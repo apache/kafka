@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -43,7 +44,7 @@ public class SmokeTestUtil {
     public static <T> ProcessorSupplier<String, T> printProcessorSupplier(final String topic, final boolean printOffset) {
         return new ProcessorSupplier<String, T>() {
             public Processor<String, T> get() {
-                return new Processor<String, T>() {
+                return new AbstractProcessor<String, T>() {
                     private int numRecordsProcessed = 0;
                     private ProcessorContext context;
 
@@ -87,7 +88,7 @@ public class SmokeTestUtil {
             return new KeyValueMapper<String, Long, KeyValue<String, Long>>() {
                 @Override
                 public KeyValue<String, Long> apply(String key, Long value) {
-                    return new KeyValue<>(Long.toString(value), 1L);
+                    return new KeyValue<>(value == null ? null : Long.toString(value), 1L);
                 }
             };
         }

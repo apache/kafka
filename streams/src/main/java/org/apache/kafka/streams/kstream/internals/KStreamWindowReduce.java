@@ -57,18 +57,19 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
     private class KStreamWindowReduceProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, V> windowStore;
+        private TupleForwarder<Windowed<K>, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
         }
 
         @Override
         public void process(K key, V value) {
-            // if the key is null, we do not need proceed aggregating the record
+            // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
                 return;
@@ -107,13 +108,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-
-                        // forward the aggregated change pair
-                        if (sendOldValues)
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                        else
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
-
+                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -122,9 +117,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
                 windowStore.put(key, value, windowStartMs);
-
-                // send the new aggregate pair (there will be no old value)
-                context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
+                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), value, null, false);
             }
         }
     }
@@ -135,13 +128,17 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         return new KTableValueGetterSupplier<Windowed<K>, V>() {
 
             public KTableValueGetter<Windowed<K>, V> get() {
-                return new KStreamAggregateValueGetter();
+                return new KStreamWindowReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, V> {
+    private class KStreamWindowReduceValueGetter implements KTableValueGetter<Windowed<K>, V> {
 
         private WindowStore<K, V> windowStore;
 
@@ -159,7 +156,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
             // this iterator should only contain one element
             try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.next().value;
+                return iter.hasNext() ? iter.next().value : null;
             }
         }
     }

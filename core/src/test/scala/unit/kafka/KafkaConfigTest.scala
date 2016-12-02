@@ -16,8 +16,9 @@
  */
 package kafka
 
-import java.io.{FileOutputStream, File}
+import java.io.{File, FileOutputStream}
 import java.security.Permission
+import java.util
 
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.SslConfigs
@@ -69,12 +70,12 @@ class KafkaTest {
     // We should be also able to set completely new property
     val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.brokerId)
-    assertEquals("compact", config3.logCleanupPolicy)
+    assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact", "--override", "broker.id=2")))
+    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
     assertEquals(2, config4.brokerId)
-    assertEquals("compact", config4.logCleanupPolicy)
+    assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
 
   @Test(expected = classOf[ExitCalled])

@@ -82,32 +82,26 @@ class DelayedProduce(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
-      trace("Checking produce satisfaction for %s, current status %s"
-        .format(topicAndPartition, status))
+      trace(s"Checking produce satisfaction for ${topicAndPartition}, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val (hasEnough, errorCode) = partitionOpt match {
+        val (hasEnough, error) = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition) match {
           case Some(partition) =>
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         }
-        if (errorCode != Errors.NONE.code) {
-          // Case B.1
+        // Case B.1 || B.2
+        if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
-          status.responseStatus.errorCode = errorCode
-        } else if (hasEnough) {
-          // Case B.2
-          status.acksPending = false
-          status.responseStatus.errorCode = Errors.NONE.code
+          status.responseStatus.errorCode = error.code
         }
       }
     }
 
-    // check if each partition has satisfied at lease one of case A and case B
-    if (! produceMetadata.produceStatus.values.exists(p => p.acksPending))
+    // check if every partition has satisfied at least one of case A or B
+    if (!produceMetadata.produceStatus.values.exists(_.acksPending))
       forceComplete()
     else
       false

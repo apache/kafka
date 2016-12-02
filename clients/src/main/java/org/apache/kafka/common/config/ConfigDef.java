@@ -438,6 +438,10 @@ public class ConfigDef {
      * the current configuration values.
      */
     public List<ConfigValue> validate(Map<String, String> props) {
+        return new ArrayList<>(validateAll(props).values());
+    }
+
+    public Map<String, ConfigValue> validateAll(Map<String, String> props) {
         Map<String, ConfigValue> configValues = new HashMap<>();
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
@@ -466,12 +470,12 @@ public class ConfigDef {
     }
 
 
-    private List<ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
+    private Map<String, ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
         Set<String> configsWithNoParent = getConfigsWithNoParent();
         for (String name: configsWithNoParent) {
             validate(name, parsed, configValues);
         }
-        return new LinkedList<>(configValues.values());
+        return configValues;
     }
 
     private List<String> undefinedDependentConfigs() {
@@ -485,7 +489,7 @@ public class ConfigDef {
                 }
             }
         }
-        return new LinkedList<>(undefinedConfigKeys);
+        return new ArrayList<>(undefinedConfigKeys);
     }
 
     private Set<String> getConfigsWithNoParent() {
@@ -539,7 +543,6 @@ public class ConfigDef {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
@@ -809,6 +812,31 @@ public class ConfigDef {
         }
     }
 
+    public static class ValidList implements Validator {
+
+        ValidString validString;
+
+        private ValidList(List<String> validStrings) {
+            this.validString = new ValidString(validStrings);
+        }
+
+        public static ValidList in(String... validStrings) {
+            return new ValidList(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            List<String> values = (List<String>) value;
+            for (String string : values) {
+                validString.ensureValid(name, string);
+            }
+        }
+
+        public String toString() {
+            return validString.toString();
+        }
+    }
+
     public static class ValidString implements Validator {
         List<String> validStrings;
 
@@ -873,46 +901,58 @@ public class ConfigDef {
         }
     }
 
+    protected List<String> headers() {
+        return Arrays.asList("Name", "Description", "Type", "Default", "Valid Values", "Importance");
+    }
+
+    protected String getConfigValue(ConfigKey key, String headerName) {
+        switch (headerName) {
+            case "Name":
+                return key.name;
+            case "Description":
+                return key.documentation;
+            case "Type":
+                return key.type.toString().toLowerCase(Locale.ROOT);
+            case "Default":
+                if (key.hasDefault()) {
+                    if (key.defaultValue == null)
+                        return "null";
+                    String defaultValueStr = convertToString(key.defaultValue, key.type);
+                    if (defaultValueStr.isEmpty())
+                        return "\"\"";
+                    else
+                        return defaultValueStr;
+                } else
+                    return "";
+            case "Valid Values":
+                return key.validator != null ? key.validator.toString() : "";
+            case "Importance":
+                return key.importance.toString().toLowerCase(Locale.ROOT);
+            default:
+                throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
+        }
+    }
+
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
-        b.append("<th>Name</th>\n");
-        b.append("<th>Description</th>\n");
-        b.append("<th>Type</th>\n");
-        b.append("<th>Default</th>\n");
-        b.append("<th>Valid Values</th>\n");
-        b.append("<th>Importance</th>\n");
+        // print column headers
+        for (String headerName : headers()) {
+            b.append("<th>");
+            b.append(headerName);
+            b.append("</th>\n");
+        }
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
-            b.append("<td>");
-            b.append(def.name);
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
-            b.append("</td>");
-            b.append("<td>");
-            if (def.hasDefault()) {
-                if (def.defaultValue == null)
-                    b.append("null");
-                else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
-                    b.append("\"\"");
-                else
-                    b.append(def.defaultValue);
-            } else
-                b.append("");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.validator != null ? def.validator.toString() : "");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("</td>");
+            // print column values
+            for (String headerName : headers()) {
+                b.append("<td>");
+                b.append(getConfigValue(def, headerName));
+                b.append("</td>");
+            }
             b.append("</tr>\n");
         }
         b.append("</tbody></table>");
@@ -924,47 +964,80 @@ public class ConfigDef {
      * documentation.
      */
     public String toRst() {
-        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        for (ConfigKey def : sortedConfigs()) {
+            getConfigKeyRst(def, b);
+            b.append("\n");
+        }
+        return b.toString();
+    }
+
+    /**
+     * Configs with new metadata (group, orderInGroup, dependents) formatted with reStructuredText, suitable for embedding in Sphinx
+     * documentation.
+     */
+    public String toEnrichedRst() {
         StringBuilder b = new StringBuilder();
 
-        for (ConfigKey def : configs) {
-            b.append("``");
-            b.append(def.name);
-            b.append("``\n");
-            for (String docLine : def.documentation.split("\n")) {
-                if (docLine.length() == 0) {
-                    continue;
+        String lastKeyGroupName = "";
+        for (ConfigKey def : sortedConfigsByGroup()) {
+            if (def.group != null) {
+                if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
+                    b.append(def.group).append("\n");
+
+                    char[] underLine = new char[def.group.length()];
+                    Arrays.fill(underLine, '^');
+                    b.append(new String(underLine)).append("\n\n");
                 }
-                b.append("  ");
-                b.append(docLine);
-                b.append("\n\n");
+                lastKeyGroupName = def.group;
             }
-            b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
-            b.append("\n");
-            if (def.defaultValue != null) {
-                b.append("  * Default: ");
-                if (def.type == Type.STRING) {
-                    b.append("\"");
-                    b.append(def.defaultValue);
-                    b.append("\"");
-                } else {
-                    b.append(def.defaultValue);
+
+            getConfigKeyRst(def, b);
+
+            if (def.dependents != null && def.dependents.size() > 0) {
+                int j = 0;
+                b.append("  * Dependents: ");
+                for (String dependent : def.dependents) {
+                    b.append("``");
+                    b.append(dependent);
+                    if (++j == def.dependents.size())
+                        b.append("``");
+                    else
+                        b.append("``, ");
                 }
                 b.append("\n");
             }
-            b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("\n\n");
+            b.append("\n");
         }
         return b.toString();
+    }
+
+    /**
+     * Shared content on Rst and Enriched Rst.
+     */
+    private void getConfigKeyRst(ConfigKey def, StringBuilder b) {
+        b.append("``").append(def.name).append("``").append("\n");
+        for (String docLine : def.documentation.split("\n")) {
+            if (docLine.length() == 0) {
+                continue;
+            }
+            b.append("  ").append(docLine).append("\n\n");
+        }
+        b.append("  * Type: ").append(getConfigValue(def, "Type")).append("\n");
+        if (def.hasDefault()) {
+            b.append("  * Default: ").append(getConfigValue(def, "Default")).append("\n");
+        }
+        if (def.validator != null) {
+            b.append("  * Valid Values: ").append(getConfigValue(def, "Valid Values")).append("\n");
+        }
+        b.append("  * Importance: ").append(getConfigValue(def, "Importance")).append("\n");
     }
 
     /**
      * Get a list of configs sorted into "natural" order: listing required fields first, then
      * ordering by importance, and finally by name.
      */
-    private List<ConfigKey> sortedConfigs() {
+    protected List<ConfigKey> sortedConfigs() {
         // sort first required fields, then by importance, then name
         List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigKey>() {
@@ -988,4 +1061,34 @@ public class ConfigDef {
         });
         return configs;
     }
+
+    /**
+     * Get a list of configs sorted taking the 'group' and 'orderInGroup' into account.
+     */
+    protected List<ConfigKey> sortedConfigsByGroup() {
+        final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
+        int ord = 0;
+        for (String group: groups) {
+            groupOrd.put(group, ord++);
+        }
+
+        List<ConfigKey> configs = new ArrayList<>(configKeys.values());
+        Collections.sort(configs, new Comparator<ConfigKey>() {
+            @Override
+            public int compare(ConfigKey k1, ConfigKey k2) {
+                int cmp = k1.group == null
+                        ? (k2.group == null ? 0 : -1)
+                        : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
+                if (cmp == 0) {
+                    cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
+                }
+                if (cmp == 0) {
+                    cmp = k1.name.compareTo(k2.name);
+                }
+                return cmp;
+            }
+        });
+        return configs;
+    }
+
 }

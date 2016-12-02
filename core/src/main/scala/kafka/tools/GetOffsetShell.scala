@@ -64,7 +64,7 @@ object GetOffsetShell {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, timeOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
 
     val clientId = "GetOffsetShell"
     val brokerList = options.valueOf(brokerListOpt)

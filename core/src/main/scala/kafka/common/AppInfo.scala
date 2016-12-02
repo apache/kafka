@@ -42,7 +42,7 @@ object AppInfo extends KafkaMetricsGroup {
     newGauge("CommitID",
       new Gauge[String] {
         def value = {
-          AppInfoParser.getCommitId();
+          AppInfoParser.getCommitId()
         }
       })
 

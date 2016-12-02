@@ -25,8 +25,6 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
-import scala.collection.mutable.ListBuffer
-
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -57,7 +55,7 @@ case class TopicMetadataRequest(versionId: Short,
     topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

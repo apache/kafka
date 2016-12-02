@@ -38,12 +38,7 @@ class Replica(val brokerId: Int,
   val topic = partition.topic
   val partitionId = partition.partitionId
 
-  def isLocal: Boolean = {
-    log match {
-      case Some(l) => true
-      case None => false
-    }
-  }
+  def isLocal: Boolean = log.isDefined
 
   private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
 
@@ -98,7 +93,7 @@ class Replica(val brokerId: Int,
   }
 
   override def equals(that: Any): Boolean = {
-    if(!(that.isInstanceOf[Replica]))
+    if(!that.isInstanceOf[Replica])
       return false
     val other = that.asInstanceOf[Replica]
     if(topic.equals(other.topic) && brokerId == other.brokerId && partition.equals(other.partition))
@@ -111,7 +106,7 @@ class Replica(val brokerId: Int,
   }
 
 
-  override def toString(): String = {
+  override def toString: String = {
     val replicaString = new StringBuilder
     replicaString.append("ReplicaId: " + brokerId)
     replicaString.append("; Topic: " + topic)

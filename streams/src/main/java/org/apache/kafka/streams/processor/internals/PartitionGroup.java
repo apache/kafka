@@ -43,6 +43,9 @@ public class PartitionGroup {
         public RecordQueue queue;
 
         public ProcessorNode node() {
+            if (queue == null) {
+                return null;
+            }
             return queue.source();
         }
 
@@ -169,5 +172,12 @@ public class PartitionGroup {
     public void close() {
         queuesByTime.clear();
         partitionQueues.clear();
+    }
+
+    public void clear() {
+        queuesByTime.clear();
+        for (RecordQueue queue : partitionQueues.values()) {
+            queue.clear();
+        }
     }
 }

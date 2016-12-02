@@ -19,27 +19,29 @@ package kafka.server
 
 import java.util.Properties
 
+import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
+import kafka.server.Constants._
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
+import org.apache.kafka.common.config.ConfigDef.Validator
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.protocol.ApiKeys
-
-import scala.collection.Map
+import org.apache.kafka.common.metrics.Quota._
 import scala.collection.JavaConverters._
-
 /**
- * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
- */
+  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
+  */
 trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties)
 }
 
 /**
- * The TopicConfigHandler will process topic config changes in ZK.
- * The callback provides the topic name and the full properties set read from ZK
- */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig) extends ConfigHandler with Logging {
+  * The TopicConfigHandler will process topic config changes in ZK.
+  * The callback provides the topic name and the full properties set read from ZK
+  */
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the compatibility of message format version.
@@ -63,30 +65,123 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       val logConfig = LogConfig(props)
       logs.foreach(_.config = logConfig)
     }
+
+    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
+      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
+        val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
+        quotaManager.markThrottled(topic, partitions)
+        logger.debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
+      } else {
+        quotaManager.removeThrottle(topic)
+        logger.debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
+      }
+    }
+    updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
+    updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
+  }
+
+  def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
+    val configValue = topicConfig.get(prop).toString.trim
+    ThrottledReplicaListValidator.ensureValidString(prop, configValue)
+    configValue match {
+      case "" => Seq()
+      case "*" => AllReplicas
+      case _ => configValue.trim
+        .split(",")
+        .map(_.split(":"))
+        .filter(_ (1).toInt == brokerId) //Filter this replica
+        .map(_ (0).toInt).toSeq //convert to list of partition ids
+    }
   }
 }
 
-object ClientConfigOverride {
-  val ProducerOverride = "producer_byte_rate"
-  val ConsumerOverride = "consumer_byte_rate"
+
+/**
+ * Handles <client-id>, <user> or <user, client-id> quota config updates in ZK.
+ * This implementation reports the overrides to the respective ClientQuotaManager objects
+ */
+class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
+
+  def updateQuotaConfig(sanitizedUser: Option[String], clientId: Option[String], config: Properties) {
+    val producerQuota =
+      if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
+      else
+        None
+    quotaManagers.produce.updateQuota(sanitizedUser, clientId, producerQuota)
+    val consumerQuota =
+      if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
+      else
+        None
+    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
+  }
 }
 
 /**
  * The ClientIdConfigHandler will process clientId config changes in ZK.
  * The callback provides the clientId and the full properties set read from ZK.
- * This implementation reports the overrides to the respective ClientQuotaManager objects
  */
-class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaManager]) extends ConfigHandler {
+class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
 
-  def processConfigChanges(clientId: String, clientConfig: Properties) = {
-    if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers(ApiKeys.PRODUCE.id).updateQuota(clientId,
-        new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
+  def processConfigChanges(clientId: String, clientConfig: Properties) {
+    updateQuotaConfig(None, Some(clientId), clientConfig)
+  }
+}
+
+/**
+ * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
+ * The callback provides the node name containing sanitized user principal, client-id if this is
+ * a <user, client-id> update and the full properties set read from ZK.
+ */
+class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+
+  def processConfigChanges(quotaEntityPath: String, config: Properties) {
+    // Entity path is <user> or <user>/clients/<client>
+    val entities = quotaEntityPath.split("/")
+    if (entities.length != 1 && entities.length != 3)
+      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath);
+    val sanitizedUser = entities(0)
+    val clientId = if (entities.length == 3) Some(entities(2)) else None
+    updateQuotaConfig(Some(sanitizedUser), clientId, config)
+  }
+}
+
+/**
+  * The BrokerConfigHandler will process individual broker config changes in ZK.
+  * The callback provides the brokerId and the full properties set read from ZK.
+  * This implementation reports the overrides to the respective ReplicationQuotaManager objects
+  */
+class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+
+  def processConfigChanges(brokerId: String, properties: Properties) {
+    def getOrDefault(prop: String): Long = {
+      if (properties.containsKey(prop))
+        properties.getProperty(prop).toLong
+      else
+        DefaultReplicationThrottledRate
     }
+    if (brokerConfig.brokerId == brokerId.trim.toInt) {
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp)))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
+    }
+  }
+}
 
-    if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers(ApiKeys.FETCH.id).updateQuota(clientId,
-        new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
+object ThrottledReplicaListValidator extends Validator {
+  def ensureValidString(name: String, value: String): Unit =
+    ensureValid(name, value.split(",").map(_.trim).toSeq)
+
+  override def ensureValid(name: String, value: Any): Unit = {
+    def check(proposed: Seq[Any]): Unit = {
+      if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
+        || proposed.headOption.exists(_.toString.trim.equals("*"))))
+        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+    }
+    value match {
+      case scalaSeq: Seq[_] => check(scalaSeq)
+      case javaList: java.util.List[_] => check(javaList.asScala)
+      case _ => throw new ConfigException(name, value, s"$name  must be a List but was ${value.getClass.getName}")
     }
   }
 }

@@ -30,8 +30,8 @@ import kafka.server.DelayedOperation
  * the rest of the group.
  */
 private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
-                                            group: GroupMetadata,
-                                            sessionTimeout: Long)
+                                       group: GroupMetadata,
+                                       sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)

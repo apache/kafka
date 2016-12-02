@@ -69,7 +69,7 @@ public class PartitionInfo {
 
     @Override
     public String toString() {
-        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s",
+        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s)",
                              topic,
                              partition,
                              leader == null ? "none" : leader.id(),

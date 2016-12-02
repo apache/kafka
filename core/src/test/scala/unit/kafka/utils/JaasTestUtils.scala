@@ -51,7 +51,7 @@ object JaasTestUtils {
         entries = Map(
           "username" -> username,
           "password" -> password
-        ) ++ validUsers.map { case (user, pass) => (s"user_$user"-> pass)}
+        ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
       )
     }
   }

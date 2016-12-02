@@ -175,7 +175,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    * @return true iff the delayed operations can be completed by the caller
    */
   def tryCompleteElseWatch(operation: T, watchKeys: Seq[Any]): Boolean = {
-    assert(watchKeys.size > 0, "The watch key list can't be empty")
+    assert(watchKeys.nonEmpty, "The watch key list can't be empty")
 
     // The cost of tryComplete() is typically proportional to the number of keys. Calling
     // tryComplete() for each key is going to be expensive if there are many keys. Instead,

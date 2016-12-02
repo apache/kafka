@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Time;
@@ -51,7 +52,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
-    private final WorkerCoordinatorMetrics sensors;
     private ClusterConfigState configSnapshot;
     private final WorkerRebalanceListener listener;
     private LeaderState leaderState;
@@ -63,6 +63,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
      */
     public WorkerCoordinator(ConsumerNetworkClient client,
                              String groupId,
+                             int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
                              int heartbeatIntervalMs,
                              Metrics metrics,
@@ -74,6 +75,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              WorkerRebalanceListener listener) {
         super(client,
                 groupId,
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
@@ -83,7 +85,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
+        new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -95,6 +97,38 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     public String protocolType() {
         return "connect";
+    }
+
+    public void poll(long timeout) {
+        // poll for io until the timeout expires
+        final long start = time.milliseconds();
+        long now = start;
+        long remaining;
+
+        do {
+            if (coordinatorUnknown()) {
+                ensureCoordinatorReady();
+                now = time.milliseconds();
+            }
+
+            if (needRejoin()) {
+                ensureActiveGroup();
+                now = time.milliseconds();
+            }
+
+            pollHeartbeat(now);
+
+            long elapsed = now - start;
+            remaining = timeout - elapsed;
+
+            // Note that because the network client is shared with the background heartbeat thread,
+            // we do not want to block in poll longer than the time to the next heartbeat.
+            client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+
+            now = time.milliseconds();
+            elapsed = now - start;
+            remaining = timeout - elapsed;
+        } while (remaining > 0);
     }
 
     @Override
@@ -238,12 +272,15 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public boolean needRejoin() {
+    protected boolean needRejoin() {
         return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
-        return this.memberId;
+        Generation generation = generation();
+        if (generation != null)
+            return generation.memberId;
+        return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
     @Override
@@ -252,7 +289,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private boolean isLeader() {
-        return assignmentSnapshot != null && memberId.equals(assignmentSnapshot.leader());
+        return assignmentSnapshot != null && memberId().equals(assignmentSnapshot.leader());
     }
 
     public String ownerUrl(String connector) {
@@ -268,11 +305,9 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private class WorkerCoordinatorMetrics {
-        public final Metrics metrics;
         public final String metricGrpName;
 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {

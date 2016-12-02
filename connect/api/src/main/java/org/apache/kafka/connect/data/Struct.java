@@ -85,8 +85,8 @@ public class Struct {
      */
     public Object get(Field field) {
         Object val = values[field.index()];
-        if (val == null && schema.defaultValue() != null) {
-            val = schema.defaultValue();
+        if (val == null && field.schema().defaultValue() != null) {
+            val = field.schema().defaultValue();
         }
         return val;
     }
@@ -261,6 +261,25 @@ public class Struct {
         if (field.schema().type() != type)
             throw new DataException("Field '" + fieldName + "' is not of type " + type);
         return values[field.index()];
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("Struct{");
+        boolean first = true;
+        for (int i = 0; i < values.length; i++) {
+            final Object value = values[i];
+            if (value != null) {
+                final Field field = schema.fields().get(i);
+                if (first) {
+                    first = false;
+                } else {
+                    sb.append(",");
+                }
+                sb.append(field.name()).append("=").append(value);
+            }
+        }
+        return sb.append("}").toString();
     }
 
 }

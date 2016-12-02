@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
-import org.apache.kafka.common.record.{CompressionType, Record}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -42,7 +42,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
     def sendAndCheck(recordBuffer: ByteBuffer, expectedOffset: Long): ProduceResponse.PartitionResponse = {
       val topicPartition = new TopicPartition("topic", partition)
-      val partitionRecords = Map(topicPartition -> recordBuffer)
+      val partitionRecords = Map(topicPartition -> MemoryRecords.readableRecords(recordBuffer))
       val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
@@ -78,7 +78,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // Change the lz4 checksum value so that it doesn't match the contents
     recordBuffer.array.update(40, 0)
     val topicPartition = new TopicPartition("topic", partition)
-    val partitionRecords = Map(topicPartition -> recordBuffer)
+    val partitionRecords = Map(topicPartition -> MemoryRecords.readableRecords(recordBuffer))
     val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
@@ -89,10 +89,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val socket = connect(s = servers.find(_.config.brokerId == leaderId).map(_.socketServer).getOrElse {
-      fail(s"Could not find broker with id $leaderId")
-    })
-    val response = send(socket, request, ApiKeys.PRODUCE, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id))
+    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
     ProduceResponse.parse(response)
   }
 

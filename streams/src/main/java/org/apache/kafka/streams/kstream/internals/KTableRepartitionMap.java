@@ -54,6 +54,10 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
+            @Override
+            public String[] storeNames() {
+                throw new StreamsException("Underlying state store not accessible due to repartitioning.");
+            }
         };
     }
 
@@ -66,15 +70,6 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
 
-    private KeyValue<K1, V1> computeValue(K key, V value) {
-        KeyValue<K1, V1> newValue = null;
-
-        if (key != null || value != null)
-            newValue = mapper.apply(key, value);
-
-        return newValue;
-    }
-
     private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
 
         /**
@@ -82,18 +77,24 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
          */
         @Override
         public void process(K key, Change<V> change) {
-            KeyValue<K1, V1> newPair = computeValue(key, change.newValue);
+            // the original key should never be null
+            if (key == null)
+                throw new StreamsException("Record key for the grouping KTable should not be null.");
 
-            // the selected repartition key should never be null
-            if (newPair.key == null)
-                throw new StreamsException("Record key for KTable repartition operator should not be null.");
+            // if the value is null, we do not need to forward its selected key-value further
+            KeyValue<K1, V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
+            KeyValue<K1, V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
 
-            context().forward(newPair.key, new Change<>(newPair.value, null));
-
-            if (change.oldValue != null) {
-                KeyValue<K1, V1> oldPair = computeValue(key, change.oldValue);
+            // if the selected repartition key or value is null, skip
+            // forward oldPair first, to be consistent with reduce and aggregate
+            if (oldPair != null && oldPair.key != null && oldPair.value != null) {
                 context().forward(oldPair.key, new Change<>(null, oldPair.value));
             }
+
+            if (newPair != null && newPair.key != null && newPair.value != null) {
+                context().forward(newPair.key, new Change<>(newPair.value, null));
+            }
+            
         }
     }
 
@@ -112,9 +113,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
         @Override
         public KeyValue<K1, V1> get(K key) {
-            return computeValue(key, parentGetter.get(key));
+            return mapper.apply(key, parentGetter.get(key));
         }
-
     }
 
 }

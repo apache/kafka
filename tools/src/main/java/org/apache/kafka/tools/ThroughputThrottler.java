@@ -72,8 +72,8 @@ public class ThroughputThrottler {
             return false;
         }
 
-        float elapsedMs = (sendStartMs - startMs) / 1000.f;
-        return elapsedMs > 0 && (amountSoFar / elapsedMs) > this.targetThroughput;
+        float elapsedSec = (sendStartMs - startMs) / 1000.f;
+        return elapsedSec > 0 && (amountSoFar / elapsedSec) > this.targetThroughput;
     }
 
     /**

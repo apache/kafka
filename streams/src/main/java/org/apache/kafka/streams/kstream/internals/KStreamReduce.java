@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -49,6 +48,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
     private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -56,16 +56,15 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
+
         @Override
         public void process(K key, V value) {
-            // the keys should never be null
+            // If the key is null we don't need to proceed
             if (key == null)
-                throw new StreamsException("Record key for KStream reduce operator with state " + storeName + " should not be null.");
+                return;
 
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
@@ -78,15 +77,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
                     newAgg = reducer.apply(newAgg, value);
                 }
             }
-
             // update the store with the new value
             store.put(key, newAgg);
-
-            // send the old / new pair
-            if (sendOldValues)
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            else
-                context().forward(key, new Change<>(newAgg, null));
+            tupleForwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 
@@ -99,6 +92,10 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
                 return new KStreamReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

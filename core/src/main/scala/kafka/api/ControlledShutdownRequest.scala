@@ -63,7 +63,7 @@ case class ControlledShutdownRequest(versionId: Short,
       4 /* broker id */
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

@@ -94,7 +94,7 @@ object TestOffsetManager {
         offset += 1
       }
       catch {
-        case e1: ClosedByInterruptException =>
+        case _: ClosedByInterruptException =>
           offsetsChannel.disconnect()
         case e2: IOException =>
           println("Commit thread %d: Error while committing offsets to %s:%d for group %s due to %s.".format(id, offsetsChannel.host, offsetsChannel.port, groupId, e2))
@@ -158,7 +158,7 @@ object TestOffsetManager {
           }
         }
         catch {
-          case e1: ClosedByInterruptException =>
+          case _: ClosedByInterruptException =>
             channel.disconnect()
             channels.remove(coordinatorId)
           case e2: IOException =>
@@ -168,7 +168,7 @@ object TestOffsetManager {
         }
       }
       catch {
-        case e: IOException =>
+        case _: IOException =>
           println("Error while querying %s:%d - shutting down query channel.".format(metadataChannel.host, metadataChannel.port))
           metadataChannel.disconnect()
           println("Creating new query channel.")
@@ -255,7 +255,7 @@ object TestOffsetManager {
     var statsThread: StatsThread = null
     try {
       zkUtils = ZkUtils(zookeeper, 6000, 2000, false)
-      commitThreads = (0 to (threadCount-1)).map { threadId =>
+      commitThreads = (0 until threadCount).map { threadId =>
         new CommitThread(threadId, partitionCount, commitIntervalMs, zkUtils)
       }
 

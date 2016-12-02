@@ -25,7 +25,7 @@ import org.apache.kafka.common.security.JaasUtils
 
 trait ZooKeeperTestHarness extends JUnitSuite with Logging {
 
-  val zkConnectionTimeout = 6000
+  val zkConnectionTimeout = 10000
   val zkSessionTimeout = 6000
 
   var zkUtils: ZkUtils = null
@@ -46,19 +46,6 @@ trait ZooKeeperTestHarness extends JUnitSuite with Logging {
      CoreUtils.swallow(zkUtils.close())
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown())
-
-    def isDown(): Boolean = {
-      try {
-        ZkFourLetterWords.sendStat("127.0.0.1", zkPort, 3000)
-        false
-      } catch { case _: Throwable =>
-        debug("Server is down")
-        true
-      }
-    }
-
-    Iterator.continually(isDown()).exists(identity)
-
     Configuration.setConfiguration(null)
   }
 

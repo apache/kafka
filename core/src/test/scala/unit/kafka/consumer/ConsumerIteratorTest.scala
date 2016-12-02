@@ -52,7 +52,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    topicInfos = configs.map(c => new PartitionTopicInfo(topic,
+    topicInfos = configs.map(_ => new PartitionTopicInfo(topic,
       0,
       queue,
       new AtomicLong(consumedOffset),
@@ -68,7 +68,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
     val messages = messageStrings.map(s => new Message(s.getBytes))
     val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new LongRef(0), messages:_*)
 
-    topicInfos(0).enqueue(messageSet)
+    topicInfos.head.enqueue(messageSet)
     assertEquals(1, queue.size)
     queue.put(ZookeeperConsumerConnector.shutdownCommand)
 
@@ -77,7 +77,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
                                                     new StringDecoder(), 
                                                     new StringDecoder(),
                                                     clientId = "")
-    val receivedMessages = (0 until 5).map(i => iter.next.message).toList
+    val receivedMessages = (0 until 5).map(_ => iter.next.message)
 
     assertFalse(iter.hasNext)
     assertEquals(0, queue.size) // Shutdown command has been consumed.
@@ -92,7 +92,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
     val messages = messageStrings.map(s => new Message(s.getBytes))
     val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(0), messages:_*)
 
-    topicInfos(0).enqueue(messageSet)
+    topicInfos.head.enqueue(messageSet)
     assertEquals(1, queue.size)
 
     val iter = new ConsumerIterator[String, String](queue,
@@ -101,17 +101,14 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
       new FailDecoder(),
       clientId = "")
 
-    val receivedMessages = (0 until 5).map{ i =>
+    (0 until 5).foreach { i =>
       assertTrue(iter.hasNext)
       val message = iter.next
       assertEquals(message.offset, i + consumedOffset)
 
-      try {
-        message.message // should fail
-      }
+      try message.message // should fail
       catch {
-        case e: UnsupportedOperationException => // this is ok
-        case e2: Throwable => fail("Unexpected exception when iterating the message set. " + e2.getMessage)
+        case _: UnsupportedOperationException => // this is ok
       }
     }
   }

@@ -39,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableSourceTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
 
     private KStreamTestDriver driver = null;
     private File stateDir = null;
@@ -62,19 +63,20 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        driver = new KStreamTestDriver(builder);
-
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
         driver.process(topic1, "C", 3);
         driver.process(topic1, "D", 4);
+        driver.flushState();
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), proc1.processed);
     }
@@ -85,12 +87,11 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
-
         KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
 
@@ -125,47 +126,50 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSedingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
         builder.addProcessor("proc1", proc1, table1.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
-
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(03<-null)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
     @Test
-    public void testSedingOldValue() throws IOException {
+    public void testSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         table1.enableSendingOldValues();
 
@@ -180,20 +184,24 @@ public class KTableSourceTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(03<-02)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
     }

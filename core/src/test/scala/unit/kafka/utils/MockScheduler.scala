@@ -56,7 +56,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   def tick() {
     this synchronized {
       val now = time.milliseconds
-      while(!tasks.isEmpty && tasks.head.nextExecution <= now) {
+      while(tasks.nonEmpty && tasks.head.nextExecution <= now) {
         /* pop and execute the task with the lowest next execution time */
         val curr = tasks.dequeue
         curr.fun()
@@ -78,7 +78,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   
 }
 
-case class MockTask(val name: String, val fun: () => Unit, var nextExecution: Long, val period: Long) extends Ordered[MockTask] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)

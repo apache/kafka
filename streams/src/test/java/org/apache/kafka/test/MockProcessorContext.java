@@ -32,14 +32,19 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
-public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
+import java.util.LinkedHashMap;
+
+public class MockProcessorContext implements InternalProcessorContext, RecordCollector.Supplier {
 
     private final KStreamTestDriver driver;
     private final Serde<?> keySerde;
@@ -50,39 +55,45 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private MetricConfig config = new MetricConfig();
     private Metrics metrics;
 
+    private final ThreadCache cache;
+    private Map<String, StateStore> storeMap = new LinkedHashMap<>();
 
-    private Map<String, StateStore> storeMap = new HashMap<>();
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;
+    private RecordContext recordContext;
+    private ProcessorNode currentNode;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
-        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector);
+        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
-                                final RecordCollector collector) {
+                                final RecordCollector collector,
+                                final ThreadCache cache) {
         this(driver, stateDir, keySerde, valSerde,
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            });
+                new RecordCollector.Supplier() {
+                    @Override
+                    public RecordCollector recordCollector() {
+                        return collector;
+                    }
+                }, cache);
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
-                                RecordCollector.Supplier collectorSupplier) {
+                                RecordCollector.Supplier collectorSupplier,
+                                final ThreadCache cache) {
         this.driver = driver;
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        this.cache = cache;
     }
 
     @Override
@@ -117,6 +128,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public Serde<?> valueSerde() {
         return this.valSerde;
+    }
+
+    @Override
+    public ThreadCache getCache() {
+        return cache;
     }
 
     @Override
@@ -200,6 +216,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         driver.forward(key, value, childName);
     }
 
+
     @Override
     public void commit() {
         throw new UnsupportedOperationException("commit() not supported.");
@@ -207,22 +224,49 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public String topic() {
-        return null;
+        if (recordContext == null) {
+            return null;
+        }
+        return recordContext.topic();
     }
 
     @Override
     public int partition() {
-        return -1;
+        if (recordContext == null) {
+            return -1;
+        }
+        return recordContext.partition();
     }
 
     @Override
     public long offset() {
-        return -1L;
+        if (recordContext == null) {
+            return -1L;
+        }
+        return recordContext.offset();
     }
 
     @Override
     public long timestamp() {
-        return this.timestamp;
+        if (recordContext == null) {
+            return timestamp;
+        }
+        return recordContext.timestamp();
+    }
+
+    @Override
+    public Map<String, Object> appConfigs() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, Object> appConfigsWithPrefix(String prefix) {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public RecordContext recordContext() {
+        return recordContext;
     }
 
     public Map<String, StateStore> allStateStores() {
@@ -235,4 +279,21 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             restoreCallback.restore(entry.key, entry.value);
         }
     }
+
+    @Override
+    public void setRecordContext(final RecordContext recordContext) {
+        this.recordContext = recordContext;
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        this.currentNode  = currentNode;
+        driver.setCurrentNode(currentNode);
+    }
+
+    @Override
+    public ProcessorNode currentNode() {
+        return currentNode;
+    }
+
 }

@@ -41,12 +41,16 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamsMetricsForTests;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with a {@link TopologyBuilder}.
@@ -146,14 +150,14 @@ public class ProcessorTopologyTestDriver {
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
-        topology = builder.build("X", null);
+        topology = builder.setApplicationId("ProcessorTopologyTestDriver").build(null);
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(String topic) {
-                return Collections.emptyList();
+                return Collections.singletonList(new PartitionInfo(topic, 0, null, null, null));
             }
         };
         restoreStateConsumer = createRestoreConsumer(id, storeNames);
@@ -161,10 +165,10 @@ public class ProcessorTopologyTestDriver {
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
             TopicPartition tp = new TopicPartition(topic, 1);
-            consumer.assign(Collections.singletonList(tp));
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
+        consumer.assign(offsetsByTopicPartition.keySet());
 
         task = new StreamTask(id,
             applicationId,
@@ -173,7 +177,9 @@ public class ProcessorTopologyTestDriver {
             consumer,
             producer,
             restoreStateConsumer,
-            config, new StreamsMetricsForTests(new Metrics()));
+            config,
+            new StreamsMetricsForTests(new Metrics()),
+            new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024));
     }
 
     /**
@@ -194,6 +200,7 @@ public class ProcessorTopologyTestDriver {
         producer.clear();
         // Process the record ...
         task.process();
+        ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(0L, offset, tp.partition(), topicName));
         task.commit();
         // Capture all the records sent to the producer ...
         for (ProducerRecord<byte[], byte[]> record : producer.history()) {

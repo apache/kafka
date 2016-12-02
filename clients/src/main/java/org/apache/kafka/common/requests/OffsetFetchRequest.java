@@ -51,11 +51,11 @@ public class OffsetFetchRequest extends AbstractRequest {
         Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
-        List<Struct> topicArray = new ArrayList<Struct>();
+        List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> entries: topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, entries.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Integer partiitonId : entries.getValue()) {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partiitonId);
@@ -71,7 +71,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public OffsetFetchRequest(Struct struct) {
         super(struct);
-        partitions = new ArrayList<TopicPartition>();
+        partitions = new ArrayList<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
@@ -85,8 +85,8 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
 
         for (TopicPartition partition: partitions) {
             responseData.put(partition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,

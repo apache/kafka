@@ -90,7 +90,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val log = logManager.getLog(TopicAndPartition(topic, part)).get
 
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
@@ -125,14 +125,14 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     var offsetChanged = false
-    for(i <- 1 to 14) {
+    for (_ <- 1 to 14) {
       val topicAndPartition = TopicAndPartition(topic, 0)
       val offsetRequest =
         OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1)))
       val consumerOffsets =
         simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
 
-      if(consumerOffsets(0) == 1) {
+      if(consumerOffsets.head == 1) {
         offsetChanged = true
       }
     }
@@ -151,7 +151,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
@@ -180,7 +180,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -25,26 +26,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
-    public final String topic;
+    public final String storeName;
 
-    private boolean materialized = false;
     private boolean sendOldValues = false;
 
-    public KTableSource(String topic) {
-        this.topic = topic;
+    public KTableSource(String storeName) {
+        this.storeName = storeName;
     }
 
     @Override
     public Processor<K, V> get() {
-        return materialized ? new MaterializedKTableSourceProcessor() : new KTableSourceProcessor();
-    }
-
-    public void materialize() {
-        materialized = true;
-    }
-
-    public boolean isMaterialized() {
-        return materialized;
+        return new KTableSourceProcessor();
     }
 
     public void enableSendingOldValues() {
@@ -52,30 +44,26 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            context().forward(key, new Change<>(value, null));
-        }
-    }
-
-    private class MaterializedKTableSourceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(topic);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         @Override
         public void process(K key, V value) {
-            V oldValue = sendOldValues ? store.get(key) : null;
+            // the keys should never be null
+            if (key == null)
+                throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
+            V oldValue = store.get(key);
             store.put(key, value);
-
-            context().forward(key, new Change<>(value, oldValue));
+            tupleForwarder.maybeForward(key, value, oldValue, sendOldValues);
         }
     }
-
 }

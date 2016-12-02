@@ -14,13 +14,14 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import org.apache.kafka.common.requests.AbstractRequestResponse
+
 import kafka.api.ApiUtils._
+import org.apache.kafka.common.requests.AbstractResponse
 
 private[kafka] abstract class GenericRequestAndHeader(val versionId: Short,
                                                       val correlationId: Int,
                                                       val clientId: String,
-                                                      val body: AbstractRequestResponse,
+                                                      val body: AbstractResponse,
                                                       val name: String,
                                                       override val requestId: Option[Short] = None)
   extends RequestOrResponse(requestId) {
@@ -39,7 +40,7 @@ private[kafka] abstract class GenericRequestAndHeader(val versionId: Short,
     body.sizeOf()
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
   }
 

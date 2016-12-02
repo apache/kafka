@@ -52,6 +52,10 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 return new KTableFilterValueGetter(parentValueGetterSupplier.get());
             }
 
+            @Override
+            public String[] storeNames() {
+                return parentValueGetterSupplier.storeNames();
+            }
         };
     }
 
@@ -76,6 +80,9 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         public void process(K key, Change<V> change) {
             V newValue = computeValue(key, change.newValue);
             V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+
+            if (sendOldValues && oldValue == null && newValue == null)
+                return; // unnecessary to forward here.
 
             context().forward(key, new Change<>(newValue, oldValue));
         }

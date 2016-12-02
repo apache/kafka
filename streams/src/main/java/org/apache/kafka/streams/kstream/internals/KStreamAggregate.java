@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -30,6 +29,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<K, V, T> aggregator;
+
 
     private boolean sendOldValues = false;
 
@@ -52,23 +52,21 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, T> store;
+        private TupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
+
         @Override
         public void process(K key, V value) {
-            // the keys should never be null
             if (key == null)
-                throw new StreamsException("Record key for KStream aggregate operator with state " + storeName + " should not be null.");
+                return;
 
             T oldAgg = store.get(key);
 
@@ -84,12 +82,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
-
-            // send the old / new pair
-            if (sendOldValues)
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            else
-                context().forward(key, new Change<>(newAgg, null));
+            tupleForwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 
@@ -102,6 +95,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 return new KStreamAggregateValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

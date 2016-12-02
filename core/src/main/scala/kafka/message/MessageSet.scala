@@ -20,6 +20,8 @@ package kafka.message
 import java.nio._
 import java.nio.channels._
 
+import org.apache.kafka.common.record.Records
+
 /**
  * Message set helper functions
  */
@@ -70,11 +72,6 @@ case class MagicAndTimestamp(magic: Byte, timestamp: Long)
  */
 abstract class MessageSet extends Iterable[MessageAndOffset] {
 
-  /** Write the messages in this set to the given channel starting at the given offset byte. 
-    * Less than the complete amount may be written, but no more than maxSize can be. The number
-    * of bytes written is returned */
-  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int
-
   /**
    * Check if all the wrapper messages in the message set have the expected magic value
    */
@@ -89,6 +86,11 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
    * Gives the total size of this message set in bytes
    */
   def sizeInBytes: Int
+
+  /**
+   * Get the client representation of the message set
+   */
+  def asRecords: Records
 
   /**
    * Print this message set's contents. If the message set has more than 100 messages, just

@@ -23,17 +23,16 @@ import java.nio.channels.GatheringByteChannel;
 public class ByteBufferSend implements Send {
 
     private final String destination;
+    private final int size;
     protected final ByteBuffer[] buffers;
     private int remaining;
-    private int size;
     private boolean pending = false;
 
     public ByteBufferSend(String destination, ByteBuffer... buffers) {
-        super();
         this.destination = destination;
         this.buffers = buffers;
-        for (int i = 0; i < buffers.length; i++)
-            remaining += buffers[i].remaining();
+        for (ByteBuffer buffer : buffers)
+            remaining += buffer.remaining();
         this.size = remaining;
     }
 

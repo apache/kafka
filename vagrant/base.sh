@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -12,8 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-#!/bin/bash
 
 set -e
 
@@ -66,6 +65,9 @@ get_kafka 0.8.2.2
 chmod a+rw /opt/kafka-0.8.2.2
 get_kafka 0.9.0.1
 chmod a+rw /opt/kafka-0.9.0.1
+get_kafka 0.10.0.1
+chmod a+rw /opt/kafka-0.10.0.1
+
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

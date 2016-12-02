@@ -46,7 +46,9 @@ public interface StateStore {
     void flush();
 
     /**
-     * Close the storage engine
+     * Close the storage engine.
+     * Note that this function needs to be idempotent since it may be called
+     * several times on the same state store.
      */
     void close();
 
@@ -56,4 +58,10 @@ public interface StateStore {
      * @return  {@code true} if the storage is persistent&mdash;{@code false} otherwise
      */
     boolean persistent();
+
+    /**
+     * Is this store open for reading and writing
+     * @return {@code true} if the store is open
+     */
+    boolean isOpen();
 }

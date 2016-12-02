@@ -51,7 +51,7 @@ public class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%.:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -699,4 +699,37 @@ public class Utils {
             throw exception;
     }
 
+    /**
+     * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     */
+    public static void closeQuietly(Closeable closeable, String name) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (Throwable t) {
+                log.warn("Failed to close " + name, t);
+            }
+        }
+    }
+
+    /**
+     * A cheap way to deterministically convert a number to a positive value. When the input is
+     * positive, the original value is returned. When the input number is negative, the returned
+     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
+     * value.
+     *
+     * Note: changing this method in the future will possibly cause partition selection not to be
+     * compatible with the existing messages already placed on a partition since it is used
+     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     *
+     * @param number a given number
+     * @return a positive number.
+     */
+    public static int toPositive(int number) {
+        return number & 0x7fffffff;
+    }
+
+    public static int longHashcode(long value) {
+        return (int) (value ^ (value >>> 32));
+    }
 }

@@ -72,7 +72,8 @@ public class WordCountDemo {
                         return new KeyValue<>(value, value);
                     }
                 })
-                .countByKey("Counts");
+                .groupByKey()
+                .count("Counts");
 
         // need to override value serde to Long type
         counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");

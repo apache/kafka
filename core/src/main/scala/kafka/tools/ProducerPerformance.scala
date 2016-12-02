@@ -63,7 +63,7 @@ object ProducerPerformance extends Logging {
     val endMs = System.currentTimeMillis
     val elapsedSecs = (endMs - startMs) / 1000.0
     val totalMBSent = (totalBytesSent.get * 1.0) / (1024 * 1024)
-    println(("%s, %s, %d, %d, %d, %.2f, %.4f, %d, %.4f").format(
+    println("%s, %s, %d, %d, %d, %.2f, %.4f, %d, %.4f".format(
       config.dateFormat.format(startMs), config.dateFormat.format(endMs),
       config.compressionCodec.codec, config.messageSize, config.batchSize, totalMBSent,
       totalMBSent / elapsedSecs, totalMessagesSent.get, totalMessagesSent.get / elapsedSecs))

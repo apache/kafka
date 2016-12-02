@@ -36,7 +36,7 @@ package org.apache.kafka.clients.producer;
  * In either of the cases above, the timestamp that has actually been used will be returned to user in
  * {@link RecordMetadata}
  */
-public final class ProducerRecord<K, V> {
+public class ProducerRecord<K, V> {
 
     private final String topic;
     private final Integer partition;
@@ -55,9 +55,13 @@ public final class ProducerRecord<K, V> {
      */
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
         if (topic == null)
-            throw new IllegalArgumentException("Topic cannot be null");
+            throw new IllegalArgumentException("Topic cannot be null.");
         if (timestamp != null && timestamp < 0)
-            throw new IllegalArgumentException("Invalid timestamp " + timestamp);
+            throw new IllegalArgumentException(
+                    String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
+        if (partition != null && partition < 0)
+            throw new IllegalArgumentException(
+                    String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
         this.topic = topic;
         this.partition = partition;
         this.key = key;

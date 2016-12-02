@@ -57,7 +57,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
     partitionsMetadata.foreach(m => m.writeTo(buffer))
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val topicMetadataInfo = new StringBuilder
     topicMetadataInfo.append("{TopicMetadata for topic %s -> ".format(topic))
     Errors.forCode(errorCode) match {
@@ -126,7 +126,7 @@ case class PartitionMetadata(partitionId: Int,
     buffer.putInt(partitionId)
 
     /* leader */
-    val leaderId = if(leader.isDefined) leader.get.id else TopicMetadata.NoLeaderNodeId
+    val leaderId = leader.fold(TopicMetadata.NoLeaderNodeId)(leader => leader.id)
     buffer.putInt(leaderId)
 
     /* number of replicas */
@@ -138,13 +138,13 @@ case class PartitionMetadata(partitionId: Int,
     isr.foreach(r => buffer.putInt(r.id))
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
-    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) leader.get.toString else "none"))
+    partitionMetadataString.append("\tleader: " + leader.getOrElse("none"))
     partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
     partitionMetadataString.append("\tisr: " + isr.mkString(","))
-    partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
+    partitionMetadataString.append("\tisUnderReplicated: " + (isr.size < replicas.size))
     partitionMetadataString.toString()
   }
 

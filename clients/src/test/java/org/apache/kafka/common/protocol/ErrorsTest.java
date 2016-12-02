@@ -77,4 +77,14 @@ public class ErrorsTest {
         assertEquals("forException should default to unknown", Errors.UNKNOWN, error);
     }
 
+    @Test
+    public void testExceptionName() {
+        String exceptionName = Errors.UNKNOWN.exceptionName();
+        assertEquals("org.apache.kafka.common.errors.UnknownServerException", exceptionName);
+        exceptionName = Errors.NONE.exceptionName();
+        assertNull(exceptionName);
+        exceptionName = Errors.INVALID_TOPIC_EXCEPTION.exceptionName();
+        assertEquals("org.apache.kafka.common.errors.InvalidTopicException", exceptionName);
+    }
+
 }

@@ -83,10 +83,8 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
             @Override
             public Map<ByteBuffer, ByteBuffer> call() throws Exception {
                 Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
-                synchronized (MemoryOffsetBackingStore.this) {
-                    for (ByteBuffer key : keys) {
-                        result.put(key, data.get(key));
-                    }
+                for (ByteBuffer key : keys) {
+                    result.put(key, data.get(key));
                 }
                 if (callback != null)
                     callback.onCompletion(null, result);
@@ -102,12 +100,10 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
         return executor.submit(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                synchronized (MemoryOffsetBackingStore.this) {
-                    for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
-                        data.put(entry.getKey(), entry.getValue());
-                    }
-                    save();
+                for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
+                    data.put(entry.getKey(), entry.getValue());
                 }
+                save();
                 if (callback != null)
                     callback.onCompletion(null, null);
                 return null;

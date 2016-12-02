@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
@@ -51,54 +50,47 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void testEvict() {
         // Create the test driver ...
-        KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(3, "three");
+        store.put(4, "four");
+        store.put(5, "five");
+        store.put(6, "six");
+        store.put(7, "seven");
+        store.put(8, "eight");
+        store.put(9, "nine");
+        assertEquals(10, driver.sizeOf(store));
 
-        try {
-            store.put(0, "zero");
-            store.put(1, "one");
-            store.put(2, "two");
-            store.put(3, "three");
-            store.put(4, "four");
-            store.put(5, "five");
-            store.put(6, "six");
-            store.put(7, "seven");
-            store.put(8, "eight");
-            store.put(9, "nine");
-            assertEquals(10, driver.sizeOf(store));
+        store.put(10, "ten");
+        store.flush();
+        assertEquals(10, driver.sizeOf(store));
+        assertTrue(driver.flushedEntryRemoved(0));
+        assertEquals(1, driver.numFlushedEntryRemoved());
 
-            store.put(10, "ten");
-            store.flush();
-            assertEquals(10, driver.sizeOf(store));
-            assertTrue(driver.flushedEntryRemoved(0));
-            assertEquals(1, driver.numFlushedEntryRemoved());
+        store.delete(1);
+        store.flush();
+        assertEquals(9, driver.sizeOf(store));
+        assertTrue(driver.flushedEntryRemoved(0));
+        assertTrue(driver.flushedEntryRemoved(1));
+        assertEquals(2, driver.numFlushedEntryRemoved());
 
-            store.delete(1);
-            store.flush();
-            assertEquals(9, driver.sizeOf(store));
-            assertTrue(driver.flushedEntryRemoved(0));
-            assertTrue(driver.flushedEntryRemoved(1));
-            assertEquals(2, driver.numFlushedEntryRemoved());
+        store.put(11, "eleven");
+        store.flush();
+        assertEquals(10, driver.sizeOf(store));
+        assertEquals(2, driver.numFlushedEntryRemoved());
 
-            store.put(11, "eleven");
-            store.flush();
-            assertEquals(10, driver.sizeOf(store));
-            assertEquals(2, driver.numFlushedEntryRemoved());
+        store.put(2, "two-again");
+        store.flush();
+        assertEquals(10, driver.sizeOf(store));
+        assertEquals(2, driver.numFlushedEntryRemoved());
 
-            store.put(2, "two-again");
-            store.flush();
-            assertEquals(10, driver.sizeOf(store));
-            assertEquals(2, driver.numFlushedEntryRemoved());
-
-            store.put(12, "twelve");
-            store.flush();
-            assertEquals(10, driver.sizeOf(store));
-            assertTrue(driver.flushedEntryRemoved(0));
-            assertTrue(driver.flushedEntryRemoved(1));
-            assertTrue(driver.flushedEntryRemoved(2));
-            assertEquals(3, driver.numFlushedEntryRemoved());
-        } finally {
-            store.close();
-        }
+        store.put(12, "twelve");
+        store.flush();
+        assertEquals(10, driver.sizeOf(store));
+        assertTrue(driver.flushedEntryRemoved(0));
+        assertTrue(driver.flushedEntryRemoved(1));
+        assertTrue(driver.flushedEntryRemoved(3));
+        assertEquals(3, driver.numFlushedEntryRemoved());
     }
 }

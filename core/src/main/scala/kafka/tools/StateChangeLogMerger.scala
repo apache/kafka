@@ -108,7 +108,7 @@ object StateChangeLogMerger extends Logging {
       val fileNameIndex = regex.lastIndexOf('/') + 1
       val dirName = if (fileNameIndex == 0) "." else regex.substring(0, fileNameIndex - 1)
       val fileNameRegex = new Regex(regex.substring(fileNameIndex))
-      files :::= new java.io.File(dirName).listFiles.filter(f => fileNameRegex.findFirstIn(f.getName) != None).map(dirName + "/" + _.getName).toList
+      files :::= new java.io.File(dirName).listFiles.filter(f => fileNameRegex.findFirstIn(f.getName).isDefined).map(dirName + "/" + _.getName).toList
     }
     if (options.has(topicOpt)) {
       topic = options.valueOf(topicOpt)
@@ -141,9 +141,9 @@ object StateChangeLogMerger extends Logging {
       if (!lineItr.isEmpty)
         lines ::= lineItr
     }
-    if (!lines.isEmpty) pqueue.enqueue(lines:_*)
+    if (lines.nonEmpty) pqueue.enqueue(lines:_*)
 
-    while (!pqueue.isEmpty) {
+    while (pqueue.nonEmpty) {
       val lineItr = pqueue.dequeue()
       output.write((lineItr.line + "\n").getBytes)
       val nextLineItr = getNextLine(lineItr.itr)
@@ -182,7 +182,7 @@ object StateChangeLogMerger extends Logging {
 
   class LineIterator(val line: String, val itr: Iterator[String]) {
     def this() = this("", null)
-    def isEmpty = (line == "" && itr == null)
+    def isEmpty = line == "" && itr == null
   }
 
   implicit object dateBasedOrdering extends Ordering[LineIterator] {

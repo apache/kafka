@@ -69,8 +69,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, "Blah", 1)
       fail("Topic should not exist")
     } catch {
-      case e: AdminOperationException => //this is good
-      case e2: Throwable => throw e2
+      case _: AdminOperationException => //this is good
     }
   }
 
@@ -80,8 +79,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
     } catch {
-      case e: AdminOperationException => //this is good
-      case e2: Throwable => throw e2
+      case _: AdminOperationException => //this is good
     }
   }
 
@@ -134,7 +132,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     assertEquals(partitionDataForTopic2(2).partitionId, 2)
     val replicas = partitionDataForTopic2(1).replicas
     assertEquals(replicas.size, 2)
-    assert(replicas(0).id == 0 || replicas(0).id == 1)
+    assert(replicas.head.id == 0 || replicas.head.id == 1)
     assert(replicas(1).id == 0 || replicas(1).id == 1)
   }
 

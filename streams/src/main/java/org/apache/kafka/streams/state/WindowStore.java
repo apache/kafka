@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <V> Type of values
  */
 @InterfaceStability.Unstable
-public interface WindowStore<K, V> extends StateStore {
+public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**
      * Put a key-value pair with the current wall-clock time as the timestamp
@@ -42,11 +42,4 @@ public interface WindowStore<K, V> extends StateStore {
      */
     void put(K key, V value, long timestamp);
 
-    /**
-     * Get all the key-value pairs with the given key and the time range from all
-     * the existing windows.
-     *
-     * @return an iterator over key-value pairs {@code <timestamp, value>}
-     */
-    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 }

@@ -66,7 +66,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     var remainingRetries = config.messageSendMaxRetries + 1
     val correlationIdStart = correlationId.get()
     debug("Handling %d events".format(events.size))
-    while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
+    while (remainingRetries > 0 && outstandingProduceRequests.nonEmpty) {
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&
           SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
@@ -76,7 +76,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         lastTopicMetadataRefreshTime = SystemTime.milliseconds
       }
       outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
-      if (outstandingProduceRequests.size > 0) {
+      if (outstandingProduceRequests.nonEmpty) {
         info("Back off for %d ms before retrying send. Remaining retries = %d".format(config.retryBackoffMs, remainingRetries-1))
         // back off and update the topic metadata cache before attempting another send operation
         Thread.sleep(config.retryBackoffMs)
@@ -87,7 +87,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         producerStats.resendRate.mark()
       }
     }
-    if(outstandingProduceRequests.size > 0) {
+    if(outstandingProduceRequests.nonEmpty) {
       producerStats.failedSendRate.mark()
       val correlationIdEnd = correlationId.get()
       error("Failed to send requests for topics %s with correlation ids in [%d,%d]"
@@ -261,9 +261,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    */
   private def send(brokerId: Int, messagesPerTopic: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]) = {
     if(brokerId < 0) {
-      warn("Failed to send data since partitions %s don't have a leader".format(messagesPerTopic.map(_._1).mkString(",")))
+      warn("Failed to send data since partitions %s don't have a leader".format(messagesPerTopic.keys.mkString(",")))
       messagesPerTopic.keys.toSeq
-    } else if(messagesPerTopic.size > 0) {
+    } else if(messagesPerTopic.nonEmpty) {
       val currentCorrelationId = correlationId.getAndIncrement
       val producerRequest = new ProducerRequest(currentCorrelationId, config.clientId, config.requestRequiredAcks,
         config.requestTimeoutMs, messagesPerTopic)
@@ -285,7 +285,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           }
           val failedPartitionsAndStatus = response.status.filter(_._2.error != Errors.NONE.code).toSeq
           failedTopicPartitions = failedPartitionsAndStatus.map(partitionStatus => partitionStatus._1)
-          if(failedTopicPartitions.size > 0) {
+          if(failedTopicPartitions.nonEmpty) {
             val errorString = failedPartitionsAndStatus
               .sortWith((p1, p2) => p1._1.topic.compareTo(p2._1.topic) < 0 ||
                                     (p1._1.topic.compareTo(p2._1.topic) == 0 && p1._1.partition < p2._1.partition))
@@ -302,7 +302,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       } catch {
         case t: Throwable =>
           warn("Failed to send producer request with correlation id %d to broker %d with data for partitions %s"
-            .format(currentCorrelationId, brokerId, messagesPerTopic.map(_._1).mkString(",")), t)
+            .format(currentCorrelationId, brokerId, messagesPerTopic.keys.mkString(",")), t)
           messagesPerTopic.keys.toSeq
       }
     } else {

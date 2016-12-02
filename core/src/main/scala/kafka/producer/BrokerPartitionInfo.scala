@@ -55,7 +55,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
           }
       }
     val partitionMetadata = metadata.partitionsMetadata
-    if(partitionMetadata.size == 0) {
+    if(partitionMetadata.isEmpty) {
       if(metadata.errorCode != Errors.NONE.code) {
         throw new KafkaException(Errors.forCode(metadata.errorCode).exception)
       } else {

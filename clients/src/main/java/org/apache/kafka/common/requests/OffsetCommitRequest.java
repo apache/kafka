@@ -154,7 +154,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
@@ -194,7 +194,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         else
             retentionTime = DEFAULT_RETENTION_TIME;
 
-        offsetData = new HashMap<TopicPartition, PartitionData>();
+        offsetData = new HashMap<>();
         for (Object topicDataObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicData = (Struct) topicDataObj;
             String topic = topicData.getString(TOPIC_KEY_NAME);
@@ -217,8 +217,8 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+        Map<TopicPartition, Short> responseData = new HashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
             responseData.put(entry.getKey(), Errors.forException(e).code());
         }

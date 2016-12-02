@@ -94,6 +94,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return inner.isOpen();
+    }
+
+    @Override
     public V get(K key) {
         long startNs = time.nanoseconds();
         try {
@@ -151,6 +156,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public KeyValueIterator<K, V> all() {
         return new MeteredKeyValueIterator<>(this.inner.all(), this.allTime);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return this.inner.approximateNumEntries();
     }
 
     @Override

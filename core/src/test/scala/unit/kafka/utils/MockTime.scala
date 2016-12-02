@@ -46,7 +46,7 @@ class MockTime(@volatile private var currentMs: Long) extends Time {
     scheduler.tick()
   }
   
-  override def toString() = "MockTime(%d)".format(milliseconds)
+  override def toString = "MockTime(%d)".format(milliseconds)
 
 }
 
