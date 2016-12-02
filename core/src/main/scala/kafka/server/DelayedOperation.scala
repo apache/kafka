@@ -17,20 +17,17 @@
 
 package kafka.server
 
-import kafka.utils._
-import kafka.utils.timer._
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.metrics.KafkaMetricsGroup
-
-import java.util.LinkedList
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import scala.collection._
-
 import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils._
+import kafka.utils.timer._
 
+import scala.collection._
 
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
@@ -48,7 +45,6 @@ import com.yammer.metrics.core.Gauge
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
-  private val purged = new AtomicBoolean(false)
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -74,15 +70,9 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   }
 
   /**
-   * This is used by Watchers to be able to determine which thread actually
-   * removed the operation from its queue (in the face of concurrent iteration)
-   */
-  final def purge(): Boolean = purged.compareAndSet(false, true)
-
-  /**
    * Check if the delayed operation is already completed
    */
-  def isCompleted(): Boolean = completed.get()
+  def isCompleted: Boolean = completed.get()
 
   /**
    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
@@ -307,22 +297,26 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   private class Watchers(val key: Any) {
 
-    private[this] val operations = new ConcurrentLinkedQueue[T]()
-    private[this] val approximateWatched = new AtomicInteger(0)
+    private case class WatchedOperation(op: T, purged: AtomicBoolean = new AtomicBoolean(false))
 
-    def watched: Int = approximateWatched.get
+    private[this] val operations = new ConcurrentLinkedQueue[WatchedOperation]()
+
+    // tracked separately because size() is O(n) for ConcurrentLinkedQueue
+    private[this] val numWatched = new AtomicInteger(0)
+
+    def watched: Int = numWatched.get
 
     def isEmpty: Boolean = operations.isEmpty
 
     // add the element to watch
     def watch(t: T) {
-      operations.add(t)
-      approximateWatched.incrementAndGet()
+      operations.add(WatchedOperation(t))
+      numWatched.incrementAndGet()
     }
 
-    private def purge(t: T): Boolean = {
-      if (t.purge()) {
-        approximateWatched.decrementAndGet()
+    private def purge(op: WatchedOperation): Boolean = {
+      if (op.purged.compareAndSet(false, true)) {
+        numWatched.decrementAndGet()
         true
       } else {
         false
@@ -335,11 +329,11 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       val iter = operations.iterator()
       while (iter.hasNext) {
         val curr = iter.next()
-        if (curr.isCompleted) {
+        if (curr.op.isCompleted) {
           // another thread has completed this operation, just remove it
           iter.remove()
           purge(curr)
-        } else if (curr.safeTryComplete()) {
+        } else if (curr.op.safeTryComplete()) {
           iter.remove()
           if (purge(curr))
             completed += 1
@@ -358,7 +352,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       val iter = operations.iterator()
       while (iter.hasNext) {
         val curr = iter.next()
-        if (curr.isCompleted) {
+        if (curr.op.isCompleted) {
           iter.remove()
           if (purge(curr))
             purged += 1

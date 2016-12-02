@@ -34,7 +34,10 @@ private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
                                        rebalanceTimeout: Long)
   extends DelayedOperation(rebalanceTimeout) {
 
+  // overridden since tryComplete already synchronizes on the group. This makes it safe to
+  // call purgatory operations while holding the group lock.
   override def safeTryComplete(): Boolean = tryComplete()
+
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)
   override def onExpiration() = coordinator.onExpireJoin()
   override def onComplete() = coordinator.onCompleteJoin(group)
