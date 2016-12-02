@@ -197,7 +197,7 @@ class GroupMetadataManagerTest {
       maybeError = Some(error)
     }
 
-    val delayedStoreOpt = groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback)
+    groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP), maybeError)
     EasyMock.verify(replicaManager)
   }
@@ -379,7 +379,52 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testExpireGroup() {
+  def testGroupMetadataRemoval() {
+    val topicPartition1 = new TopicPartition("foo", 0)
+    val topicPartition2 = new TopicPartition("foo", 1)
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+
+    val group = new GroupMetadata(groupId)
+    groupMetadataManager.addGroup(group)
+    group.generationId = 5
+
+    // expect the group metadata tombstone
+    EasyMock.reset(partition)
+    val messageSetCapture: Capture[ByteBufferMessageSet] = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andStubReturn(Some(Message.MagicValue_V1))
+    EasyMock.expect(replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartitionId)).andStubReturn(Some(partition))
+    EasyMock.expect(partition.appendMessagesToLeader(EasyMock.capture(messageSetCapture), EasyMock.anyInt()))
+      .andReturn(LogAppendInfo.UnknownLogAppendInfo)
+    EasyMock.replay(replicaManager, partition)
+
+    groupMetadataManager.cleanupGroupMetadata()
+
+    assertTrue(messageSetCapture.hasCaptured)
+
+    val messageSet = messageSetCapture.getValue
+    assertEquals(1, messageSet.size)
+
+    val metadataTombstone = messageSet.head.message
+    assertTrue(metadataTombstone.hasKey)
+    assertTrue(metadataTombstone.isNull)
+
+    val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
+    assertEquals(groupId, groupKey.key)
+
+    // the full group should be gone since all offsets were removed
+    assertEquals(None, groupMetadataManager.getGroup(groupId))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
+  }
+
+  @Test
+  def testExpireGroupWithOffsetsOnly() {
+    // verify that the group is removed properly, but no tombstone is written if
+    // this is a group which is only using kafka for offset storage
+
     val memberId = ""
     val generationId = -1
     val topicPartition1 = new TopicPartition("foo", 0)
@@ -418,11 +463,26 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     EasyMock.reset(partition)
-    EasyMock.expect(partition.appendMessagesToLeader(EasyMock.anyObject(classOf[ByteBufferMessageSet]), EasyMock.anyInt()))
+    val messageSetCapture: Capture[ByteBufferMessageSet] = EasyMock.newCapture()
+
+    EasyMock.expect(partition.appendMessagesToLeader(EasyMock.capture(messageSetCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
     groupMetadataManager.cleanupGroupMetadata()
+
+    assertTrue(messageSetCapture.hasCaptured)
+
+    // verify the tombstones are correct and only for the expired offsets
+    val messageSet = messageSetCapture.getValue
+    assertEquals(2, messageSet.size)
+    messageSet.map(_.message).foreach { message =>
+      assertTrue(message.hasKey)
+      assertTrue(message.isNull)
+      val offsetKey = GroupMetadataManager.readMessageKey(message.key).asInstanceOf[OffsetKey]
+      assertEquals(groupId, offsetKey.key.group)
+      assertEquals("foo", offsetKey.key.topicPartition.topic)
+    }
 
     // the full group should be gone since all offsets were removed
     assertEquals(None, groupMetadataManager.getGroup(groupId))
@@ -509,6 +569,5 @@ class GroupMetadataManagerTest {
       )})
     EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andStubReturn(Some(Message.MagicValue_V1))
   }
-
 
 }
