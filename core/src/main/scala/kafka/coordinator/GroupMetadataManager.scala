@@ -592,7 +592,7 @@ class GroupMetadataManager(val brokerId: Int,
               // retry removing this group.
               tombstones += new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
                 timestamp = timestamp, magicValue = magicValue)
-              trace(s"Marked group $groupId in $appendPartition for deletion")
+              trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
             }
 
             if (tombstones.nonEmpty) {
@@ -601,10 +601,10 @@ class GroupMetadataManager(val brokerId: Int,
                 // it will be appended again in the next purge cycle
                 partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstones: _*))
                 offsetsRemoved += expiredOffsets.size
-                trace(s"Successfully appended tombstones to $appendPartition for expired offsets and/or metadata for group $groupId")
+                trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired offsets and/or metadata for group $groupId")
               } catch {
                 case t: Throwable =>
-                  error(s"Failed to append tombstones to $appendPartition for expired offsets and/or metadata for group $groupId.", t)
+                  error(s"Failed to append ${tombstones.size} tombstones to $appendPartition for expired offsets and/or metadata for group $groupId.", t)
                 // ignore and continue
               }
             }
