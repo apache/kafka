@@ -268,6 +268,10 @@ public class NetworkClient implements KafkaClient {
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
     }
 
+    private boolean canSendRequest(String node, short apiKey) {
+        return this.requiredApiVersions != null && apiKey == ApiKeys.API_VERSIONS.id && apiVersionsRequestQueue.contains(node) || canSendRequest(node);
+    }
+
     /**
      * Are we connected and ready and able to send more requests to the given connection?
      *
@@ -295,7 +299,7 @@ public class NetworkClient implements KafkaClient {
 
     private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
         String nodeId = request.destination();
-        if (!canSendRequest(nodeId))
+        if (!canSendRequest(nodeId, request.header().apiKey()))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
 
         Send send = request.body().toSend(nodeId, request.header());

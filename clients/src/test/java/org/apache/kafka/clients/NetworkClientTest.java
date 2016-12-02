@@ -134,11 +134,11 @@ public class NetworkClientTest {
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
+        awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, produceRequest, handler);
-        awaitReady(networkClient, node);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
@@ -191,11 +191,11 @@ public class NetworkClientTest {
 
     @Test
     public void testRequestTimeout() {
+        awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, produceRequest, handler);
-        awaitReady(client, node);
         long now = time.milliseconds();
         client.send(request, now);
         // sleeping to make sure that the time since last send is greater than requestTimeOut
