@@ -21,16 +21,10 @@ import kafka.utils._
 import kafka.utils.timer._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.metrics.KafkaMetricsGroup
-
-import java.util.LinkedList
-import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.utils.Utils
-
 import scala.collection._
-
 import com.yammer.metrics.core.Gauge
 
 
@@ -77,7 +71,7 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   /**
    * Check if the delayed operation is already completed
    */
-  def isCompleted(): Boolean = completed.get()
+  def isCompleted: Boolean = completed.get()
 
   /**
    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
@@ -98,6 +92,12 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
    * This function needs to be defined in subclasses
    */
   def tryComplete(): Boolean
+
+  def safeTryComplete(): Boolean = {
+    synchronized {
+      tryComplete()
+    }
+  }
 
   /*
    * run() method defines a task that is executed on timeout
@@ -187,14 +187,14 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation synchronized operation.tryComplete()
+    var isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
     var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted())
+      if (operation.isCompleted)
         return false
       watchForOperation(key, operation)
 
@@ -204,14 +204,14 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       }
     }
 
-    isCompletedByMe = operation synchronized operation.tryComplete()
+    isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
-    if (! operation.isCompleted()) {
+    if (!operation.isCompleted) {
       timeoutTimer.add(operation)
-      if (operation.isCompleted()) {
+      if (operation.isCompleted) {
         // cancel the timer task
         operation.cancel()
       }
@@ -288,58 +288,53 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   }
 
   /**
-   * A linked list of watched delayed operations based on some key
+   * A vector of watched delayed operations for a specific key
    */
   private class Watchers(val key: Any) {
 
-    private[this] val operations = new LinkedList[T]()
+    private[this] var operations = Vector[T]()
 
-    def watched: Int = operations synchronized operations.size
+    def watched: Int = synchronized {
+      operations.size
+    }
 
     // add the element to watch
     def watch(t: T) {
-      operations synchronized operations.add(t)
+      synchronized {
+        operations = operations :+ t
+      }
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
+      val ops = synchronized(operations)
+      var completedAlready = 0
+      var completedNow = 0
 
-      var completed = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            // another thread has completed this operation, just remove it
-            iter.remove()
-          } else if (curr synchronized curr.tryComplete()) {
-            completed += 1
-            iter.remove()
-          }
-        }
+      // call tryComplete without holding the lock to avoid potential deadlocks
+      for (op <- ops) {
+        if (op.isCompleted)
+          completedAlready += 1
+        else if (op.safeTryComplete())
+          completedNow += 1
       }
 
-      if (operations.size == 0)
-        removeKeyIfEmpty(key, this)
+      // purge if there are any completed operations
+      if (completedAlready + completedNow > 0)
+        purgeCompleted()
 
-      completed
+      completedNow
     }
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
-      var purged = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            iter.remove()
-            purged += 1
-          }
-        }
+      val (purged, shouldRemove) = synchronized {
+        val initialSize = operations.size
+        operations = operations.filterNot(_.isCompleted)
+        (initialSize - operations.size, operations.isEmpty)
       }
 
-      if (operations.size == 0)
+      if (shouldRemove)
         removeKeyIfEmpty(key, this)
 
       purged
