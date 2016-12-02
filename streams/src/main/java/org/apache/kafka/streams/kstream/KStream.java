@@ -367,8 +367,10 @@ public interface KStream<K, V> {
      *
      * @param processorSupplier         the supplier of {@link ProcessorSupplier} that generates {@link org.apache.kafka.streams.processor.Processor}
      * @param stateStoreNames           the names of the state store used by the processor
+     *
+     * @return processor                the name of the processor
      */
-    void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
+    String process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.

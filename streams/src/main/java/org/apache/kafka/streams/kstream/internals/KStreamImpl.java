@@ -380,11 +380,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public void process(final ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames) {
+    public String process(final ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames) {
         String name = topology.newName(PROCESSOR_NAME);
 
         topology.addProcessor(name, processorSupplier, this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
+
+        return name;
     }
 
     @Override
