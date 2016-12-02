@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -60,8 +62,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
-
     private boolean requiresPoll = true;
+    private final Time time;
+    private Sensor nodeCommitTimeSensor;
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -86,10 +89,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
-                      ThreadCache cache) {
+                      ThreadCache cache,
+                      Time time) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.nodeCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit");
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -114,7 +119,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
-
+        this.time = time;
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
@@ -238,7 +243,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
 
         try {
+            long now = time.milliseconds();
             node.processor().punctuate(timestamp);
+            node.nodeMetrics.nodePunctuateTimeSensor.record(time.milliseconds() - now);
         } catch (KafkaException ke) {
             throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
@@ -246,15 +253,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-
-    public ProcessorNode node() {
-        return recordInfo.node();
-    }
-
     /**
      * Commit the current task state
      */
     public void commit() {
+        long now = time.milliseconds();
         log.debug("{} Committing its state", logPrefix);
         // 1) flush local state
         stateMgr.flush(processorContext);
@@ -265,6 +268,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // 3) commit consumed offsets if it is dirty already
         commitOffsets();
+        nodeCommitTimeSensor.record(time.milliseconds() - now);
     }
 
     /**
@@ -386,6 +390,5 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public String toString() {
         return super.toString();
     }
-
 
 }

@@ -59,7 +59,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         if (this.valDeserializer instanceof ChangedDeserializer &&
                 ((ChangedDeserializer) this.valDeserializer).inner() == null)
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
-        this.nodeMetrics = new NodeMetricsImpl(metrics, name(),  "task." + context.taskId());
+        this.nodeMetrics = new NodeMetrics(metrics, name(),  "task." + context.taskId());
 
     }
 

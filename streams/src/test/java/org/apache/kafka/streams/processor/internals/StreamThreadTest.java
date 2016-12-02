@@ -142,7 +142,7 @@ public class StreamThreadTest {
                               StreamsConfig config,
                               StreamsMetrics metrics,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, metrics, stateDirectory, null);
+            super(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, metrics, stateDirectory, null, new MockTime());
         }
 
         @Override

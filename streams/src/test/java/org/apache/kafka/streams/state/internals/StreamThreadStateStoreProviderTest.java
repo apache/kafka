@@ -18,6 +18,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -186,7 +187,8 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new StreamsMetricsForTests(new Metrics()), stateDirectory, null) {
+                              streamsConfig, new StreamsMetricsForTests(new Metrics()), stateDirectory, null,
+            new MockTime()) {
             @Override
             protected void initializeOffsetLimits() {
 

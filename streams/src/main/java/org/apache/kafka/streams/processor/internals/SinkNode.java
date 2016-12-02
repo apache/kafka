@@ -64,7 +64,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (this.valSerializer instanceof ChangedSerializer &&
                 ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
-        this.nodeMetrics = new NodeMetricsImpl(metrics, name(),  "task." + context.taskId());
+        this.nodeMetrics = new NodeMetrics(metrics, name(),  "task." + context.taskId());
     }
 
 
