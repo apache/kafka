@@ -61,8 +61,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String storeName) {
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
@@ -71,16 +71,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       String storeName) {
         return aggregate(initializer, adder, subtractor, null, storeName);
     }
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");

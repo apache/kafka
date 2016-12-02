@@ -32,9 +32,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final KeyValueMapper<K, V, KeyValue<K1, V1>> mapper;
+    private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
 
-    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
+    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
