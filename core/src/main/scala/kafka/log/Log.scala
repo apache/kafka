@@ -104,18 +104,21 @@ class Log(@volatile var dir: File,
       0
   }
 
+  @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
+
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   locally {
     val startMs = time.milliseconds
+
     loadSegments()
+    /* Calculate the offset of the next message */
+    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
+      activeSegment.size.toInt)
+
     info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
       .format(name, segments.size(), logEndOffset, time.milliseconds - startMs))
   }
-
-  /* Calculate the offset of the next message */
-  @volatile private var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
-    activeSegment.size.toInt)
 
   val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(dir)
 
