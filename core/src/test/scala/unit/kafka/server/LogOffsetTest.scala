@@ -214,6 +214,25 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
   }
 
+  /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
+   * different (simulating a race condition) */
+  @Test
+  def testFetchOffsetsBeforeWithChangingSegments() {
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    EasyMock.expect(log.logSegments).andStubAnswer {
+      new IAnswer[Iterable[LogSegment]] {
+        def answer = new Iterable[LogSegment] {
+          override def size = 2
+          def iterator = Seq(logSegment).iterator
+        }
+      }
+    }
+    EasyMock.replay(logSegment)
+    EasyMock.replay(log)
+    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
+  }
+
   private def createBrokerConfig(nodeId: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
