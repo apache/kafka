@@ -1013,6 +1013,40 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
+  def testOverCompactedLogRecovery(): Unit = {
+    // append some messages to create some segments
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.MaxMessageBytesProp, 64*1024: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    val config = LogConfig(logProps)
+    val log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    val set1 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = Seq(0),
+      messages = new Message("v1".getBytes(), "k1".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+    val set2 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = Seq(Integer.MAX_VALUE.toLong + 1),
+      messages = new Message("v2".getBytes(), "k2".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+    log.append(set1, false)
+    //This last write will cause an integer overflow when appending to the log
+    log.append(set2, false)
+
+    log.close()
+    for (file : File <- logDir.listFiles()) {
+      if (file.getName.contains(".index")) {
+        val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
+        assertTrue(offsetIndex.lastOffset >= 0)
+      }
+    }
+  }
+
+  @Test
   def testCleanShutdownFile() {
     // append some messages to create some segments
     val logProps = new Properties()
