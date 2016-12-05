@@ -30,6 +30,7 @@ public class MetricConfig {
     private long eventWindow;
     private long timeWindowMs;
     private Map<String, String> tags;
+    private Sensor.LogLevel logLevel;
 
     public MetricConfig() {
         super();
@@ -38,6 +39,7 @@ public class MetricConfig {
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();
+        this.logLevel = Sensor.LogLevel.SENSOR_INFO;
     }
 
     public Quota quota() {
@@ -86,4 +88,15 @@ public class MetricConfig {
         this.samples = samples;
         return this;
     }
+
+    public Sensor.LogLevel logLevel() {
+        return this.logLevel;
+    }
+
+    public MetricConfig logLevel(Sensor.LogLevel logLevel) {
+        this.logLevel = logLevel;
+        return this;
+    }
+
+
 }

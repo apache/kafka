@@ -59,16 +59,16 @@ public class MockStreamsMetrics implements StreamsMetrics {
     }
 
     @Override
-    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.LogLevel logLevel, String... tags) {
         Map<String, String> tagMap = new HashMap<>();
         String metricGroupName = "stream-" + scopeName + "-metrics";
 
         // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + operationName);
+        Sensor parent = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + operationName, logLevel);
         addLatencyMetrics(metricGroupName, parent, "all", operationName, tagMap);
 
         // add the store operation metrics with additional tags
-        Sensor sensor = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + entityName + "-" + operationName, parent);
+        Sensor sensor = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + entityName + "-" + operationName, logLevel, parent);
         addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
         return sensor;
@@ -93,8 +93,8 @@ public class MockStreamsMetrics implements StreamsMetrics {
     }
 
     @Override
-    public Sensor sensor(String name) {
-        return metrics.sensor(name);
+    public Sensor sensor(String name, Sensor.LogLevel logLevel) {
+        return metrics.sensor(name, logLevel);
     }
 
 
@@ -104,7 +104,7 @@ public class MockStreamsMetrics implements StreamsMetrics {
     }
 
     @Override
-    public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return metrics.sensor(name, config, parents);
+    public Sensor sensor(String name, MetricConfig config, Sensor.LogLevel logLevel, Sensor... parents) {
+        return metrics.sensor(name, config, logLevel, parents);
     }
 }

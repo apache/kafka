@@ -41,7 +41,34 @@ public final class Sensor {
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
 
-    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time, long inactiveSensorExpirationTimeSeconds) {
+    public enum LogLevel {
+        SENSOR_INFO, SENSOR_DEBUG;
+        public static final String SENSOR_INFO_STR = "SENSOR_INFO";
+        public static final String SENSOR_DEBUG_STR = "SENSOR_DEBUG";
+
+        public static LogLevel fromString(String logLevel) {
+            if (logLevel.equals(SENSOR_INFO_STR)) {
+                return SENSOR_INFO;
+            } else if (logLevel.equals(SENSOR_DEBUG_STR)) {
+                return SENSOR_DEBUG;
+            }
+            return null;
+        }
+
+        public static String toString(LogLevel logLevel) {
+            if (logLevel == SENSOR_DEBUG) {
+                return SENSOR_DEBUG_STR;
+            } else if (logLevel == SENSOR_INFO) {
+                return SENSOR_INFO_STR;
+            }
+
+            return null;
+        }
+    }
+    private final LogLevel logLevel;
+
+    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
+           long inactiveSensorExpirationTimeSeconds, LogLevel logLevel) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
@@ -52,6 +79,7 @@ public final class Sensor {
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
+        this.logLevel = logLevel;
         checkForest(new HashSet<Sensor>());
     }
 
@@ -74,7 +102,9 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        record(1.0);
+        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+            record(1.0);
+        }
     }
 
     /**
@@ -84,7 +114,9 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        record(value, time.milliseconds());
+        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+            record(value, time.milliseconds());
+        }
     }
 
     /**
@@ -96,15 +128,17 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        this.lastRecordTime = timeMs;
-        synchronized (this) {
-            // increment all the stats
-            for (int i = 0; i < this.stats.size(); i++)
-                this.stats.get(i).record(config, value, timeMs);
-            checkQuotas(timeMs);
+        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+            this.lastRecordTime = timeMs;
+            synchronized (this) {
+                // increment all the stats
+                for (int i = 0; i < this.stats.size(); i++)
+                    this.stats.get(i).record(config, value, timeMs);
+                checkQuotas(timeMs);
+            }
+            for (int i = 0; i < parents.length; i++)
+                parents[i].record(value, timeMs);
         }
-        for (int i = 0; i < parents.length; i++)
-            parents[i].record(value, timeMs);
     }
 
     /**

@@ -68,15 +68,15 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
-        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent");
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
-        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete");
-        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all");
-        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all");
-        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range");
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.LogLevel.SENSOR_DEBUG);
+        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.LogLevel.SENSOR_DEBUG);
+        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.LogLevel.SENSOR_DEBUG);
+        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete", Sensor.LogLevel.SENSOR_DEBUG);
+        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all", Sensor.LogLevel.SENSOR_DEBUG);
+        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all", Sensor.LogLevel.SENSOR_DEBUG);
+        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range", Sensor.LogLevel.SENSOR_DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.LogLevel.SENSOR_DEBUG);
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.LogLevel.SENSOR_DEBUG);
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();

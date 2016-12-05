@@ -241,8 +241,13 @@ public class Metrics implements Closeable {
      * @return The sensor
      */
     public Sensor sensor(String name) {
-        return sensor(name, null, (Sensor[]) null);
+        return this.sensor(name, Sensor.LogLevel.SENSOR_INFO);
     }
+
+    public Sensor sensor(String name, Sensor.LogLevel logLevel) {
+        return sensor(name, null, logLevel, (Sensor[]) null);
+    }
+
 
     /**
      * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
@@ -252,7 +257,10 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public Sensor sensor(String name, Sensor... parents) {
-        return sensor(name, null, parents);
+        return this.sensor(name, Sensor.LogLevel.SENSOR_INFO, parents);
+    }
+    public Sensor sensor(String name, Sensor.LogLevel logLevel, Sensor... parents) {
+        return sensor(name, null, logLevel, parents);
     }
 
     /**
@@ -264,7 +272,10 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return sensor(name, config, Long.MAX_VALUE, parents);
+        return this.sensor(name, config, Sensor.LogLevel.SENSOR_INFO, parents);
+    }
+    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.LogLevel logLevel, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, logLevel, parents);
     }
 
     /**
@@ -277,10 +288,10 @@ public class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.LogLevel logLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, logLevel);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -295,6 +306,9 @@ public class Metrics implements Closeable {
             log.debug("Added sensor with name {}", name);
         }
         return s;
+    }
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.LogLevel.SENSOR_INFO, parents);
     }
 
     /**
