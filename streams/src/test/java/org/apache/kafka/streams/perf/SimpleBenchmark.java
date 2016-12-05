@@ -120,21 +120,21 @@ public class SimpleBenchmark {
         SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka, zookeeper);
 
         // producer performance
-        //benchmark.produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+        benchmark.produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
         // consumer performance
-        //benchmark.consume(SOURCE_TOPIC);
+        benchmark.consume(SOURCE_TOPIC);
         // simple stream performance source->process
         benchmark.processStream(SOURCE_TOPIC);
         // simple stream performance source->sink
-        //benchmark.processStreamWithSink(SOURCE_TOPIC);
+        benchmark.processStreamWithSink(SOURCE_TOPIC);
         // simple stream performance source->store
-        //benchmark.processStreamWithStateStore(SOURCE_TOPIC);
+        benchmark.processStreamWithStateStore(SOURCE_TOPIC);
         // simple streams performance KSTREAM-KTABLE join
-        //benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "kStreamKTable", JOIN_TOPIC_2_PREFIX + "kStreamKTable");
+        benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "kStreamKTable", JOIN_TOPIC_2_PREFIX + "kStreamKTable");
         // simple streams performance KSTREAM-KSTREAM join
-        //benchmark.kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "kStreamKStream", JOIN_TOPIC_2_PREFIX + "kStreamKStream");
+        benchmark.kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "kStreamKStream", JOIN_TOPIC_2_PREFIX + "kStreamKStream");
         // simple streams performance KTABLE-KTABLE join
-        //benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "kTableKTable", JOIN_TOPIC_2_PREFIX + "kTableKTable");
+        benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "kTableKTable", JOIN_TOPIC_2_PREFIX + "kTableKTable");
     }
 
     private Properties setJoinProperties(final String applicationId) {
