@@ -784,7 +784,7 @@ object GroupCoordinator {
             time: Time): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
+      offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
       offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
       offsetsTopicNumPartitions = config.offsetsTopicPartitions,
       offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
