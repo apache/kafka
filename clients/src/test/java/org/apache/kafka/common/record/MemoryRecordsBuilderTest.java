@@ -42,6 +42,68 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testCompressionRateV0() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        Record[] records = new Record[] {
+                Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()),
+                Record.create(Record.MAGIC_VALUE_V0, 1L, "b".getBytes(), "2".getBytes()),
+                Record.create(Record.MAGIC_VALUE_V0, 2L, "c".getBytes(), "3".getBytes()),
+        };
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V0, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
+
+        int uncompressedSize = 0;
+        long offset = 0L;
+        for (Record record : records) {
+            uncompressedSize += record.size() + Records.LOG_OVERHEAD;
+            builder.append(offset++, record);
+        }
+
+        MemoryRecords built = builder.build();
+        if (compressionType == CompressionType.NONE) {
+            assertEquals(1.0, builder.compressionRate(), 0.00001);
+        } else {
+            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD_V0;
+            double computedCompressionRate = (double) compressedSize / uncompressedSize;
+            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+        }
+    }
+
+    @Test
+    public void testCompressionRateV1() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        Record[] records = new Record[] {
+                Record.create(Record.MAGIC_VALUE_V1, 0L, "a".getBytes(), "1".getBytes()),
+                Record.create(Record.MAGIC_VALUE_V1, 1L, "b".getBytes(), "2".getBytes()),
+                Record.create(Record.MAGIC_VALUE_V1, 2L, "c".getBytes(), "3".getBytes()),
+        };
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
+
+        int uncompressedSize = 0;
+        long offset = 0L;
+        for (Record record : records) {
+            uncompressedSize += record.size() + Records.LOG_OVERHEAD;
+            builder.append(offset++, record);
+        }
+
+        MemoryRecords built = builder.build();
+        if (compressionType == CompressionType.NONE) {
+            assertEquals(1.0, builder.compressionRate(), 0.00001);
+        } else {
+            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD_V1;
+            double computedCompressionRate = (double) compressedSize / uncompressedSize;
+            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+        }
+    }
+
+    @Test
     public void buildUsingLogAppendTime() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);

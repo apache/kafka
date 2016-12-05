@@ -184,7 +184,7 @@ public class MemoryRecordsBuilder {
         ByteBuffer buffer = buffer().duplicate();
         buffer.flip();
         buffer.position(initPos);
-        builtRecords = MemoryRecords.readableRecords(buffer);
+        builtRecords = MemoryRecords.readableRecords(buffer.slice());
     }
 
     private void writerCompressedWrapperHeader() {
@@ -193,6 +193,7 @@ public class MemoryRecordsBuilder {
         buffer.position(initPos);
 
         int wrapperSize = pos - initPos - Records.LOG_OVERHEAD;
+        int writtenCompressed = wrapperSize - Record.recordOverhead(magic);
         LogEntry.writeHeader(buffer, lastOffset, wrapperSize);
 
         long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
@@ -201,7 +202,7 @@ public class MemoryRecordsBuilder {
         buffer.position(pos);
 
         // update the compression ratio
-        this.compressionRate = (float) buffer.position() / this.writtenUncompressed;
+        this.compressionRate = (float) writtenCompressed / this.writtenUncompressed;
         TYPE_TO_RATE[compressionType.id] = TYPE_TO_RATE[compressionType.id] * COMPRESSION_RATE_DAMPING_FACTOR +
             compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
     }
@@ -251,7 +252,7 @@ public class MemoryRecordsBuilder {
             LogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
             long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : record.timestamp();
             record.convertTo(appendStream, magic, timestamp, timestampType);
-            recordWritten(offset, timestamp, size);
+            recordWritten(offset, timestamp, size + Records.LOG_OVERHEAD);
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
@@ -270,7 +271,7 @@ public class MemoryRecordsBuilder {
             ByteBuffer buffer = record.buffer().duplicate();
             appendStream.write(buffer.array(), buffer.arrayOffset(), buffer.limit());
 
-            recordWritten(offset, record.timestamp(), size);
+            recordWritten(offset, record.timestamp(), size + Records.LOG_OVERHEAD);
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
