@@ -24,7 +24,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-
 /**
  * A record: a serialized key and value along with the associated CRC and other fields
  */
@@ -153,7 +152,9 @@ public final class Record {
     }
 
     /**
-     * The complete serialized size of this record in bytes (including crc, header attributes, etc)
+     * The complete serialized size of this record in bytes (including crc, header attributes, etc), but
+     * excluding the log overhead (offset and record size).
+     * @return the size in bytes
      */
     public int sizeInBytes() {
         return buffer.limit();
@@ -161,6 +162,7 @@ public final class Record {
 
     /**
      * The length of the key in bytes
+     * @return the size in bytes of the key (0 if the key is null)
      */
     public int keySize() {
         if (magic() == MAGIC_VALUE_V0)
@@ -189,6 +191,7 @@ public final class Record {
 
     /**
      * The length of the value in bytes
+     * @return the size in bytes of the value (0 if the value is null)
      */
     public int valueSize() {
         return buffer.getInt(valueSizeOffset());
@@ -203,7 +206,8 @@ public final class Record {
     }
 
     /**
-     * The magic version of this record
+     * The magic value (i.e. message format version) of this record
+     * @return the magic value
      */
     public byte magic() {
         return buffer.get(MAGIC_OFFSET);
@@ -211,6 +215,7 @@ public final class Record {
 
     /**
      * The attributes stored with this record
+     * @return the attributes
      */
     public byte attributes() {
         return buffer.get(ATTRIBUTES_OFFSET);
@@ -221,6 +226,8 @@ public final class Record {
      * 1. wrapperRecordTimestampType = null and wrapperRecordTimestamp is null - Uncompressed message, timestamp is in the message.
      * 2. wrapperRecordTimestampType = LOG_APPEND_TIME and WrapperRecordTimestamp is not null - Compressed message using LOG_APPEND_TIME
      * 3. wrapperRecordTimestampType = CREATE_TIME and wrapperRecordTimestamp is not null - Compressed message using CREATE_TIME
+     *
+     * @return the timestamp as determined above
      */
     public long timestamp() {
         if (magic() == MAGIC_VALUE_V0)
@@ -237,6 +244,8 @@ public final class Record {
 
     /**
      * The timestamp of the message.
+     * @return the timstamp type or {@link TimestampType#NO_TIMESTAMP_TYPE} if the magic is 0 or the message has
+     *   been up-converted.
      */
     public TimestampType timestampType() {
         if (magic() == 0)
@@ -254,6 +263,7 @@ public final class Record {
 
     /**
      * A ByteBuffer containing the value of this record
+     * @return the value or null if the value for this record is null
      */
     public ByteBuffer value() {
         return Utils.sizeDelimited(buffer, valueSizeOffset());
@@ -261,6 +271,7 @@ public final class Record {
 
     /**
      * A ByteBuffer containing the message key
+     * @return the buffer or null if the key for this record is null
      */
     public ByteBuffer key() {
         if (magic() == MAGIC_VALUE_V0)
@@ -269,11 +280,14 @@ public final class Record {
             return Utils.sizeDelimited(buffer, KEY_SIZE_OFFSET_V1);
     }
 
+    /**
+     * Get the underlying buffer backing this record instance.
+     *
+     * @return the buffer
+     */
     public ByteBuffer buffer() {
         return this.buffer;
     }
-
-
 
     public String toString() {
         if (magic() > 0)
@@ -311,10 +325,22 @@ public final class Record {
         return buffer.hashCode();
     }
 
+    /**
+     * Get the size of this record if converted to the given format.
+     *
+     * @param toMagic The target magic version to convert to
+     * @return The size in bytes after conversion
+     */
     public int convertedSize(byte toMagic) {
         return recordSize(toMagic, Math.max(0, keySize()), Math.max(0, valueSize()));
     }
 
+    /**
+     * Convert this record to another message format.
+     *
+     * @param toMagic The target magic version to convert to
+     * @return A new record instance with a freshly allocated ByteBuffer.
+     */
     public Record convert(byte toMagic) {
         if (toMagic == magic())
             return this;
@@ -327,13 +353,22 @@ public final class Record {
         return new Record(buffer);
     }
 
-    public void convertTo(ByteBuffer buffer, byte toMagic, long timestamp, TimestampType timestampType) {
+    private void convertTo(ByteBuffer buffer, byte toMagic, long timestamp, TimestampType timestampType) {
         if (compressionType() != CompressionType.NONE)
             throw new IllegalArgumentException("Cannot use convertTo for deep conversion");
 
         write(buffer, toMagic, timestamp, key(), value(), CompressionType.NONE, timestampType);
     }
 
+    /**
+     * Convert this record to another message format and write the converted data to the provided outputs stream.
+     *
+     * @param out The output stream to write the converted data to
+     * @param toMagic The target magic version for conversion
+     * @param timestamp The timestamp to use in the converted record (for up-conversion)
+     * @param timestampType The timestamp type to use in the converted record (for up-conversion)
+     * @throws IOException for any IO errors writing the converted record.
+     */
     public void convertTo(DataOutputStream out, byte toMagic, long timestamp, TimestampType timestampType) throws IOException {
         if (compressionType() != CompressionType.NONE)
             throw new IllegalArgumentException("Cannot use convertTo for deep conversion");
@@ -342,14 +377,16 @@ public final class Record {
     }
 
     /**
-     * A constructor to create a LogRecord. If the record's compression type is not none, then
+     * Create a new record instance. If the record's compression type is not none, then
      * its value payload should be already compressed with the specified type; the constructor
      * would always write the value payload as is and will not do the compression itself.
      *
+     * @param magic The magic value to use
      * @param timestamp The timestamp of the record
      * @param key The key of the record (null, if none)
      * @param value The record value
      * @param compressionType The compression type used on the contents of the record (if any)
+     * @param timestampType The timestamp type to be used for this record
      */
     public static Record create(byte magic,
                                 long timestamp,
@@ -389,6 +426,18 @@ public final class Record {
         return create(CURRENT_MAGIC_VALUE, NO_TIMESTAMP, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }
 
+    /**
+     * Write the header for a compressed record set in-place (i.e. assuming the compressed record data has already
+     * been written at the value offset in a wrapped record). This lets you dynamically create a compressed message
+     * set, and then go back later and fill in its size and CRC, which saves the need for copying to another buffer.
+     *
+     * @param buffer The buffer containing the compressed record data positioned at the first offset of the
+     * @param magic The magic value of the record set
+     * @param recordSize The size of the record (including record overhead)
+     * @param timestamp The timestamp of the wrapper record
+     * @param compressionType The compression type used
+     * @param timestampType The timestamp type of the wrapper record
+     */
     public static void writeCompressedRecordHeader(ByteBuffer buffer,
                                                    byte magic,
                                                    int recordSize,
@@ -424,6 +473,19 @@ public final class Record {
         }
     }
 
+    /**
+     * Write the record data with the given compression type and return the computed crc.
+     *
+     * @param out The output stream to write to
+     * @param magic The magic value to be used
+     * @param timestamp The timestamp of the record
+     * @param key The record key
+     * @param value The record value
+     * @param compressionType The compression type
+     * @param timestampType The timestamp type
+     * @return the computed CRC for this record.
+     * @throws IOException for any IO errors writing to the output stream.
+     */
     public static long write(DataOutputStream out,
                              byte magic,
                              long timestamp,
@@ -434,22 +496,23 @@ public final class Record {
         return write(out, magic, timestamp, wrapNullable(key), wrapNullable(value), compressionType, timestampType);
     }
 
-    /**
-     * Write the record data with the given compressor and return the computed crc.
-     */
-    public static long write(DataOutputStream out,
-                             byte magic,
-                             long timestamp,
-                             ByteBuffer key,
-                             ByteBuffer value,
-                             CompressionType compressionType,
-                             TimestampType timestampType) throws IOException {
+    private static long write(DataOutputStream out,
+                              byte magic,
+                              long timestamp,
+                              ByteBuffer key,
+                              ByteBuffer value,
+                              CompressionType compressionType,
+                              TimestampType timestampType) throws IOException {
         byte attributes = computeAttributes(magic, compressionType, timestampType);
         long crc = computeChecksum(magic, attributes, timestamp, key, value);
         write(out, magic, crc, attributes, timestamp, key, value);
         return crc;
     }
 
+
+    /**
+     * Write a record using raw fields (without validation). This should only be used in testing.
+     */
     public static void write(DataOutputStream out,
                              byte magic,
                              long crc,
@@ -462,13 +525,13 @@ public final class Record {
 
     // Write a record to the buffer, if the record's compression type is none, then
     // its value payload should be already compressed with the specified type
-    public static void write(DataOutputStream out,
-                             byte magic,
-                             long crc,
-                             byte attributes,
-                             long timestamp,
-                             ByteBuffer key,
-                             ByteBuffer value) throws IOException {
+    private static void write(DataOutputStream out,
+                              byte magic,
+                              long crc,
+                              byte attributes,
+                              long timestamp,
+                              ByteBuffer key,
+                              ByteBuffer value) throws IOException {
         if (magic != MAGIC_VALUE_V0 && magic != MAGIC_VALUE_V1)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (timestamp < 0 && timestamp != NO_TIMESTAMP)
@@ -525,7 +588,6 @@ public final class Record {
             return timestampType.updateAttributes(attributes);
         return attributes;
     }
-
 
     public static long computeChecksum(byte magic, byte attributes, long timestamp, byte[] key, byte[] value) {
         return computeChecksum(magic, attributes, timestamp, wrapNullable(key), wrapNullable(value));

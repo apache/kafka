@@ -758,7 +758,6 @@ public class Utils {
         }
     }
 
-
     /**
      * Compute the checksum of a range of data
      * @param buffer Buffer containing the data to checksum
