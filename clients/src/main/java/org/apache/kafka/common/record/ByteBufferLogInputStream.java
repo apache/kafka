@@ -57,13 +57,18 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
     }
 
     public static class ByteBufferLogEntry extends LogEntry {
-        protected final ByteBuffer buffer;
+        private final ByteBuffer buffer;
+        private final Record record;
 
         public ByteBufferLogEntry(ByteBuffer buffer) {
-            ByteBuffer dup = buffer.duplicate();
-            int size = dup.getInt(dup.position() + Records.SIZE_OFFSET);
-            dup.limit(dup.position() + LOG_OVERHEAD + size);
-            this.buffer = dup.slice();
+            ByteBuffer entryBuffer = buffer.duplicate();
+            int size = entryBuffer.getInt(entryBuffer.position() + Records.SIZE_OFFSET);
+            entryBuffer.limit(entryBuffer.position() + LOG_OVERHEAD + size);
+            this.buffer = entryBuffer.slice();
+
+            ByteBuffer recordBuffer = this.buffer.duplicate();
+            recordBuffer.position(LOG_OVERHEAD);
+            this.record = new Record(recordBuffer.slice());
         }
 
         @Override
@@ -73,9 +78,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
 
         @Override
         public Record record() {
-            ByteBuffer dup = buffer.duplicate();
-            dup.position(LOG_OVERHEAD);
-            return new Record(dup.slice());
+            return record;
         }
 
         public void setOffset(long offset) {
@@ -83,8 +86,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         }
 
         public void setCreateTime(long timestamp) {
-            Record record = record();
-            if (record.magic() == 0)
+            if (record.magic() == Record.MAGIC_VALUE_V0)
                 throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
 
             long currentTimestamp = record.timestamp();
@@ -100,8 +102,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         }
 
         public void setLogAppendTime(long timestamp) {
-            Record record = record();
-            if (record.magic() == 0)
+            if (record.magic() == Record.MAGIC_VALUE_V0)
                 throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
 
             byte attributes = record.attributes();
