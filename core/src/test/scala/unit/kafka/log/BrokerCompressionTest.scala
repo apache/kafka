@@ -35,7 +35,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val time = new MockTime(0)
+  val time = new MockTime(0, 0)
   val logConfig = LogConfig()
 
   @After

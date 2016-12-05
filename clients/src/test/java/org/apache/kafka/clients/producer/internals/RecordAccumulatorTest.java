@@ -41,7 +41,7 @@ import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Test;
 
@@ -60,7 +60,6 @@ public class RecordAccumulatorTest {
     private PartitionInfo part2 = new PartitionInfo(topic, partition2, node1, null, null);
     private PartitionInfo part3 = new PartitionInfo(topic, partition3, node2, null, null);
     private MockTime time = new MockTime();
-    private SystemTime systemTime = new SystemTime();
     private byte[] key = "key".getBytes();
     private byte[] value = "value".getBytes();
     private int msgSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
@@ -294,7 +293,7 @@ public class RecordAccumulatorTest {
     private void delayedInterrupt(final Thread thread, final long delayMs) {
         Thread t = new Thread() {
             public void run() {
-                systemTime.sleep(delayMs);
+                Time.SYSTEM.sleep(delayMs);
                 thread.interrupt();
             }
         };

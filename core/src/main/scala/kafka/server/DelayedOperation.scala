@@ -27,8 +27,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.utils.Utils
-
 import scala.collection._
 
 import com.yammer.metrics.core.Gauge

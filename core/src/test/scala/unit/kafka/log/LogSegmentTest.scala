@@ -23,10 +23,9 @@ import kafka.common.LongRef
 import org.junit.{After, Test}
 import kafka.utils.TestUtils
 import kafka.message._
-import kafka.utils.SystemTime
+import org.apache.kafka.common.utils.Time
 
 import scala.collection._
- import scala.collection.mutable.ListBuffer
 
 class LogSegmentTest {
   
@@ -42,7 +41,7 @@ class LogSegmentTest {
     timeIdxFile.delete()
     val idx = new OffsetIndex(idxFile, offset, 1000)
     val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
-    val seg = new LogSegment(ms, idx, timeIdx, offset, indexIntervalBytes, 0, SystemTime)
+    val seg = new LogSegment(ms, idx, timeIdx, offset, indexIntervalBytes, 0, Time.SYSTEM)
     segments += seg
     seg
   }
@@ -296,7 +295,7 @@ class LogSegmentTest {
   /* create a segment with   pre allocate */
   def createSegment(offset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
     val tempDir = TestUtils.tempDir()
-    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, SystemTime, fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate)
+    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate)
     segments += seg
     seg
   }
@@ -317,7 +316,7 @@ class LogSegmentTest {
   @Test
   def testCreateWithInitFileSizeClearShutdown() {
     val tempDir = TestUtils.tempDir()
-    val seg = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, false, 512*1024*1024, true)
+    val seg = new LogSegment(tempDir, 40, 10, 1000, 0, Time.SYSTEM, false, 512*1024*1024, true)
 
     val ms = messages(50, "hello", "there")
     seg.append(50, Message.NoTimestamp, -1L, ms)
@@ -333,7 +332,7 @@ class LogSegmentTest {
     //After close, file should be trimmed
     assertEquals(oldSize, seg.log.file.length)
 
-    val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, true,  512*1024*1024, true)
+    val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, Time.SYSTEM, true,  512*1024*1024, true)
     segments += segReopen
 
     val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)

@@ -18,12 +18,13 @@ package kafka.server
 
 import kafka.utils.ZkUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.{Json, SystemTime, Logging, ZKCheckedEphemeral}
+import kafka.utils.{Json, Logging, ZKCheckedEphemeral}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 import kafka.controller.KafkaController
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Time
 
 /**
  * This class handles zookeeper based leader election based on an ephemeral path. The election module does not handle
@@ -35,7 +36,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
                              electionPath: String,
                              onBecomingLeader: () => Unit,
                              onResigningAsLeader: () => Unit,
-                             brokerId: Int)
+                             brokerId: Int,
+                             time: Time)
   extends LeaderElector with Logging {
   var leaderId = -1
   // create the election path in ZK, if one does not exist
@@ -59,7 +61,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   }
 
   def elect: Boolean = {
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = time.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
    
    leaderId = getControllerID 
