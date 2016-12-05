@@ -114,6 +114,14 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
       OffsetPosition(relativeOffset(idx, n), physical(idx, n))
     }
   }
+
+  /**
+    * @param offset that we want to potentially append
+    * @return true if it is safe to append this offset to this index
+    */
+  def canAppend(offset: Long) : Boolean = {
+    !isFull && ((offset - baseOffset) <= Integer.MAX_VALUE)
+  }
   
   /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.

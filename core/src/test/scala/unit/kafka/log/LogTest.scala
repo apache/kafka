@@ -1033,16 +1033,35 @@ class LogTest extends JUnitSuite {
       compressionCodec = NoCompressionCodec,
       offsetSeq = Seq(Integer.MAX_VALUE.toLong + 1),
       messages = new Message("v2".getBytes(), "k2".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+    val set3 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = Seq(Integer.MAX_VALUE.toLong + 2),
+      messages = new Message("v3".getBytes(), "k3".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+    val set4 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = Seq(Integer.MAX_VALUE.toLong + 3),
+      messages = new Message("v4".getBytes(), "k4".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+
+    //Writes into an empty log with baseOffset 0
     log.append(set1, false)
-    //This last write will cause an integer overflow when appending to the log
+
+    //This write will roll the segment, and create a new segment with baseOffset = log end of previous segment  1
     log.append(set2, false)
 
+    //This write will also roll the segment, ""                                       "" Integer.MAX_VALUE + 2
+    log.append(set3, false)
+
+    //Since the last segment got baseOffset = Integer.MAX_VALUE + 2, this set does not roll the log.
+    log.append(set4, false)
+
     log.close()
-    for (file : File <- logDir.listFiles()) {
-      if (file.getName.contains(".index")) {
-        val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
-        assertTrue(offsetIndex.lastOffset >= 0)
-      }
+    val indexFiles = logDir.listFiles(new FilenameFilter {
+      override def accept(dir: File, name: String)  = name.contains(".index")
+    });
+    assertEquals(3, indexFiles.length)
+    for (file : File <- indexFiles) {
+      val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
+      assertTrue(offsetIndex.lastOffset >= 0)
     }
   }
 

@@ -407,7 +407,8 @@ class Log(@volatile var dir: File,
 
         // maybe roll the log if this segment is full
         val segment = maybeRoll(messagesSize = validMessages.sizeInBytes,
-                                maxTimestampInMessages = appendInfo.maxTimestamp)
+                                maxTimestampInMessages = appendInfo.maxTimestamp,
+                                minOffsetInMessages = appendInfo.firstOffset)
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
@@ -732,13 +733,13 @@ class Log(@volatile var dir: File,
    * </ol>
    * @return The currently active segment after (perhaps) rolling to a new segment
    */
-  private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long): LogSegment = {
+  private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long, minOffsetInMessages: Long): LogSegment = {
     val segment = activeSegment
     val now = time.milliseconds
     val reachedRollMs = segment.timeWaitedForRoll(now, maxTimestampInMessages) > config.segmentMs - segment.rollJitterMs
     if (segment.size > config.segmentSize - messagesSize ||
         (segment.size > 0 && reachedRollMs) ||
-        segment.index.isFull || segment.timeIndex.isFull) {
+        segment.index.isFull || segment.timeIndex.isFull || !segment.index.canAppend(minOffsetInMessages)) {
       debug(s"Rolling new log segment in $name (log_size = ${segment.size}/${config.segmentSize}}, " +
           s"index_size = ${segment.index.entries}/${segment.index.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
