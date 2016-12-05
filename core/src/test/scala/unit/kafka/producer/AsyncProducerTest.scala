@@ -36,6 +36,7 @@ import kafka.utils.TestUtils._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
+import org.apache.kafka.common.utils.Time
 
 @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class AsyncProducerTest {
@@ -416,6 +417,7 @@ class AsyncProducerTest {
       override def nanoseconds: Long = 0L
       override def milliseconds: Long = 0L
       override def sleep(ms: Long): Unit = {}
+      override def hiResClockMs: Long = 0L
     }
     val handler = new DefaultEventHandler[Int,String](config,
                                                       partitioner = new FixedValuePartitioner(),

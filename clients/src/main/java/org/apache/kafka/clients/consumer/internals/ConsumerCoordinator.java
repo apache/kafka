@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -62,6 +63,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
+
+    private static final long CLOSE_TIMEOUT_MS = 5000;
 
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
@@ -225,7 +228,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
-        } catch (WakeupException e) {
+        } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
             log.error("User provided listener {} for group {} failed on partition assignment",
@@ -333,7 +336,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
-        } catch (WakeupException e) {
+        } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
             log.error("User provided listener {} for group {} failed on partition revocation",
@@ -405,6 +408,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.disableWakeups();
         try {
             maybeAutoCommitOffsetsSync();
+
+            Node coordinator;
+            long endTimeMs = time.milliseconds() + CLOSE_TIMEOUT_MS;
+            while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+                long remainingTimeMs = endTimeMs - time.milliseconds();
+                if (remainingTimeMs > 0)
+                    client.poll(remainingTimeMs);
+                else {
+                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.", client.pendingRequestCount(coordinator), groupId);
+                    break;
+                }
+            }
         } finally {
             super.close();
         }
@@ -545,7 +560,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled) {
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
-            } catch (WakeupException e) {
+            } catch (WakeupException | InterruptException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {

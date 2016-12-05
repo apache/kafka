@@ -27,6 +27,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private long timeoutMs;
     private KafkaConsumer<byte[], byte[]> consumer;
     private final Set<TopicPartition> pausedPartitions;
+    private boolean commitRequested;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
         this.offsets = new HashMap<>();
@@ -109,4 +110,18 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     public Set<TopicPartition> pausedPartitions() {
         return pausedPartitions;
     }
+
+    @Override
+    public void requestCommit() {
+        commitRequested = true;
+    }
+
+    public boolean isCommitRequested() {
+        return commitRequested;
+    }
+
+    public void clearCommitRequest() {
+        commitRequested = false;
+    }
+
 }

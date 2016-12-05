@@ -27,6 +27,7 @@ import kafka.common._
 import kafka.message._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import org.apache.kafka.common.utils.Time
 
 import scala.Iterable
 import scala.collection._
@@ -69,7 +70,7 @@ import scala.collection._
 class LogCleaner(val config: CleanerConfig,
                  val logDirs: Array[File],
                  val logs: Pool[TopicAndPartition, Log], 
-                 time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
   
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs)
@@ -648,7 +649,7 @@ private[log] class Cleaner(val id: Int,
 /**
  * A simple struct for collecting stats about log cleaning
  */
-private class CleanerStats(time: Time = SystemTime) {
+private class CleanerStats(time: Time = Time.SYSTEM) {
   val startTime = time.milliseconds
   var mapCompleteTime = -1L
   var endTime = -1L

@@ -26,7 +26,8 @@ import kafka.common.{LogCleaningAbortedException, TopicAndPartition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.OffsetCheckpoint
 import kafka.utils.CoreUtils._
-import kafka.utils.{Logging, Pool, Time}
+import kafka.utils.{Logging, Pool}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{immutable, mutable}
 
@@ -288,7 +289,7 @@ private[log] object LogCleanerManager extends Logging {
     }
 
     // dirty log segments
-    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset).toArray
+    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
 
     val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
 

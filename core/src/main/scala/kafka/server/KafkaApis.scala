@@ -19,8 +19,8 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
+import java.util.{Collections, Properties}
 import java.util
-import java.util.Properties
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse, FetchResponsePartitionData}
@@ -30,19 +30,19 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
+import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
-import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
@@ -64,7 +64,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
-                val clusterId: String) extends Logging {
+                val clusterId: String,
+                time: Time) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
@@ -117,7 +118,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           error("Error when handling request %s".format(request.body), e)
         }
     } finally
-      request.apiLocalCompleteTimeMs = SystemTime.milliseconds
+      request.apiLocalCompleteTimeMs = time.milliseconds
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
@@ -168,6 +169,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
+        // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
+        // since this broker is no longer a replica for that offsets topic partition.
+        // This is required to handle the following scenario :
+        // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
+        // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
+        // is not cleared.
+        result.foreach { case (topicPartition, errorCode) =>
+          if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions() && topicPartition.topic == Topic.GroupMetadataTopicName) {
+            coordinator.handleGroupEmigration(topicPartition.partition)
+          }
+        }
         new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
       } else {
         val result = stopReplicaRequest.partitions.asScala.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
@@ -297,7 +309,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
         //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
         //   - If v2 we use the default expiration timestamp
-        val currentTimestamp = SystemTime.milliseconds
+        val currentTimestamp = time.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedTopics.mapValues { partitionData =>
           val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
@@ -345,10 +357,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ 
+      val mergedResponseStatus = responseStatus ++
         unauthorizedForWriteRequestInfo.mapValues(_ =>
-           new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp)) ++ 
-        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => 
+           new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp)) ++
+        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ =>
            new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
@@ -396,7 +408,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = time.milliseconds
 
       quotas.produce.recordAndMaybeThrottle(
         request.session.sanitizedUser,
@@ -504,7 +516,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = time.milliseconds
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
@@ -705,18 +717,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    val segsArray = log.logSegments.toArray
-    var offsetTimeArray: Array[(Long, Long)] = null
-    val lastSegmentHasSize = segsArray.last.size > 0
-    if (lastSegmentHasSize)
-      offsetTimeArray = new Array[(Long, Long)](segsArray.length + 1)
-    else
-      offsetTimeArray = new Array[(Long, Long)](segsArray.length)
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segments = log.logSegments.toBuffer
+    val lastSegmentHasSize = segments.last.size > 0
 
-    for (i <- segsArray.indices)
-      offsetTimeArray(i) = (segsArray(i).baseOffset, segsArray(i).lastModified)
+    val offsetTimeArray =
+      if (lastSegmentHasSize)
+        new Array[(Long, Long)](segments.length + 1)
+      else
+        new Array[(Long, Long)](segments.length)
+
+    for (i <- segments.indices)
+      offsetTimeArray(i) = (segments(i).baseOffset, segments(i).lastModified)
     if (lastSegmentHasSize)
-      offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.milliseconds)
+      offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
 
     var startIndex = -1
     timestamp match {
@@ -1002,15 +1017,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
-    import JavaConversions._
-
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
       val responseBody = new JoinGroupResponse(request.header.apiVersion, joinResult.errorCode, joinResult.generationId,
-        joinResult.subProtocol, joinResult.memberId, joinResult.leaderId, members)
+        joinResult.subProtocol, joinResult.memberId, joinResult.leaderId, members.asJava)
 
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
@@ -1025,11 +1038,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         JoinGroupResponse.UNKNOWN_PROTOCOL,
         JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
         JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-        Map.empty[String, ByteBuffer])
+        Collections.emptyMap())
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     } else {
       // let the coordinator to handle join-group
-      val protocols = joinGroupRequest.groupProtocols().map(protocol =>
+      val protocols = joinGroupRequest.groupProtocols().asScala.map(protocol =>
         (protocol.name, Utils.toArray(protocol.metadata))).toList
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId,
@@ -1045,8 +1058,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSyncGroupRequest(request: RequestChannel.Request) {
-    import JavaConversions._
-
     val syncGroupRequest = request.body.asInstanceOf[SyncGroupRequest]
 
     def sendResponseCallback(memberState: Array[Byte], errorCode: Short) {
@@ -1061,7 +1072,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.groupId(),
         syncGroupRequest.generationId(),
         syncGroupRequest.memberId(),
-        syncGroupRequest.groupAssignment().mapValues(Utils.toArray),
+        syncGroupRequest.groupAssignment().asScala.mapValues(Utils.toArray),
         sendResponseCallback
       )
     }
@@ -1189,7 +1200,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (authorizedTopics, unauthorizedForDeleteTopics) = existingAndAuthorizedForDescribeTopics.partition { topic =>
       authorize(request.session, Delete, new Resource(auth.Topic, topic))
     }
-    
+
     def sendResponseCallback(results: Map[String, Errors]): Unit = {
       val completeResults = nonExistingOrUnauthorizedForDescribeTopics.map(topic => (topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap ++
           unauthorizedForDeleteTopics.map(topic => (topic, Errors.TOPIC_AUTHORIZATION_FAILED)).toMap ++ results

@@ -32,12 +32,14 @@ import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
@@ -363,7 +365,7 @@ class ZkUtils(val zkClient: ZkClient,
                          rack: Option[String],
                          apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = Time.SYSTEM.milliseconds.toString
 
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
     var jsonMap = Map("version" -> version,
@@ -630,17 +632,11 @@ class ZkUtils(val zkClient: ZkClient,
     dataAndStat
   }
 
-  def getChildren(path: String): Seq[String] = {
-    import scala.collection.JavaConversions._
-    // triggers implicit conversion from java list to scala Seq
-    zkClient.getChildren(path)
-  }
+  def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
 
   def getChildrenParentMayNotExist(path: String): Seq[String] = {
-    import scala.collection.JavaConversions._
-    // triggers implicit conversion from java list to scala Seq
     try {
-      zkClient.getChildren(path)
+      zkClient.getChildren(path).asScala
     } catch {
       case _: ZkNoNodeException => Nil
     }

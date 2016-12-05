@@ -19,18 +19,22 @@ package kafka.tools
 
 import joptsimple.OptionParser
 import kafka.cluster.BrokerEndPoint
-import kafka.message.{MessageSet, MessageAndOffset, ByteBufferMessageSet}
+import kafka.message.{ByteBufferMessageSet, MessageAndOffset, MessageSet}
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
+
 import kafka.client.ClientUtils
-import java.util.regex.{PatternSyntaxException, Pattern}
+import java.util.regex.{Pattern, PatternSyntaxException}
+
 import kafka.api._
 import java.text.SimpleDateFormat
 import java.util.Date
+
 import kafka.common.TopicAndPartition
 import kafka.utils._
-import kafka.consumer.{ConsumerConfig, Whitelist, SimpleConsumer}
+import kafka.consumer.{ConsumerConfig, SimpleConsumer, Whitelist}
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Time
 
 /**
  *  For verifying the consistency among replicas.
@@ -59,7 +63,7 @@ object ReplicaVerificationTool extends Logging {
   val dateFormat = new SimpleDateFormat(dateFormatString)
 
   def getCurrentTimeString() = {
-    ReplicaVerificationTool.dateFormat.format(new Date(SystemTime.milliseconds))
+    ReplicaVerificationTool.dateFormat.format(new Date(Time.SYSTEM.milliseconds))
   }
 
   def main(args: Array[String]): Unit = {
@@ -210,7 +214,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
   private val messageSetCache = new Pool[TopicAndPartition, Pool[Int, FetchResponsePartitionData]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
   private val verificationBarrier = new AtomicReference(new CountDownLatch(1))
-  @volatile private var lastReportTime = SystemTime.milliseconds
+  @volatile private var lastReportTime = Time.SYSTEM.milliseconds
   private var maxLag: Long = -1L
   private var offsetWithMaxLag: Long = -1L
   private var maxLagTopicAndPartition: TopicAndPartition = null
@@ -331,7 +335,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       }
       fetchResponsePerReplica.clear()
     }
-    val currentTimeMs = SystemTime.milliseconds
+    val currentTimeMs = Time.SYSTEM.milliseconds
     if (currentTimeMs - lastReportTime > reportInterval) {
       println(ReplicaVerificationTool.dateFormat.format(new Date(currentTimeMs)) + ": max lag is "
         + maxLag + " for partition " + maxLagTopicAndPartition + " at offset " + offsetWithMaxLag

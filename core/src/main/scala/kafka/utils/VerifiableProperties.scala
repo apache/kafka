@@ -21,11 +21,12 @@ import java.util.Properties
 import java.util.Collections
 import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
+import scala.collection.JavaConverters._
 
 
 class VerifiableProperties(val props: Properties) extends Logging {
   private val referenceSet = mutable.HashSet[String]()
-  
+
   def this() = this(new Properties)
 
   def containsKey(name: String): Boolean = {
@@ -215,10 +216,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
 
   def verify() {
     info("Verifying properties")
-    val propNames = {
-      import JavaConversions._
-      Collections.list(props.propertyNames).map(_.toString).sorted
-    }
+    val propNames = Collections.list(props.propertyNames).asScala.map(_.toString).sorted
     for(key <- propNames) {
       if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))

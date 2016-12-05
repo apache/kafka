@@ -17,45 +17,24 @@
 
 package kafka.utils
 
-import java.util.concurrent._
-
-import org.apache.kafka.common.utils
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
 /**
  * A class used for unit testing things which depend on the Time interface.
- * 
- * This class never manually advances the clock, it only does so when you call
- *   sleep(ms)
- * 
- * It also comes with an associated scheduler instance for managing background tasks in
- * a deterministic way.
+ * There a couple of difference between this class and `org.apache.kafka.common.utils.MockTime`:
+ *
+ * 1. This has an associated scheduler instance for managing background tasks in a deterministic way.
+ * 2. This doesn't support the `auto-tick` functionality as it interacts badly with the current implementation of `MockScheduler`.
  */
-class MockTime(@volatile private var currentMs: Long) extends Time {
-  
+class MockTime(currentTimeMs: Long, currentHiResTimeNs: Long) extends JMockTime(0, currentTimeMs, currentHiResTimeNs) {
+
+  def this() = this(System.currentTimeMillis(), System.nanoTime())
+
   val scheduler = new MockScheduler(this)
-  
-  def this() = this(System.currentTimeMillis)
-  
-  def milliseconds: Long = currentMs
 
-  def nanoseconds: Long = 
-    TimeUnit.NANOSECONDS.convert(currentMs, TimeUnit.MILLISECONDS)
-
-  def sleep(ms: Long) {
-    this.currentMs += ms
+  override def sleep(ms: Long) {
+    super.sleep(ms)
     scheduler.tick()
   }
-  
-  override def toString = "MockTime(%d)".format(milliseconds)
 
-}
-
-object MockTime {
-  implicit def toCommonTime(time: MockTime): utils.Time = new utils.Time {
-    override def nanoseconds(): Long = time.nanoseconds
-
-    override def milliseconds(): Long = time.milliseconds
-
-    override def sleep(ms: Long): Unit = time.sleep(ms)
-  }
 }

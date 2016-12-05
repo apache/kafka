@@ -408,11 +408,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             ids.add(id);
         }
         for (String topic : allSourceTopics) {
-            for (PartitionInfo partitionInfo : metadataWithInternalTopics.partitionsForTopic(topic)) {
-                TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
-                if (!allAssignedPartitions.contains(partition)) {
-                    log.warn("stream-thread [{}] Partition {} is not assigned to any tasks: {}", streamThread.getName(), partition, partitionsForTask);
+            List<PartitionInfo> partitionInfoList = metadataWithInternalTopics.partitionsForTopic(topic);
+            if (partitionInfoList != null) {
+                for (PartitionInfo partitionInfo : partitionInfoList) {
+                    TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+                    if (!allAssignedPartitions.contains(partition)) {
+                        log.warn("stream-thread [{}] Partition {} is not assigned to any tasks: {}", streamThread.getName(), partition, partitionsForTask);
+                    }
                 }
+            } else {
+                log.warn("stream-thread [{}] No partitions found for topic {}", streamThread.getName(), topic);
             }
         }
 
@@ -425,15 +430,18 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             for (InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = -1;
-                for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                    if (numPartitions < task.partition + 1)
-                        numPartitions = task.partition + 1;
+                if (tasksByTopicGroup.get(topicGroupId) != null) {
+                    for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
+                        if (numPartitions < task.partition + 1)
+                            numPartitions = task.partition + 1;
+                    }
+                    InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
+                    topicMetadata.numPartitions = numPartitions;
+
+                    changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
+                } else {
+                    log.debug("stream-thread [{}] No tasks found for topic group {}", streamThread.getName(), topicGroupId);
                 }
-
-                InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
-                topicMetadata.numPartitions = numPartitions;
-
-                changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
             }
         }
 

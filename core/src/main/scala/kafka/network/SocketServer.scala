@@ -443,7 +443,9 @@ private[kafka] class Processor(val id: Int,
             // that are sitting in the server's socket buffer
             curr.request.updateRequestMetrics
             trace("Socket server received empty response to send, registering for read: " + curr)
-            selector.unmute(curr.request.connectionId)
+            val channelId = curr.request.connectionId
+            if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
+                selector.unmute(channelId)
           case RequestChannel.SendAction =>
             sendResponse(curr)
           case RequestChannel.CloseConnectionAction =>
@@ -486,9 +488,12 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedReceives() {
     selector.completedReceives.asScala.foreach { receive =>
       try {
-        val channel = selector.channel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
-          channel.socketAddress)
+        val openChannel = selector.channel(receive.source)
+        val session = {
+          // Only methods that are safe to call on a disconnected channel should be invoked on 'channel'.
+          val channel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
+          RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName), channel.socketAddress)
+        }
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
         requestChannel.sendRequest(req)
         selector.mute(receive.source)
