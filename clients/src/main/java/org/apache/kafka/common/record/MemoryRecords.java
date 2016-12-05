@@ -78,7 +78,7 @@ public class MemoryRecords extends AbstractRecords {
         int bytes = 0;
         Iterator<ByteBufferLogEntry> iterator = shallowIterator();
         while (iterator.hasNext())
-            bytes += iterator.next().size();
+            bytes += iterator.next().sizeInBytes();
         return bytes;
     }
 
@@ -99,7 +99,7 @@ public class MemoryRecords extends AbstractRecords {
         Iterator<ByteBufferLogEntry> shallowIterator = shallowIterator();
         while (shallowIterator.hasNext()) {
             ByteBufferLogEntry shallowEntry = shallowIterator.next();
-            bytesRead += shallowEntry.size();
+            bytesRead += shallowEntry.sizeInBytes();
 
             // We use the absolute offset to decide whether to retain the message or not (this is handled by the
             // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
@@ -137,7 +137,7 @@ public class MemoryRecords extends AbstractRecords {
                 // There are no messages compacted out and no message format conversion, write the original message set back
                 shallowEntry.writeTo(buffer);
                 messagesRetained += retainedEntries.size();
-                bytesRetained += shallowEntry.size();
+                bytesRetained += shallowEntry.sizeInBytes();
             } else if (!retainedEntries.isEmpty()) {
                 ByteBuffer slice = buffer.slice();
                 MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),

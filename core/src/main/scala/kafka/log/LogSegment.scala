@@ -230,7 +230,7 @@ class LogSegment(val log: FileRecords,
           timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
           lastIndexEntry = validBytes
         }
-        validBytes += entry.size()
+        validBytes += entry.sizeInBytes()
       }
     } catch {
       case e: CorruptRecordException =>

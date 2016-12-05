@@ -249,7 +249,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             FileChannelLogEntry entry = iterator.next();
             long offset = entry.offset();
             if (offset >= targetOffset)
-                return new LogEntryPosition(offset, entry.position(), entry.size());
+                return new LogEntryPosition(offset, entry.position(), entry.sizeInBytes());
         }
         return null;
     }

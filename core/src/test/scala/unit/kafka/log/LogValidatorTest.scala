@@ -373,7 +373,7 @@ class LogValidatorTest extends JUnitSuite {
         id.toString.getBytes,
         id.toString.getBytes))
 
-    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.size()).sum / 2, 1024), 1 << 16))
+    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
     val builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, CompressionType.GZIP,
       TimestampType.CREATE_TIME)
 

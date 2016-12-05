@@ -77,7 +77,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (eagerLoadRecords)
             logEntry.loadRecord();
 
-        position += logEntry.size();
+        position += logEntry.sizeInBytes();
         return logEntry;
     }
 
@@ -155,7 +155,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public int size() {
+        public int sizeInBytes() {
             return Records.LOG_OVERHEAD + recordSize;
         }
 

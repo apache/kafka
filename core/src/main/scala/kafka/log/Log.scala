@@ -387,13 +387,13 @@ class Log(@volatile var dir: File,
           // format conversion)
           if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
             for (logEntry <- validRecords.shallowIterator.asScala) {
-              if (logEntry.size > config.maxMessageSize) {
+              if (logEntry.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
                 BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
                 BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
                 throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-                  .format(logEntry.size, config.maxMessageSize))
+                  .format(logEntry.sizeInBytes, config.maxMessageSize))
               }
             }
           }
@@ -471,7 +471,7 @@ class Log(@volatile var dir: File,
       val record = entry.record
 
       // Check if the message sizes are valid.
-      val messageSize = entry.size
+      val messageSize = entry.sizeInBytes
       if(messageSize > config.maxMessageSize) {
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)

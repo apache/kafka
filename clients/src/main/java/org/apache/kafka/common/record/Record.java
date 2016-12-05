@@ -127,7 +127,7 @@ public final class Record {
      * Returns true if the crc stored with the record matches the crc computed off the record contents
      */
     public boolean isValid() {
-        return size() >= CRC_LENGTH && checksum() == computeChecksum();
+        return sizeInBytes() >= CRC_LENGTH && checksum() == computeChecksum();
     }
 
     public Long wrapperRecordTimestamp() {
@@ -143,9 +143,9 @@ public final class Record {
      */
     public void ensureValid() {
         if (!isValid()) {
-            if (size() < CRC_LENGTH)
+            if (sizeInBytes() < CRC_LENGTH)
                 throw new InvalidRecordException("Record is corrupt (crc could not be retrieved as the record is too "
-                        + "small, size = " + size() + ")");
+                        + "small, size = " + sizeInBytes() + ")");
             else
                 throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
                         + ", computed crc = " + computeChecksum() + ")");
@@ -155,7 +155,7 @@ public final class Record {
     /**
      * The complete serialized size of this record in bytes (including crc, header attributes, etc)
      */
-    public int size() {
+    public int sizeInBytes() {
         return buffer.limit();
     }
 

@@ -693,7 +693,7 @@ public class Fetcher<K, V> {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.size();
+                        bytes += logEntry.sizeInBytes();
                     }
                 }
 

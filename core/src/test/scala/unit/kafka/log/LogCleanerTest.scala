@@ -725,7 +725,7 @@ class LogCleanerTest extends JUnitSuite {
         kv._1.toString.getBytes,
         kv._2.toString.getBytes))
 
-    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.size()).sum / 2, 1024), 1 << 16))
+    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
     val builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME)
 
     var offset = initialOffset

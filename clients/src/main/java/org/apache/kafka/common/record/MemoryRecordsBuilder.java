@@ -265,7 +265,7 @@ public class MemoryRecordsBuilder {
      */
     public void appendUnchecked(long offset, Record record) {
         try {
-            int size = record.size();
+            int size = record.sizeInBytes();
             LogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
 
             ByteBuffer buffer = record.buffer().duplicate();

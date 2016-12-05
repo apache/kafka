@@ -52,7 +52,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
             return null;
 
         ByteBufferLogEntry slice = new ByteBufferLogEntry(buffer);
-        buffer.position(buffer.position() + slice.size());
+        buffer.position(buffer.position() + slice.sizeInBytes());
         return slice;
     }
 

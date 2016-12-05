@@ -58,7 +58,7 @@ public class MemoryRecordsBuilderTest {
         int uncompressedSize = 0;
         long offset = 0L;
         for (Record record : records) {
-            uncompressedSize += record.size() + Records.LOG_OVERHEAD;
+            uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
             builder.append(offset++, record);
         }
 
@@ -89,7 +89,7 @@ public class MemoryRecordsBuilderTest {
         int uncompressedSize = 0;
         long offset = 0L;
         for (Record record : records) {
-            uncompressedSize += record.size() + Records.LOG_OVERHEAD;
+            uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
             builder.append(offset++, record);
         }
 

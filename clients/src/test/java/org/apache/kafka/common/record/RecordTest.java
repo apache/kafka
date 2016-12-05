@@ -86,7 +86,7 @@ public class RecordTest {
                 this.value == null ? null : this.value.array()
         ));
         assertTrue(record.isValid());
-        for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.size(); i++) {
+        for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.sizeInBytes(); i++) {
             Record copy = copyOf(record);
             copy.buffer().put(i, (byte) 69);
             assertFalse(copy.isValid());
@@ -100,7 +100,7 @@ public class RecordTest {
     }
 
     private Record copyOf(Record record) {
-        ByteBuffer buffer = ByteBuffer.allocate(record.size());
+        ByteBuffer buffer = ByteBuffer.allocate(record.sizeInBytes());
         record.buffer().put(buffer);
         buffer.rewind();
         record.buffer().rewind();

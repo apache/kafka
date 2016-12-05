@@ -189,7 +189,7 @@ public class TestUtils {
     public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
         int bufferSize = 0;
         for (final Record record : records)
-            bufferSize += Records.LOG_OVERHEAD + record.size();
+            bufferSize += Records.LOG_OVERHEAD + record.sizeInBytes();
         final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compressionType, TimestampType.CREATE_TIME);
         long nextOffset = offset;

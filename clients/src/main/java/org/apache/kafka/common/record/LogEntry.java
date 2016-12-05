@@ -46,8 +46,8 @@ public abstract class LogEntry implements Iterable<LogEntry> {
         return "LogEntry(" + offset() + ", " + record() + ")";
     }
     
-    public int size() {
-        return record().size() + LOG_OVERHEAD;
+    public int sizeInBytes() {
+        return record().sizeInBytes() + LOG_OVERHEAD;
     }
 
     public boolean isCompressed() {
@@ -55,7 +55,7 @@ public abstract class LogEntry implements Iterable<LogEntry> {
     }
 
     public void writeTo(ByteBuffer buffer) {
-        writeHeader(buffer, offset(), record().size());
+        writeHeader(buffer, offset(), record().sizeInBytes());
         buffer.put(record().buffer().duplicate());
     }
 

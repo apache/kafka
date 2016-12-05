@@ -68,7 +68,7 @@ public abstract class AbstractRecords implements Records {
     public static int estimatedSize(CompressionType compressionType, Iterable<LogEntry> entries) {
         int size = 0;
         for (LogEntry entry : entries)
-            size += entry.size();
+            size += entry.sizeInBytes();
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 

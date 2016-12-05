@@ -341,7 +341,7 @@ object DumpLogSegments {
         println()
       }
 
-      validBytes += shallowLogEntry.size
+      validBytes += shallowLogEntry.sizeInBytes
     }
     val trailingBytes = messageSet.sizeInBytes - validBytes
     if(trailingBytes > 0)

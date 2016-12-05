@@ -109,11 +109,11 @@ public class FileRecordsTest {
         List<LogEntry> items = shallowEntries(read);
         LogEntry second = items.get(1);
 
-        read = fileRecords.read(second.size(), fileRecords.sizeInBytes());
+        read = fileRecords.read(second.sizeInBytes(), fileRecords.sizeInBytes());
         assertEquals("Try a read starting from the second message",
                 items.subList(1, 3), shallowEntries(read));
 
-        read = fileRecords.read(second.size(), second.size());
+        read = fileRecords.read(second.sizeInBytes(), second.sizeInBytes());
         assertEquals("Try a read of a single message starting from the second message",
                 Collections.singletonList(second), shallowEntries(read));
     }
@@ -130,22 +130,22 @@ public class FileRecordsTest {
         List<LogEntry> entries = shallowEntries(fileRecords);
         int position = 0;
 
-        int message1Size = entries.get(0).size();
+        int message1Size = entries.get(0).sizeInBytes();
         assertEquals("Should be able to find the first message by its offset",
                 new FileRecords.LogEntryPosition(0L, position, message1Size),
                 fileRecords.searchForOffsetWithSize(0, 0));
         position += message1Size;
 
-        int message2Size = entries.get(1).size();
+        int message2Size = entries.get(1).sizeInBytes();
         assertEquals("Should be able to find second message when starting from 0",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, 0));
         assertEquals("Should be able to find second message starting from its offset",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, position));
-        position += message2Size + entries.get(2).size();
+        position += message2Size + entries.get(2).sizeInBytes();
 
-        int message4Size = entries.get(3).size();
+        int message4Size = entries.get(3).sizeInBytes();
         assertEquals("Should be able to find fourth message from a non-existant offset",
                 new FileRecords.LogEntryPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
@@ -161,7 +161,7 @@ public class FileRecordsTest {
     public void testIteratorWithLimits() throws IOException {
         LogEntry entry = shallowEntries(fileRecords).get(1);
         long start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.size();
+        int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
         assertEquals(Collections.singletonList(entry), shallowEntries(slice));
         FileRecords slice2 = fileRecords.read(start, size - 1);
@@ -177,7 +177,7 @@ public class FileRecordsTest {
         long end = fileRecords.searchForOffsetWithSize(1, 0).position;
         fileRecords.truncateTo((int) end);
         assertEquals(Collections.singletonList(entry), shallowEntries(fileRecords));
-        assertEquals(entry.size(), fileRecords.sizeInBytes());
+        assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
     }
 
     /**
@@ -299,7 +299,7 @@ public class FileRecordsTest {
     public void testFormatConversionWithPartialMessage() throws IOException {
         LogEntry entry = shallowEntries(fileRecords).get(1);
         long start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.size();
+        int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
         Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0);
         assertTrue("No message should be there", shallowEntries(messageV0).isEmpty());
