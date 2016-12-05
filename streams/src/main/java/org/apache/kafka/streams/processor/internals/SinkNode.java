@@ -69,7 +69,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     @Override
     public void process(final K key, final V value) {
-        nodeMetrics.nodeProcessTimeSensor.record();
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
         final long timestamp = context.timestamp();

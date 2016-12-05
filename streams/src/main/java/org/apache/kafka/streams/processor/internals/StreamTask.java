@@ -64,6 +64,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private boolean commitOffsetNeeded = false;
     private boolean requiresPoll = true;
     private final Time time;
+    private final StreamsMetrics metrics;
     private Sensor nodeCommitTimeSensor;
 
     /**
@@ -95,6 +96,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.nodeCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit");
+        this.metrics = metrics;
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -257,7 +259,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Commit the current task state
      */
     public void commit() {
-        long now = time.milliseconds();
+        long startNs = time.nanoseconds();
         log.debug("{} Committing its state", logPrefix);
         // 1) flush local state
         stateMgr.flush(processorContext);
@@ -268,7 +270,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // 3) commit consumed offsets if it is dirty already
         commitOffsets();
-        nodeCommitTimeSensor.record(time.milliseconds() - now);
+        metrics.recordLatency(nodeCommitTimeSensor, startNs, time.nanoseconds());
     }
 
     /**

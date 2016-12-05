@@ -95,9 +95,9 @@ public class ProcessorNode<K, V> {
     }
 
     public void process(final K key, final V value) {
-        long startMs = time.milliseconds();
+        long startNs = time.nanoseconds();
         processor.process(key, value);
-        nodeMetrics.nodeProcessTimeSensor.record(time.milliseconds() - startMs);
+        nodeMetrics.metrics.recordLatency(nodeMetrics.nodeProcessTimeSensor, startNs, time.nanoseconds());
     }
 
     /**
