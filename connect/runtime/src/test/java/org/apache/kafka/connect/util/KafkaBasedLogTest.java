@@ -247,7 +247,7 @@ public class KafkaBasedLogTest {
 
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(7L, consumer.position(TP0));
-        assertEquals(7L, consumer.position(TP0));
+        assertEquals(7L, consumer.position(TP1));
 
         store.stop();
 
