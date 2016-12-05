@@ -265,15 +265,15 @@ public class KafkaBasedLog<K, V> {
         log.trace("Reading to end of log offsets {}", endOffsets);
 
         while (!endOffsets.isEmpty()) {
-            poll(Integer.MAX_VALUE);
-
             Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<TopicPartition, Long> entry = it.next();
                 if (consumer.position(entry.getKey()) >= entry.getValue())
                     it.remove();
-                else
+                else {
+                    poll(Integer.MAX_VALUE);
                     break;
+                }
             }
         }
     }
@@ -287,6 +287,7 @@ public class KafkaBasedLog<K, V> {
         @Override
         public void run() {
             try {
+                log.trace("{} started execution", this);
                 while (true) {
                     int numCallbacks;
                     synchronized (KafkaBasedLog.this) {
@@ -323,7 +324,7 @@ public class KafkaBasedLog<K, V> {
                     }
                 }
             } catch (Throwable t) {
-                log.error("Unexpected exception in KafkaBasedLog's work thread", t);
+                log.error("Unexpected exception in {}", this, t);
             }
         }
     }
