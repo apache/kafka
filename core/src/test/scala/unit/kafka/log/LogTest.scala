@@ -1062,7 +1062,9 @@ class LogTest extends JUnitSuite {
     for (file : File <- indexFiles) {
       val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
       assertTrue(offsetIndex.lastOffset >= 0)
+      offsetIndex.close()
     }
+    Utils.delete(logDir)
   }
 
   @Test

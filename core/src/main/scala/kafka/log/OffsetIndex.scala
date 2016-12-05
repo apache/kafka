@@ -120,7 +120,7 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
     * @return true if it is safe to append this offset to this index
     */
   def canAppend(offset: Long) : Boolean = {
-    !isFull && ((offset - baseOffset) <= Integer.MAX_VALUE)
+    (offset - baseOffset) <= Integer.MAX_VALUE
   }
   
   /**
