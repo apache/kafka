@@ -26,28 +26,24 @@ import org.junit.Assert._
 
 import scala.collection.{Map, Seq, mutable}
 
-/**
-  * Created by kimwo on 05-12-2016.
-  */
 class GroupCoordinatorTest {
 
   @Test
   def testOffsetsRetentionMsIntegerOverflow() {
-    var props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     props.setProperty(KafkaConfig.OffsetsRetentionMinutesProp, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    var time = new MockTime
+    val time = new MockTime
 
-    val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
-    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    val partitionAssignment = mutable.Map[String, Map[Int, Seq[Int]]](Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
     val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
-    EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(Topic.GroupMetadataTopicName))).andReturn(ret)
+    EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(Topic.GroupMetadataTopicName))).andReturn(partitionAssignment)
     EasyMock.replay(zkUtils)
 
-    val t = GroupCoordinator(config, zkUtils, replicaManager, time)
+    val coordinator = GroupCoordinator(config, zkUtils, replicaManager, time)
 
-    assertEquals(t.offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
+    assertEquals(coordinator.offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
   }
 
 }
