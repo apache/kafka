@@ -237,7 +237,6 @@ object TestPurgatoryPerformance {
   }
 
   private class FakeOperation(delayMs: Long, size: Int, val latencyMs: Long, latch: CountDownLatch) extends DelayedOperation(delayMs) {
-    private[this] val data = new Array[Byte](size)
     val completesAt = System.currentTimeMillis + latencyMs
 
     def onExpiration(): Unit = {}
