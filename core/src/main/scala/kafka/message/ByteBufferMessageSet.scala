@@ -158,9 +158,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   override def asRecords: MemoryRecords = MemoryRecords.readableRecords(buffer.duplicate())
 
-  override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean =
-    asRecords.hasMatchingShallowMagic(expectedMagicValue)
-
   /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()
 

@@ -57,10 +57,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        if (compressionType == CompressionType.NONE)
-            assertEquals(0L, info.offsetOfMaxTimestamp);
-        else
-            assertEquals(2L, info.offsetOfMaxTimestamp);
+        assertEquals(2L, info.offsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         while (iterator.hasNext()) {
@@ -87,10 +84,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        if (compressionType == CompressionType.NONE)
-            assertEquals(0L, info.offsetOfMaxTimestamp);
-        else
-            assertEquals(2L, info.offsetOfMaxTimestamp);
+        assertEquals(2L, info.offsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         while (iterator.hasNext()) {

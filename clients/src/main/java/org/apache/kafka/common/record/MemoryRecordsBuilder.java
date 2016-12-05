@@ -162,11 +162,10 @@ public class MemoryRecordsBuilder {
      * @return The max timestamp and its offset
      */
     public MemoryRecords.RecordsInfo info() {
-        if (timestampType == TimestampType.LOG_APPEND_TIME) {
-            long offsetOfMaxTimestamp = compressionType == CompressionType.NONE ? baseOffset : lastOffset;
-            return new MemoryRecords.RecordsInfo(logAppendTime,  offsetOfMaxTimestamp);
-        }
-        return new MemoryRecords.RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            return new MemoryRecords.RecordsInfo(logAppendTime,  lastOffset);
+        else
+            return new MemoryRecords.RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
     }
 
     public void close() {

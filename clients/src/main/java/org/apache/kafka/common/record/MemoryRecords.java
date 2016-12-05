@@ -47,7 +47,9 @@ public class MemoryRecords extends AbstractRecords {
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
         ByteBuffer dup = buffer.duplicate();
-        dup.position((int) position);
+        int pos = (int) position;
+        dup.position(pos);
+        dup.limit(pos + length);
         return channel.write(dup);
     }
 
