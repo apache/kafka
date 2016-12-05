@@ -244,7 +244,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    * on multiple lists, and some of its watched entries may still be in the watch lists
    * even when it has been completed, this number may be larger than the number of real operations watched
    */
-  def watched() = allWatchers.map(_.watched).sum
+  def watched() = allWatchers.map(_.countWatched).sum
 
   /**
    * Return the number of delayed operations in the expiry queue
@@ -298,8 +298,8 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   private class Watchers(val key: Any) {
     private[this] val operations = new ConcurrentLinkedQueue[T]()
 
-    // note that size() is O(n) for ConcurrentLinkedQueue. Use isEmpty() if possible.
-    def watched: Int = operations.size
+    // count the current number of watched operations. This is O(n), so use isEmpty() if possible
+    def countWatched: Int = operations.size
 
     def isEmpty: Boolean = operations.isEmpty
 
