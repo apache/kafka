@@ -33,7 +33,6 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -47,6 +46,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -191,41 +191,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     private final ThreadCache cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
-    private final StreamsMetrics streamsMetrics = new StreamsMetrics() {
-        @Override
-        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordLatency(Sensor sensor, long startNs, long endNs) {
-        }
-
-        @Override
-        public Sensor sensor(String name) {
-            return metrics.sensor(name);
-        }
-
-        @Override
-        public Sensor addSensor(String name, Sensor... parents) {
-            return metrics.sensor(name, parents);
-        }
-
-        @Override
-        public void removeSensor(String name) {
-            metrics.removeSensor(name);
-        }
-
-        @Override
-        public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-            return metrics.sensor(name, config, parents);
-        }
-
-        @Override
-        public Sensor getSensor(String name) {
-            return metrics.getSensor(name);
-        }
-    };
+    private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final RecordCollector recordCollector;
     private File stateDir = null;
 

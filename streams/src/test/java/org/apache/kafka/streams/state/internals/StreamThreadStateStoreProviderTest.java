@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsForTests;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -187,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new StreamsMetricsForTests(new Metrics()), stateDirectory, null,
+                              streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null,
             new MockTime()) {
             @Override
             protected void initializeOffsetLimits() {

@@ -30,7 +30,7 @@ public class ProcessorNodeTest {
     @Test (expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() throws Exception {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null, null);
+        node.init(null);
     }
 
     @SuppressWarnings("unchecked")

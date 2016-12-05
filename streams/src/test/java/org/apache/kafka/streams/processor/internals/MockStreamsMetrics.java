@@ -16,14 +16,22 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.streams.StreamsMetrics;
 
-public class StreamsMetricsForTests implements StreamsMetrics {
+public class MockStreamsMetrics implements StreamsMetrics {
 
     final Metrics metrics;
     final String metricGrpName;
@@ -36,7 +44,7 @@ public class StreamsMetricsForTests implements StreamsMetrics {
     Sensor taskCreationSensor;
     Sensor taskDestructionSensor;
 
-    public StreamsMetricsForTests(Metrics metrics) {
+    public MockStreamsMetrics(Metrics metrics) {
         this.metrics = metrics;
         this.metricGrpName = "stream-metrics";
         this.metricTags = new LinkedHashMap<>();
@@ -52,14 +60,36 @@ public class StreamsMetricsForTests implements StreamsMetrics {
 
     @Override
     public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-        Sensor sensor = metrics.sensor(scopeName + "-" + entityName + "-" + operationName);
+        Map<String, String> tagMap = new HashMap<>();
+        String metricGroupName = "stream-" + scopeName + "-metrics";
+
+        // first add the global operation metrics if not yet, with the global tags only
+        Sensor parent = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + operationName);
+        addLatencyMetrics(metricGroupName, parent, "all", operationName, tagMap);
+
+        // add the store operation metrics with additional tags
+        Sensor sensor = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + entityName + "-" + operationName, parent);
+        addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+
         return sensor;
+    }
+    private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
+            "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
+            "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
+            "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
+    }
+
+    private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
+        if (!metrics.metrics().containsKey(name))
+            sensor.add(name, stat);
     }
 
 
     @Override
     public void recordLatency(Sensor sensor, long startNs, long endNs) {
-        sensor.record((endNs - startNs) / 1000000, endNs);
     }
 
     @Override
@@ -67,10 +97,6 @@ public class StreamsMetricsForTests implements StreamsMetrics {
         return metrics.sensor(name);
     }
 
-    @Override
-    public Sensor addSensor(String name, Sensor... parents) {
-        return metrics.sensor(name, parents);
-    }
 
     @Override
     public void removeSensor(String name) {
@@ -81,10 +107,4 @@ public class StreamsMetricsForTests implements StreamsMetrics {
     public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
         return metrics.sensor(name, config, parents);
     }
-
-    @Override
-    public Sensor getSensor(String name) {
-        return metrics.getSensor(name);
-    }
-
 }

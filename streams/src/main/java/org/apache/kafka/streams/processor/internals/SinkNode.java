@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -53,7 +52,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context, StreamsMetrics metrics) {
+    public void init(ProcessorContext context) {
         this.context = context;
 
         // if serializers are null, get the default ones from the context
@@ -64,7 +63,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (this.valSerializer instanceof ChangedSerializer &&
                 ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
-        this.nodeMetrics = new NodeMetrics(metrics, name(),  "task." + context.taskId());
+        this.nodeMetrics = new NodeMetrics(context.metrics(), name(),  "task." + context.taskId());
     }
 
 

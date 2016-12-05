@@ -87,7 +87,7 @@ public class KStreamTestDriver {
         for (ProcessorNode node : topology.processors()) {
             context.setCurrentNode(node);
             try {
-                node.init(context, context.metrics());
+                node.init(context);
             } finally {
                 context.setCurrentNode(null);
             }

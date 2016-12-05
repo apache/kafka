@@ -325,7 +325,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         for (ProcessorNode node : this.topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
-                node.init(processorContext, processorContext.metrics());
+                node.init(processorContext);
                 node.nodeMetrics.nodeTaskCreationSensor.record();
             } finally {
                 processorContext.setCurrentNode(null);
@@ -345,6 +345,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             processorContext.setCurrentNode(node);
             try {
                 node.close();
+                node.nodeMetrics.nodeTaskDestructionSensor.record();
             } catch (RuntimeException e) {
                 exception = e;
             } finally {

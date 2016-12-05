@@ -49,7 +49,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsForTests;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -179,7 +179,7 @@ public class ProcessorTopologyTestDriver {
             producer,
             restoreStateConsumer,
             config,
-            new StreamsMetricsForTests(new Metrics()),
+            new MockStreamsMetrics(new Metrics()),
             new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024),
             new MockTime());
     }

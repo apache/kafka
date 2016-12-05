@@ -198,6 +198,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
             for (ProcessorNode child : (List<ProcessorNode>) currentNode.children()) {
                 currentNode = child;
                 child.process(key, value);
+                child.nodeMetrics.contextForwardSensor.record();
             }
         } finally {
             currentNode = previousNode;
@@ -211,6 +212,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         currentNode = child;
         try {
             child.process(key, value);
+            child.nodeMetrics.contextForwardSensor.record();
         } finally {
             currentNode = previousNode;
         }
@@ -224,6 +226,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
                 currentNode = child;
                 try {
                     child.process(key, value);
+                    child.nodeMetrics.contextForwardSensor.record();
                     return;
                 } finally {
                     currentNode = previousNode;

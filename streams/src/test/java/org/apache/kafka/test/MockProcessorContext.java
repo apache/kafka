@@ -24,21 +24,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -58,10 +52,10 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
-    private MockTime time = new MockTime();
+    private final MockTime time = new MockTime();
     private MetricConfig config = new MetricConfig();
-    private Metrics metrics;
-
+    private final Metrics metrics;
+    private final StreamsMetrics streamsMetrics;
     private final ThreadCache cache;
     private Map<String, StateStore> storeMap = new LinkedHashMap<>();
 
@@ -101,6 +95,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
         this.cache = cache;
+        this.streamsMetrics = new MockStreamsMetrics(metrics);
     }
 
     @Override
@@ -152,66 +147,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public StreamsMetrics metrics() {
-        return new StreamsMetrics() {
-            @Override
-            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-                Map<String, String> tagMap = new HashMap<>();
-                String metricGroupName = "stream-" + scopeName + "-metrics";
-
-                // first add the global operation metrics if not yet, with the global tags only
-                Sensor parent = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + operationName);
-                addLatencyMetrics(metricGroupName, parent, "all", operationName, tagMap);
-
-                // add the store operation metrics with additional tags
-                Sensor sensor = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + entityName + "-" + operationName, parent);
-                addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
-
-                return sensor;
-            }
-            private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-                maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
-                    "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
-                maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
-                    "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
-                maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
-                    "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
-            }
-
-            private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-                if (!metrics.metrics().containsKey(name))
-                    sensor.add(name, stat);
-            }
-
-
-            @Override
-            public void recordLatency(Sensor sensor, long startNs, long endNs) {
-            }
-
-            @Override
-            public Sensor sensor(String name) {
-                return metrics.sensor(name);
-            }
-
-            @Override
-            public Sensor addSensor(String name, Sensor... parents) {
-                return metrics.sensor(name, parents);
-            }
-
-            @Override
-            public void removeSensor(String name) {
-                metrics.removeSensor(name);
-            }
-
-            @Override
-            public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-                return metrics.sensor(name, config, parents);
-            }
-
-            @Override
-            public Sensor getSensor(String name) {
-                return metrics.getSensor(name);
-            }
-        };
+        return streamsMetrics;
     }
 
     @Override

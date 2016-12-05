@@ -27,9 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -76,14 +74,14 @@ public class ProcessorNode<K, V> {
     }
 
 
-    public void init(ProcessorContext context, StreamsMetrics metrics) {
+    public void init(ProcessorContext context) {
         try {
             processor.init(context);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
         this.time = time != null ? time : new SystemTime();
-        this.nodeMetrics = new NodeMetrics(metrics, name,  "task." + context.taskId());
+        this.nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
 
     }
 
@@ -124,15 +122,11 @@ public class ProcessorNode<K, V> {
         final String metricGrpName;
         final Map<String, String> metricTags;
 
-        final Sensor nodeCommitTimeSensor;
-        final Sensor nodePollTimeSensor;
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
         final Sensor contextForwardSensor;
         final Sensor nodeTaskCreationSensor;
         final Sensor nodeTaskDestructionSensor;
-        //TODO:
-        //final Sensor nodeThroughputSensor;
 
 
         public NodeMetrics(StreamsMetrics metrics, String name, String sensorNamePrefix) {
@@ -143,8 +137,6 @@ public class ProcessorNode<K, V> {
             this.metricTags.put("node-id", "-" + name);
 
             // these are all latency metrics
-            this.nodeCommitTimeSensor = metrics.addLatencySensor(scope, name, "commit");
-            this.nodePollTimeSensor = metrics.addLatencySensor(scope, name, "poll");
             this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, name, "process");
             this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, name, "punctuate");
 
@@ -152,8 +144,6 @@ public class ProcessorNode<K, V> {
             this.contextForwardSensor.add(new MetricName(sensorNamePrefix + "node-forward-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
 
             this.nodeTaskCreationSensor = metrics.sensor(sensorNamePrefix + "node-task-create-time" + name);
-            this.nodeTaskCreationSensor.add(new MetricName(sensorNamePrefix + "node-task-create-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
-            this.nodeTaskCreationSensor.add(new MetricName(sensorNamePrefix + "node-task-create-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
             this.nodeTaskCreationSensor.add(new MetricName(sensorNamePrefix + "node-task-create-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
             this.nodeTaskDestructionSensor = metrics.sensor(sensorNamePrefix + "node-task-destruction" + name);
@@ -162,8 +152,6 @@ public class ProcessorNode<K, V> {
         }
 
         public void removeAllSensors() {
-            metrics.removeSensor(nodeCommitTimeSensor.name());
-            metrics.removeSensor(nodePollTimeSensor.name());
             metrics.removeSensor(nodeProcessTimeSensor.name());
             metrics.removeSensor(nodePunctuateTimeSensor.name());
             metrics.removeSensor(contextForwardSensor.name());

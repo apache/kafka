@@ -43,13 +43,9 @@ public interface StreamsMetrics {
 
     Sensor sensor(String name);
 
-    Sensor addSensor(String name, Sensor... parents);
-
     void removeSensor(String name);
 
     Sensor sensor(String name, MetricConfig config, Sensor... parents);
-
-    public Sensor getSensor(String name);
 
 }
 

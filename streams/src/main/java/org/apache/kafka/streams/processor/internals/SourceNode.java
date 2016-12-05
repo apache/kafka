@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -46,7 +45,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context, StreamsMetrics metrics) {
+    public void init(ProcessorContext context) {
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
@@ -59,7 +58,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         if (this.valDeserializer instanceof ChangedDeserializer &&
                 ((ChangedDeserializer) this.valDeserializer).inner() == null)
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
-        this.nodeMetrics = new NodeMetrics(metrics, name(),  "task." + context.taskId());
+        this.nodeMetrics = new NodeMetrics(context.metrics(), name(),  "task." + context.taskId());
 
     }
 

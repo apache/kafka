@@ -102,11 +102,6 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
     }
 
     @Override
-    public Sensor addSensor(String name, Sensor... parents) {
-        return metrics.sensor(name, parents);
-    }
-
-    @Override
     public void removeSensor(String name) {
         metrics.removeSensor(name);
     }
@@ -114,11 +109,6 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
     @Override
     public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
         return metrics.sensor(name, config, parents);
-    }
-
-    @Override
-    public Sensor getSensor(String name) {
-        return metrics.getSensor(name);
     }
 
 

@@ -41,7 +41,7 @@ public class SinkNodeTest {
         context.setTime(-1);
 
         final SinkNode sink = new SinkNode<>("name", "output-topic", anySerializer, anySerializer, null);
-        sink.init(context, context.metrics());
+        sink.init(context);
 
         sink.process(null, null);
     }
@@ -58,7 +58,7 @@ public class SinkNodeTest {
         context.setTime(0);
 
         final SinkNode sink = new SinkNode<>("name", "output-topic", anySerializer, anySerializer, null);
-        sink.init(context, context.metrics());
+        sink.init(context);
 
         try {
             sink.process("", "");
