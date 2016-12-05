@@ -298,52 +298,48 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   private class Watchers(val key: Any) {
     private[this] val operations = new ConcurrentLinkedQueue[T]()
 
-    // tracked separately because size() is O(n) for ConcurrentLinkedQueue
-    private[this] val numWatched = new AtomicInteger(0)
-
-    def watched: Int = numWatched.get
+    // note that size() is O(n) for ConcurrentLinkedQueue. Use isEmpty() if possible.
+    def watched: Int = operations.size
 
     def isEmpty: Boolean = operations.isEmpty
 
     // add the element to watch
     def watch(t: T) {
       operations.add(t)
-      numWatched.incrementAndGet()
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-      var completedNow = 0
-      var completedAlready = 0
+      var completed = 0
 
       val iter = operations.iterator()
       while (iter.hasNext) {
         val curr = iter.next()
-        if (curr.isCompleted)
-          completedAlready += 1
-        else if (curr.safeTryComplete())
-          completedNow += 1
+        if (curr.isCompleted) {
+          // another thread has completed this operation, just remove it
+          iter.remove()
+        } else if (curr.safeTryComplete()) {
+          iter.remove()
+          completed += 1
+        }
       }
 
-      if (completedNow + completedAlready > 0)
-        purgeCompleted()
+      if (operations.isEmpty)
+        removeKeyIfEmpty(key, this)
 
-      completedNow
+      completed
     }
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       var purged = 0
 
-      synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            iter.remove()
-            numWatched.decrementAndGet()
-            purged += 1
-          }
+      val iter = operations.iterator()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        if (curr.isCompleted) {
+          iter.remove()
+          purged += 1
         }
       }
 
