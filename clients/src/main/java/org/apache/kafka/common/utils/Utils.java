@@ -283,7 +283,6 @@ public class Utils {
         return array == null ? null : ByteBuffer.wrap(array);
     }
 
-
     /**
      * Read a byte array from the given offset and size in the buffer
      */

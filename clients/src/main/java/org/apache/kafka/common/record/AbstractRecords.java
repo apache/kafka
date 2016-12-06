@@ -50,7 +50,7 @@ public abstract class AbstractRecords implements Records {
             // enough to hold a full log entry. We just return all the bytes in the file message set.
             // Even though the message set does not have the right format version, we expect old clients
             // to raise an error to the user after reading the message size and seeing that there
-            // are not available bytes from in the response to read the full message.
+            // are not enough available bytes in the response to read the full message.
             return this;
         } else {
             // We use the first message to determine the compression type for the resulting message set.

@@ -28,8 +28,8 @@ import java.nio.channels.FileChannel;
  */
 public class FileLogInputStream implements LogInputStream<FileLogInputStream.FileChannelLogEntry> {
     private long position;
-    protected final long end;
-    protected final FileChannel channel;
+    private final long end;
+    private final FileChannel channel;
     private final int maxRecordSize;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
 

@@ -66,7 +66,7 @@ public final class RecordBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
-        if (!hasRoomFor(key, value)) {
+        if (!recordsBuilder.hasRoomFor(key, value)) {
             return null;
         } else {
             long checksum = this.recordsBuilder.append(offsetCounter++, timestamp, key, value);
@@ -209,10 +209,6 @@ public final class RecordBatch {
 
     public boolean isWritable() {
         return !recordsBuilder.isClosed();
-    }
-
-    private boolean hasRoomFor(byte[] key, byte[] value) {
-        return recordsBuilder.hasRoomFor(key, value);
     }
 
 }
