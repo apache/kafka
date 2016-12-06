@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.SessionMerger;
+import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -146,7 +146,7 @@ public class KGroupedStreamImplTest {
             public Integer apply(final String aggKey, final String value, final Integer aggregate) {
                 return aggregate + 1;
             }
-        }, new SessionMerger<String, Integer>() {
+        }, new Merger<String, Integer>() {
             @Override
             public Integer apply(final String aggKey, final Integer aggOne, final Integer aggTwo) {
                 return aggOne + aggTwo;
@@ -265,7 +265,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, new SessionMerger<String, String>() {
+        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -275,7 +275,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullAggregatorWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, null, new SessionMerger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, null, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -295,7 +295,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionWindowsWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new SessionMerger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -305,7 +305,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreNameWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new SessionMerger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -315,7 +315,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new SessionMerger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;

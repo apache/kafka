@@ -22,7 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.SessionMerger;
+import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
@@ -66,7 +66,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             return aggregate + 1;
         }
     };
-    private final SessionMerger<String, Long> sessionMerger = new SessionMerger<String, Long>() {
+    private final Merger<String, Long> sessionMerger = new Merger<String, Long>() {
         @Override
         public Long apply(final String aggKey, final Long aggOne, final Long aggTwo) {
             return aggOne + aggTwo;

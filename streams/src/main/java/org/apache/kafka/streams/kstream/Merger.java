@@ -26,7 +26,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @param <T>   aggregate value type
  */
 @InterfaceStability.Unstable
-public interface SessionMerger<K, V> {
+public interface Merger<K, V> {
 
     /**
      * Compute a new aggregate from the key and two aggregates

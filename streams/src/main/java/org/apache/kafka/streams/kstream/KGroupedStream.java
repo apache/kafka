@@ -225,7 +225,7 @@ public interface KGroupedStream<K, V> {
      *
      * @param initializer    the instance of {@link Initializer}
      * @param aggregator     the instance of {@link Aggregator}
-     * @param sessionMerger  the instance of {@link SessionMerger}
+     * @param sessionMerger  the instance of {@link Merger}
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
@@ -236,8 +236,8 @@ public interface KGroupedStream<K, V> {
      *         that represent the latest (rolling) aggregate for each key within that window
      */
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                         final Aggregator<K, V, T> aggregator,
-                                         final SessionMerger<K, T> sessionMerger,
+                                         final Aggregator<? super K, ? super V, T> aggregator,
+                                         final Merger<? super K, T> sessionMerger,
                                          final SessionWindows sessionWindows,
                                          final Serde<T> aggValueSerde,
                                          final String storeName);
@@ -252,7 +252,7 @@ public interface KGroupedStream<K, V> {
      *
      * @param initializer    the instance of {@link Initializer}
      * @param aggregator     the instance of {@link Aggregator}
-     * @param sessionMerger  the instance of {@link SessionMerger}
+     * @param sessionMerger  the instance of {@link Merger}
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @param aggValueSerde  aggregate value serdes for materializing the aggregated table,
      *                       if not specified the default serdes defined in the configs will be used
@@ -263,8 +263,8 @@ public interface KGroupedStream<K, V> {
      *         that represent the latest (rolling) aggregate for each key within that window
      */
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                         final Aggregator<K, V, T> aggregator,
-                                         final SessionMerger<K, T> sessionMerger,
+                                         final Aggregator<? super K, ? super V, T> aggregator,
+                                         final Merger<? super K, T> sessionMerger,
                                          final SessionWindows sessionWindows,
                                          final Serde<T> aggValueSerde,
                                          final StateStoreSupplier<SessionStore> storeSupplier);

@@ -19,7 +19,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.SessionMerger;
+import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -194,8 +194,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @SuppressWarnings("unchecked")
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<K, V, T> aggregator,
-                                                final SessionMerger<K, T> sessionMerger,
+                                                final Aggregator<? super K, ? super V, T> aggregator,
+                                                final Merger<? super K, T> sessionMerger,
                                                 final SessionWindows sessionWindows,
                                                 final Serde<T> aggValueSerde,
                                                 final String storeName) {
@@ -214,8 +214,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @SuppressWarnings("unchecked")
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<K, V, T> aggregator,
-                                                final SessionMerger<K, T> sessionMerger,
+                                                final Aggregator<? super K, ? super V, T> aggregator,
+                                                final Merger<? super K, T> sessionMerger,
                                                 final SessionWindows sessionWindows,
                                                 final Serde<T> aggValueSerde,
                                                 final StateStoreSupplier<SessionStore> storeSupplier) {
@@ -258,7 +258,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 return aggregate + 1;
             }
         };
-        final SessionMerger<K, Long> sessionMerger = new SessionMerger<K, Long>() {
+        final Merger<K, Long> sessionMerger = new Merger<K, Long>() {
             @Override
             public Long apply(final K aggKey, final Long aggOne, final Long aggTwo) {
                 return aggOne + aggTwo;
@@ -313,7 +313,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             }
         };
 
-        final SessionMerger<K, V> sessionMerger = new SessionMerger<K, V>() {
+        final Merger<K, V> sessionMerger = new Merger<K, V>() {
             @Override
             public V apply(final K aggKey, final V aggOne, final V aggTwo) {
                 return aggregator.apply(aggKey, aggTwo, aggOne);

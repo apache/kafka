@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.SessionMerger;
+import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -37,16 +37,16 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
     private final String storeName;
     private final SessionWindows windows;
     private final Initializer<T> initializer;
-    private final Aggregator<K, V, T> aggregator;
-    private final SessionMerger<K, T> sessionMerger;
+    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final Merger<? super K, T> sessionMerger;
 
     private boolean sendOldValues = false;
 
     KStreamSessionWindowAggregate(final SessionWindows windows,
                                   final String storeName,
                                   final Initializer<T> initializer,
-                                  final Aggregator<K, V, T> aggregator,
-                                  final SessionMerger<K, T> sessionMerger) {
+                                  final Aggregator<? super K, ? super V, T> aggregator,
+                                  final Merger<? super K, T> sessionMerger) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
