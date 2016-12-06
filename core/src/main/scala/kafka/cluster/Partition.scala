@@ -75,41 +75,27 @@ class Partition(val topic: String,
   )
 
   newGauge("InSyncReplicasCount",
-           new Gauge[Int] {
-             def value = {
-               leaderReplicaIfLocal() match {
-                 case Some(_) =>
-                   inSyncReplicas.size
-                 case None =>
-                   0
-               }
-             }
-           },
-           tags
+    new Gauge[Int] {
+      def value = {
+        if (isLeaderReplicaLocal) inSyncReplicas.size else 0
+      }
+    },
+    tags
   )
 
   newGauge("ReplicasCount",
-           new Gauge[Int] {
-             def value = {
-               leaderReplicaIfLocal() match {
-                 case Some(_) =>
-                   assignedReplicas.size
-                 case None =>
-                   0
-               }
-             }
-           },
-           tags
+    new Gauge[Int] {
+      def value = {
+        if (isLeaderReplicaLocal) assignedReplicas.size else 0
+      }
+    },
+    tags
   )
 
-  def isUnderReplicated(): Boolean = {
-    leaderReplicaIfLocal() match {
-      case Some(_) =>
-        inSyncReplicas.size < assignedReplicas.size
-      case None =>
-        false
-    }
-  }
+  private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
+
+  def isUnderReplicated: Boolean =
+    isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     val replicaOpt = getReplica(replicaId)
