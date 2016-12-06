@@ -161,11 +161,11 @@ public class MemoryRecordsBuilder {
      * be either the first offset in the set if no compression is used or the last offset otherwise.
      * @return The max timestamp and its offset
      */
-    public MemoryRecords.RecordsInfo info() {
+    public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME)
-            return new MemoryRecords.RecordsInfo(logAppendTime,  lastOffset);
+            return new RecordsInfo(logAppendTime,  lastOffset);
         else
-            return new MemoryRecords.RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
+            return new RecordsInfo(maxTimestamp, compressionType == CompressionType.NONE ? offsetOfMaxTimestamp : lastOffset);
     }
 
     public void close() {
@@ -445,6 +445,17 @@ public class MemoryRecordsBuilder {
                 }
             }
             return value;
+        }
+    }
+
+    public static class RecordsInfo {
+        public final long maxTimestamp;
+        public final long shallowOffsetOfMaxTimestamp;
+
+        public RecordsInfo(long maxTimestamp,
+                           long shallowOffsetOfMaxTimestamp) {
+            this.maxTimestamp = maxTimestamp;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }
     }
 }

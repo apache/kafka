@@ -114,7 +114,7 @@ private[kafka] object LogValidator {
         ValidationAndOffsetAssignResult(
           validatedRecords = builder.build(),
           maxTimestamp = info.maxTimestamp,
-          offsetOfMaxTimestamp = info.offsetOfMaxTimestamp,
+          shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
           messageSizeMaybeChanged = true)
       } else {
         // ensure the inner messages are valid
@@ -131,7 +131,7 @@ private[kafka] object LogValidator {
 
         ValidationAndOffsetAssignResult(validatedRecords = records,
           maxTimestamp = if (messageTimestampType == TimestampType.LOG_APPEND_TIME) now else maxTimestamp,
-          offsetOfMaxTimestamp = offset,
+          shallowOffsetOfMaxTimestamp = offset,
           messageSizeMaybeChanged = false)
       }
     }
@@ -165,7 +165,7 @@ private[kafka] object LogValidator {
     ValidationAndOffsetAssignResult(
       validatedRecords = builder.build(),
       maxTimestamp = info.maxTimestamp,
-      offsetOfMaxTimestamp = info.offsetOfMaxTimestamp,
+      shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true)
   }
 
@@ -206,7 +206,7 @@ private[kafka] object LogValidator {
     ValidationAndOffsetAssignResult(
       validatedRecords = records,
       maxTimestamp = maxTimestamp,
-      offsetOfMaxTimestamp = offsetOfMaxTimestamp,
+      shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp,
       messageSizeMaybeChanged = false)
   }
 
@@ -233,7 +233,7 @@ private[kafka] object LogValidator {
 
   case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
                                              maxTimestamp: Long,
-                                             offsetOfMaxTimestamp: Long,
+                                             shallowOffsetOfMaxTimestamp: Long,
                                              messageSizeMaybeChanged: Boolean)
 
 }

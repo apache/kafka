@@ -116,10 +116,10 @@ public class MemoryRecordsBuilderTest {
         builder.append(2L, 0L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
-        MemoryRecords.RecordsInfo info = builder.info();
+        MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        assertEquals(2L, info.offsetOfMaxTimestamp);
+        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         while (iterator.hasNext()) {
@@ -143,10 +143,10 @@ public class MemoryRecordsBuilderTest {
         builder.convertAndAppend(2L, Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
         MemoryRecords records = builder.build();
 
-        MemoryRecords.RecordsInfo info = builder.info();
+        MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        assertEquals(2L, info.offsetOfMaxTimestamp);
+        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         while (iterator.hasNext()) {
@@ -165,20 +165,25 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
         builder.append(0L, 0L, "a".getBytes(), "1".getBytes());
-        builder.append(1L, 1L, "b".getBytes(), "2".getBytes());
-        builder.append(2L, 2L, "c".getBytes(), "3".getBytes());
+        builder.append(1L, 2L, "b".getBytes(), "2".getBytes());
+        builder.append(2L, 1L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
-        MemoryRecords.RecordsInfo info = builder.info();
+        MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(2L, info.maxTimestamp);
-        assertEquals(2L, info.offsetOfMaxTimestamp);
+
+        if (compressionType == CompressionType.NONE)
+            assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
+        else
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
-        long i = 0L;
+        int i = 0;
+        long[] expectedTimestamps = new long[] {0L, 2L, 1L};
         while (iterator.hasNext()) {
             Record record = iterator.next();
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
-            assertEquals(i++, record.timestamp());
+            assertEquals(expectedTimestamps[i++], record.timestamp());
         }
     }
 
@@ -197,9 +202,9 @@ public class MemoryRecordsBuilderTest {
         builder.append(2L, 2L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
-        MemoryRecords.RecordsInfo info = builder.info();
+        MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(2L, info.maxTimestamp);
-        assertEquals(2L, info.offsetOfMaxTimestamp);
+        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         long i = 0L;
@@ -224,9 +229,9 @@ public class MemoryRecordsBuilderTest {
         builder.convertAndAppend(0L, Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
         MemoryRecords records = builder.build();
 
-        MemoryRecords.RecordsInfo info = builder.info();
+        MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(Record.NO_TIMESTAMP, info.maxTimestamp);
-        assertEquals(0L, info.offsetOfMaxTimestamp);
+        assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
 
         Iterator<Record> iterator = records.records();
         while (iterator.hasNext()) {

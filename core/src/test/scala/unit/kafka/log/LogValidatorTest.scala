@@ -47,7 +47,7 @@ class LogValidatorTest extends JUnitSuite {
     assertEquals("message set size should not change", records.deepIterator.asScala.size, validatedRecords.deepIterator.asScala.size)
     validatedRecords.deepIterator.asScala.foreach(logEntry => validateLogAppendTime(now, logEntry.record))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
-    assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.offsetOfMaxTimestamp)
+    assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
   }
 
@@ -72,7 +72,7 @@ class LogValidatorTest extends JUnitSuite {
     assertTrue("MessageSet should still valid", validatedRecords.shallowIterator.next().record.isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.deepIterator.asScala.size - 1}",
-      records.deepIterator.asScala.size - 1, validatedResults.offsetOfMaxTimestamp)
+      records.deepIterator.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size may have been changed", validatedResults.messageSizeMaybeChanged)
   }
 
@@ -99,7 +99,7 @@ class LogValidatorTest extends JUnitSuite {
     assertTrue("MessageSet should still valid", validatedRecords.shallowIterator.next().record.isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.deepIterator.asScala.size - 1}",
-      records.deepIterator.asScala.size - 1, validatedResults.offsetOfMaxTimestamp)
+      records.deepIterator.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
   }
 
@@ -131,7 +131,7 @@ class LogValidatorTest extends JUnitSuite {
       i += 1
     }
     assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatingResults.maxTimestamp)
-    assertEquals(s"Offset of max timestamp should be 1", 1, validatingResults.offsetOfMaxTimestamp)
+    assertEquals(s"Offset of max timestamp should be 1", 1, validatingResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatingResults.messageSizeMaybeChanged)
   }
 
@@ -165,7 +165,7 @@ class LogValidatorTest extends JUnitSuite {
     }
     assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatedResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.deepIterator.asScala.size - 1}",
-      validatedRecords.deepIterator.asScala.size - 1, validatedResults.offsetOfMaxTimestamp)
+      validatedRecords.deepIterator.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
   }
 

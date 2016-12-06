@@ -241,17 +241,6 @@ public class MemoryRecords extends AbstractRecords {
         }
     }
 
-    public static class RecordsInfo {
-        public final long maxTimestamp;
-        public final long offsetOfMaxTimestamp;
-
-        public RecordsInfo(long maxTimestamp,
-                           long offsetOfMaxTimestamp) {
-            this.maxTimestamp = maxTimestamp;
-            this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
-        }
-    }
-
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                TimestampType timestampType,
