@@ -40,7 +40,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
   val logConfig = LogConfig(logProps)
-  val time = new MockTime(1400000000000L)  // Tue May 13 16:53:20 UTC 2014
+  val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
 
   @After
   def tearDown(): Unit = {
@@ -171,15 +171,6 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     logs.put(TopicAndPartition("log", 0), log)
     val cleanerManager = new LogCleanerManager(Array(logDir), logs)
     cleanerManager
-  }
-
-  private def appendMessagesAndExpireSegments(set: ByteBufferMessageSet, log: Log): Unit = {
-    // append some messages to create some segments
-    for (i <- 0 until 100)
-      log.append(set)
-
-    // expire all segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
   }
 
   private def createLog(segmentSize: Int, cleanupPolicy: String = "delete"): Log = {

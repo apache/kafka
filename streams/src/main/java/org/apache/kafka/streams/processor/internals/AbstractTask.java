@@ -28,6 +28,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,6 +39,8 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
+    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
+
     protected final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
@@ -69,7 +73,7 @@ public abstract class AbstractTask {
             this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
-            throw new ProcessorStateException("Error while creating the state manager", e);
+            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
     }
 
@@ -78,6 +82,7 @@ public abstract class AbstractTask {
         initializeOffsetLimits();
 
         for (StateStore store : this.topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
     }
@@ -108,8 +113,10 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
-
     public abstract void close();
+
+    public abstract void initTopology();
+    public abstract void closeTopology();
 
     public abstract void commitOffsets();
 
@@ -117,6 +124,7 @@ public abstract class AbstractTask {
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
     void closeStateManager() {
+        log.trace("task [{}] Closing", id());
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
@@ -134,11 +142,11 @@ public abstract class AbstractTask {
                 OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
                 stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
             } catch (AuthorizationException e) {
-                throw new ProcessorStateException(String.format("AuthorizationException when initializing offsets for %s", partition), e);
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
             } catch (WakeupException e) {
                 throw e;
             } catch (KafkaException e) {
-                throw new ProcessorStateException(String.format("Failed to initialize offsets for %s", partition), e);
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
             }
         }
     }

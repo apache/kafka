@@ -19,7 +19,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class HeartbeatResponse extends AbstractRequestResponse {
+public class HeartbeatResponse extends AbstractResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.HEARTBEAT.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";

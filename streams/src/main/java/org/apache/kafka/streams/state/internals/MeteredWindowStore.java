@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.KeyValue;
@@ -43,7 +42,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     public MeteredWindowStore(final WindowStore<K, V> inner, String metricScope, Time time) {
         this.inner = inner;
         this.metricScope = metricScope;
-        this.time = time != null ? time : new SystemTime();
+        this.time = time != null ? time : Time.SYSTEM;
     }
 
     @Override

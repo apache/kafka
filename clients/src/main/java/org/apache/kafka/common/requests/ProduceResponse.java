@@ -28,7 +28,7 @@ import java.util.Map;
 /**
  * This wrapper supports both v0 and v1 of ProduceResponse.
  */
-public class ProduceResponse extends AbstractRequestResponse {
+public class ProduceResponse extends AbstractResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
     private static final String RESPONSES_KEY_NAME = "responses";
@@ -98,7 +98,7 @@ public class ProduceResponse extends AbstractRequestResponse {
      */
     public ProduceResponse(Struct struct) {
         super(struct);
-        responses = new HashMap<TopicPartition, PartitionResponse>();
+        responses = new HashMap<>();
         for (Object topicResponse : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicRespStruct = (Struct) topicResponse;
             String topic = topicRespStruct.getString(TOPIC_KEY_NAME);
@@ -117,11 +117,11 @@ public class ProduceResponse extends AbstractRequestResponse {
 
     private void initCommonFields(Map<TopicPartition, PartitionResponse> responses) {
         Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
-        List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
+        List<Struct> topicDatas = new ArrayList<>(responseByTopic.size());
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, entry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
                 PartitionResponse part = partitionEntry.getValue();
                 Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)

@@ -102,7 +102,7 @@ class ProduceConsumeValidateTest(Test):
         except BaseException as e:
             for s in self.test_context.services:
                 self.mark_for_collect(s)
-            raise e
+            raise
 
     @staticmethod
     def annotate_missing_msgs(missing, acked, consumed, msg):

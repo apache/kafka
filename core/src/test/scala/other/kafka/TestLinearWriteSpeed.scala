@@ -28,7 +28,7 @@ import kafka.message._
 
 import scala.math._
 import joptsimple._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -101,7 +101,8 @@ object TestLinearWriteSpeed {
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
-    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = (0 until numMessages).map(x => new Message(new Array[Byte](messageSize))): _*)
+    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec,
+      messages = (0 until numMessages).map(_ => new Message(new Array[Byte](messageSize))): _*)
     
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)
@@ -200,7 +201,7 @@ object TestLinearWriteSpeed {
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, scheduler, SystemTime)
+    val log = new Log(dir, config, 0L, scheduler, Time.SYSTEM)
     def write(): Int = {
       log.append(messages, true)
       messages.sizeInBytes

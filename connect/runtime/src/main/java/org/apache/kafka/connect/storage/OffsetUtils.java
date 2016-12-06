@@ -48,6 +48,8 @@ public class OffsetUtils {
             if (value == null)
                 continue;
             Schema.Type schemaType = ConnectSchema.schemaType(value.getClass());
+            if (schemaType == null)
+                throw new DataException("Offsets may only contain primitive types as values, but field " + entry.getKey() + " contains " + value.getClass());
             if (!schemaType.isPrimitive())
                 throw new DataException("Offsets may only contain primitive types as values, but field " + entry.getKey() + " contains " + schemaType);
         }

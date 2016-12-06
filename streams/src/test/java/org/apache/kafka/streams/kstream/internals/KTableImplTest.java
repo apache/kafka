@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -39,6 +40,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.io.File;
 import java.io.IOException;
 
@@ -336,7 +338,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testRepartition() throws IOException {
+    public void testRepartition() throws Exception {
         String topic1 = "topic1";
         String storeName1 = "storeName1";
 
@@ -366,10 +368,15 @@ public class KTableImplTest {
         assertTrue(driver.allProcessorNames().contains("KSTREAM-SINK-0000000007"));
         assertTrue(driver.allProcessorNames().contains("KSTREAM-SOURCE-0000000008"));
 
-        assertNotNull(((ChangedSerializer) ((SinkNode) driver.processor("KSTREAM-SINK-0000000003")).valueSerializer()).inner());
-        assertNotNull(((ChangedDeserializer) ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000004")).valueDeserializer()).inner());
-        assertNotNull(((ChangedSerializer) ((SinkNode) driver.processor("KSTREAM-SINK-0000000007")).valueSerializer()).inner());
-        assertNotNull(((ChangedDeserializer) ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000008")).valueDeserializer()).inner());
+        Field valSerializerField  = ((SinkNode) driver.processor("KSTREAM-SINK-0000000003")).getClass().getDeclaredField("valSerializer");
+        Field valDeserializerField  = ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000004")).getClass().getDeclaredField("valDeserializer");
+        valSerializerField.setAccessible(true);
+        valDeserializerField.setAccessible(true);
+
+        assertNotNull(((ChangedSerializer) valSerializerField.get(driver.processor("KSTREAM-SINK-0000000003"))).inner());
+        assertNotNull(((ChangedDeserializer) valDeserializerField.get(driver.processor("KSTREAM-SOURCE-0000000004"))).inner());
+        assertNotNull(((ChangedSerializer) valSerializerField.get(driver.processor("KSTREAM-SINK-0000000007"))).inner());
+        assertNotNull(((ChangedDeserializer) valDeserializerField.get(driver.processor("KSTREAM-SOURCE-0000000008"))).inner());
     }
 
     @Test(expected = NullPointerException.class)
@@ -400,6 +407,11 @@ public class KTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
         table.writeAsText(null);
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+        table.writeAsText("\t  \t");
     }
 
     @Test(expected = NullPointerException.class)

@@ -21,7 +21,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.MockTime;
@@ -60,7 +59,7 @@ public class ConsumerNetworkClientTest {
         assertTrue(future.succeeded());
 
         ClientResponse clientResponse = future.value();
-        HeartbeatResponse response = new HeartbeatResponse(clientResponse.responseBody());
+        HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE.code(), response.errorCode());
     }
 
@@ -100,10 +99,35 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void blockWhenPollConditionNotSatisfied() {
+        long timeout = 4000L;
+
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(Long.MAX_VALUE), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(timeout, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void blockOnlyForRetryBackoffIfNoInflightRequests() {
+        long retryBackoffMs = 100L;
+
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
+
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
         EasyMock.replay(mockNetworkClient);
 
@@ -181,7 +205,7 @@ public class ConsumerNetworkClientTest {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
         consumerClient.poll(future2);
         ClientResponse clientResponse = future2.value();
-        HeartbeatResponse response = new HeartbeatResponse(clientResponse.responseBody());
+        HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE.code(), response.errorCode());
 
         // Disable ready flag to delay send and queue another send. Disconnection should remove pending send
@@ -201,9 +225,8 @@ public class ConsumerNetworkClientTest {
         return new HeartbeatRequest("group", 1, "memberId");
     }
 
-    private Struct heartbeatResponse(short error) {
-        HeartbeatResponse response = new HeartbeatResponse(error);
-        return response.toStruct();
+    private HeartbeatResponse heartbeatResponse(short error) {
+        return new HeartbeatResponse(error);
     }
 
 }

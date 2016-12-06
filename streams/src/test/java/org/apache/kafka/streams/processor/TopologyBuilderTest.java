@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
@@ -24,11 +26,15 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -150,7 +156,7 @@ public class TopologyBuilderTest {
         builder.addSource("source-3", "topic-3");
         builder.addInternalTopic("topic-3");
 
-        Set<String> expected = new HashSet<String>();
+        Set<String> expected = new HashSet<>();
         expected.add("topic-1");
         expected.add("topic-2");
         expected.add("X-topic-3");
@@ -510,11 +516,102 @@ public class TopologyBuilderTest {
         builder.addInternalTopic("foo");
         builder.addSource("source", "foo");
         final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.interSourceTopics.get("appId-foo");
+        final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Properties properties = topicConfig.toProperties(0);
         assertEquals("appId-foo", topicConfig.name());
         assertEquals("delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
         assertEquals(1, properties.size());
     }
 
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldThroughOnUnassignedStateStoreAccess() {
+        final String sourceNodeName = "source";
+        final String goodNodeName = "goodGuy";
+        final String badNodeName = "badGuy";
+
+        final Properties config = new Properties();
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
+
+        try {
+            final TopologyBuilder builder = new TopologyBuilder();
+            builder
+                .addSource(sourceNodeName, "topic")
+                .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
+                .addStateStore(
+                    Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
+                    goodNodeName)
+                .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
+
+            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder, LocalMockProcessorSupplier.STORE_NAME);
+            driver.process("topic", null, null);
+
+        } catch (final StreamsException e) {
+            final Throwable cause = e.getCause();
+            if (cause != null
+                && cause instanceof TopologyBuilderException
+                && cause.getMessage().equals("Invalid topology building: Processor " + badNodeName + " has no access to StateStore " + LocalMockProcessorSupplier.STORE_NAME)) {
+                throw (TopologyBuilderException) cause;
+            } else {
+                throw new RuntimeException("Did expect different exception. Did catch:", e);
+            }
+        }
+    }
+
+    private static class LocalMockProcessorSupplier implements ProcessorSupplier {
+        final static String STORE_NAME = "store";
+
+        @Override
+        public Processor get() {
+            return new Processor() {
+                @Override
+                public void init(ProcessorContext context) {
+                    context.getStateStore(STORE_NAME);
+                }
+
+                @Override
+                public void process(Object key, Object value) {
+                }
+
+                @Override
+                public void punctuate(long timestamp) {
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", "topic-foo");
+        builder.addSource("source-2", Pattern.compile("topic-[A-C]"));
+        builder.addSource("source-3", Pattern.compile("topic-\\d"));
+
+        StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
+        updatedTopicsField.setAccessible(true);
+
+        Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+
+        updatedTopics.add("topic-B");
+        updatedTopics.add("topic-3");
+        updatedTopics.add("topic-A");
+
+        builder.updateSubscriptions(subscriptionUpdates, null);
+        builder.setApplicationId("test-id");
+
+        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
+        assertTrue(topicGroups.get(0).sourceTopics.contains("topic-foo"));
+        assertTrue(topicGroups.get(1).sourceTopics.contains("topic-A"));
+        assertTrue(topicGroups.get(1).sourceTopics.contains("topic-B"));
+        assertTrue(topicGroups.get(2).sourceTopics.contains("topic-3"));
+
+    }
 }

@@ -276,7 +276,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     AclCommand.main(deleteDescribeAclArgs)
     AclCommand.main(deleteWriteAclArgs)
-    servers.foreach { s =>
+    servers.foreach { _ =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
     }
   }

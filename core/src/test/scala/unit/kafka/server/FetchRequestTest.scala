@@ -129,7 +129,7 @@ class FetchRequestTest extends BaseRequestTest {
     val size3 = logEntries(partitionData3).map(_.size).sum
     assertTrue(s"Expected $size3 to be smaller than $maxResponseBytes", size3 <= maxResponseBytes)
     assertTrue(s"Expected $size3 to be larger than $maxPartitionBytes", size3 > maxPartitionBytes)
-    assertTrue(maxPartitionBytes < MemoryRecords.readableRecords(partitionData3.recordSet).sizeInBytes)
+    assertTrue(maxPartitionBytes < partitionData3.records.sizeInBytes)
 
     // 4. Partition with message larger than the response limit at the start of the list
     val shuffledTopicPartitions4 = Seq(partitionWithLargeMessage2, partitionWithLargeMessage1) ++
@@ -146,7 +146,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = logEntries(partitionData4).map(_.size).sum
     assertTrue(s"Expected $size4 to be larger than $maxResponseBytes", size4 > maxResponseBytes)
-    assertTrue(maxResponseBytes < MemoryRecords.readableRecords(partitionData4.recordSet).sizeInBytes)
+    assertTrue(maxResponseBytes < partitionData4.records.sizeInBytes)
   }
 
   @Test
@@ -160,12 +160,12 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.highWatermark > 0)
-    assertEquals(maxPartitionBytes, MemoryRecords.readableRecords(partitionData.recordSet).sizeInBytes)
+    assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
     assertEquals(0, logEntries(partitionData).map(_.size).sum)
   }
 
   private def logEntries(partitionData: FetchResponse.PartitionData): Seq[LogEntry] = {
-    val memoryRecords = MemoryRecords.readableRecords(partitionData.recordSet)
+    val memoryRecords = partitionData.records
     memoryRecords.iterator.asScala.toIndexedSeq
   }
 
@@ -181,7 +181,7 @@ class FetchRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE.code, partitionData.errorCode)
       assertTrue(partitionData.highWatermark > 0)
 
-      val memoryRecords = MemoryRecords.readableRecords(partitionData.recordSet)
+      val memoryRecords = partitionData.records
       responseBufferSize += memoryRecords.sizeInBytes
 
       val messages = memoryRecords.iterator.asScala.toIndexedSeq

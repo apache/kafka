@@ -125,7 +125,7 @@ public abstract class ConnectRecord {
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
-        result = 31 * result + (value != null ? timestamp.hashCode() : 0);
+        result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
         return result;
     }
 }

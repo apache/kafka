@@ -172,7 +172,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   private def duplicateFirstTopic(request: CreateTopicsRequest) = {
     val struct = request.toStruct
     val topics = struct.getArray("create_topic_requests")
-    val firstTopic= topics(0).asInstanceOf[Struct]
+    val firstTopic = topics(0).asInstanceOf[Struct]
     val newTopics = firstTopic :: topics.toList
     struct.set("create_topic_requests", newTopics.toArray)
     new CreateTopicsRequest(struct)

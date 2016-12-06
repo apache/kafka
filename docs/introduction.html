@@ -51,7 +51,7 @@ In Kafka the communication between the clients and the servers is done with a si
 <p>Let's first dive into the core abstraction Kafka provides for a stream of records&mdash;the topic.</p>
 <p>A topic is a category or feed name to which records are published. Topics in Kafka are always multi-subscriber; that is, a topic can have zero, one, or many consumers that subscribe to the data written to it.</p>
 <p> For each topic, the Kafka cluster maintains a partitioned log that looks like this: </p>
-<img src="images/log_anatomy.png">
+<img class="centered" src="images/log_anatomy.png">
 
 <p> Each partition is an ordered, immutable sequence of records that is continually appended to&mdash;a structured commit log. The records in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each record within the partition.
 </p>

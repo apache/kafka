@@ -109,7 +109,7 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-three", 0, null, null, null),
                 new PartitionInfo("topic-four", 0, null, null, null));
 
-        cluster = new Cluster(Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet());
+        cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
         discovery = new StreamsMetadataState(builder);
         discovery.onChange(hostToPartitions, cluster);
     }

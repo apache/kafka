@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.Record
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
@@ -375,7 +375,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           mirrorMakerConsumer.commit()
           throw e
 
-        case e: CommitFailedException =>
+        case _: CommitFailedException =>
           warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
             "another instance. If you see this regularly, it could indicate that you need to either increase " +
             s"the consumer's ${consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
@@ -431,13 +431,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               val data = mirrorMakerConsumer.receive()
               trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
-              records.foreach(producer.send)
+              records.asScala.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
           } catch {
-            case cte: ConsumerTimeoutException =>
+            case _: ConsumerTimeoutException =>
               trace("Caught ConsumerTimeoutException, continue iteration.")
-            case we: WakeupException =>
+            case _: WakeupException =>
               trace("Caught ConsumerWakeupException, continue iteration.")
           }
           maybeFlushAndCommitOffsets()
@@ -485,7 +485,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         mirrorMakerConsumer.stop()
       }
       catch {
-        case ie: InterruptedException =>
+        case _: InterruptedException =>
           warn("Interrupt during shutdown of the mirror maker thread")
       }
     }
@@ -495,7 +495,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         shutdownLatch.await()
         info("Mirror maker thread shutdown complete")
       } catch {
-        case ie: InterruptedException =>
+        case _: InterruptedException =>
           warn("Shutdown of the mirror maker thread interrupted")
       }
     }
@@ -607,7 +607,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def commit() {
-      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))})
+      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))}.asJava)
       offsets.clear()
     }
   }

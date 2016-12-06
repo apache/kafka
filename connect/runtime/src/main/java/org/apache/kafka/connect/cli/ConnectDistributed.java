@@ -18,7 +18,6 @@
 package org.apache.kafka.connect.cli;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
@@ -62,7 +61,7 @@ public class ConnectDistributed {
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
-        Time time = new SystemTime();
+        Time time = Time.SYSTEM;
         ConnectorFactory connectorFactory = new ConnectorFactory();
         DistributedConfig config = new DistributedConfig(workerProps);
 
@@ -78,8 +77,7 @@ public class ConnectDistributed {
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, worker.getInternalValueConverter());
         statusBackingStore.configure(config);
 
-        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter());
-        configBackingStore.configure(config);
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter(), config);
 
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());

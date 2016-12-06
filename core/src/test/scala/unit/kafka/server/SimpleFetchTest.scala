@@ -24,14 +24,12 @@ import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{MockTime => JMockTime}
-
-import org.junit.{Test, After, Before}
-
-import java.util.{Properties}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.junit.{After, Before, Test}
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import collection.JavaConversions._
 
+import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
 import org.junit.Assert._
 
@@ -49,7 +47,6 @@ class SimpleFetchTest {
 
   // set the replica manager with the partition
   val time = new MockTime
-  val jTime = new JMockTime
   val metrics = new Metrics
   val leaderLEO = 20L
   val followerLEO = 15L
@@ -63,7 +60,7 @@ class SimpleFetchTest {
   val partitionId = 0
   val topicAndPartition = TopicAndPartition(topic, partitionId)
 
-  val fetchInfo = Seq(topicAndPartition -> PartitionFetchInfo(0, fetchSize))
+  val fetchInfo = Seq(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition) -> new PartitionData(0, fetchSize))
 
   var replicaManager: ReplicaManager = null
 
@@ -99,7 +96,7 @@ class SimpleFetchTest {
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
 
     // add the partition with two replicas, both in ISR
@@ -117,7 +114,7 @@ class SimpleFetchTest {
 
     // add both of them to ISR
     val allReplicas = List(leaderReplica, followerReplica)
-    allReplicas.foreach(partition.addReplicaIfNotExists(_))
+    allReplicas.foreach(partition.addReplicaIfNotExists)
     partition.inSyncReplicas = allReplicas.toSet
   }
 
@@ -149,9 +146,23 @@ class SimpleFetchTest {
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
     assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(
+        replicaId = Request.OrdinaryConsumerId,
+        fetchOnlyFromLeader = true,
+        readOnlyCommitted = true,
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        readPartitionInfo = fetchInfo,
+        quota = UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
     assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(true, false, Int.MaxValue, false, fetchInfo, UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(
+        replicaId = Request.OrdinaryConsumerId,
+        fetchOnlyFromLeader = true,
+        readOnlyCommitted = false,
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        readPartitionInfo = fetchInfo,
+        quota = UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())

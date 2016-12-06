@@ -222,4 +222,9 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     public void setCurrentNode(final ProcessorNode currentNode) {
         // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
+
+    @Override
+    public ProcessorNode currentNode() {
+        throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
+    }
 }

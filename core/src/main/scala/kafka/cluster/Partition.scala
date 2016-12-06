@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.requests.PartitionState
+import org.apache.kafka.common.utils.Time
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -144,12 +145,13 @@ class Partition(val topic: String,
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
+      val topicPartition = TopicAndPartition(topic, partitionId)
       try {
-        logManager.deleteLog(TopicAndPartition(topic, partitionId))
+        logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
       } catch {
         case e: IOException =>
-          fatal("Error deleting the log for partition [%s,%d]".format(topic, partitionId), e)
+          fatal(s"Error deleting the log for partition $topicPartition", e)
           Runtime.getRuntime().halt(1)
       }
     }
@@ -415,11 +417,10 @@ class Partition(val topic: String,
      * is violated, that replica is considered to be out of sync
      *
      **/
-    val leaderLogEndOffset = leaderReplica.logEndOffset
     val candidateReplicas = inSyncReplicas - leaderReplica
 
     val laggingReplicas = candidateReplicas.filter(r => (time.milliseconds - r.lastCaughtUpTimeMs) > maxLagMs)
-    if(laggingReplicas.nonEmpty)
+    if (laggingReplicas.nonEmpty)
       debug("Lagging replicas for partition %s are %s".format(TopicAndPartition(topic, partitionId), laggingReplicas.map(_.brokerId).mkString(",")))
 
     laggingReplicas
@@ -442,7 +443,7 @@ class Partition(val topic: String,
 
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(this.topic, this.partitionId))
+          replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 

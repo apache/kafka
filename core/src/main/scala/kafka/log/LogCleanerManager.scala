@@ -26,7 +26,8 @@ import kafka.common.{LogCleaningAbortedException, TopicAndPartition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.OffsetCheckpoint
 import kafka.utils.CoreUtils._
-import kafka.utils.{Logging, Pool, Time}
+import kafka.utils.{Logging, Pool}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{immutable, mutable}
 
@@ -112,12 +113,10 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     */
   def deletableLogs(): Iterable[(TopicAndPartition, Log)] = {
     inLock(lock) {
-      val toClean = logs.filterNot {
-        case (topicAndPartition, log) => inProgress.contains(topicAndPartition)
-      }.filter {
-        case (topicAndPartition, log) => isCompactAndDelete(log)
+      val toClean = logs.filter { case (topicAndPartition, log) =>
+        !inProgress.contains(topicAndPartition) && isCompactAndDelete(log)
       }
-      toClean.foreach{x => inProgress.put(x._1, LogCleaningInProgress)}
+      toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
       toClean
     }
 
@@ -290,7 +289,7 @@ private[log] object LogCleanerManager extends Logging {
     }
 
     // dirty log segments
-    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset).toArray
+    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
 
     val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
 

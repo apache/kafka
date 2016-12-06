@@ -65,9 +65,9 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.putAll(consumerSecurityProps)
-    for (i <- 0 until producerCount)
+    for (_ <- 0 until producerCount)
       producers += createNewProducer
-    for (i <- 0 until consumerCount) {
+    for (_ <- 0 until consumerCount) {
       consumers += createNewConsumer
     }
 

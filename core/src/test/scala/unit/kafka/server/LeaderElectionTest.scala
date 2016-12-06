@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, PartitionState}
+import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
@@ -30,7 +30,7 @@ import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 
 class LeaderElectionTest extends ZooKeeperTestHarness {
@@ -131,10 +131,10 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
     val nodes = brokers.map(_.getNode(SecurityProtocol.PLAINTEXT))
 
-    val controllerContext = new ControllerContext(zkUtils, 6000)
+    val controllerContext = new ControllerContext(zkUtils)
     controllerContext.liveBrokers = brokers.toSet
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, new SystemTime, metrics)
+    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM, metrics)
     controllerChannelManager.startup()
     try {
       val staleControllerEpoch = 0
@@ -156,7 +156,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     }
   }
 
-  private def staleControllerEpochCallback(response: AbstractRequestResponse): Unit = {
+  private def staleControllerEpochCallback(response: AbstractResponse): Unit = {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
     staleControllerEpochDetected = Errors.forCode(leaderAndIsrResponse.errorCode) match {
       case Errors.STALE_CONTROLLER_EPOCH => true

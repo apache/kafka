@@ -84,6 +84,16 @@ public class AbstractTaskTest {
             }
 
             @Override
+            public void initTopology() {
+
+            }
+
+            @Override
+            public void closeTopology() {
+
+            }
+
+            @Override
             public void commitOffsets() {
                 // do nothing
             }

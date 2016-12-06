@@ -39,7 +39,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       createNewProducerWithNoSerializer(brokerList)
       fail("Instantiating a producer without specifying a serializer should cause a ConfigException")
     } catch {
-      case ce : ConfigException => // this is ok
+      case _ : ConfigException => // this is ok
     }
 
     // create a producer with explicit serializers should succeed
@@ -67,7 +67,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       producer.send(record5)
       fail("Should have gotten a SerializationException")
     } catch {
-      case se: SerializationException => // this is ok
+      case _: SerializationException => // this is ok
     }
   }
 
