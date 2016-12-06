@@ -74,7 +74,14 @@ class LogSegment(val log: FileMessageSet,
   /* Return the size in bytes of this log segment */
   def size: Long = log.sizeInBytes()
 
-  /**
+   /**
+     * checks that the argument offset can be represented as an integer offset relative the baseOffset.
+     */
+   def canConvertToRelativeOffset(offset: Long): Boolean = {
+     (offset - baseOffset) <= Integer.MAX_VALUE
+   }
+
+   /**
    * Append the given messages starting with the given offset. Add
    * an entry to the index if needed.
    *
@@ -86,7 +93,7 @@ class LogSegment(val log: FileMessageSet,
    * @param messages The messages to append.
    */
   @nonthreadsafe
-  def append(firstOffset: Long, largestTimestamp: Long, offsetOfLargestTimestamp: Long, messages: ByteBufferMessageSet) {
+  def append(firstOffset: Long, largestTimestamp: Long, offsetOfLargestTimestamp: Long, largestOffset: Long, messages: ByteBufferMessageSet) {
     if (messages.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at offset %d"
           .format(messages.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, offsetOfLargestTimestamp))
@@ -94,6 +101,7 @@ class LogSegment(val log: FileMessageSet,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
       // append the messages
+      require(canConvertToRelativeOffset(largestOffset), "largest offset in message set can not be safely converted to relative offset.")
       log.append(messages)
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {

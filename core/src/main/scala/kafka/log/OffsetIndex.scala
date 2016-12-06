@@ -116,20 +116,11 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
   }
 
   /**
-    * @param offset that we want to potentially append
-    * @return true if it is safe to append this offset to this index
-    */
-  def canAppend(offset: Long) : Boolean = {
-    (offset - baseOffset) <= Integer.MAX_VALUE
-  }
-  
-  /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    */
   def append(offset: Long, position: Int) {
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
-      require(canAppend(offset), "Attempting to pack too large an offset range into index.")
       if (_entries == 0 || offset > _lastOffset) {
         debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
         mmap.putInt((offset - baseOffset).toInt)

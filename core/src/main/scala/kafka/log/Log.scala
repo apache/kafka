@@ -412,7 +412,7 @@ class Log(@volatile var dir: File,
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
-          offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp, messages = validMessages)
+          offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp, largestOffset = appendInfo.lastOffset, messages = validMessages)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -739,7 +739,7 @@ class Log(@volatile var dir: File,
     val reachedRollMs = segment.timeWaitedForRoll(now, maxTimestampInMessages) > config.segmentMs - segment.rollJitterMs
     if (segment.size > config.segmentSize - messagesSize ||
         (segment.size > 0 && reachedRollMs) ||
-        segment.index.isFull || segment.timeIndex.isFull || !segment.index.canAppend(maxOffsetInMessages)) {
+        segment.index.isFull || segment.timeIndex.isFull || !segment.canConvertToRelativeOffset(maxOffsetInMessages)) {
       debug(s"Rolling new log segment in $name (log_size = ${segment.size}/${config.segmentSize}}, " +
           s"index_size = ${segment.index.entries}/${segment.index.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
