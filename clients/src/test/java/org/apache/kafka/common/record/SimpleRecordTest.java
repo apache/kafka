@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -54,6 +55,42 @@ public class SimpleRecordTest {
         assertTrue(record.isValid());
         // no exception should be thrown
         record.ensureValid();
+    }
+
+    @Test
+    public void testConvertFromV0ToV1() {
+        byte[][] keys = new byte[][] {"a".getBytes(), "".getBytes(), null, "b".getBytes()};
+        byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
+
+        for (int i = 0; i < keys.length; i++) {
+            Record record = Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, keys[i], values[i]);
+            Record converted = record.convert(Record.MAGIC_VALUE_V1);
+
+            assertEquals(Record.MAGIC_VALUE_V1, converted.magic());
+            assertEquals(Record.NO_TIMESTAMP, converted.timestamp());
+            assertEquals(record.key(), converted.key());
+            assertEquals(record.value(), converted.value());
+            assertTrue(record.isValid());
+            assertEquals(record.convertedSize(Record.MAGIC_VALUE_V1), converted.sizeInBytes());
+        }
+    }
+
+    @Test
+    public void testConvertFromV1ToV0() {
+        byte[][] keys = new byte[][] {"a".getBytes(), "".getBytes(), null, "b".getBytes()};
+        byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
+
+        for (int i = 0; i < keys.length; i++) {
+            Record record = Record.create(Record.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
+            Record converted = record.convert(Record.MAGIC_VALUE_V0);
+
+            assertEquals(Record.MAGIC_VALUE_V0, converted.magic());
+            assertEquals(Record.NO_TIMESTAMP, converted.timestamp());
+            assertEquals(record.key(), converted.key());
+            assertEquals(record.value(), converted.value());
+            assertTrue(record.isValid());
+            assertEquals(record.convertedSize(Record.MAGIC_VALUE_V0), converted.sizeInBytes());
+        }
     }
 
 }

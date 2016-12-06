@@ -44,7 +44,7 @@ class LogValidatorTest extends JUnitSuite {
       messageTimestampType = TimestampType.LOG_APPEND_TIME,
       messageTimestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
-    assertEquals("message set size should not change", records.deepIterator.asScala.size, validatedRecords.deepIterator.asScala.size)
+    assertEquals("number of messages should not change", records.deepIterator.asScala.size, validatedRecords.deepIterator.asScala.size)
     validatedRecords.deepIterator.asScala.foreach(logEntry => validateLogAppendTime(now, logEntry.record))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
@@ -67,7 +67,7 @@ class LogValidatorTest extends JUnitSuite {
       messageTimestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
-    assertEquals("message set size should not change", records.deepIterator.asScala.size, validatedRecords.deepIterator.asScala.size)
+    assertEquals("number of messages should not change", records.deepIterator.asScala.size, validatedRecords.deepIterator.asScala.size)
     validatedRecords.deepIterator.asScala.foreach(logEntry => validateLogAppendTime(now, logEntry.record))
     assertTrue("MessageSet should still valid", validatedRecords.shallowIterator.next().record.isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
@@ -93,7 +93,7 @@ class LogValidatorTest extends JUnitSuite {
       messageTimestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
-    assertEquals("message set size should not change", records.deepIterator.asScala.size,
+    assertEquals("number of messages should not change", records.deepIterator.asScala.size,
       validatedRecords.deepIterator.asScala.size)
     validatedRecords.deepIterator.asScala.foreach(logEntry => validateLogAppendTime(now, logEntry.record))
     assertTrue("MessageSet should still valid", validatedRecords.shallowIterator.next().record.isValid)

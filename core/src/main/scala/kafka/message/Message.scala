@@ -342,16 +342,6 @@ class Message(val buffer: ByteBuffer,
   def key: ByteBuffer = sliceDelimited(keySizeOffset)
 
   /**
-   * convert the message to specified format
-   */
-  def toFormatVersion(toMagicValue: Byte): Message = {
-    if (magic == toMagicValue)
-      this
-    else
-      Message.fromRecord(asRecord.convert(toMagicValue))
-  }
-
-  /**
    * Read a size-delimited byte buffer starting at the given offset
    */
   private def sliceDelimited(start: Int): ByteBuffer = {
