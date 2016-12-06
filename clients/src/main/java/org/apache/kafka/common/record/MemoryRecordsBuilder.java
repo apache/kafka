@@ -85,7 +85,6 @@ public class MemoryRecordsBuilder {
         }
     });
 
-    private final ByteBuffer initialBuffer;
     private final TimestampType timestampType;
     private final CompressionType compressionType;
     private final DataOutputStream appendStream;
@@ -95,6 +94,7 @@ public class MemoryRecordsBuilder {
     private final long baseOffset;
     private final long logAppendTime;
     private final int writeLimit;
+    private final int initialCapacity;
 
     private MemoryRecords builtRecords;
     private long writtenUncompressed;
@@ -122,7 +122,7 @@ public class MemoryRecordsBuilder {
         this.compressionRate = 1;
         this.maxTimestamp = Record.NO_TIMESTAMP;
         this.writeLimit = writeLimit;
-        this.initialBuffer = buffer;
+        this.initialCapacity = buffer.capacity();
 
         if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
@@ -135,12 +135,12 @@ public class MemoryRecordsBuilder {
         appendStream = wrapForOutput(bufferStream, compressionType, magic, COMPRESSION_DEFAULT_BUFFER_SIZE);
     }
 
-    public ByteBuffer initialBuffer() {
-        return initialBuffer;
+    public ByteBuffer buffer() {
+        return bufferStream.buffer();
     }
 
-    private ByteBuffer buffer() {
-        return bufferStream.buffer();
+    public int initialCapacity() {
+        return initialCapacity;
     }
 
     public double compressionRate() {
@@ -345,7 +345,7 @@ public class MemoryRecordsBuilder {
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
         return !isFull() && (numRecords == 0 ?
-                this.initialBuffer.capacity() >= Records.LOG_OVERHEAD + Record.recordSize(magic, key, value) :
+                this.initialCapacity >= Records.LOG_OVERHEAD + Record.recordSize(magic, key, value) :
                 this.writeLimit >= estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(magic, key, value));
     }
 

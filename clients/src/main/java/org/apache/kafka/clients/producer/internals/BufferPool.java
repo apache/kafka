@@ -198,12 +198,13 @@ public final class BufferPool {
      * memory as free.
      * 
      * @param buffer The buffer to return
+     * @param size The size of the buffer to mark as deallocated, note that this may be smaller than buffer.capacity
+     *             since the buffer may re-allocate itself during in-place compression
      */
-    public void deallocate(ByteBuffer buffer) {
-        int size = buffer.capacity();
+    public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
         try {
-            if (size == this.poolableSize) {
+            if (size == this.poolableSize && size == buffer.capacity()) {
                 buffer.clear();
                 this.free.add(buffer);
             } else {
@@ -215,6 +216,10 @@ public final class BufferPool {
         } finally {
             lock.unlock();
         }
+    }
+
+    public void deallocate(ByteBuffer buffer) {
+        deallocate(buffer, buffer.capacity());
     }
 
     /**

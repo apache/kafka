@@ -439,7 +439,7 @@ public final class RecordAccumulator {
      */
     public void deallocate(RecordBatch batch) {
         incomplete.remove(batch);
-        free.deallocate(batch.initialBuffer());
+        free.deallocate(batch.buffer(), batch.initialCapacity());
     }
     
     /**

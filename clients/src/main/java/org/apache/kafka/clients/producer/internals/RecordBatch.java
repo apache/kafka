@@ -199,8 +199,12 @@ public final class RecordBatch {
         recordsBuilder.close();
     }
 
-    public ByteBuffer initialBuffer() {
-        return recordsBuilder.initialBuffer();
+    public ByteBuffer buffer() {
+        return recordsBuilder.buffer();
+    }
+
+    public int initialCapacity() {
+        return recordsBuilder.initialCapacity();
     }
 
     public boolean isWritable() {
