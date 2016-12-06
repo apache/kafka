@@ -317,11 +317,11 @@ class ReplicaManager(val config: KafkaConfig,
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied
    */
-  def appendLogEntries(timeout: Long,
-                       requiredAcks: Short,
-                       internalTopicsAllowed: Boolean,
-                       entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                       responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
+  def appendRecords(timeout: Long,
+                    requiredAcks: Short,
+                    internalTopicsAllowed: Boolean,
+                    entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
@@ -402,7 +402,7 @@ class ReplicaManager(val config: KafkaConfig,
           val partitionOpt = getPartition(topicPartition.topic, topicPartition.partition)
           val info = partitionOpt match {
             case Some(partition) =>
-              partition.appendEntriesToLeader(records, requiredAcks)
+              partition.appendRecordsToLeader(records, requiredAcks)
             case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
               .format(topicPartition, localBrokerId))
           }
@@ -628,9 +628,9 @@ class ReplicaManager(val config: KafkaConfig,
     quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
   }
 
-  def getMessageFormatVersion(topicAndPartition: TopicAndPartition): Option[Byte] =
+  def getMagicAndTimestampType(topicAndPartition: TopicAndPartition): Option[(Byte, TimestampType)] =
     getReplica(topicAndPartition.topic, topicAndPartition.partition).flatMap { replica =>
-      replica.log.map(_.config.messageFormatVersion.messageFormatVersion)
+      replica.log.map(log => (log.config.messageFormatVersion.messageFormatVersion, log.config.messageTimestampType))
     }
 
   def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) {

@@ -141,9 +141,8 @@ class GroupMetadataManager(val brokerId: Int,
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
                         responseCallback: Errors => Unit): Option[DelayedStore] = {
-    val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
-    magicValueAndTimestampOpt match {
-      case Some((magicValue, timestamp)) =>
+    getMagicAndTimestamp(partitionFor(group.groupId)) match {
+      case Some((magicValue, timestampType, timestamp)) =>
         val groupMetadataValueVersion = {
           if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0)
             0.toShort
@@ -151,12 +150,12 @@ class GroupMetadataManager(val brokerId: Int,
             GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
         }
 
-        val record = Record.create(magicValue, timestamp,
+        val record = Record.create(magicValue, timestampType, timestamp,
           GroupMetadataManager.groupMetadataKey(group.groupId),
           GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion))
 
         val groupMetadataPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
-        val groupMetadataRecords = Map(groupMetadataPartition -> MemoryRecords.withRecords(compressionType, record))
+        val groupMetadataRecords = Map(groupMetadataPartition -> MemoryRecords.withRecords(timestampType, compressionType, record))
         val generationId = group.generationId
 
         // set the callback function to insert the created group into cache after log append completed
@@ -219,7 +218,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def store(delayedStore: DelayedStore) {
     // call replica manager to append the group message
-    replicaManager.appendLogEntries(
+    replicaManager.appendRecords(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
       true, // allow appending to internal offset topic
@@ -241,18 +240,17 @@ class GroupMetadataManager(val brokerId: Int,
     }
 
     // construct the message set to append
-    val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
-    magicValueAndTimestampOpt match {
-      case Some((magicValue, timestamp)) =>
+    getMagicAndTimestamp(partitionFor(group.groupId)) match {
+      case Some((magicValue, timestampType, timestamp)) =>
         val records = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-          Record.create(magicValue, timestamp,
+          Record.create(magicValue, timestampType, timestamp,
             GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
             GroupMetadataManager.offsetCommitValue(offsetAndMetadata))
         }.toSeq
 
         val offsetTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
 
-        val entries = Map(offsetTopicPartition -> MemoryRecords.withRecords(compressionType, records:_*))
+        val entries = Map(offsetTopicPartition -> MemoryRecords.withRecords(timestampType, compressionType, records:_*))
 
         // set the callback function to insert offsets into cache after log append completed
         def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
@@ -567,15 +565,15 @@ class GroupMetadataManager(val brokerId: Int,
       }
 
       val offsetsPartition = partitionFor(groupId)
-      getMessageFormatVersionAndTimestamp(offsetsPartition) match {
-        case Some((magicValue, timestamp)) =>
+      getMagicAndTimestamp(offsetsPartition) match {
+        case Some((magicValue, timestampType, timestamp)) =>
           val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
           partitionOpt.foreach { partition =>
             val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
             val tombstones = expiredOffsets.map { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
-              Record.create(magicValue, timestamp, commitKey, null)
+              Record.create(magicValue, timestampType, timestamp, commitKey, null)
             }.toBuffer
             trace(s"Marked ${expiredOffsets.size} offsets in $appendPartition for deletion.")
 
@@ -585,7 +583,7 @@ class GroupMetadataManager(val brokerId: Int,
               // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
               // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
               // retry removing this group.
-              tombstones += Record.create(magicValue, timestamp, GroupMetadataManager.groupMetadataKey(group.groupId), null)
+              tombstones += Record.create(magicValue, timestampType, timestamp, GroupMetadataManager.groupMetadataKey(group.groupId), null)
               trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
             }
 
@@ -593,7 +591,7 @@ class GroupMetadataManager(val brokerId: Int,
               try {
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
-                partition.appendEntriesToLeader(MemoryRecords.withRecords(compressionType, tombstones: _*))
+                partition.appendRecordsToLeader(MemoryRecords.withRecords(timestampType, compressionType, tombstones: _*))
                 offsetsRemoved += expiredOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired offsets and/or metadata for group $groupId")
               } catch {
@@ -657,11 +655,11 @@ class GroupMetadataManager(val brokerId: Int,
    * @param   partition  Partition of GroupMetadataTopic
    * @return  Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
    */
-  private def getMessageFormatVersionAndTimestamp(partition: Int): Option[(Byte, Long)] = {
+  private def getMagicAndTimestamp(partition: Int): Option[(Byte, TimestampType, Long)] = {
     val groupMetadataTopicAndPartition = TopicAndPartition(Topic.GroupMetadataTopicName, partition)
-    replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).map { messageFormatVersion =>
+    replicaManager.getMagicAndTimestampType(groupMetadataTopicAndPartition).map { case (messageFormatVersion, timestampType) =>
       val timestamp = if (messageFormatVersion == Record.MAGIC_VALUE_V0) Record.NO_TIMESTAMP else time.milliseconds()
-      (messageFormatVersion, timestamp)
+      (messageFormatVersion, timestampType, timestamp)
     }
   }
 

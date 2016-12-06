@@ -103,7 +103,7 @@ class ReplicaManagerTest {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
       }
-      rm.appendLogEntries(
+      rm.appendRecords(
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
@@ -156,7 +156,7 @@ class ReplicaManagerTest {
       rm.getLeaderReplicaIfLocal(topic, 0)
 
       // Append a message.
-      rm.appendLogEntries(
+      rm.appendRecords(
         timeout = 1000,
         requiredAcks = -1,
         internalTopicsAllowed = false,
@@ -218,7 +218,7 @@ class ReplicaManagerTest {
       
       // Append a couple of messages.
       for(i <- 1 to 2)
-        rm.appendLogEntries(
+        rm.appendRecords(
           timeout = 1000,
           requiredAcks = -1,
           internalTopicsAllowed = false,

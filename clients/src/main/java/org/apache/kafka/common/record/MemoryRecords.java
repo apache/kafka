@@ -292,7 +292,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withRecords(CompressionType compressionType, long initialOffset, List<Record> records) {
-        return withLogEntries(compressionType, buildLogEntries(initialOffset, records));
+        return withRecords(initialOffset, TimestampType.CREATE_TIME, compressionType, System.currentTimeMillis(), records);
     }
 
     public static MemoryRecords withRecords(Record ... records) {
@@ -305,6 +305,18 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(CompressionType compressionType, Record ... records) {
         return withRecords(compressionType, 0L, Arrays.asList(records));
+    }
+
+    public static MemoryRecords withRecords(TimestampType timestampType, CompressionType compressionType, Record ... records) {
+        return withRecords(0L, timestampType, compressionType, System.currentTimeMillis(), Arrays.asList(records));
+    }
+
+    public static MemoryRecords withRecords(long initialOffset,
+                                            TimestampType timestampType,
+                                            CompressionType compressionType,
+                                            long logAppendTime,
+                                            List<Record> records) {
+        return withLogEntries(timestampType, compressionType, logAppendTime, buildLogEntries(initialOffset, records));
     }
 
     private static MemoryRecords withLogEntries(TimestampType timestampType,

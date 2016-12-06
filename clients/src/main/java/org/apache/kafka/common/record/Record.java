@@ -410,6 +410,10 @@ public final class Record {
         return create(magic, timestamp, key, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }
 
+    public static Record create(byte magic, TimestampType timestampType, long timestamp, byte[] key, byte[] value) {
+        return create(magic, timestamp, key, value, CompressionType.NONE, timestampType);
+    }
+
     public static Record create(byte magic, long timestamp, byte[] value) {
         return create(magic, timestamp, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }

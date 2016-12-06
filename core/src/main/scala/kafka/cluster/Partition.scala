@@ -440,7 +440,7 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  def appendEntriesToLeader(records: MemoryRecords, requiredAcks: Int = 0) = {
+  def appendRecordsToLeader(records: MemoryRecords, requiredAcks: Int = 0) = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       val leaderReplicaOpt = leaderReplicaIfLocal()
       leaderReplicaOpt match {
