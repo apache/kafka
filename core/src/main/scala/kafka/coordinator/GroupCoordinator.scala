@@ -776,22 +776,26 @@ object GroupCoordinator {
     apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
+  private[coordinator] def offsetConfig(config: KafkaConfig) = OffsetConfig(
+    maxMetadataSize = config.offsetMetadataMaxSize,
+    loadBufferSize = config.offsetsLoadBufferSize,
+    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
+    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
+    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
+    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+    offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  )
+
   def apply(config: KafkaConfig,
             zkUtils: ZkUtils,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time): GroupCoordinator = {
-    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
