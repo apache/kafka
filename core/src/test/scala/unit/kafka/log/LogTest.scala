@@ -1041,25 +1041,20 @@ class LogTest extends JUnitSuite {
       compressionCodec = NoCompressionCodec,
       offsetSeq = Seq(Integer.MAX_VALUE.toLong + 3),
       messages = new Message("v4".getBytes(), "k4".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
-
     //Writes into an empty log with baseOffset 0
     log.append(set1, false)
-
     //This write will roll the segment, and create a new segment with baseOffset = log end of previous segment  1
     log.append(set2, false)
-
     //This write will also roll the segment, ""                                       "" Integer.MAX_VALUE + 2
     log.append(set3, false)
-
     //Since the last segment got baseOffset = Integer.MAX_VALUE + 2, this set does not roll the log.
     log.append(set4, false)
-
     log.close()
     val indexFiles = logDir.listFiles(new FilenameFilter {
       override def accept(dir: File, name: String)  = name.contains(".index")
     });
     assertEquals(3, indexFiles.length)
-    for (file : File <- indexFiles) {
+    for (file <- indexFiles) {
       val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
       assertTrue(offsetIndex.lastOffset >= 0)
       offsetIndex.close()
