@@ -1050,9 +1050,7 @@ class LogTest extends JUnitSuite {
     //Since the last segment got baseOffset = Integer.MAX_VALUE + 2, this set does not roll the log.
     log.append(set4, false)
     log.close()
-    val indexFiles = logDir.listFiles(new FilenameFilter {
-      override def accept(dir: File, name: String)  = name.contains(".index")
-    });
+    val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
     assertEquals(3, indexFiles.length)
     for (file <- indexFiles) {
       val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
