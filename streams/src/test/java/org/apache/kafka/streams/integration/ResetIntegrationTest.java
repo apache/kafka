@@ -34,12 +34,14 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -48,6 +50,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -63,6 +67,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * Tests local state store and global application cleanup.
  */
 public class ResetIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(ResetIntegrationTest.class);
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
@@ -267,22 +272,25 @@ public class ResetIntegrationTest {
     }
 
     private Properties prepareTest() throws Exception {
-        final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + testNo);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
+        properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig(
+                APP_ID + testNo,
+                CLUSTER.bootstrapServers(),
+                Serdes.Long().getClass().getName(),
+                Serdes.String().getClass().getName(),
+                properties);
 
-        return streamsConfiguration;
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+
+        return streamsConfig;
     }
 
     private void prepareInputData() throws Exception {
@@ -325,6 +333,12 @@ public class ResetIntegrationTest {
             })
             .groupByKey()
             .count("global-count");
+        globalCounts.foreach(new ForeachAction<Long, Long>() {
+            @Override
+            public void apply(Long key, Long value) {
+                log.info("global-count result: <{}, {}> ", key, value);
+            }
+        });
         globalCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
         final KStream<Long, Long> windowedCounts = input
@@ -351,6 +365,12 @@ public class ResetIntegrationTest {
                     return new KeyValue<>(key.window().start() + key.window().end(), value);
                 }
             });
+        windowedCounts.foreach(new ForeachAction<Long, Long>() {
+            @Override
+            public void apply(Long key, Long value) {
+                log.info("window-count result: <{}, {}> ", key, value);
+            }
+        });
         windowedCounts.to(Serdes.Long(), Serdes.Long(), outputTopic2);
 
         return builder;
@@ -362,12 +382,19 @@ public class ResetIntegrationTest {
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
         // use map to trigger internal re-partitioning before groupByKey
-        input.map(new KeyValueMapper<Long, String, KeyValue<Long, Long>>() {
+        final KStream<Long, Long> result = input.map(new KeyValueMapper<Long, String, KeyValue<Long, Long>>() {
             @Override
             public KeyValue<Long, Long> apply(final Long key, final String value) {
                 return new KeyValue<>(key, key);
             }
-        }).to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
+        });
+        result.foreach(new ForeachAction<Long, Long>() {
+            @Override
+            public void apply(Long key, Long value) {
+                log.info("map result: <{}, {}> ", key, value);
+            }
+        });
+        result.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
         return builder;
     }
