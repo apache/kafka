@@ -234,7 +234,8 @@ class LogSegment(val log: FileRecords,
       }
     } catch {
       case e: CorruptRecordException =>
-        logger.warn("Found invalid messages in log segment %s at byte offset %d: %s.".format(log.file.getAbsolutePath, validBytes, e.getMessage))
+        logger.warn("Found invalid messages in log segment %s at byte offset %d: %s."
+          .format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
     log.truncateTo(validBytes)

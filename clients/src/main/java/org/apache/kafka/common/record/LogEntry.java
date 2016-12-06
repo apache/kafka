@@ -41,6 +41,10 @@ public abstract class LogEntry implements Iterable<LogEntry> {
         return offset() + 1;
     }
 
+    public byte magic() {
+        return record().magic();
+    }
+
     @Override
     public String toString() {
         return "LogEntry(" + offset() + ", " + record() + ")";

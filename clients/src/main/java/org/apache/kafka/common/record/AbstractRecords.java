@@ -28,7 +28,7 @@ public abstract class AbstractRecords implements Records {
     public boolean hasMatchingShallowMagic(byte magic) {
         Iterator<? extends LogEntry> iterator = shallowIterator();
         while (iterator.hasNext())
-            if (iterator.next().record().magic() != magic)
+            if (iterator.next().magic() != magic)
                 return false;
         return true;
     }

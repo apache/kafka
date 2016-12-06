@@ -998,7 +998,7 @@ class LogTest extends JUnitSuite {
       val numMessages = 50 + TestUtils.random.nextInt(50)
       for (_ <- 0 until numMessages)
         log.append(set)
-      val messages = log.logSegments.flatMap(_.log.shallowIterator.asScala.toList)
+      val messages = log.logSegments.flatMap(_.log.deepIterator.asScala.toList)
       log.close()
 
       // corrupt index and log by appending random bytes
@@ -1008,7 +1008,8 @@ class LogTest extends JUnitSuite {
       // attempt recovery
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
       assertEquals(numMessages, log.logEndOffset)
-      assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.shallowIterator.asScala.toList))
+      assertEquals("Messages in the log after recovery should be the same.", messages,
+        log.logSegments.flatMap(_.log.deepIterator.asScala.toList))
       Utils.delete(logDir)
     }
   }

@@ -244,7 +244,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param startingPosition The starting position in the file to begin searching from.
      */
     public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        Iterator<FileChannelLogEntry> iterator = shallowEntriesFrom(Integer.MAX_VALUE, startingPosition, false);
+        Iterator<FileChannelLogEntry> iterator = shallowEntriesFrom(Integer.MAX_VALUE, startingPosition);
         while (iterator.hasNext()) {
             FileChannelLogEntry entry = iterator.next();
             long offset = entry.offset();
@@ -302,35 +302,32 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return new TimestampAndOffset(maxTimestamp, offsetOfMaxTimestamp);
     }
 
-    @Override
-    public boolean hasMatchingShallowMagic(byte magic) {
-        Iterator<FileChannelLogEntry> iterator = shallowEntriesFrom(Integer.MAX_VALUE, start, false);
-        while (iterator.hasNext())
-            if (iterator.next().magic() != magic)
-                return false;
-        return true;
-    }
-
+    /**
+     * Get an iterator over the shallow entries in the file. Note that the entries are
+     * backed by the open file channel. When the channel is closed (i.e. when this instance
+     * is closed), the entries will generally no longer be readable.
+     * @return An iterator over the shallow entries
+     */
     @Override
     public Iterator<FileChannelLogEntry> shallowIterator() {
         return shallowEntriesFrom(start);
     }
 
     public Iterator<FileChannelLogEntry> shallowEntries(int maxMessageSize) {
-        return shallowEntriesFrom(maxMessageSize, start, true);
+        return shallowEntriesFrom(maxMessageSize, start);
     }
 
     private Iterator<FileChannelLogEntry> shallowEntriesFrom(long start) {
-        return shallowEntriesFrom(Integer.MAX_VALUE, start, true);
+        return shallowEntriesFrom(Integer.MAX_VALUE, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowEntriesFrom(int maxMessageSize, long start, boolean eagerLoadRecords) {
+    private Iterator<FileChannelLogEntry> shallowEntriesFrom(int maxMessageSize, long start) {
         final long end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, maxMessageSize, start, end, eagerLoadRecords);
+        FileLogInputStream inputStream = new FileLogInputStream(channel, maxMessageSize, start, end);
         return RecordsIterator.shallowIterator(inputStream);
     }
 
@@ -341,7 +338,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, Integer.MAX_VALUE, start, end, true);
+        FileLogInputStream inputStream = new FileLogInputStream(channel, Integer.MAX_VALUE, start, end);
         return new RecordsIterator(inputStream, false, false, Integer.MAX_VALUE);
     }
 

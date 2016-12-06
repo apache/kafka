@@ -31,7 +31,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     protected final long end;
     protected final FileChannel channel;
     private final int maxRecordSize;
-    private final boolean eagerLoadRecords;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
 
     /**
@@ -40,14 +39,15 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      * @param maxRecordSize Maximum size of records
      * @param start Position in the file channel to start from
      * @param end Position in the file channel not to read past
-     * @param eagerLoadRecords Whether or not to load records eagerly (i.e. in {@link #nextEntry()})
      */
-    public FileLogInputStream(FileChannel channel, int maxRecordSize, long start, long end, boolean eagerLoadRecords) {
+    public FileLogInputStream(FileChannel channel,
+                              int maxRecordSize,
+                              long start,
+                              long end) {
         this.channel = channel;
         this.maxRecordSize = maxRecordSize;
         this.position = start;
         this.end = end;
-        this.eagerLoadRecords = eagerLoadRecords;
     }
 
     @Override
@@ -74,17 +74,14 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         FileChannelLogEntry logEntry = new FileChannelLogEntry(offset, channel, position, size);
-        if (eagerLoadRecords)
-            logEntry.loadRecord();
-
         position += logEntry.sizeInBytes();
         return logEntry;
     }
 
     /**
      * Log entry backed by an underlying FileChannel. This allows iteration over the shallow log
-     * entries without needing to read the record data into memory until it is needed. See
-     * {@link FileRecords#hasMatchingShallowMagic(byte)} for example usage.
+     * entries without needing to read the record data into memory until it is needed. The downside
+     * is that entries will generally no longer be readable when the underlying channel is closed.
      */
     public static class FileChannelLogEntry extends LogEntry {
         private final long offset;
@@ -112,6 +109,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return position;
         }
 
+        @Override
         public byte magic() {
             if (record != null)
                 return record.magic();
@@ -128,6 +126,11 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             }
         }
 
+        /**
+         * Force load the record and its data (key and value) into memory.
+         * @return The resulting record
+         * @throws IOException for any IO errors reading from the underlying file
+         */
         private Record loadRecord() throws IOException {
             if (record != null)
                 return record;
