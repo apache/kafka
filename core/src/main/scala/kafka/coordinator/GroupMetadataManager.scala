@@ -214,7 +214,7 @@ class GroupMetadataManager(val brokerId: Int,
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
       true, // allow appending to internal offset topic
-      delayedStore.entriesPerPartition,
+      delayedStore.partitionRecords,
       delayedStore.callback)
   }
 
@@ -1065,7 +1065,7 @@ object GroupMetadataManager {
 
 }
 
-case class DelayedStore(entriesPerPartition: Map[TopicPartition, MemoryRecords],
+case class DelayedStore(partitionRecords: Map[TopicPartition, MemoryRecords],
                         callback: Map[TopicPartition, PartitionResponse] => Unit)
 
 case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {

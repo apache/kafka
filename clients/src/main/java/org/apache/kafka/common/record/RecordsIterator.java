@@ -29,7 +29,7 @@ import java.util.ArrayDeque;
 import java.util.Iterator;
 
 /**
- * An iterator which handles both the shallow and deep iteration of a log buffer.
+ * An iterator which handles both the shallow and deep iteration of record sets.
  */
 public class RecordsIterator extends AbstractIterator<LogEntry> {
     private final boolean shallow;
