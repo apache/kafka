@@ -15,6 +15,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -235,6 +237,11 @@ public class StreamThreadStateStoreProviderTest {
         @Override
         public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
 
+        }
+
+        @Override
+        public Map<MetricName, ? extends Metric> metrics() {
+            return null;
         }
     }
 }
