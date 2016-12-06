@@ -50,7 +50,7 @@ public abstract class AbstractRecords implements Records {
             // enough to hold a full log entry. We just return all the bytes in the file message set.
             // Even though the message set does not have the right format version, we expect old clients
             // to raise an error to the user after reading the message size and seeing that there
-            // is not enough data available to parse the full message.
+            // are not available bytes from in the response to read the full message.
             return this;
         } else {
             // We use the first message to determine the compression type for the resulting message set.
@@ -69,6 +69,7 @@ public abstract class AbstractRecords implements Records {
         int size = 0;
         for (LogEntry entry : entries)
             size += entry.sizeInBytes();
+        // NOTE: 1024 is the minimum block size for snappy encoding
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 

@@ -265,9 +265,24 @@ public class Utils {
         return toArray(buffer, 0, buffer.limit());
     }
 
+    /**
+     * Convert a ByteBuffer to a nullable array.
+     * @param buffer The buffer to convert
+     * @return The resulting array or null if the buffer is null
+     */
     public static byte[] toNullableArray(ByteBuffer buffer) {
         return buffer == null ? null : toArray(buffer);
     }
+
+    /**
+     * Wrap an array as a nullable ByteBuffer.
+     * @param array The nullable array to wrap
+     * @return The wrapping ByteBuffer or null if array is null
+     */
+    public static ByteBuffer wrapNullable(byte[] array) {
+        return array == null ? null : ByteBuffer.wrap(array);
+    }
+
 
     /**
      * Read a byte array from the given offset and size in the buffer

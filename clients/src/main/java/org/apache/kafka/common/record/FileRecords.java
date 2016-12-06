@@ -95,7 +95,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Read log entries into a given buffer.
-     * @param buffer The buffer to read into
+     * @param buffer The buffer to write the entries to
      * @param position Position in the buffer to read from
      * @return The same buffer
      * @throws IOException

@@ -201,7 +201,7 @@ public class FileRecordsTest {
 
     /**
      * Expect a KafkaException if targetSize is bigger than the size of
-     * the FileMessageSet.
+     * the FileRecords.
      */
     @Test
     public void testTruncateNotCalledIfSizeIsBiggerThanTargetSize() throws IOException {
@@ -243,7 +243,7 @@ public class FileRecordsTest {
     }
 
     /**
-     * Test the new FileMessageSet with pre allocate as true
+     * Test the new FileRecords with pre allocate as true
      */
     @Test
     public void testPreallocateTrue() throws IOException {
@@ -257,7 +257,7 @@ public class FileRecordsTest {
     }
 
     /**
-     * Test the new FileMessageSet with pre allocate as false
+     * Test the new FileRecords with pre allocate as false
      */
     @Test
     public void testPreallocateFalse() throws IOException {
@@ -271,7 +271,7 @@ public class FileRecordsTest {
     }
 
     /**
-     * Test the new FileMessageSet with pre allocate as true and file has been clearly shut down, the file will be truncate to end of valid data.
+     * Test the new FileRecords with pre allocate as true and file has been clearly shut down, the file will be truncate to end of valid data.
      */
     @Test
     public void testPreallocateClearShutdown() throws IOException {

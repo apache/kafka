@@ -24,6 +24,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.utils.Utils.wrapNullable;
+
 /**
  * A record: a serialized key and value along with the associated CRC and other fields
  */
@@ -96,12 +98,9 @@ public final class Record {
     private final TimestampType wrapperRecordTimestampType;
 
     public Record(ByteBuffer buffer) {
-        this.buffer = buffer;
-        this.wrapperRecordTimestamp = null;
-        this.wrapperRecordTimestampType = null;
+        this(buffer, null, null);
     }
 
-    // Package private constructor for inner iteration.
     public Record(ByteBuffer buffer, Long wrapperRecordTimestamp, TimestampType wrapperRecordTimestampType) {
         this.buffer = buffer;
         this.wrapperRecordTimestamp = wrapperRecordTimestamp;
@@ -579,11 +578,10 @@ public final class Record {
     }
 
     private static int recordSize(byte magic, int keySize, int valueSize) {
-        if (magic == 0)
-            return CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH + KEY_SIZE_LENGTH + keySize + VALUE_SIZE_LENGTH + valueSize;
-        return CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH + TIMESTAMP_LENGTH + KEY_SIZE_LENGTH + keySize + VALUE_SIZE_LENGTH + valueSize;
+        return recordOverhead(magic) + keySize + valueSize;
     }
 
+    // visible only for testing
     public static byte computeAttributes(byte magic, CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
@@ -593,6 +591,7 @@ public final class Record {
         return attributes;
     }
 
+    // visible only for testing
     public static long computeChecksum(byte magic, byte attributes, long timestamp, byte[] key, byte[] value) {
         return computeChecksum(magic, attributes, timestamp, wrapNullable(key), wrapNullable(value));
     }
@@ -635,10 +634,6 @@ public final class Record {
         if (magic == 0)
             return KEY_OFFSET_V0;
         return KEY_OFFSET_V1;
-    }
-
-    private static ByteBuffer wrapNullable(byte[] array) {
-        return array == null ? null : ByteBuffer.wrap(array);
     }
 
 }

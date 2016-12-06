@@ -357,7 +357,7 @@ class LogValidatorTest extends JUnitSuite {
   }
 
   /* check that offsets are assigned consecutively from the given base offset */
-  def checkOffsets(records: MemoryRecords, baseOffset: Long) {
+  private def checkOffsets(records: MemoryRecords, baseOffset: Long) {
     assertTrue("Message set should not be empty", records.deepIterator.asScala.nonEmpty)
     var offset = baseOffset
     for (entry <- records.deepIterator.asScala) {

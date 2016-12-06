@@ -139,13 +139,13 @@ class Message(val buffer: ByteBuffer,
   
   import kafka.message.Message._
 
-  def asRecord: Record = {
-    val timestamp: java.lang.Long = wrapperMessageTimestamp match {
-      case None => null
-      case Some(timestamp) => timestamp
+  private[message] def asRecord: Record = {
+    wrapperMessageTimestamp match {
+      case None => new Record(buffer)
+      case Some(timestamp) =>
+        val timestampType = wrapperMessageTimestampType.orNull
+        new Record(buffer, timestamp, timestampType)
     }
-    val timestampType = wrapperMessageTimestampType.orNull
-    new Record(buffer, timestamp, timestampType)
   }
 
   /**

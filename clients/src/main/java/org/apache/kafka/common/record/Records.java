@@ -22,7 +22,8 @@ import java.util.Iterator;
 
 /**
  * A log buffer is a sequence of log entries. Each log entry consists of a 4 byte size, an 8 byte offset,
- * and the record bytes. See {@link MemoryRecords} for the in-memory representation.
+ * and the record bytes. See {@link MemoryRecords} for the in-memory representation and {@link FileRecords}
+ * for an on-disk representation.
  */
 public interface Records {
 
@@ -49,19 +50,25 @@ public interface Records {
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
     /**
-     * Get the shallow log entries in this log buffer.
+     * Get the shallow log entries in this log buffer. Note that the signature allows subclasses
+     * to return a more specific log entry type. This enables optimizations such as in-place offset
+     * assignment (see {@link ByteBufferLogInputStream.ByteBufferLogEntry}), and partial reading of
+     * record data (see {@link FileLogInputStream.FileChannelLogEntry#magic()}.
      * @return An iterator over the shallow entries of the log
      */
     Iterator<? extends LogEntry> shallowIterator();
 
     /**
-     * Get the deep log entries (i.e. descend into compressed message sets)
+     * Get the deep log entries (i.e. descend into compressed message sets). For the deep records,
+     * there are fewer options for optimization since the data must be decompressed before it can be
+     * returned. Hence there is little advantage in allowing subclasses to return a more specific type
+     * as we do for {@link #shallowIterator()}.
      * @return An iterator over the deep entries of the log
      */
     Iterator<LogEntry> deepIterator();
 
     /**
-     * Check whether all entries in this buffer have a certain magic value.
+     * Check whether all shallow entries in this buffer have a certain magic value.
      * @param magic The magic value to check
      * @return true if all shallow entries have a matching magic value, false otherwise
      */
@@ -69,7 +76,8 @@ public interface Records {
 
 
     /**
-     * Convert all entries in this buffer to a certain magic value.
+     * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
+     * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @return A Records (which may or may not be the same instance)
      */
