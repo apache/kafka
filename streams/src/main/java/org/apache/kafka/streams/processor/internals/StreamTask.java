@@ -54,7 +54,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final PunctuationQueue punctuationQueue;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final RecordCollector recordCollector;
+    private final RecordCollectorImpl recordCollector;
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
@@ -109,7 +109,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer, id().toString());
+        this.recordCollector = new RecordCollectorImpl(producer, id().toString());
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
