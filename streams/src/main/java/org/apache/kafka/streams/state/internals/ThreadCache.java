@@ -39,9 +39,9 @@ import java.util.NoSuchElementException;
 public class ThreadCache {
     private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
     private final String name;
+    private final long maxCacheSizeBytes;
     private final Map<String, NamedCache> caches = new HashMap<>();
     private final ThreadCacheMetrics metrics;
-    private long maxCacheSizeBytes;
 
     // internal stats
     private long numPuts = 0;
@@ -100,7 +100,7 @@ public class ThreadCache {
         cache.flush();
 
         log.debug("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-            name, puts(), gets(), evicts(), flushes());
+                  name, puts(), gets(), evicts(), flushes());
     }
 
     public LRUCacheEntry get(final String namespace, byte[] key) {
@@ -330,8 +330,4 @@ public class ThreadCache {
 
     }
 
-    // visible for testing
-    void setMaxCacheSizeBytes(final long maxCacheSizeBytes) {
-        this.maxCacheSizeBytes = maxCacheSizeBytes;
-    }
 }
