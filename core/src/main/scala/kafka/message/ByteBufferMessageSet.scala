@@ -238,7 +238,8 @@ object ByteBufferMessageSet {
                           messagesRetained: Int,
                           bytesRetained: Int,
                           maxTimestamp: Long,
-                          offsetOfMaxTimestamp: Long)
+                          offsetOfMaxTimestamp: Long,
+                          maxOffset: Long)
 }
 
 private object OffsetAssigner {
@@ -447,6 +448,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
                  filter: MessageAndOffset => Boolean): FilterResult = {
     var maxTimestamp = Message.NoTimestamp
     var offsetOfMaxTimestamp = -1L
+    var maxOffset = -1L
     var messagesRead = 0
     var bytesRead = 0
     var messagesRetained = 0
@@ -469,6 +471,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           if (shallowMessage.timestamp > maxTimestamp) {
             maxTimestamp = shallowMessage.timestamp
             offsetOfMaxTimestamp = shallowOffset
+          }
+          if (shallowOffset > maxOffset) {
+            maxOffset = shallowOffset
           }
         }
         messagesRead += 1
@@ -509,7 +514,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       }
     }
 
-    FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, offsetOfMaxTimestamp)
+    FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, offsetOfMaxTimestamp, maxOffset)
   }
 
   /**
