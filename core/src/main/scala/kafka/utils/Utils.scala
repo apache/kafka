@@ -491,9 +491,13 @@ object Utils extends Logging {
    */
   def createFile(path: String): File = {
     val f = new File(path)
-    val created = f.createNewFile()
-    if(!created)
-      throw new KafkaStorageException("Failed to create file %s.".format(path))
+    try {
+      val created = f.createNewFile()
+      if (!created)
+        throw new KafkaStorageException("Failed to create file %s.".format(path))
+    } catch {
+      case ex: IOException => throw new KafkaStorageException("Failed to create file %s.Maybe caused by permission denied".format(path))
+    }
     f
   }
   
