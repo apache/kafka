@@ -17,17 +17,42 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.util.Map;
 
 public class StandbyContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
+
+    private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+
+        }
+
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<K, V> partitioner) {
+
+        }
+
+        @Override
+        public void flush() {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    };
 
     private final TaskId id;
     private final String applicationId;
@@ -78,7 +103,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
 
     @Override
     public RecordCollector recordCollector() {
-        throw new UnsupportedOperationException();
+        return NO_OP_COLLECTOR;
     }
 
     @Override
