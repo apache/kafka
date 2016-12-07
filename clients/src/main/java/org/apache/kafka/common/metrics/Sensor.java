@@ -41,34 +41,34 @@ public final class Sensor {
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
 
-    public enum LogLevel {
+    public enum RecordLevel {
         SENSOR_INFO, SENSOR_DEBUG;
         public static final String SENSOR_INFO_STR = "INFO";
         public static final String SENSOR_DEBUG_STR = "DEBUG";
 
-        public static LogLevel fromString(String logLevel) {
-            if (logLevel.equals(SENSOR_INFO_STR)) {
+        public static RecordLevel fromString(String recordLevel) {
+            if (recordLevel.equals(SENSOR_INFO_STR)) {
                 return SENSOR_INFO;
-            } else if (logLevel.equals(SENSOR_DEBUG_STR)) {
+            } else if (recordLevel.equals(SENSOR_DEBUG_STR)) {
                 return SENSOR_DEBUG;
             }
             return null;
         }
 
-        public static String toString(LogLevel logLevel) {
-            if (logLevel == SENSOR_DEBUG) {
+        public static String toString(RecordLevel recordLevel) {
+            if (recordLevel == SENSOR_DEBUG) {
                 return SENSOR_DEBUG_STR;
-            } else if (logLevel == SENSOR_INFO) {
+            } else if (recordLevel == SENSOR_INFO) {
                 return SENSOR_INFO_STR;
             }
 
             return null;
         }
     }
-    private final LogLevel logLevel;
+    private final RecordLevel recordLevel;
 
     Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
-           long inactiveSensorExpirationTimeSeconds, LogLevel logLevel) {
+           long inactiveSensorExpirationTimeSeconds, RecordLevel recordLevel) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
@@ -79,7 +79,7 @@ public final class Sensor {
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
-        this.logLevel = logLevel;
+        this.recordLevel = recordLevel;
         checkForest(new HashSet<Sensor>());
     }
 
@@ -102,7 +102,7 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
             record(1.0);
         }
     }
@@ -114,7 +114,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
             record(value, time.milliseconds());
         }
     }
@@ -128,7 +128,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        if (this.logLevel.ordinal() <= config.logLevel().ordinal()) {
+        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
             this.lastRecordTime = timeMs;
             synchronized (this) {
                 // increment all the stats

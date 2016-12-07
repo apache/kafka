@@ -241,11 +241,11 @@ public class Metrics implements Closeable {
      * @return The sensor
      */
     public Sensor sensor(String name) {
-        return this.sensor(name, Sensor.LogLevel.SENSOR_INFO);
+        return this.sensor(name, Sensor.RecordLevel.SENSOR_INFO);
     }
 
-    public Sensor sensor(String name, Sensor.LogLevel logLevel) {
-        return sensor(name, null, logLevel, (Sensor[]) null);
+    public Sensor sensor(String name, Sensor.RecordLevel recordLevel) {
+        return sensor(name, null, recordLevel, (Sensor[]) null);
     }
 
 
@@ -257,10 +257,10 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public Sensor sensor(String name, Sensor... parents) {
-        return this.sensor(name, Sensor.LogLevel.SENSOR_INFO, parents);
+        return this.sensor(name, Sensor.RecordLevel.SENSOR_INFO, parents);
     }
-    public Sensor sensor(String name, Sensor.LogLevel logLevel, Sensor... parents) {
-        return sensor(name, null, logLevel, parents);
+    public Sensor sensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
+        return sensor(name, null, recordLevel, parents);
     }
 
     /**
@@ -272,10 +272,10 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return this.sensor(name, config, Sensor.LogLevel.SENSOR_INFO, parents);
+        return this.sensor(name, config, Sensor.RecordLevel.SENSOR_INFO, parents);
     }
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.LogLevel logLevel, Sensor... parents) {
-        return sensor(name, config, Long.MAX_VALUE, logLevel, parents);
+    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, recordLevel, parents);
     }
 
     /**
@@ -288,10 +288,10 @@ public class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.LogLevel logLevel, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordLevel recordLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, logLevel);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordLevel);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -308,7 +308,7 @@ public class Metrics implements Closeable {
         return s;
     }
     public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
-        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.LogLevel.SENSOR_INFO, parents);
+        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordLevel.SENSOR_INFO, parents);
     }
 
     /**

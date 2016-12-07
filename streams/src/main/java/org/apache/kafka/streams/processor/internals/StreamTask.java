@@ -95,7 +95,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.nodeCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit", Sensor.LogLevel.SENSOR_DEBUG);
+        this.nodeCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit", Sensor.RecordLevel.SENSOR_DEBUG);
         this.metrics = metrics;
 
         // create queues for each assigned partition and associate them

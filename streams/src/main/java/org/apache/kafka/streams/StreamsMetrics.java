@@ -34,18 +34,18 @@ public interface StreamsMetrics {
      * @param tags Additional tags of the sensor.
      * @return The added sensor.
      */
-    Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.LogLevel logLevel, String... tags);
+    Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
     /**
      * Record the given latency value of the sensor.
      */
     void recordLatency(Sensor sensor, long startNs, long endNs);
 
-    Sensor sensor(String name, Sensor.LogLevel logLevel);
+    Sensor sensor(String name, Sensor.RecordLevel recordLevel);
 
     void removeSensor(String name);
 
-    Sensor sensor(String name, MetricConfig config, Sensor.LogLevel logLevel, Sensor... parents);
+    Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents);
 
 }
 

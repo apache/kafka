@@ -38,7 +38,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.clients.CommonClientConfigs.METRICS_LOG_LEVEL_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -122,8 +121,8 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>metrics.num.samples</code> */
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
-    /** <code>metrics.log.level</code> */
-    public static final String METRICS_LOG_LEVEL_CONFIG = CommonClientConfigs.METRICS_LOG_LEVEL_CONFIG;
+    /** <code>metrics.record.level</code> */
+    public static final String METRICS_RECORD_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORD_LEVEL_CONFIG;
 
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
@@ -242,12 +241,12 @@ public class StreamsConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_LOG_LEVEL_CONFIG,
+                                .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
-                                        "SENSOR_INFO",
-                                        in("SENSOR_INFO", "SENSOR_DEBUG"),
+                                        "INFO",
+                                        in("INFO", "DEBUG"),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_LOG_LEVEL_DOC)
+                                        CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
                                 .define(APPLICATION_SERVER_CONFIG,
                                         Type.STRING,
                                         "",

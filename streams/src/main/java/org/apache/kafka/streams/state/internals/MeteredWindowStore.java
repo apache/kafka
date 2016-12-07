@@ -54,10 +54,10 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.LogLevel.SENSOR_DEBUG);
-        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.LogLevel.SENSOR_DEBUG);
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.LogLevel.SENSOR_DEBUG);
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.LogLevel.SENSOR_DEBUG);
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.SENSOR_DEBUG);
+        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.RecordLevel.SENSOR_DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordLevel.SENSOR_DEBUG);
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordLevel.SENSOR_DEBUG);
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();

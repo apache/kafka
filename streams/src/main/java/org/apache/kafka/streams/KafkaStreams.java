@@ -262,7 +262,7 @@ public class KafkaStreams {
         reporters.add(new JmxReporter(JMX_PREFIX));
 
         final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
-            .logLevel(Sensor.LogLevel.fromString(config.getString(StreamsConfig.METRICS_LOG_LEVEL_CONFIG)))
+            .recordLevel(Sensor.RecordLevel.fromString(config.getString(StreamsConfig.METRICS_RECORD_LEVEL_CONFIG)))
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 

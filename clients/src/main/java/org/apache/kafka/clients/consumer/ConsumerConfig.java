@@ -177,7 +177,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>metrics.log.level</code>
      */
-    public static final String METRICS_LOG_LEVEL_CONFIG = CommonClientConfigs.METRICS_LOG_LEVEL_CONFIG;
+    public static final String METRICS_RECORD_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORD_LEVEL_CONFIG;
 
     /**
      * <code>metric.reporters</code>
@@ -332,12 +332,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_LOG_LEVEL_CONFIG,
+                                .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
                                         "INFO",
                                         in("INFO", "DEBUG"),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_LOG_LEVEL_DOC)
+                                        CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",

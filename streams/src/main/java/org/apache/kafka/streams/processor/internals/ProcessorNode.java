@@ -137,16 +137,16 @@ public class ProcessorNode<K, V> {
             this.metricTags.put("node-id", "-" + name);
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, name, "process", Sensor.LogLevel.SENSOR_DEBUG);
-            this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, name, "punctuate", Sensor.LogLevel.SENSOR_DEBUG);
+            this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, name, "process", Sensor.RecordLevel.SENSOR_DEBUG);
+            this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, name, "punctuate", Sensor.RecordLevel.SENSOR_DEBUG);
 
-            this.contextForwardSensor = metrics.sensor(sensorNamePrefix + "node-forward-time" + name, Sensor.LogLevel.SENSOR_DEBUG);
+            this.contextForwardSensor = metrics.sensor(sensorNamePrefix + "node-forward-time" + name, Sensor.RecordLevel.SENSOR_DEBUG);
             this.contextForwardSensor.add(new MetricName(sensorNamePrefix + "node-forward-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
 
-            this.nodeTaskCreationSensor = metrics.sensor(sensorNamePrefix + "node-task-create-time" + name, Sensor.LogLevel.SENSOR_DEBUG);
+            this.nodeTaskCreationSensor = metrics.sensor(sensorNamePrefix + "node-task-create-time" + name, Sensor.RecordLevel.SENSOR_DEBUG);
             this.nodeTaskCreationSensor.add(new MetricName(sensorNamePrefix + "node-task-create-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
-            this.nodeTaskDestructionSensor = metrics.sensor(sensorNamePrefix + "node-task-destruction" + name, Sensor.LogLevel.SENSOR_DEBUG);
+            this.nodeTaskDestructionSensor = metrics.sensor(sensorNamePrefix + "node-task-destruction" + name, Sensor.RecordLevel.SENSOR_DEBUG);
             this.nodeTaskDestructionSensor.add(new MetricName(sensorNamePrefix + "node-task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
 
         }
