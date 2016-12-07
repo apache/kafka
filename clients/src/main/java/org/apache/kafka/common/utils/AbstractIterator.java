@@ -25,9 +25,9 @@ import java.util.NoSuchElementException;
  */
 public abstract class AbstractIterator<T> implements Iterator<T> {
 
-    private static enum State {
+    private enum State {
         READY, NOT_READY, DONE, FAILED
-    };
+    }
 
     private State state = State.NOT_READY;
     private T next;

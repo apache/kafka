@@ -70,6 +70,11 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
+    public long size() {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
     public final boolean equals(Object o) {
         if (o == this) {
             return true;

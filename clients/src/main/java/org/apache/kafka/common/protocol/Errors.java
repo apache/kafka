@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
@@ -161,7 +162,9 @@ public enum Errors {
         new NotControllerException("This is not the correct controller for this cluster.")),
     INVALID_REQUEST(42,
         new InvalidRequestException("This most likely occurs because of a request being malformed by the client library or" +
-            " the message was sent to an incompatible broker. See the broker logs for more details."));
+            " the message was sent to an incompatible broker. See the broker logs for more details.")),
+    UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
+        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

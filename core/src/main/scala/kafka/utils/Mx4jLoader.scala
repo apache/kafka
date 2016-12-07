@@ -61,12 +61,10 @@ object Mx4jLoader extends Logging {
       true
     }
     catch {
-	  case e: ClassNotFoundException => {
+	  case _: ClassNotFoundException =>
         info("Will not load MX4J, mx4j-tools.jar is not in the classpath")
-      }
-      case e: Throwable => {
+      case e: Throwable =>
         warn("Could not start register mbean in JMX", e)
-      }
     }
     false
   }

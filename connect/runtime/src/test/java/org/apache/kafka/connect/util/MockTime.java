@@ -19,31 +19,37 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A clock that you can manually advance by calling sleep
  */
 public class MockTime implements Time {
 
-    private long nanos = 0;
+    private final AtomicLong nanos;
 
     public MockTime() {
-        this.nanos = System.nanoTime();
+        this.nanos = new AtomicLong(System.nanoTime());
     }
 
     @Override
     public long milliseconds() {
-        return TimeUnit.MILLISECONDS.convert(this.nanos, TimeUnit.NANOSECONDS);
+        return TimeUnit.MILLISECONDS.convert(this.nanos.get(), TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public long hiResClockMs() {
+        return TimeUnit.NANOSECONDS.toMillis(nanos.get());
     }
 
     @Override
     public long nanoseconds() {
-        return nanos;
+        return nanos.get();
     }
 
     @Override
     public void sleep(long ms) {
-        this.nanos += TimeUnit.NANOSECONDS.convert(ms, TimeUnit.MILLISECONDS);
+        this.nanos.addAndGet(TimeUnit.NANOSECONDS.convert(ms, TimeUnit.MILLISECONDS));
     }
 
 }

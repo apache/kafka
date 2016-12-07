@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
-public class OffsetFetchResponse extends AbstractRequestResponse {
+public class OffsetFetchResponse extends AbstractResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.OFFSET_FETCH.id);
     private static final String RESPONSES_KEY_NAME = "responses";
@@ -47,11 +47,9 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     /**
      * Possible error codeS:
      *
-     *  UNKNOWN_TOPIC_OR_PARTITION (3)  <- only for request v0
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)
      *  GROUP_LOAD_IN_PROGRESS (14)
      *  NOT_COORDINATOR_FOR_GROUP (16)
-     *  ILLEGAL_GENERATION (22)
-     *  UNKNOWN_MEMBER_ID (25)
      *  TOPIC_AUTHORIZATION_FAILED (29)
      *  GROUP_AUTHORIZATION_FAILED (30)
      */

@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -46,12 +47,17 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public V get(final K key) {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
-            V result = store.get(key);
-            if (result != null) {
-                return result;
+            try {
+                final V result = store.get(key);
+                if (result != null) {
+                    return result;
+                }
+            } catch (InvalidStateStoreException e) {
+                throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
             }
+
         }
         return null;
     }
@@ -61,10 +67,14 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
-                return store.range(from, to);
+                try {
+                    return store.range(from, to);
+                } catch (InvalidStateStoreException e) {
+                    throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+                }
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
@@ -73,16 +83,20 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
-                return store.all();
+                try {
+                    return store.all();
+                } catch (InvalidStateStoreException e) {
+                    throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+                }
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
     @Override
     public long approximateNumEntries() {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         long total = 0;
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             total += store.approximateNumEntries();

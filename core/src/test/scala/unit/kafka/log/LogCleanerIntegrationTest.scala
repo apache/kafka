@@ -33,6 +33,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
+import scala.Seq
 import scala.collection._
 import scala.util.Random
 
@@ -72,9 +73,11 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
-    log.append(largeMessageSet, assignOffsets = true)
+    val appendInfo = log.append(largeMessageSet, assignOffsets = true)
+    val largeMessageOffset = appendInfo.firstOffset
+
     val dups = writeDups(startKey = largeMessageKey + 1, numKeys = 100, numDups = 3, log = log, codec = codec)
-    val appends2 = appends ++ Seq(largeMessageKey -> largeMessageValue) ++ dups
+    val appends2 = appends ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dups
     val firstDirty2 = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty2)
 
@@ -90,6 +93,45 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     assertFalse(checkpoints.contains(topics(0)))
   }
 
+  @Test
+  def testCleansCombinedCompactAndDeleteTopic(): Unit = {
+    val logProps  = new Properties()
+    val retentionMs: Integer = 100000
+    logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
+
+    def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String, Long)]) = {
+      cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 100L)
+      val log = cleaner.logs.get(topics(0))
+
+      val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
+      val startSize = log.size
+
+      val firstDirty = log.activeSegment.baseOffset
+      cleaner.startup()
+
+      // should compact the log
+      checkLastCleaned("log", 0, firstDirty)
+      val compactedSize = log.logSegments.map(_.size).sum
+      assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+      (log, messages)
+    }
+
+    val (log, _) = runCleanerAndCheckCompacted(100)
+    // should delete old segments
+    log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
+
+    TestUtils.waitUntilTrue(() => log.numberOfSegments == 1, "There should only be 1 segment remaining", 10000L)
+    assertEquals(1, log.numberOfSegments)
+
+    cleaner.shutdown()
+
+    // run the cleaner again to make sure if there are no issues post deletion
+    val (log2, messages) = runCleanerAndCheckCompacted(20)
+    val read = readFromLog(log2)
+    assertEquals("Contents of the map shouldn't change", toMap(messages), toMap(read))
+  }
+
   // returns (value, ByteBufferMessageSet)
   private def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, ByteBufferMessageSet) = {
     def messageValue(length: Int): String = {
@@ -103,7 +145,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   @Test
-  def testCleanerWithMessageFormatV0() {
+  def testCleanerWithMessageFormatV0(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, Message.MagicValue_V0)
     val maxMessageSize = codec match {
@@ -119,7 +161,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
 
     val log = cleaner.logs.get(topics(0))
-    val props = logConfigProperties(maxMessageSize)
+    val props = logConfigProperties(maxMessageSize = maxMessageSize)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
 
@@ -134,15 +176,16 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
-    val appends2: Seq[(Int, String)] = {
+    val appends2: Seq[(Int, String, Long)] = {
       val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V0)
-      log.append(largeMessageSet, assignOffsets = true)
+      val appendInfo = log.append(largeMessageSet, assignOffsets = true)
+      val largeMessageOffset = appendInfo.firstOffset
 
       // also add some messages with version 1 to check that we handle mixed format versions correctly
       props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
       log.config = new LogConfig(props)
       val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V1)
-      appends ++ dupsV0 ++ Seq(largeMessageKey -> largeMessageValue) ++ dupsV1
+      appends ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1
     }
     val firstDirty2 = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty2)
@@ -150,22 +193,63 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     checkLogAfterAppendingDups(log, startSize, appends2)
   }
 
+  @Test
+  def testCleaningNestedMessagesWithMultipleVersions(): Unit = {
+    val maxMessageSize = 192
+    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
+
+    val log = cleaner.logs.get(topics(0))
+    val props = logConfigProperties(maxMessageSize = maxMessageSize)
+    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
+    log.config = new LogConfig(props)
+
+    // with compression enabled, these messages will be written as a single message containing
+    // all of the individual messages
+    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V0)
+    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = Message.MagicValue_V0)
+
+    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
+    log.config = new LogConfig(props)
+
+    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = Message.MagicValue_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = Message.MagicValue_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = Message.MagicValue_V1)
+
+    val appends = appendsV0 ++ appendsV1
+
+    val startSize = log.size
+    cleaner.startup()
+
+    val firstDirty = log.activeSegment.baseOffset
+    assertTrue(firstDirty > appendsV0.size) // ensure we clean data from V0 and V1
+
+    checkLastCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.map(_.size).sum
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+
+    checkLogAfterAppendingDups(log, startSize, appends)
+  }
+
   private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
     // LogConfig.MinCleanableDirtyRatioProp
     cleaner.awaitCleaned(topic, partitionId, firstDirty)
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, partitionId)).get
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(TopicAndPartition(topic, partitionId))
     assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned",
       lastCleaned >= firstDirty)
   }
 
-  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String)]) {
+  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]) {
     val read = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change", appends.toMap, read.toMap)
+    assertEquals("Contents of the map shouldn't change", toMap(appends), toMap(read))
     assertTrue(startSize > log.size)
   }
 
-  private def readFromLog(log: Log): Iterable[(Int, String)] = {
+  private def toMap(messages: Iterable[(Int, String, Long)]): Map[Int, (String, Long)] = {
+    messages.map { case (key, value, offset) => key -> (value, offset) }.toMap
+  }
+
+  private def readFromLog(log: Log): Iterable[(Int, String, Long)] = {
 
     def messageIterator(entry: MessageAndOffset): Iterator[MessageAndOffset] =
       // create single message iterator or deep iterator depending on compression codec
@@ -175,29 +259,48 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     for (segment <- log.logSegments; entry <- segment.log; messageAndOffset <- messageIterator(entry)) yield {
       val key = TestUtils.readString(messageAndOffset.message.key).toInt
       val value = TestUtils.readString(messageAndOffset.message.payload)
-      key -> value
+      (key, value, messageAndOffset.offset)
     }
   }
 
   private def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec,
-                        startKey: Int = 0, magicValue: Byte = Message.CurrentMagicValue): Seq[(Int, String)] = {
+                        startKey: Int = 0, magicValue: Byte = Message.CurrentMagicValue): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
-      log.append(TestUtils.singleMessageSet(payload = payload.toString.getBytes, codec = codec,
+      val appendInfo = log.append(TestUtils.singleMessageSet(payload = payload.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), assignOffsets = true)
+      counter += 1
+      (key, payload, appendInfo.firstOffset)
+    }
+  }
+
+  private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec,
+                                        startKey: Int = 0, magicValue: Byte = Message.CurrentMagicValue): Seq[(Int, String, Long)] = {
+    val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
+      val payload = counter.toString
       counter += 1
       (key, payload)
     }
+
+    val messages = kvs.map { case (key, payload) =>
+      new Message(payload.toString.getBytes, key.toString.getBytes, Message.NoTimestamp, magicValue)
+    }
+
+    val messageSet = new ByteBufferMessageSet(compressionCodec = codec, messages: _*)
+    val appendInfo = log.append(messageSet, assignOffsets = true)
+    val offsets = appendInfo.firstOffset to appendInfo.lastOffset
+
+    kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
   }
-    
+
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     cleaner.shutdown()
     time.scheduler.shutdown()
     Utils.delete(logDir)
   }
 
-  private def logConfigProperties(maxMessageSize: Int, minCleanableDirtyRatio: Float = 0.0F): Properties = {
+  private def logConfigProperties(propertyOverrides: Properties = new Properties(), maxMessageSize: Int, minCleanableDirtyRatio: Float = 0.0F): Properties = {
     val props = new Properties()
     props.put(LogConfig.MaxMessageBytesProp, maxMessageSize: java.lang.Integer)
     props.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
@@ -205,6 +308,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
+    props.putAll(propertyOverrides)
     props
   }
   
@@ -213,8 +317,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
                           minCleanableDirtyRatio: Float = 0.0F,
                           numThreads: Int = 1,
                           maxMessageSize: Int = 128,
-                          defaultPolicy: String = "compact",
-                          policyOverrides: Map[String, String] = Map()): LogCleaner = {
+                          logCleanerBackOffMillis: Long = 15000L,
+                          propertyOverrides: Properties = new Properties()): LogCleaner = {
     
     // create partitions and add them to the pool
     val logs = new Pool[TopicAndPartition, Log]()
@@ -223,14 +327,14 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       dir.mkdirs()
 
       val log = new Log(dir = dir,
-                        LogConfig(logConfigProperties(maxMessageSize, minCleanableDirtyRatio)),
+                        LogConfig(logConfigProperties(propertyOverrides, maxMessageSize, minCleanableDirtyRatio)),
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
                         time = time)
       logs.put(TopicAndPartition("log", i), log)      
     }
   
-    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize),
+    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize, backOffMs = logCleanerBackOffMillis),
                    logDirs = Array(logDir),
                    logs = logs,
                    time = time)

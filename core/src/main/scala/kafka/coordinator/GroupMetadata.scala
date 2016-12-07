@@ -17,13 +17,11 @@
 
 package kafka.coordinator
 
-import kafka.utils.nonthreadsafe
-import java.util.UUID
-
-import kafka.common.OffsetAndMetadata
-import org.apache.kafka.common.TopicPartition
-
 import collection.mutable
+import java.util.UUID
+import kafka.common.OffsetAndMetadata
+import kafka.utils.nonthreadsafe
+import org.apache.kafka.common.TopicPartition
 
 private[coordinator] sealed trait GroupState { def state: Byte }
 
@@ -190,8 +188,8 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
 
   def allMemberMetadata = members.values.toList
 
-  def rebalanceTimeout = members.values.foldLeft(0) {(timeout, member) =>
-    timeout.max(member.sessionTimeoutMs)
+  def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
+    timeout.max(member.rebalanceTimeoutMs)
   }
 
   // TODO: decide if ids should be predictable or random

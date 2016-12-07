@@ -15,7 +15,7 @@ Java 7 should be used for building in order to support both Java 7 and Java 8 at
 Now everything else will work.
 
 ### Building a jar and running it ###
-    ./gradlew jar  
+    ./gradlew jar
 
 Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 
@@ -67,7 +67,7 @@ The release file can be found inside `./core/build/distributions/`.
     ./gradlew clean
 
 ### Running a task on a particular version of Scala (either 2.10.6 or 2.11.8) ###
-*Note that if building the jars with a version other than 2.10, you need to set the `SCALA_BINARY_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.10.6, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.11) or the full version (eg 2.11.8):
 
@@ -102,7 +102,7 @@ This is for `core`, `examples` and `clients`
 ### Publishing the jar for all version of Scala and for all projects to maven ###
     ./gradlew uploadArchivesAll
 
-Please note for this to work you should create/update `~/.gradle/gradle.properties` and assign the following variables
+Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
 
     mavenUrl=
     mavenUsername=

@@ -17,15 +17,19 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.junit.Test;
 
@@ -33,6 +37,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
@@ -47,7 +53,8 @@ public class RecordCollectorTest {
             new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());
+    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
 
 
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
@@ -63,9 +70,9 @@ public class RecordCollectorTest {
     @Test
     public void testSpecificPartition() {
 
-        RecordCollector collector = new RecordCollector(
-                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer)
-        );
+        RecordCollectorImpl collector = new RecordCollectorImpl(
+                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
+                "RecordCollectorTest-TestSpecificPartition");
 
         collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
         collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
@@ -95,9 +102,9 @@ public class RecordCollectorTest {
     @Test
     public void testStreamPartitioner() {
 
-        RecordCollector collector = new RecordCollector(
-                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer)
-        );
+        RecordCollectorImpl collector = new RecordCollectorImpl(
+                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
+                "RecordCollectorTest-TestStreamPartitioner");
 
         collector.send(new ProducerRecord<>("topic1", "3", "0"), stringSerializer, stringSerializer, streamPartitioner);
         collector.send(new ProducerRecord<>("topic1", "9", "0"), stringSerializer, stringSerializer, streamPartitioner);
@@ -118,4 +125,40 @@ public class RecordCollectorTest {
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldRetryWhenTimeoutExceptionOccursOnSend() throws Exception {
+        final AtomicInteger attempt = new AtomicInteger(0);
+        RecordCollectorImpl collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        if (attempt.getAndIncrement() == 0) {
+                            throw new TimeoutException();
+                        }
+                        return super.send(record, callback);
+                    }
+                },
+                "test");
+
+        collector.send(new ProducerRecord<>("topic1", "3", "0"), stringSerializer, stringSerializer, streamPartitioner);
+        final Long offset = collector.offsets().get(new TopicPartition("topic1", 0));
+        assertEquals(Long.valueOf(0L), offset);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionAfterMaxAttempts() throws Exception {
+        RecordCollector collector = new RecordCollectorImpl(
+                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                        throw new TimeoutException();
+                    }
+                },
+                "test");
+
+        collector.send(new ProducerRecord<>("topic1", "3", "0"), stringSerializer, stringSerializer, streamPartitioner);
+
+    }
 }

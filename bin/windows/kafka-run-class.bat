@@ -31,7 +31,15 @@ IF ["%SCALA_VERSION%"] EQU [""] (
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
-  set SCALA_BINARY_VERSION=2.10
+  for /f "tokens=1,2 delims=." %%a in ("%SCALA_VERSION%") do (
+    set FIRST=%%a
+    set SECOND=%%b
+    if ["!SECOND!"] EQU [""] (
+      set SCALA_BINARY_VERSION=!FIRST!
+    ) else (
+      set SCALA_BINARY_VERSION=!FIRST!.!SECOND!
+    )
+  )
 )
 
 rem Classpath addition for kafka-core dependencies
@@ -81,7 +89,7 @@ rem Log4j settings
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
 	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
 ) ELSE (
-  # create logs directory
+  rem create logs directory
   IF not exist %LOG_DIR% (
       mkdir %LOG_DIR%
   )

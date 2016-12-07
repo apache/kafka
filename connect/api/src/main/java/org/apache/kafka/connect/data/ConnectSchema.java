@@ -22,6 +22,7 @@ import org.apache.kafka.connect.errors.DataException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,12 +107,13 @@ public class ConnectSchema implements Schema {
         this.doc = doc;
         this.parameters = parameters;
 
-        this.fields = fields;
-        if (this.fields != null && this.type == Type.STRUCT) {
-            this.fieldsByName = new HashMap<>();
-            for (Field field : fields)
+        if (this.type == Type.STRUCT) {
+            this.fields = fields == null ? Collections.<Field>emptyList() : fields;
+            this.fieldsByName = new HashMap<>(this.fields.size());
+            for (Field field : this.fields)
                 fieldsByName.put(field.name(), field);
         } else {
+            this.fields = null;
             this.fieldsByName = null;
         }
 

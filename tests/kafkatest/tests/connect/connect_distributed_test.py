@@ -23,7 +23,7 @@ from kafkatest.services.security.security_config import SecurityConfig
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 import subprocess, itertools, time
-from collections import Counter
+from collections import Counter, namedtuple
 import operator
 
 class ConnectDistributedTest(Test):
@@ -155,7 +155,6 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
-    
     @matrix(connector_type=["source", "sink"])
     def test_restart_failed_task(self, connector_type):
         self.setup_services()
@@ -166,7 +165,7 @@ class ConnectDistributedTest(Test):
         if connector_type == "sink":
             connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
         else:
-            connector = MockSource(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
             
         connector.start()
 

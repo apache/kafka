@@ -29,8 +29,8 @@ object AclCommand {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Describe, All),
-    Group -> Set(Read, All),
+    Topic -> Set(Read, Write, Describe, All, Delete),
+    Group -> Set(Read, Describe, All),
     Cluster -> Set(Create, ClusterAction, All)
   )
 
@@ -84,7 +84,6 @@ object AclCommand {
         CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
 
       for ((resource, acls) <- resourceToAcl) {
-        val acls = resourceToAcl(resource)
         println(s"Adding ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         authorizer.addAcls(acls, resource)
       }

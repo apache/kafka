@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -32,16 +23,25 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
 
@@ -66,10 +66,9 @@ public class NetworkClientTest {
 
     @Test(expected = IllegalStateException.class)
     public void testSendToUnreadyNode() {
-        RequestSend send = new RequestSend("5",
-                                           client.nextRequestHeader(ApiKeys.METADATA),
-                                           new MetadataRequest(Arrays.asList("test")).toStruct());
-        ClientRequest request = new ClientRequest(time.milliseconds(), false, send, null);
+        MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList("test"));
+        RequestHeader header = client.nextRequestHeader(ApiKeys.METADATA);
+        ClientRequest request = new ClientRequest("5", time.milliseconds(), false, header, metadataRequest, null);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
     }
@@ -91,10 +90,9 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, produceRequest, null);
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1, client.inFlightRequestCount(node.idString()));
 
@@ -104,11 +102,10 @@ public class NetworkClientTest {
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, produceRequest, handler);
         awaitReady(networkClient, node);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
@@ -126,7 +123,7 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         assertTrue("The handler should have executed.", handler.executed);
         assertTrue("Should have a response body.", handler.response.hasResponse());
-        assertEquals("Should be correlated to the original request", request, handler.response.request());
+        assertEquals("Should be correlated to the original request", request.header(), handler.response.requestHeader());
     }
 
     private void awaitReady(NetworkClient client, Node node) {
@@ -136,11 +133,10 @@ public class NetworkClientTest {
 
     @Test
     public void testRequestTimeout() {
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, produceRequest, handler);
         awaitReady(client, node);
         long now = time.milliseconds();
         client.send(request, now);
@@ -153,14 +149,13 @@ public class NetworkClientTest {
 
     @Test
     public void testLeastLoadedNode() {
-        Node leastNode = null;
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
         
         // leastloadednode should be our single node
-        leastNode = client.leastLoadedNode(time.milliseconds());
+        Node leastNode = client.leastLoadedNode(time.milliseconds());
         assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
         
         // sleep for longer than reconnect backoff
@@ -203,6 +198,25 @@ public class NetworkClientTest {
         long delay = client.connectionDelay(node, time.milliseconds());
 
         assertEquals(reconnectBackoffMsTest, delay);
+    }
+
+    @Test
+    public void testDisconnectDuringUserMetadataRequest() {
+        // this test ensures that the default metadata updater does not intercept a user-initiated
+        // metadata request when the remote node disconnects with the request in-flight.
+        awaitReady(client, node);
+        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.METADATA);
+
+        MetadataRequest metadataRequest = new MetadataRequest(Collections.<String>emptyList());
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, metadataRequest, null);
+        client.send(request, time.milliseconds());
+        client.poll(requestTimeoutMs, time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
+
+        selector.close(node.idString());
+        List<ClientResponse> responses = client.poll(requestTimeoutMs, time.milliseconds());
+        assertEquals(1, responses.size());
+        assertTrue(responses.iterator().next().wasDisconnected());
     }
     
     private static class TestCallbackHandler implements RequestCompletionHandler {

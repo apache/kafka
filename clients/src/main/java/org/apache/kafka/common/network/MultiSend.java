@@ -34,7 +34,6 @@ public class MultiSend implements Send {
     private static final Logger log = LoggerFactory.getLogger(MultiSend.class);
     private String dest;
     private long totalWritten = 0;
-    private List<Send> sends;
     private Iterator<Send> sendsIterator;
     private Send current;
     private boolean doneSends = false;
@@ -42,7 +41,6 @@ public class MultiSend implements Send {
 
     public MultiSend(String dest, List<Send> sends) {
         this.dest = dest;
-        this.sends = sends;
         this.sendsIterator = sends.iterator();
         nextSendOrDone();
         for (Send send: sends)
@@ -76,7 +74,7 @@ public class MultiSend implements Send {
             throw new KafkaException("This operation cannot be completed on a complete request.");
 
         int totalWrittenPerCall = 0;
-        boolean sendComplete = false;
+        boolean sendComplete;
         do {
             long written = current.writeTo(channel);
             totalWritten += written;

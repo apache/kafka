@@ -133,6 +133,7 @@ public class KafkaConfigBackingStoreTest {
     KafkaBasedLog<String, byte[]> storeLog;
     private KafkaConfigBackingStore configStorage;
 
+    private String internalTopic;
     private Capture<String> capturedTopic = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedProducerProps = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
@@ -142,7 +143,8 @@ public class KafkaConfigBackingStoreTest {
 
     @Before
     public void setUp() {
-        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter);
+        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG);
+        Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
     }
 
@@ -154,7 +156,8 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -193,7 +196,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Null before writing
@@ -261,8 +264,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
@@ -317,7 +319,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
@@ -370,7 +372,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector with initial state paused
@@ -412,7 +414,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector with initial state paused
@@ -462,7 +464,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector with initial state paused
@@ -501,7 +503,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // The target state deletion should reset the state to STARTED
@@ -548,7 +550,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
@@ -602,7 +604,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
@@ -649,7 +651,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
@@ -712,7 +714,7 @@ public class KafkaConfigBackingStoreTest {
 
         PowerMock.replayAll();
 
-        configStorage.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
         configStorage.start();
         // After reading the log, it should have been in an inconsistent state
         ClusterConfigState configState = configStorage.snapshot();

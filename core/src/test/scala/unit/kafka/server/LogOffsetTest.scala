@@ -32,7 +32,7 @@ import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -90,7 +90,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val log = logManager.getLog(TopicAndPartition(topic, part)).get
 
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
@@ -125,7 +125,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     var offsetChanged = false
-    for(i <- 1 to 14) {
+    for (_ <- 1 to 14) {
       val topicAndPartition = TopicAndPartition(topic, 0)
       val offsetRequest =
         OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1)))
@@ -151,7 +151,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
@@ -180,7 +180,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
-    for(i <- 0 until 20)
+    for (_ <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
@@ -210,6 +210,25 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     EasyMock.replay(logSegment)
     val logSegments = Seq(logSegment)
     EasyMock.expect(log.logSegments).andStubReturn(logSegments)
+    EasyMock.replay(log)
+    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
+  }
+
+  /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
+   * different (simulating a race condition) */
+  @Test
+  def testFetchOffsetsBeforeWithChangingSegments() {
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    EasyMock.expect(log.logSegments).andStubAnswer {
+      new IAnswer[Iterable[LogSegment]] {
+        def answer = new Iterable[LogSegment] {
+          override def size = 2
+          def iterator = Seq(logSegment).iterator
+        }
+      }
+    }
+    EasyMock.replay(logSegment)
     EasyMock.replay(log)
     server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
   }

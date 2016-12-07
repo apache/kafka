@@ -17,26 +17,35 @@
 
 package org.apache.kafka.streams;
 
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class KafkaStreamsTest {
 
+    private static final int NUM_BROKERS = 1;
     // We need this to avoid the KafkaConsumer hanging on poll (this may occur if the test doesn't complete
-    // quick enough
+    // quick enough)
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @Test
     public void testStartAndClose() throws Exception {
@@ -50,15 +59,25 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        StateListenerStub stateListener = new StateListenerStub();
+        streams.setStateListener(stateListener);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
+        Assert.assertEquals(stateListener.numChanges, 0);
 
         streams.start();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.RUNNING);
+        Assert.assertEquals(stateListener.numChanges, 1);
+        Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
+        Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
+
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initCountDifference = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
 
-        streams.close();
+        assertTrue(streams.close(15, TimeUnit.SECONDS));
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
     }
 
     @Test
@@ -86,12 +105,12 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
         streams.close();
-
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot restart after closing.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();
@@ -111,11 +130,96 @@ public class KafkaStreamsTest {
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("This process was already started.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();
         }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
+        final KafkaStreams streams = createKafkaStreams();
+        streams.allMetadata();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
+        final KafkaStreams streams = createKafkaStreams();
+        streams.allMetadataForStore("store");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
+        final KafkaStreams streams = createKafkaStreams();
+        streams.metadataForKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
+        final KafkaStreams streams = createKafkaStreams();
+        streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
+            @Override
+            public Integer partition(final String key, final Object value, final int numPartitions) {
+                return 0;
+            }
+        });
+    }
+
+    @Test
+    public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
+        final AtomicBoolean keepRunning = new AtomicBoolean(true);
+        try {
+            final Properties props = new Properties();
+            props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+            props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+
+            final KStreamBuilder builder = new KStreamBuilder();
+            final CountDownLatch latch = new CountDownLatch(1);
+            final String topic = "input";
+            CLUSTER.createTopic(topic);
+
+            builder.stream(Serdes.String(), Serdes.String(), topic)
+                    .foreach(new ForeachAction<String, String>() {
+                        @Override
+                        public void apply(final String key, final String value) {
+                            try {
+                                latch.countDown();
+                                while (keepRunning.get()) {
+                                    Thread.sleep(10);
+                                }
+                            } catch (InterruptedException e) {
+                                // no-op
+                            }
+                        }
+                    });
+            final KafkaStreams streams = new KafkaStreams(builder, props);
+            streams.start();
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
+                                                                            Collections.singletonList(new KeyValue<>("A", "A")),
+                                                                            TestUtils.producerConfig(
+                                                                                    CLUSTER.bootstrapServers(),
+                                                                                    StringSerializer.class,
+                                                                                    StringSerializer.class,
+                                                                                    new Properties()),
+                                                                                    System.currentTimeMillis());
+
+            assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
+            assertFalse(streams.close(10, TimeUnit.MILLISECONDS));
+        } finally {
+            // stop the thread so we don't interfere with other tests etc
+            keepRunning.set(false);
+        }
+    }
+
+
+    private KafkaStreams createKafkaStreams() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        return new KafkaStreams(builder, props);
     }
 
     @Test
@@ -131,40 +235,6 @@ public class KafkaStreamsTest {
         streams.start();
         streams.close();
         streams.cleanUp();
-    }
-
-    @Test
-    public void testCleanupIsolation() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-
-        final String appId1 = "testIsolation-1";
-        final String appId2 = "testIsolation-2";
-        final String stateDir = TestUtils.tempDirectory().getPath();
-        final File stateDirApp1 = new File(stateDir + File.separator + appId1);
-        final File stateDirApp2 = new File(stateDir + File.separator + appId2);
-
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
-
-        assertFalse(stateDirApp1.exists());
-        assertFalse(stateDirApp2.exists());
-
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId1);
-        final KafkaStreams streams1 = new KafkaStreams(builder, props);
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId2);
-        final KafkaStreams streams2 = new KafkaStreams(builder, props);
-
-        assertTrue(stateDirApp1.exists());
-        assertTrue(stateDirApp2.exists());
-
-        streams1.cleanUp();
-        assertFalse(stateDirApp1.exists());
-        assertTrue(stateDirApp2.exists());
-
-        streams2.cleanUp();
-        assertFalse(stateDirApp1.exists());
-        assertFalse(stateDirApp2.exists());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -187,4 +257,17 @@ public class KafkaStreamsTest {
         }
     }
 
+
+    public static class StateListenerStub implements KafkaStreams.StateListener {
+        public int numChanges = 0;
+        public KafkaStreams.State oldState;
+        public KafkaStreams.State newState;
+
+        @Override
+        public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+            this.numChanges++;
+            this.oldState = oldState;
+            this.newState = newState;
+        }
+    }
 }

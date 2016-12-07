@@ -16,15 +16,16 @@
  */
 package kafka.api
 
+import java.util.Collections
+
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils, Logging}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.junit.{Before, Test}
 import org.junit.Assert._
-import scala.collection.JavaConversions._
 
 class AdminClientTest extends IntegrationTestHarness with Logging {
 
@@ -63,10 +64,10 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testListGroups() {
-    consumers.head.subscribe(List(topic))
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
     val groups = client.listAllGroupsFlattened
@@ -77,41 +78,40 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testDescribeGroup() {
-    consumers.head.subscribe(List(topic))
+  def testGetConsumerGroupSummary() {
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
-    val group = client.describeGroup(groupId)
-    assertEquals("consumer", group.protocolType)
-    assertEquals("range", group.protocol)
+    val group = client.describeConsumerGroup(groupId)
+    assertEquals("range", group.assignmentStrategy)
     assertEquals("Stable", group.state)
-    assertFalse(group.members.isEmpty)
+    assertFalse(group.consumers.isEmpty)
 
-    val member = group.members.head
+    val member = group.consumers.get.head
     assertEquals(clientId, member.clientId)
-    assertFalse(member.clientHost.isEmpty)
-    assertFalse(member.memberId.isEmpty)
+    assertFalse(member.host.isEmpty)
+    assertFalse(member.consumerId.isEmpty)
   }
 
   @Test
   def testDescribeConsumerGroup() {
-    consumers.head.subscribe(List(topic))
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
-    val consumerSummaries = client.describeConsumerGroup(groupId)
-    assertEquals(1, consumerSummaries.size)
-    assertEquals(Some(Set(tp, tp2)), consumerSummaries.map(_.head.assignment.toSet))
+    val consumerGroupSummary = client.describeConsumerGroup(groupId)
+    assertEquals(1, consumerGroupSummary.consumers.get.size)
+    assertEquals(List(tp, tp2), consumerGroupSummary.consumers.get.flatMap(_.assignment))
   }
 
   @Test
   def testDescribeConsumerGroupForNonExistentGroup() {
     val nonExistentGroup = "non" + groupId
-    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).isEmpty)
+    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
   }
 }

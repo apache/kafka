@@ -19,12 +19,17 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -34,14 +39,16 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
+    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
+
     protected final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
-    protected ProcessorContext processorContext;
-
+    protected InternalProcessorContext processorContext;
+    protected final ThreadCache cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -52,19 +59,21 @@ public abstract class AbstractTask {
                            Consumer<byte[], byte[]> consumer,
                            Consumer<byte[], byte[]> restoreConsumer,
                            boolean isStandby,
-                           StateDirectory stateDirectory) {
+                           StateDirectory stateDirectory,
+                           final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
+        this.cache = cache;
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic());
+            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
-            throw new ProcessorStateException("Error while creating the state manager", e);
+            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
     }
 
@@ -72,8 +81,8 @@ public abstract class AbstractTask {
         // set initial offset limits
         initializeOffsetLimits();
 
-        for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
+        for (StateStore store : this.topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
     }
@@ -98,12 +107,24 @@ public abstract class AbstractTask {
         return processorContext;
     }
 
+    public final ThreadCache cache() {
+        return cache;
+    }
+
     public abstract void commit();
+
+    public abstract void close();
+
+    public abstract void initTopology();
+    public abstract void closeTopology();
+
+    public abstract void commitOffsets();
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    public void close() {
+    void closeStateManager() {
+        log.trace("task [{}] Closing", id());
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
@@ -117,8 +138,16 @@ public abstract class AbstractTask {
 
     protected void initializeOffsetLimits() {
         for (TopicPartition partition : partitions) {
-            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            try {
+                OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            } catch (AuthorizationException e) {
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+            } catch (WakeupException e) {
+                throw e;
+            } catch (KafkaException e) {
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+            }
         }
     }
 
@@ -151,5 +180,12 @@ public abstract class AbstractTask {
 
         sb.append("\n");
         return sb.toString();
+    }
+
+    /**
+     * Flush all state stores owned by this task
+     */
+    public void flushState() {
+        stateMgr.flush((InternalProcessorContext) this.context());
     }
 }

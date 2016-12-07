@@ -12,17 +12,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -30,12 +19,12 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -44,6 +33,17 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class SenderTest {
 
@@ -60,7 +60,7 @@ public class SenderTest {
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
     private int batchSize = 16 * 1024;
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, new ClusterResourceListeners());
     private Cluster cluster = TestUtils.singletonCluster("test", 1);
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
@@ -68,7 +68,7 @@ public class SenderTest {
 
     @Before
     public void setup() {
-        Map<String, String> metricTags = new LinkedHashMap<String, String>();
+        Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", CLIENT_ID);
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         metrics = new Metrics(metricConfig, time);
@@ -82,7 +82,6 @@ public class SenderTest {
                             MAX_RETRIES,
                             metrics,
                             time,
-                            CLIENT_ID,
                             REQUEST_TIMEOUT);
 
         metadata.update(cluster, time.milliseconds());
@@ -142,13 +141,12 @@ public class SenderTest {
                                        maxRetries,
                                        m,
                                        time,
-                                       "clientId",
                                        REQUEST_TIMEOUT);
             // do a successful retry
             Future<RecordMetadata> future = accumulator.append(tp, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
-            String id = client.requests().peek().request().destination();
+            String id = client.requests().peek().destination();
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
@@ -169,7 +167,7 @@ public class SenderTest {
             future = accumulator.append(tp, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // send produce request
             for (int i = 0; i < maxRetries + 1; i++) {
-                client.disconnect(client.requests().peek().request().destination());
+                client.disconnect(client.requests().peek().destination());
                 sender.run(time.milliseconds()); // receive error
                 sender.run(time.milliseconds()); // reconnect
                 sender.run(time.milliseconds()); // resend
@@ -195,7 +193,6 @@ public class SenderTest {
                 maxRetries,
                 m,
                 time,
-                "clientId",
                 REQUEST_TIMEOUT);
 
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
@@ -207,8 +204,8 @@ public class SenderTest {
             accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
-            String id = client.requests().peek().request().destination();
-            assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().request().header().apiKey());
+            String id = client.requests().peek().destination();
+            assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().header().apiKey());
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
@@ -274,11 +271,10 @@ public class SenderTest {
         }
     }
 
-    private Struct produceResponse(TopicPartition tp, long offset, int error, int throttleTimeMs) {
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, int error, int throttleTimeMs) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse((short) error, offset, Record.NO_TIMESTAMP);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
-        ProduceResponse response = new ProduceResponse(partResp, throttleTimeMs);
-        return response.toStruct();
+        return new ProduceResponse(partResp, throttleTimeMs);
     }
 
 }

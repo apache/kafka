@@ -17,18 +17,42 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
-
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.util.Map;
 
-public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
+public class StandbyContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
+
+    private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+
+        }
+
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<K, V> partitioner) {
+
+        }
+
+        @Override
+        public void flush() {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    };
 
     private final TaskId id;
     private final String applicationId;
@@ -38,6 +62,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
+    private final ThreadCache zeroSizedCache = new ThreadCache(0);
 
     private boolean initialized;
 
@@ -78,7 +103,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
 
     @Override
     public RecordCollector recordCollector() {
-        throw new UnsupportedOperationException();
+        return NO_OP_COLLECTOR;
     }
 
     @Override
@@ -118,6 +143,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public StateStore getStateStore(String name) {
         throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
+    }
+
+    @Override
+    public ThreadCache getCache() {
+        return zeroSizedCache;
     }
 
     /**
@@ -200,5 +230,26 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public RecordContext recordContext() {
+        throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
+    }
+
+    @Override
+    public void setRecordContext(final RecordContext recordContext) {
+        throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
+    }
+
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        // no-op. can't throw as this is called on commit when the StateStores get flushed.
+    }
+
+    @Override
+    public ProcessorNode currentNode() {
+        throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 }

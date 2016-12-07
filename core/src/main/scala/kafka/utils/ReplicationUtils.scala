@@ -58,13 +58,13 @@ object ReplicationUtils extends Logging {
           (expectedLeader,writtenLeader) match {
             case (Some(expectedLeader),Some(writtenLeader)) =>
               if(expectedLeader == writtenLeader)
-                return (true,writtenStat.getVersion())
+                return (true, writtenStat.getVersion())
             case _ =>
           }
         case None =>
       }
     } catch {
-      case e1: Exception =>
+      case _: Exception =>
     }
     (false,-1)
   }
