@@ -198,7 +198,7 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
-
+    private boolean caughtException = false;
     private long timerStartedMs;
     private long lastCleanMs;
     private long lastCommitMs;
@@ -344,9 +344,11 @@ public class StreamThread extends Thread {
         try {
             runLoop();
         } catch (KafkaException e) {
+            caughtException = true;
             // just re-throw the exception as it should be logged already
             throw e;
         } catch (Exception e) {
+            caughtException = true;
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
             log.error("{} Streams application error during processing: ", logPrefix, e);
@@ -367,6 +369,7 @@ public class StreamThread extends Thread {
     public Map<TaskId, StreamTask> tasks() {
         return Collections.unmodifiableMap(activeTasks);
     }
+
 
     private void shutdown() {
         log.info("{} Shutting down", logPrefix);
@@ -414,8 +417,11 @@ public class StreamThread extends Thread {
         log.debug("{} shutdownTasksAndState: shutting down all active tasks [{}] and standby tasks [{}]", logPrefix,
             activeTasks.keySet(), standbyTasks.keySet());
 
-        // Commit first as there may be cached records that have not been flushed yet.
-        commitOffsets(rethrowExceptions);
+        // only commit under clean exit
+        if (!caughtException) {
+            // Commit first as there may be cached records that have not been flushed yet.
+            commitOffsets(rethrowExceptions);
+        }
         // Close all processors in topology order
         closeAllTasks();
         // flush state
