@@ -92,6 +92,20 @@ public class PlainSaslServer implements SaslServer {
         if (authorizationID.isEmpty())
             authorizationID = username;
 
+        authorize(username, password);
+        
+        complete = true;
+        return new byte[0];
+    }
+
+    /**
+     * Overridable method to allow for custom authorization checking of username/password
+     * 
+     * @param username as received in {@link #evaluateResponse(byte[])}
+     * @param password as received in {@link #evaluateResponse(byte[])}
+     * @throws SaslException if authentication fails
+     */
+    protected void authorize(String username, String password) throws SaslException {
         try {
             String expectedPassword = JaasUtils.jaasConfig(LoginType.SERVER.contextName(), JAAS_USER_PREFIX + username);
             if (!password.equals(expectedPassword)) {
@@ -100,8 +114,6 @@ public class PlainSaslServer implements SaslServer {
         } catch (IOException e) {
             throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
         }
-        complete = true;
-        return new byte[0];
     }
 
     @Override
