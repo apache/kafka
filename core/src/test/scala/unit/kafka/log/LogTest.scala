@@ -1031,23 +1031,23 @@ class LogTest extends JUnitSuite {
       messages = new Message("v1".getBytes(), "k1".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
     val set2 = new ByteBufferMessageSet(
       compressionCodec = NoCompressionCodec,
-      offsetSeq = Seq(Integer.MAX_VALUE.toLong + 1),
-      messages = new Message("v2".getBytes(), "k2".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
-    val set3 = new ByteBufferMessageSet(
-      compressionCodec = NoCompressionCodec,
       offsetSeq = Seq(Integer.MAX_VALUE.toLong + 2),
       messages = new Message("v3".getBytes(), "k3".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
-    val set4 = new ByteBufferMessageSet(
+    val set3 = new ByteBufferMessageSet(
       compressionCodec = NoCompressionCodec,
       offsetSeq = Seq(Integer.MAX_VALUE.toLong + 3),
       messages = new Message("v4".getBytes(), "k4".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
+    val set4 = new ByteBufferMessageSet(
+      compressionCodec = NoCompressionCodec,
+      offsetSeq = Seq(Integer.MAX_VALUE.toLong + 4),
+      messages = new Message("v5".getBytes(), "k5".getBytes(), Message.NoTimestamp, magicValue = Message.CurrentMagicValue))
     //Writes into an empty log with baseOffset 0
     log.append(set1, false)
-    //This write will roll the segment, and create a new segment with baseOffset = log end of previous segment  1
+    //This write will roll the segment, yielding a new segment with base offset 2
     log.append(set2, false)
-    //This write will also roll the segment, ""                                       "" Integer.MAX_VALUE + 2
+    //This will also roll the segment, yielding a new segment with base offset Integer.MAX_VALUE+3
     log.append(set3, false)
-    //Since the last segment got baseOffset = Integer.MAX_VALUE + 2, this set does not roll the log.
+    //This will go into the existing log
     log.append(set4, false)
     log.close()
     val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))

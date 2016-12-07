@@ -157,7 +157,7 @@ class LogCleanerTest extends JUnitSuite {
     log.append(message(1,1)) // offset 3
     log.append(message(0,0)) // offset 4
     // roll the segment, so we can clean the messages already appended
-    log.roll()
+    log.roll(5)
 
     val initialLogSize = log.size
 
@@ -186,7 +186,7 @@ class LogCleanerTest extends JUnitSuite {
     log.append(message(1,1)) // offset 3
     log.append(message(0,0)) // offset 4
     // roll the segment, so we can clean the messages already appended
-    log.roll()
+    log.roll(5)
 
     // clean the log with only one message removed
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 2, log.activeSegment.baseOffset))
@@ -636,7 +636,7 @@ class LogCleanerTest extends JUnitSuite {
     log.append(message(2,2))
     log.append(message(3,3))
     log.append(message(4,4))
-    log.roll()
+    log.roll(5)
 
     val stats = new CleanerStats()
     cleaner.buildOffsetMap(log, 2, Int.MaxValue, map, stats)
@@ -678,7 +678,7 @@ class LogCleanerTest extends JUnitSuite {
     log.append(invalidCleanedMessage(dupSetOffset, dupSet, codec), assignOffsets = false)
     log.append(invalidCleanedMessage(noDupSetOffset, noDupSet, codec), assignOffsets = false)
 
-    log.roll()
+    log.roll(5)
 
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 

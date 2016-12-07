@@ -650,7 +650,7 @@ class Log(@volatile var dir: File,
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
         if (segments.size == numToDelete)
-          roll()
+          roll(0L)
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
       }
@@ -744,7 +744,12 @@ class Log(@volatile var dir: File,
           s"index_size = ${segment.index.entries}/${segment.index.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
-      roll()
+      /*
+        maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
+        Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
+        min offset
+       */
+      roll(maxOffsetInMessages - Integer.MAX_VALUE)
     } else {
       segment
     }
@@ -756,10 +761,10 @@ class Log(@volatile var dir: File,
    *
    * @return The newly rolled segment
    */
-  def roll(): LogSegment = {
+  def roll(offset: Long): LogSegment = {
     val start = time.nanoseconds
     lock synchronized {
-      val newOffset = logEndOffset
+      val newOffset = Math.max(offset, logEndOffset)
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)
