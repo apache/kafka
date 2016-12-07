@@ -118,8 +118,6 @@ public class ThreadCache {
         final NamedCache cache = getOrCreateCache(namespace);
         cache.put(Bytes.wrap(key), value);
         maybeEvict(namespace);
-        final long x = sizeBytes();
-        System.out.println(x);
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, byte[] key, LRUCacheEntry value) {
