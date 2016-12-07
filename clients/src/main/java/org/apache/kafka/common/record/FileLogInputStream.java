@@ -90,7 +90,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         private final int recordSize;
         private Record record = null;
 
-        public FileChannelLogEntry(long offset,
+        private FileChannelLogEntry(long offset,
                                    FileChannel channel,
                                    long position,
                                    int recordSize) {

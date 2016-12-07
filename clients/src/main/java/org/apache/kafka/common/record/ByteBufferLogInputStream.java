@@ -60,7 +60,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         private final ByteBuffer buffer;
         private final Record record;
 
-        public ByteBufferLogEntry(ByteBuffer buffer) {
+        private ByteBufferLogEntry(ByteBuffer buffer) {
             ByteBuffer entryBuffer = buffer.duplicate();
             int size = entryBuffer.getInt(entryBuffer.position() + Records.SIZE_OFFSET);
             entryBuffer.limit(entryBuffer.position() + LOG_OVERHEAD + size);
