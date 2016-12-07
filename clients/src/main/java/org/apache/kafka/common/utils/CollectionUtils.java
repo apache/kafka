@@ -43,7 +43,7 @@ public class CollectionUtils {
 
     /**
      * group partitions by topic
-     * @param partitions
+     * @param partitions Partitions
      * @return partitions per topic
      */
     public static Map<String, List<Integer>> groupDataByTopic(List<TopicPartition> partitions) {
