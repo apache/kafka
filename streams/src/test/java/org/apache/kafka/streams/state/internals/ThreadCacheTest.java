@@ -459,6 +459,20 @@ public class ThreadCacheTest {
         assertEquals(cache.evicts(), 3);
     }
 
+    @Test
+    public void shouldNotLoopForEverWhenEvictingAndCurrentCacheIsEmpty() throws Exception {
+        final ThreadCache threadCache = new ThreadCache(51);
+        threadCache.addDirtyEntryFlushListener("other", new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                //
+            }
+        });
+        threadCache.put("namespace", new byte[]{0}, dirtyEntry(new byte[5]));
+        threadCache.setMaxCacheSizeBytes(50); // single entry is 51
+        threadCache.put("other", new byte[]{1}, dirtyEntry(new byte[1]));
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, true, -1, -1, -1, "");
     }

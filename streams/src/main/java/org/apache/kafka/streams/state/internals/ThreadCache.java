@@ -39,9 +39,9 @@ import java.util.NoSuchElementException;
 public class ThreadCache {
     private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
     private final String name;
-    private final long maxCacheSizeBytes;
     private final Map<String, NamedCache> caches = new HashMap<>();
     private final ThreadCacheMetrics metrics;
+    private long maxCacheSizeBytes;
 
     // internal stats
     private long numPuts = 0;
@@ -195,9 +195,11 @@ public class ThreadCache {
     private void maybeEvict(final String namespace) {
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
+            if (cache.size() == 0) {
+                return;
+            }
             log.trace("Thread {} evicting cache {}", name, namespace);
             cache.evict();
-
             numEvicts++;
         }
     }
@@ -323,5 +325,10 @@ public class ThreadCache {
             // do nothing
         }
 
+    }
+
+    // visible for testing
+    void setMaxCacheSizeBytes(final long maxCacheSizeBytes) {
+        this.maxCacheSizeBytes = maxCacheSizeBytes;
     }
 }
