@@ -115,10 +115,11 @@ public class ThreadCache {
 
     public void put(final String namespace, byte[] key, LRUCacheEntry value) {
         numPuts++;
-
         final NamedCache cache = getOrCreateCache(namespace);
         cache.put(Bytes.wrap(key), value);
         maybeEvict(namespace);
+        final long x = sizeBytes();
+        System.out.println(x);
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, byte[] key, LRUCacheEntry value) {
@@ -195,6 +196,10 @@ public class ThreadCache {
     private void maybeEvict(final String namespace) {
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
+            // we abort here as the put on this cache may have triggered
+            // a put on another cache. So even though the sizeInBytes() is
+            // still > maxCacheSizeBytes there is nothing to evict from this
+            // namespaced cache.
             if (cache.size() == 0) {
                 return;
             }

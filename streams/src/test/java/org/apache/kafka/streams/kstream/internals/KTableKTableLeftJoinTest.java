@@ -37,10 +37,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -346,8 +344,6 @@ public class KTableKTableLeftJoinTest {
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
         final KStreamBuilder builder = new KStreamBuilder();
-        final Map<Long, String> joinResults = new HashMap<>();
-
         final KTable<Long, String> aggTable = builder.table(Serdes.Long(), Serdes.String(), agg, agg)
                 .groupBy(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                     @Override
