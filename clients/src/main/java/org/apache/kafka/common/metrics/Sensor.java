@@ -12,17 +12,17 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -43,8 +43,8 @@ public final class Sensor {
 
     public enum LogLevel {
         SENSOR_INFO, SENSOR_DEBUG;
-        public static final String SENSOR_INFO_STR = "SENSOR_INFO";
-        public static final String SENSOR_DEBUG_STR = "SENSOR_DEBUG";
+        public static final String SENSOR_INFO_STR = "INFO";
+        public static final String SENSOR_DEBUG_STR = "DEBUG";
 
         public static LogLevel fromString(String logLevel) {
             if (logLevel.equals(SENSOR_INFO_STR)) {
