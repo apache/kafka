@@ -411,6 +411,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
+      // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+      if(!controller.isActive()) {
+        return
+      }
+
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           try {
@@ -453,6 +458,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
      */
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
+      // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+      if(!controller.isActive()) {
+        return
+      }
+
       inLock(controllerContext.controllerLock) {
         var topicsToBeDeleted = children.asScala.toSet
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
@@ -504,6 +514,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     @throws(classOf[Exception])
     def handleDataChange(dataPath : String, data: Object) {
+      // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+      if(!controller.isActive()) {
+        return
+      }
+
       inLock(controllerContext.controllerLock) {
         try {
           info(s"Partition modification triggered $data for path $dataPath")

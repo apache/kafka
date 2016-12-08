@@ -1246,6 +1246,11 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
+    // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+    if(!controller.isActive()) {
+      return
+    }
+
     debug("Partitions reassigned listener fired for path %s. Record partitions to be reassigned %s"
       .format(dataPath, data))
     val partitionsReassignmentData = ZkUtils.parsePartitionReassignmentData(data.toString)
@@ -1290,6 +1295,11 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
+    // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+    if(!controller.isActive()) {
+      return
+    }
+
     inLock(controllerContext.controllerLock) {
       debug("Reassigned partitions isr change listener fired for path %s with children %s".format(dataPath, data))
       val topicAndPartition = TopicAndPartition(topic, partition)
@@ -1343,6 +1353,10 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
 
   override def handleChildChange(parentPath: String, currentChildren: util.List[String]): Unit = {
     import scala.collection.JavaConverters._
+    // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+    if(!controller.isActive()) {
+      return
+    }
 
     inLock(controller.controllerContext.controllerLock) {
       debug("[IsrChangeNotificationListener] Fired!!!")
@@ -1416,6 +1430,11 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
+    // Avoid continue to exectue handleChildChange after controller is not active because of zkclient's callback order
+    if(!controller.isActive()) {
+      return
+    }
+
     debug("Preferred replica election listener fired for path %s. Record partitions to undergo preferred replica election %s"
             .format(dataPath, data.toString))
     inLock(controllerContext.controllerLock) {
