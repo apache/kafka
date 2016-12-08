@@ -198,7 +198,7 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
-    private boolean caughtException = false;
+    private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
     private long lastCommitMs;
@@ -343,12 +343,11 @@ public class StreamThread extends Thread {
 
         try {
             runLoop();
+            cleanRun = true;
         } catch (KafkaException e) {
-            caughtException = true;
             // just re-throw the exception as it should be logged already
             throw e;
         } catch (Exception e) {
-            caughtException = true;
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
             log.error("{} Streams application error during processing: ", logPrefix, e);
@@ -418,7 +417,7 @@ public class StreamThread extends Thread {
             activeTasks.keySet(), standbyTasks.keySet());
 
         // only commit under clean exit
-        if (!caughtException) {
+        if (cleanRun) {
             // Commit first as there may be cached records that have not been flushed yet.
             commitOffsets(rethrowExceptions);
         }
