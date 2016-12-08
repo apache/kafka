@@ -67,6 +67,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * <p>
@@ -102,6 +103,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
+
+    private final AtomicLong requestIdGen = new AtomicLong();
 
     private final Time time;
 
@@ -1021,7 +1024,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
-        HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, action, callback);
+        HerderRequest req = new HerderRequest(requestIdGen.incrementAndGet(), time.milliseconds() + delayMs, action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
@@ -1092,11 +1095,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private static class HerderRequest implements Comparable<HerderRequest> {
+        private final long id;
         private final long at;
         private final Callable<Void> action;
         private final Callback<Void> callback;
 
-        public HerderRequest(long at, Callable<Void> action, Callback<Void> callback) {
+        public HerderRequest(long id, long at, Callable<Void> action, Callback<Void> callback) {
+            this.id = id;
             this.at = at;
             this.action = action;
             this.callback = callback;
@@ -1112,9 +1117,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public int compareTo(HerderRequest o) {
-            final int soonest = Long.compare(at, o.at);
-            // If tied, returning a positive value should respect insertion order.
-            return soonest != 0 ? soonest : 1;
+            return Long.compare(id, o.id);
         }
     }
 
