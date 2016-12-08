@@ -761,10 +761,10 @@ class Log(@volatile var dir: File,
    *
    * @return The newly rolled segment
    */
-  def roll(offset: Long): LogSegment = {
+  def roll(expectedNextOffset: Long = 0): LogSegment = {
     val start = time.nanoseconds
     lock synchronized {
-      val newOffset = Math.max(offset, logEndOffset)
+      val newOffset = Math.max(expectedNextOffset, logEndOffset)
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)
