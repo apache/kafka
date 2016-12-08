@@ -389,6 +389,10 @@ public class Metrics implements Closeable {
         return this.metrics;
     }
 
+    public KafkaMetric metric(MetricName metricName) {
+        return this.metrics.get(metricName);
+    }
+
     /**
      * This iterates over every Sensor and triggers a removeSensor if it has expired
      * Package private for testing

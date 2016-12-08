@@ -17,27 +17,29 @@
 
 package kafka.network
 
-import java.net._
-import javax.net.ssl._
 import java.io._
-import java.util.HashMap
-import java.util.Random
+import java.net._
 import java.nio.ByteBuffer
+import java.util.{HashMap, Random}
+import javax.net.ssl._
 
+import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.{Metrics => YammerMetrics}
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.NetworkSend
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
-import org.apache.kafka.common.utils.Time
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
@@ -393,6 +395,20 @@ class SocketServerTest extends JUnitSuite {
       serverMetrics.close()
     }
 
+  }
+
+  @Test
+  def testMetricCollectionAfterShutdown(): Unit = {
+    server.shutdown()
+
+    val sum = YammerMetrics
+      .defaultRegistry
+      .allMetrics.asScala
+      .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
+      .collect { case (_, metric: Gauge[_]) => metric.value.asInstanceOf[Double] }
+      .sum
+
+    assertEquals(0, sum, 0)
   }
 
 }
