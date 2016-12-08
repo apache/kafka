@@ -28,14 +28,14 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 
-import org.apache.kafka.common.errors.{UnsupportedForMessageFormatException, CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
+import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 
 import scala.collection.Seq
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, -1L, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
@@ -83,11 +83,11 @@ case class LogAppendInfo(var firstOffset: Long,
  *
  */
 @threadsafe
-class Log(val dir: File,
+class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
-          time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+          time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -103,20 +103,26 @@ class Log(val dir: File,
     else
       0
   }
-  val t = time.milliseconds
+
+  @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
+
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  loadSegments()
+  locally {
+    val startMs = time.milliseconds
 
-  /* Calculate the offset of the next message */
-  @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
+    loadSegments()
+    /* Calculate the offset of the next message */
+    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
+      activeSegment.size.toInt)
+
+    info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
+      .format(name, segments.size(), logEndOffset, time.milliseconds - startMs))
+  }
 
   val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(dir)
 
-  info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
-      .format(name, segments.size(), logEndOffset, time.milliseconds - t))
-
-  val tags = Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
+  private val tags = Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
@@ -222,7 +228,6 @@ class Log(val dir: File,
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
-
         segments.put(start, segment)
       }
     }
@@ -263,12 +268,13 @@ class Log(val dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
-      recoverLog()
-      // reset the index size of the currently active log segment to allow more entries
-      activeSegment.index.resize(config.maxIndexSize)
-      activeSegment.timeIndex.resize(config.maxIndexSize)
+      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+        recoverLog()
+        // reset the index size of the currently active log segment to allow more entries
+        activeSegment.index.resize(config.maxIndexSize)
+        activeSegment.timeIndex.resize(config.maxIndexSize)
+      }
     }
-
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -599,19 +605,21 @@ class Log(val dir: File,
           s"for partition $topicAndPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $KAFKA_0_10_0_IV0")
 
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segmentsCopy = logSegments.toBuffer
     // For the earliest and latest, we do not need to return the timestamp.
-    val segsArray = logSegments.toArray
     if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(Message.NoTimestamp, segsArray(0).baseOffset))
+        return Some(TimestampOffset(Message.NoTimestamp, segmentsCopy.head.baseOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
         return Some(TimestampOffset(Message.NoTimestamp, logEndOffset))
 
     val targetSeg = {
       // Get all the segments whose largest timestamp is smaller than target timestamp
-      val earlierSegs = segsArray.takeWhile(_.largestTimestamp < targetTimestamp)
+      val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
       // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-      if (earlierSegs.length < segsArray.length)
-        Some(segsArray(earlierSegs.length))
+      if (earlierSegs.length < segmentsCopy.length)
+        Some(segmentsCopy(earlierSegs.length))
       else
         None
     }
@@ -833,7 +841,6 @@ class Log(val dir: File,
    */
   private[log] def delete() {
     lock synchronized {
-      removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
       Utils.delete(dir)
@@ -1046,6 +1053,9 @@ object Log {
   /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
+  /** a directory that is scheduled to be deleted */
+  val DeleteDirSuffix = "-delete"
+
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
@@ -1092,10 +1102,18 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    val name: String = dir.getName
-    if (name == null || name.isEmpty || !name.contains('-')) {
+    val dirName = dir.getName
+    if (dirName == null || dirName.isEmpty || !dirName.contains('-')) {
       throwException(dir)
     }
+
+    val name: String =
+      if (dirName.endsWith(DeleteDirSuffix)) {
+        dirName.substring(0, dirName.indexOf('.'))
+      } else {
+        dirName
+      }
+
     val index = name.lastIndexOf('-')
     val topic: String = name.substring(0, index)
     val partition: String = name.substring(index + 1)
@@ -1104,6 +1122,7 @@ object Log {
     }
     TopicAndPartition(topic, partition.toInt)
   }
+
 
   def throwException(dir: File) {
     throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +

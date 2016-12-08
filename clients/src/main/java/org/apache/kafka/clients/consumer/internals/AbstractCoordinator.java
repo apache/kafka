@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
@@ -886,7 +887,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         }
                     }
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException | InterruptException e) {
+                Thread.interrupted();
                 log.error("Unexpected interrupt received in heartbeat thread for group {}", groupId, e);
                 this.failed.set(new RuntimeException(e));
             } catch (RuntimeException e) {

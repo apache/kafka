@@ -425,20 +425,6 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         assertEquals(Collections.emptySet(), worker.taskIds());
-
-        assertFalse(worker.stopAndAwaitTask(TASK_ID));
-    }
-
-    @Test
-    public void testStopInvalidTask() {
-        expectStartStorage();
-
-        PowerMock.replayAll();
-
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
-        worker.start();
-
-        assertFalse(worker.stopAndAwaitTask(TASK_ID));
     }
 
     @Test

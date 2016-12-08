@@ -35,6 +35,7 @@ import static org.junit.Assert.assertTrue;
 
 public class SegmentsTest {
 
+    private static final int NUM_SEGMENTS = 5;
     private MockProcessorContext context;
     private Segments segments;
 
@@ -46,7 +47,7 @@ public class SegmentsTest {
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
                                            new ThreadCache(0));
-        segments = new Segments("test", 4 * 60 * 1000, 5);
+        segments = new Segments("test", 4 * 60 * 1000, NUM_SEGMENTS);
     }
 
     @After
@@ -96,6 +97,7 @@ public class SegmentsTest {
         assertNull(segments.getOrCreateSegment(0, context));
         assertFalse(new File(context.stateDir(), "test/test-197001010000").exists());
     }
+
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() throws Exception {
         final Segment segment1 = segments.getOrCreateSegment(0, context);
@@ -138,7 +140,7 @@ public class SegmentsTest {
         // close existing.
         segments.close();
 
-        segments  = new Segments("test", 4 * 60 * 1000, 5);
+        segments = new Segments("test", 4 * 60 * 1000, 5);
         segments.openExisting(context);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());
@@ -161,5 +163,31 @@ public class SegmentsTest {
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldRollSegments() throws Exception {
+        segments.getOrCreateSegment(0, context);
+        verifyCorrectSegments(0, 1);
+        segments.getOrCreateSegment(1, context);
+        verifyCorrectSegments(0, 2);
+        segments.getOrCreateSegment(2, context);
+        verifyCorrectSegments(0, 3);
+        segments.getOrCreateSegment(3, context);
+        verifyCorrectSegments(0, 4);
+        segments.getOrCreateSegment(4, context);
+        verifyCorrectSegments(0, 5);
+        segments.getOrCreateSegment(5, context);
+        verifyCorrectSegments(1, 5);
+        segments.getOrCreateSegment(6, context);
+        verifyCorrectSegments(2, 5);
+    }
+
+    private void verifyCorrectSegments(final long first, final int numSegments) {
+        final List<Segment> result = this.segments.segments(0, Long.MAX_VALUE);
+        assertEquals(numSegments, result.size());
+        for (int i = 0; i < numSegments; i++) {
+            assertEquals(i + first, result.get(i).id);
+        }
     }
 }

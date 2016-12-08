@@ -33,11 +33,11 @@ import scala.math.ceil
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param _file The index file
+ * @param file The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
     extends Logging {
 
   protected def entrySize: Int
@@ -46,8 +46,8 @@ abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val 
 
   @volatile
   protected var mmap: MappedByteBuffer = {
-    val newlyCreated = _file.createNewFile()
-    val raf = new RandomAccessFile(_file, "rw")
+    val newlyCreated = file.createNewFile()
+    val raf = new RandomAccessFile(file, "rw")
     try {
       /* pre-allocate the file if necessary */
       if(newlyCreated) {
@@ -92,11 +92,6 @@ abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val 
   def entries: Int = _entries
 
   /**
-   * The index file
-   */
-  def file: File = _file
-
-  /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
    * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
    * loading segments from disk or truncating back to an old segment where a new log segment became active;
@@ -104,7 +99,7 @@ abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val 
    */
   def resize(newSize: Int) {
     inLock(lock) {
-      val raf = new RandomAccessFile(_file, "rw")
+      val raf = new RandomAccessFile(file, "rw")
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
       val position = mmap.position
 
@@ -128,8 +123,8 @@ abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val 
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(_file.toPath, f.toPath)
-    finally _file = f
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    finally file = f
   }
 
   /**
@@ -145,10 +140,10 @@ abstract class AbstractIndex[K, V](@volatile private[this] var _file: File, val 
    * Delete this index file
    */
   def delete(): Boolean = {
-    info(s"Deleting index ${_file.getAbsolutePath}")
+    info(s"Deleting index ${file.getAbsolutePath}")
     if(Os.isWindows)
       CoreUtils.swallow(forceUnmap(mmap))
-    _file.delete()
+    file.delete()
   }
 
   /**

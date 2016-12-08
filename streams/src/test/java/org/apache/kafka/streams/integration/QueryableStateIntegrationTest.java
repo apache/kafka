@@ -143,6 +143,7 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
 
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
@@ -276,6 +277,7 @@ public class QueryableStateIntegrationTest {
                         return false;
                     } catch (final InvalidStateStoreException e) {
                         // rebalance
+                        assertEquals(streams.state(), KafkaStreams.State.REBALANCING);
                         return false;
                     }
 
@@ -306,6 +308,7 @@ public class QueryableStateIntegrationTest {
                         return false;
                     } catch (InvalidStateStoreException e) {
                         // rebalance
+                        assertEquals(streams.state(), KafkaStreams.State.REBALANCING);
                         return false;
                     }
 

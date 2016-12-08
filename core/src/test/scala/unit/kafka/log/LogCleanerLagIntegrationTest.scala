@@ -44,7 +44,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
   val compactionLag = 1 * msPerHour
   assertTrue("compactionLag must be divisible by 2 for this test", compactionLag % 2 == 0)
 
-  val time = new MockTime(1400000000000L)  // Tue May 13 16:53:20 UTC 2014
+  val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val cleanerBackOffMs = 200L
   val segmentSize = 100
   val deleteDelay = 1000

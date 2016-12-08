@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.requests.PartitionState
+import org.apache.kafka.common.utils.Time
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -74,14 +75,28 @@ class Partition(val topic: String,
     tags
   )
 
-  def isUnderReplicated(): Boolean = {
-    leaderReplicaIfLocal() match {
-      case Some(_) =>
-        inSyncReplicas.size < assignedReplicas.size
-      case None =>
-        false
-    }
-  }
+  newGauge("InSyncReplicasCount",
+    new Gauge[Int] {
+      def value = {
+        if (isLeaderReplicaLocal) inSyncReplicas.size else 0
+      }
+    },
+    tags
+  )
+
+  newGauge("ReplicasCount",
+    new Gauge[Int] {
+      def value = {
+        if (isLeaderReplicaLocal) assignedReplicas.size else 0
+      }
+    },
+    tags
+  )
+
+  private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
+
+  def isUnderReplicated: Boolean =
+    isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     val replicaOpt = getReplica(replicaId)
@@ -144,12 +159,13 @@ class Partition(val topic: String,
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
+      val topicPartition = TopicAndPartition(topic, partitionId)
       try {
-        logManager.deleteLog(TopicAndPartition(topic, partitionId))
+        logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
       } catch {
         case e: IOException =>
-          fatal("Error deleting the log for partition [%s,%d]".format(topic, partitionId), e)
+          fatal(s"Error deleting the log for partition $topicPartition", e)
           Runtime.getRuntime().halt(1)
       }
     }
@@ -441,7 +457,7 @@ class Partition(val topic: String,
 
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(this.topic, this.partitionId))
+          replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
@@ -478,6 +494,8 @@ class Partition(val topic: String,
    */
   private def removePartitionMetrics() {
     removeMetric("UnderReplicated", tags)
+    removeMetric("InSyncReplicasCount", tags)
+    removeMetric("ReplicasCount", tags)
   }
 
   override def equals(that: Any): Boolean = {

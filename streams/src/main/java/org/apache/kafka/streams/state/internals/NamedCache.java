@@ -92,10 +92,14 @@ class NamedCache {
     }
 
     synchronized void flush() {
+        flush(null);
+    }
+
+    private void flush(final LRUNode evicted) {
         numFlushes++;
 
         log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
-            name, hits(), misses(), overwrites(), flushes());
+                  name, hits(), misses(), overwrites(), flushes());
 
         if (listener == null) {
             throw new IllegalArgumentException("No listener for namespace " + name + " registered with cache");
@@ -107,6 +111,14 @@ class NamedCache {
 
         final List<ThreadCache.DirtyEntry> entries  = new ArrayList<>();
         final List<Bytes> deleted = new ArrayList<>();
+
+        // evicted already been removed from the cache so add it to the list of
+        // flushed entries and remove from dirtyKeys.
+        if (evicted != null) {
+            entries.add(new ThreadCache.DirtyEntry(evicted.key, evicted.entry.value, evicted.entry));
+            dirtyKeys.remove(evicted.key);
+        }
+
         for (Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
@@ -118,12 +130,15 @@ class NamedCache {
                 deleted.add(node.key);
             }
         }
-        listener.apply(entries);
+        // clear dirtyKeys before the listener is applied as it may be re-entrant.
         dirtyKeys.clear();
+        listener.apply(entries);
         for (Bytes key : deleted) {
             delete(key);
         }
     }
+
+
 
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
@@ -208,16 +223,10 @@ class NamedCache {
         }
         final LRUNode eldest = tail;
         currentSizeBytes -= eldest.size();
-        if (eldest.entry.isDirty()) {
-            flush();
-        }
         remove(eldest);
         cache.remove(eldest.key);
-
-        // could have been deleted from the cache during flush
-        // so there would be double counting
-        if (currentSizeBytes + eldest.size() == 0) {
-            currentSizeBytes = 0;
+        if (eldest.entry.isDirty()) {
+            flush(eldest);
         }
     }
 
@@ -281,6 +290,14 @@ class NamedCache {
         return tail.entry;
     }
 
+    synchronized LRUNode head() {
+        return head;
+    }
+
+    synchronized LRUNode tail() {
+        return tail;
+    }
+
     synchronized long dirtySize() {
         return dirtyKeys.size();
     }
@@ -288,7 +305,7 @@ class NamedCache {
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    private class LRUNode {
+    class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;
@@ -299,20 +316,32 @@ class NamedCache {
             this.entry = entry;
         }
 
-        public LRUCacheEntry entry() {
+        LRUCacheEntry entry() {
             return entry;
         }
 
-        public void update(LRUCacheEntry entry) {
-            this.entry = entry;
+        Bytes key() {
+            return key;
         }
 
-        public long size() {
+        long size() {
             return  key.get().length +
                     8 + // entry
                     8 + // previous
                     8 + // next
                     entry.size();
+        }
+
+        LRUNode next() {
+            return next;
+        }
+
+        LRUNode previous() {
+            return previous;
+        }
+
+        private void update(LRUCacheEntry entry) {
+            this.entry = entry;
         }
     }
 

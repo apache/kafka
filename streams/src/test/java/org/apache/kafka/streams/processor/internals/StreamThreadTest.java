@@ -32,7 +32,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
@@ -159,6 +160,8 @@ public class StreamThreadTest {
     @Test
     public void testPartitionAssignmentChange() throws Exception {
         StreamsConfig config = new StreamsConfig(configProps());
+        StateListenerStub stateListener = new StateListenerStub();
+
 
         TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         builder.addSource("source1", "topic1");
@@ -166,14 +169,15 @@ public class StreamThreadTest {
         builder.addSource("source3", "topic3");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source2", "source3");
 
-        StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId, processId, new Metrics(), new SystemTime(), new StreamsMetadataState(builder)) {
+        StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder)) {
             @Override
             protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                 ProcessorTopology topology = builder.build(id.topicGroupId);
                 return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
             }
         };
-
+        thread.setStateListener(stateListener);
+        assertEquals(thread.state(), StreamThread.State.RUNNING);
         initPartitionGrouper(config, thread);
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
@@ -190,7 +194,15 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
+        Assert.assertEquals(stateListener.numChanges, 1);
+        Assert.assertEquals(stateListener.oldState, StreamThread.State.RUNNING);
+        Assert.assertEquals(stateListener.newState, StreamThread.State.PARTITIONS_REVOKED);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        assertEquals(thread.state(), StreamThread.State.RUNNING);
+        Assert.assertEquals(stateListener.numChanges, 3);
+        Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
+        Assert.assertEquals(stateListener.newState, StreamThread.State.RUNNING);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
@@ -272,6 +284,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().isEmpty());
+
+        thread.close();
+        assertTrue((thread.state() == StreamThread.State.PENDING_SHUTDOWN) ||
+            (thread.state() == StreamThread.State.NOT_RUNNING));
     }
 
 
@@ -509,5 +525,23 @@ public class StreamThreadTest {
                 partitionAssignor.assign(metadata, Collections.singletonMap("client", subscription));
 
         partitionAssignor.onAssignment(assignments.get("client"));
+    }
+
+    public static class StateListenerStub implements StreamThread.StateListener {
+        public int numChanges = 0;
+        public StreamThread.State oldState = null;
+        public StreamThread.State newState = null;
+
+        @Override
+        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+            this.numChanges++;
+            if (this.newState != null) {
+                if (this.newState != oldState) {
+                    throw new RuntimeException("State mismatch " + oldState + " different from " + this.newState);
+                }
+            }
+            this.oldState = oldState;
+            this.newState = newState;
+        }
     }
 }
