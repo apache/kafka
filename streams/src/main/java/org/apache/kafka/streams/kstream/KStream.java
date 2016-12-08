@@ -923,8 +923,8 @@ public interface KStream<K, V> {
      * input streams.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -997,8 +997,8 @@ public interface KStream<K, V> {
      * input streams.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1086,13 +1086,13 @@ public interface KStream<K, V> {
      * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
      * evaluation strategy:
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1171,13 +1171,13 @@ public interface KStream<K, V> {
      * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
      * evaluation strategy:
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1266,7 +1266,7 @@ public interface KStream<K, V> {
      * input streams.
      * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
@@ -1274,8 +1274,8 @@ public interface KStream<K, V> {
      * non-deterministic processing order).
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1354,7 +1354,7 @@ public interface KStream<K, V> {
      * input streams.
      * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
@@ -1362,8 +1362,8 @@ public interface KStream<K, V> {
      * non-deterministic processing order).
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1456,8 +1456,8 @@ public interface KStream<K, V> {
      * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1528,8 +1528,8 @@ public interface KStream<K, V> {
      * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1610,8 +1610,8 @@ public interface KStream<K, V> {
      * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
@@ -1685,8 +1685,8 @@ public interface KStream<K, V> {
      * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
      * <p>
      * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met an internal repartitioning topic will be created in Kafka and an additional
-     * repartitioning step will be performed before the actual join.
+     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
+     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internal
