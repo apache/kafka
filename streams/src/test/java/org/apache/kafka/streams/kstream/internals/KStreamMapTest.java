@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
@@ -79,5 +80,20 @@ public class KStreamMapTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
+            @Override
+            public KeyValue<Number, String> apply(Number key, Object value) {
+                return KeyValue.pair(key, key + ":" + value);
+            }
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>stream("numbers")
+            .map(stringify)
+            .to("strings");
     }
 }

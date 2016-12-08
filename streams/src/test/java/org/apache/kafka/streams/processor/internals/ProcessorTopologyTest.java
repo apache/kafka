@@ -231,10 +231,10 @@ public class ProcessorTopologyTest {
         assertNull(driver.readOutput(topic));
     }
 
-    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<K, V>() {
+    protected StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<Object, Object>() {
             @Override
-            public Integer partition(K key, V value, int numPartitions) {
+            public Integer partition(Object key, Object value, int numPartitions) {
                 return partition;
             }
         };
