@@ -747,7 +747,10 @@ class Log(@volatile var dir: File,
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
         Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
-        min offset
+        min offset. Prior behavior assigned new baseOffset = logEndOffset from old segment.  This was problematic in
+        the case that two consecutive messages differed in offset by Integer.MAX_VALUE.toLong + 2 or more.  In this case,
+        the prior behavior would roll a new log segment whose base offset was too low to contain the next message.  This edge case
+        is possible when a replica is recovering a highly compacted topic from scratch.
        */
       roll(maxOffsetInMessages - Integer.MAX_VALUE)
     } else {
