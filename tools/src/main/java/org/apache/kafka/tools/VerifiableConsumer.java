@@ -46,8 +46,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -215,7 +215,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     public void run() {
         try {
-            consumer.subscribe(Arrays.asList(topic), this);
+            consumer.subscribe(Collections.singletonList(topic), this);
 
             while (true) {
                 ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);

@@ -42,9 +42,9 @@ public class ThroughputThrottler {
     private static final long NS_PER_SEC = 1000 * NS_PER_MS;
     private static final long MIN_SLEEP_NS = 2 * NS_PER_MS;
 
-    long sleepTimeNs;
+    private long sleepTimeNs;
     long sleepDeficitNs = 0;
-    long targetThroughput = -1;
+    private long targetThroughput = -1;
     long startMs;
     private boolean wakeup = false;
 
@@ -64,7 +64,7 @@ public class ThroughputThrottler {
      * @param amountSoFar bytes produced so far if you want to throttle data throughput, or
      *                    messages produced so far if you want to throttle message throughput.
      * @param sendStartMs timestamp of the most recently sent message
-     * @return
+     * @return If throughput can be throttled
      */
     public boolean shouldThrottle(long amountSoFar, long sendStartMs) {
         if (this.targetThroughput < 0) {
