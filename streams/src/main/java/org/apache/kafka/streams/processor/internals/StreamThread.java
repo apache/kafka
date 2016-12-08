@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -50,12 +51,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -811,10 +814,12 @@ public class StreamThread extends Thread {
         if (partitionAssignor == null)
             throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
-        // create the active tasks
+        final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
+
+        // collect newly assigned tasks and reopen re-assigned tasks
         for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
-            TaskId taskId = entry.getKey();
-            Set<TopicPartition> partitions = entry.getValue();
+            final TaskId taskId = entry.getKey();
+            final Set<TopicPartition> partitions = entry.getValue();
 
             if (assignment.containsAll(partitions)) {
                 try {
@@ -823,14 +828,15 @@ public class StreamThread extends Thread {
                         log.debug("{} recycling old task {}", logPrefix, taskId);
                         suspendedTasks.remove(taskId);
                         task.initTopology();
-                    } else {
-                        log.debug("{} creating new task {}", logPrefix, taskId);
-                        task = createStreamTask(taskId, partitions);
-                    }
-                    activeTasks.put(taskId, task);
 
-                    for (TopicPartition partition : partitions)
-                        activeTasksByPartition.put(partition, task);
+                        activeTasks.put(taskId, task);
+
+                        for (TopicPartition partition : partitions) {
+                            activeTasksByPartition.put(partition, task);
+                        }
+                    } else {
+                        newTasks.put(taskId, partitions);
+                    }
                 } catch (StreamsException e) {
                     log.error("{} Failed to create an active task {}: ", logPrefix, taskId, e);
                     throw e;
@@ -840,8 +846,51 @@ public class StreamThread extends Thread {
             }
         }
 
-        // finally destroy any remaining suspended tasks
+        // destroy any remaining suspended tasks
         removeSuspendedTasks();
+
+        // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
+        // -> other thread will call removeSuspendedTasks(); eventually
+        long backoffTimeMs = 50L;
+        while (true) {
+            final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = newTasks.entrySet().iterator();
+            while (it.hasNext()) {
+                final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
+                final TaskId taskId = newTaskAndPartitions.getKey();
+                final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
+
+                try {
+                    log.debug("{} creating new task {}", logPrefix, taskId);
+                    final StreamTask task = createStreamTask(taskId, partitions);
+
+                    activeTasks.put(taskId, task);
+
+                    for (TopicPartition partition : partitions) {
+                        activeTasksByPartition.put(partition, task);
+                    }
+
+                    it.remove();
+                } catch (final ProcessorStateException e) {
+                    if(e.getCause() instanceof IOException) {
+                        // ignore and retry
+                        log.warn(getName() + " Could not create task {}. Will retry.", taskId, e);
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+
+            if(newTasks.isEmpty()) {
+                break;
+            }
+
+            try {
+                Thread.sleep(backoffTimeMs);
+                backoffTimeMs <<= 1;
+            } catch (InterruptedException e) {
+                // ignore
+            }
+        }
     }
 
     private StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
@@ -864,10 +913,12 @@ public class StreamThread extends Thread {
 
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
-        // create the standby tasks
+        final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
+
+        // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
-            TaskId taskId = entry.getKey();
-            Set<TopicPartition> partitions = entry.getValue();
+            final TaskId taskId = entry.getKey();
+            final Set<TopicPartition> partitions = entry.getValue();
             StandbyTask task = findMatchingSuspendedStandbyTask(taskId, partitions);
 
             if (task != null) {
@@ -875,9 +926,9 @@ public class StreamThread extends Thread {
                 suspendedStandbyTasks.remove(taskId);
                 task.initTopology();
             } else {
-                log.debug("{} creating new standby task {}", logPrefix, taskId);
-                task = createStandbyTask(taskId, partitions);
+                newStandbyTasks.put(taskId, partitions);
             }
+
             if (task != null) {
                 standbyTasks.put(taskId, task);
                 for (TopicPartition partition : partitions) {
@@ -891,8 +942,57 @@ public class StreamThread extends Thread {
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }
-        // finally destroy any remaining suspended tasks
+
+        // destroy any remaining suspended tasks
         removeSuspendedStandbyTasks();
+
+        // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
+        // -> other thread will call removeSuspendedTasks(); eventually
+        long backoffTimeMs = 50L;
+        while (true) {
+            final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = newStandbyTasks.entrySet().iterator();
+            while (it.hasNext()) {
+                final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
+                final TaskId taskId = newTaskAndPartitions.getKey();
+                final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
+
+                try {
+                    log.debug("{} creating new standby task {}", logPrefix, taskId);
+                    final StandbyTask task = createStandbyTask(taskId, partitions);
+
+                    standbyTasks.put(taskId, task);
+
+                    for (TopicPartition partition : partitions) {
+                        standbyTasksByPartition.put(partition, task);
+                    }
+                    // collect checked pointed offsets to position the restore consumer
+                    // this include all partitions from which we restore states
+                    for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                        standbyTasksByPartition.put(partition, task);
+                    }
+
+                    it.remove();
+                } catch (final ProcessorStateException e) {
+                    if(e.getCause() instanceof IOException) {
+                        // ignore and retry
+                        log.warn("Could not create standby task {}. Will retry.", taskId, e);
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+
+            if(newStandbyTasks.isEmpty()) {
+                break;
+            }
+
+            try {
+                Thread.sleep(backoffTimeMs);
+                backoffTimeMs <<= 1;
+            } catch (InterruptedException e) {
+                // ignore
+            }
+        }
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
