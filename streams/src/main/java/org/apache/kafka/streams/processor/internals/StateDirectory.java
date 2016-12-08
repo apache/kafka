@@ -94,8 +94,9 @@ public class StateDirectory {
         try {
             channel = getOrCreateFileChannel(taskId, lockFile.toPath());
         } catch (NoSuchFileException e) {
-            // FileChannel.open(CREATE, WRITE) could throw NoSuchFileException during a startup and shutdown race
-            // in this case we will return immediately
+            // FileChannel.open(..) could throw NoSuchFileException when there is another thread
+            // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
+            // file, in this case we will return immediately indicating locking failed.
             return false;
         }
 
