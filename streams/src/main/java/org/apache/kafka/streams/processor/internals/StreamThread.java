@@ -449,7 +449,6 @@ public class StreamThread extends Thread {
                         StreamTask task = activeTasksByPartition.get(partition);
                         numAddedRecords += task.addRecords(partition, records.records(partition));
                     }
-                    sensors.processedRecordsSensor.record(numAddedRecords, timerStartedMs);
                     sensors.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
                     polledRecords = true;
                 } else {
@@ -922,7 +921,6 @@ public class StreamThread extends Thread {
         final Sensor punctuateTimeSensor;
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
-        final Sensor processedRecordsSensor;
         final Sensor skippedRecordsSensor;
 
         public StreamsMetricsImpl(Metrics metrics) {
@@ -956,9 +954,6 @@ public class StreamThread extends Thread {
 
             this.taskDestructionSensor = metrics.sensor(sensorNamePrefix + ".task-destruction");
             this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
-
-            this.processedRecordsSensor = metrics.sensor(sensorNamePrefix + ".processed-records");
-            this.processedRecordsSensor.add(metrics.metricName("processed-records-count", metricGrpName, "The number of processed records.", metricTags), new Count());
 
             this.skippedRecordsSensor = metrics.sensor(sensorNamePrefix + ".skipped-records");
             this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The number of skipped records.", metricTags), new Count());

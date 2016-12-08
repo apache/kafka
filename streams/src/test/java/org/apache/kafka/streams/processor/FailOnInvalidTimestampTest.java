@@ -17,32 +17,20 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.junit.Test;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+public class FailOnInvalidTimestampTest extends TimestampExtractorTest {
 
-class TimestampExtractorTest {
+    @Test
+    public void extractMetadataTimestamp() {
+        testExtractMetadataTimestamp(new FailOnInvalidTimestamp());
+    }
 
-    void testExtractMetadataTimestamp(TimestampExtractor extractor) {
-        final long metadataTimestamp = 42;
-
-        final long timestamp = extractor.extract(
-            new ConsumerRecord<>(
-                "anyTopic",
-                0,
-                0,
-                metadataTimestamp,
-                TimestampType.NO_TIMESTAMP_TYPE,
-                0,
-                0,
-                0,
-                null,
-                null),
-            0
-        );
-
-        assertThat(timestamp, is(metadataTimestamp));
+    @Test(expected = StreamsException.class)
+    public void failOnInvalidTimestamp() {
+        final TimestampExtractor extractor = new FailOnInvalidTimestamp();
+        extractor.extract(new ConsumerRecord<>("anyTopic", 0, 0, null, null), 42);
     }
 
 }

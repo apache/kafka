@@ -17,32 +17,29 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.record.TimestampType;
+import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-class TimestampExtractorTest {
+public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTest {
 
-    void testExtractMetadataTimestamp(TimestampExtractor extractor) {
-        final long metadataTimestamp = 42;
+    @Test
+    public void extractMetadataTimestamp() {
+        testExtractMetadataTimestamp(new UsePreviousTimeOnInvalidTimestamp());
+    }
 
+    @Test
+    public void usePreviousTimeOnInvalidTimestamp() {
+        final long previousTime = 42;
+
+        final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
         final long timestamp = extractor.extract(
-            new ConsumerRecord<>(
-                "anyTopic",
-                0,
-                0,
-                metadataTimestamp,
-                TimestampType.NO_TIMESTAMP_TYPE,
-                0,
-                0,
-                0,
-                null,
-                null),
-            0
+            new ConsumerRecord<>("anyTopic", 0, 0, null, null),
+            previousTime
         );
 
-        assertThat(timestamp, is(metadataTimestamp));
+        assertThat(timestamp, is(previousTime));
     }
 
 }
