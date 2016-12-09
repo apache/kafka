@@ -128,7 +128,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
-    private final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
+    final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
     private Set<String> connectorConfigUpdates = new HashSet<>();
@@ -1019,15 +1019,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
-    private void addRequest(Callable<Void> action, Callback<Void> callback) {
-        addRequest(0, action, callback);
+    HerderRequest addRequest(Callable<Void> action, Callback<Void> callback) {
+        return addRequest(0, action, callback);
     }
 
-    private void addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
+    HerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
         HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
+        return req;
     }
 
     private HerderRequest peekWithoutException() {
@@ -1094,7 +1095,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private static class HerderRequest implements Comparable<HerderRequest> {
+    static class HerderRequest implements Comparable<HerderRequest> {
         private final long at;
         private final long seq;
         private final Callable<Void> action;
