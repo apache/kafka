@@ -143,12 +143,12 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
-     * @return false if no fetches were sent, true otherwise
+     * @return number of fetches sent
      */
-    public boolean sendFetches() {
-        boolean fetches = false;
+    public int sendFetches() {
+        int fetches = 0;
         for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
-            fetches = true;
+            fetches++;
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -608,8 +608,8 @@ public class Fetcher<K, V> {
             future.complete(timestampOffsetMap);
     }
 
-    private List<TopicPartition> fetchablePartitions() {
-        List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
+    private Set<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
         if (nextInLineRecords != null && !nextInLineRecords.isDrained())
             fetchable.remove(nextInLineRecords.partition);
         for (CompletedFetch completedFetch : completedFetches)

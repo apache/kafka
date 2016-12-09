@@ -18,12 +18,10 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -284,8 +282,8 @@ public class SubscriptionState {
         return this.assignment.partitionSet();
     }
 
-    public List<TopicPartition> fetchablePartitions() {
-        List<TopicPartition> fetchable = new ArrayList<>();
+    public Set<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> fetchable = new HashSet<>();
         for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (state.value().isFetchable())
                 fetchable.add(state.topicPartition());
