@@ -303,6 +303,7 @@ public class Utils {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             // this is okay, we just wake up early
+            Thread.currentThread().interrupt();
         }
     }
 
