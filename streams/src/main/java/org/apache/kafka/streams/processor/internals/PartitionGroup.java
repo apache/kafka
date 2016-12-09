@@ -43,9 +43,6 @@ public class PartitionGroup {
         public RecordQueue queue;
 
         public ProcessorNode node() {
-            if (queue == null) {
-                return null;
-            }
             return queue.source();
         }
 

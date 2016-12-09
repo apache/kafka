@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -243,8 +244,8 @@ public class StreamsConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
                                 .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
-                                        "INFO",
-                                        in("INFO", "DEBUG"),
+                                        Sensor.RecordLevel.SENSOR_INFO_STR,
+                                        in(Sensor.RecordLevel.SENSOR_INFO_STR, Sensor.RecordLevel.SENSOR_DEBUG_STR),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
                                 .define(APPLICATION_SERVER_CONFIG,

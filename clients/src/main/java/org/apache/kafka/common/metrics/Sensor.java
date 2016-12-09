@@ -51,8 +51,7 @@ public final class Sensor {
                 return SENSOR_INFO;
             } else if (recordLevel.equals(SENSOR_DEBUG_STR)) {
                 return SENSOR_DEBUG;
-            }
-            return null;
+            } else throw new IllegalArgumentException("record Level " + recordLevel + " type not defined");
         }
 
         public static String toString(RecordLevel recordLevel) {
@@ -62,9 +61,10 @@ public final class Sensor {
                 return SENSOR_INFO_STR;
             }
 
-            return null;
+            return "ILLEGAL_LEVEL";
         }
     }
+
     private final RecordLevel recordLevel;
 
     Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,

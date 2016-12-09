@@ -17,6 +17,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
@@ -334,8 +335,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
                                 .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
-                                        "INFO",
-                                        in("INFO", "DEBUG"),
+                                        Sensor.RecordLevel.SENSOR_INFO_STR,
+                                        in(Sensor.RecordLevel.SENSOR_INFO_STR, Sensor.RecordLevel.SENSOR_DEBUG_STR),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,

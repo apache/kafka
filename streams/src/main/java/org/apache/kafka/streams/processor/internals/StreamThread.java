@@ -195,8 +195,7 @@ public class StreamThread extends Thread {
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
-    private final StreamsMetricsImpl sensors;
-    private final Metrics metrics;
+    private final StreamsMetricsImpl streamsMetrics;
     final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
@@ -285,15 +284,14 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         threadClientId = clientId + "-" + threadName;
-        this.sensors = new StreamsMetricsImpl(metrics, "stream-metrics", "thread." + threadClientId,
+        this.streamsMetrics = new StreamsMetricsImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
-        this.metrics = metrics;
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
             config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
-        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
+        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.streamsMetrics);
 
 
         this.logPrefix = String.format("stream-thread [%s]", threadName);
@@ -564,7 +562,7 @@ public class StreamThread extends Thread {
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
-                    sensors.pollTimeSensor.record(computeLatency());
+                    streamsMetrics.pollTimeSensor.record(computeLatency());
                 }
             }
 
@@ -580,12 +578,12 @@ public class StreamThread extends Thread {
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
-                        sensors.processTimeSensor.record(computeLatency());
+                        streamsMetrics.processTimeSensor.record(computeLatency());
 
                         maybePunctuate(task);
 
                         if (task.commitNeeded())
-                            commitOne(task, time.milliseconds());
+                            commitOne(task);
                     }
 
                 } else {
@@ -658,7 +656,7 @@ public class StreamThread extends Thread {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
-                sensors.punctuateTimeSensor.record(time.milliseconds() - now);
+                streamsMetrics.punctuateTimeSensor.record(computeLatency());
 
         } catch (KafkaException e) {
             log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
@@ -700,17 +698,17 @@ public class StreamThread extends Thread {
     private void commitAll() {
         log.trace("stream-thread [{}] Committing all its owned tasks", this.getName());
         for (StreamTask task : activeTasks.values()) {
-            commitOne(task, time.milliseconds());
+            commitOne(task);
         }
         for (StandbyTask task : standbyTasks.values()) {
-            commitOne(task, time.milliseconds());
+            commitOne(task);
         }
     }
 
     /**
      * Commit the state of a task
      */
-    private void commitOne(AbstractTask task, long now) {
+    private void commitOne(AbstractTask task) {
         log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
             task.commit();
@@ -723,7 +721,7 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        sensors.commitTimeSensor.record(time.milliseconds() - now);
+        streamsMetrics.commitTimeSensor.record(computeLatency());
     }
 
     /**
@@ -766,11 +764,11 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         log.info("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
 
-        sensors.taskCreationSensor.record();
+        streamsMetrics.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory, cache, time);
+        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, streamsMetrics, stateDirectory, cache, time);
     }
 
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
@@ -834,12 +832,12 @@ public class StreamThread extends Thread {
     private StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         log.info("{} Creating new standby task {} with assigned partitions [{}]", logPrefix, id, partitions);
 
-        sensors.taskCreationSensor.record();
+        streamsMetrics.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStores().isEmpty()) {
-            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors, stateDirectory);
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, streamsMetrics, stateDirectory);
         } else {
             return null;
         }
@@ -964,7 +962,7 @@ public class StreamThread extends Thread {
             public void apply(final AbstractTask task) {
                 log.info("{} Closing a task {}", StreamThread.this.logPrefix, task.id());
                 task.close();
-                sensors.taskDestructionSensor.record();
+                streamsMetrics.taskDestructionSensor.record();
             }
         }, "close", false);
     }
@@ -975,7 +973,7 @@ public class StreamThread extends Thread {
             public void apply(final AbstractTask task) {
                 log.info("{} Closing a task's topology {}", StreamThread.this.logPrefix, task.id());
                 task.closeTopology();
-                sensors.taskDestructionSensor.record();
+                streamsMetrics.taskDestructionSensor.record();
             }
         }, "close", false);
     }
@@ -1108,11 +1106,11 @@ public class StreamThread extends Thread {
             String metricGroupName = "stream-" + scopeName + "-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(sensorNamePrefix + "." + scopeName + "-" + operationName, recordLevel);
+            Sensor parent = metrics.sensor(sensorNamePrefix + "." + operationName, recordLevel);
             addLatencyMetrics(metricGroupName, parent, "all", operationName, this.metricTags);
 
             // add the store operation metrics with additional tags
-            Sensor sensor = metrics.sensor(sensorNamePrefix + "." + scopeName + "-" + entityName + "-" + operationName, recordLevel, parent);
+            Sensor sensor = metrics.sensor(sensorNamePrefix + "." + entityName + "-" + operationName, recordLevel, parent);
             addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
             return sensor;

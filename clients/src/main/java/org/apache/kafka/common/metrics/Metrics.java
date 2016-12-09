@@ -12,6 +12,12 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,12 +30,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A registry of sensors and metrics.
@@ -259,6 +259,7 @@ public class Metrics implements Closeable {
     public Sensor sensor(String name, Sensor... parents) {
         return this.sensor(name, Sensor.RecordLevel.SENSOR_INFO, parents);
     }
+
     public Sensor sensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
         return sensor(name, null, recordLevel, parents);
     }
@@ -274,6 +275,7 @@ public class Metrics implements Closeable {
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
         return this.sensor(name, config, Sensor.RecordLevel.SENSOR_INFO, parents);
     }
+
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents) {
         return sensor(name, config, Long.MAX_VALUE, recordLevel, parents);
     }
