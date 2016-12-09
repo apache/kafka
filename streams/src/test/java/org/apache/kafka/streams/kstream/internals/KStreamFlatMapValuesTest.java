@@ -27,7 +27,6 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
