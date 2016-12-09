@@ -28,7 +28,7 @@ public class MockAggregator {
         return new Aggregator<K, V, String>() {
             @Override
             public String apply(K aggKey, V value, String aggregate) {
-                return aggKey + sep + value;
+                return aggregate + sep + value;
             }
         };
     }
