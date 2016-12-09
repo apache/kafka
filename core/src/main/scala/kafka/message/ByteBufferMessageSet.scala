@@ -472,9 +472,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
             maxTimestamp = shallowMessage.timestamp
             offsetOfMaxTimestamp = shallowOffset
           }
-          if (shallowOffset > maxOffset) {
-            maxOffset = shallowOffset
-          }
+          maxOffset = shallowOffset
         }
         messagesRead += 1
       } else {
