@@ -219,6 +219,9 @@ public class StreamThread extends Thread {
 
     private ThreadCache cache;
 
+    private final TaskCreator taskCreator = new TaskCreator();
+    private final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator();
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -851,46 +854,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        long backoffTimeMs = 50L;
-        while (true) {
-            final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = newTasks.entrySet().iterator();
-            while (it.hasNext()) {
-                final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
-                final TaskId taskId = newTaskAndPartitions.getKey();
-                final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-
-                try {
-                    log.debug("{} creating new task {}", logPrefix, taskId);
-                    final StreamTask task = createStreamTask(taskId, partitions);
-
-                    activeTasks.put(taskId, task);
-
-                    for (TopicPartition partition : partitions) {
-                        activeTasksByPartition.put(partition, task);
-                    }
-
-                    it.remove();
-                } catch (final ProcessorStateException e) {
-                    if(e.getCause() instanceof IOException) {
-                        // ignore and retry
-                        log.warn(getName() + " Could not create task {}. Will retry.", taskId, e);
-                    } else {
-                        throw e;
-                    }
-                }
-            }
-
-            if(newTasks.isEmpty()) {
-                break;
-            }
-
-            try {
-                Thread.sleep(backoffTimeMs);
-                backoffTimeMs <<= 1;
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        }
+        taskCreator.retryWithBackoff(newTasks);
     }
 
     private StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
@@ -946,53 +910,9 @@ public class StreamThread extends Thread {
         // destroy any remaining suspended tasks
         removeSuspendedStandbyTasks();
 
-        // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
-        // -> other thread will call removeSuspendedTasks(); eventually
-        long backoffTimeMs = 50L;
-        while (true) {
-            final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = newStandbyTasks.entrySet().iterator();
-            while (it.hasNext()) {
-                final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
-                final TaskId taskId = newTaskAndPartitions.getKey();
-                final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-
-                try {
-                    log.debug("{} creating new standby task {}", logPrefix, taskId);
-                    final StandbyTask task = createStandbyTask(taskId, partitions);
-
-                    standbyTasks.put(taskId, task);
-
-                    for (TopicPartition partition : partitions) {
-                        standbyTasksByPartition.put(partition, task);
-                    }
-                    // collect checked pointed offsets to position the restore consumer
-                    // this include all partitions from which we restore states
-                    for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
-                        standbyTasksByPartition.put(partition, task);
-                    }
-
-                    it.remove();
-                } catch (final ProcessorStateException e) {
-                    if(e.getCause() instanceof IOException) {
-                        // ignore and retry
-                        log.warn("Could not create standby task {}. Will retry.", taskId, e);
-                    } else {
-                        throw e;
-                    }
-                }
-            }
-
-            if(newStandbyTasks.isEmpty()) {
-                break;
-            }
-
-            try {
-                Thread.sleep(backoffTimeMs);
-                backoffTimeMs <<= 1;
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        }
+        // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
+        // -> other thread will call removeSuspendedStandbyTasks(); eventually
+        standbyTaskCreator.retryWithBackoff(newStandbyTasks);
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
@@ -1253,4 +1173,75 @@ public class StreamThread extends Thread {
                 sensor.add(name, stat);
         }
     }
+
+    abstract class AbstractTaskCreator {
+        void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+            long backoffTimeMs = 50L;
+            while (true) {
+                final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
+                while (it.hasNext()) {
+                    final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
+                    final TaskId taskId = newTaskAndPartitions.getKey();
+                    final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
+
+                    try {
+                        createTask(taskId, partitions);
+                        it.remove();
+                    } catch (final ProcessorStateException e) {
+                        if(e.getCause() instanceof IOException) {
+                            // ignore and retry
+                            log.warn("Could not create standby task {}. Will retry.", taskId, e);
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+
+                if(tasksToBeCreated.isEmpty()) {
+                    break;
+                }
+
+                try {
+                    Thread.sleep(backoffTimeMs);
+                    backoffTimeMs <<= 1;
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+            }
+        }
+
+        abstract void createTask(final TaskId id, final Collection<TopicPartition> partitions);
+    }
+
+    class TaskCreator extends AbstractTaskCreator {
+        void createTask(final TaskId taskId, final Collection<TopicPartition> partitions) {
+            log.debug("{} creating new task {}", logPrefix, taskId);
+            final StreamTask task = createStreamTask(taskId, partitions);
+
+            activeTasks.put(taskId, task);
+
+            for (TopicPartition partition : partitions) {
+                activeTasksByPartition.put(partition, task);
+            }
+        }
+    }
+
+    class StandbyTaskCreator extends AbstractTaskCreator {
+        void createTask(final TaskId taskId, final Collection<TopicPartition> partitions) {
+            log.debug("{} creating new standby task {}", logPrefix, taskId);
+            final StandbyTask task = createStandbyTask(taskId, partitions);
+
+            standbyTasks.put(taskId, task);
+
+            for (TopicPartition partition : partitions) {
+                standbyTasksByPartition.put(partition, task);
+            }
+            // collect checked pointed offsets to position the restore consumer
+            // this include all partitions from which we restore states
+            for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                standbyTasksByPartition.put(partition, task);
+            }
+        }
+    }
+
 }
