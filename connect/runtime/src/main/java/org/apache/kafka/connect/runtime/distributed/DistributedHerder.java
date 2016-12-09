@@ -104,7 +104,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
 
-    private final AtomicLong requestIdGen = new AtomicLong();
+    private final AtomicLong requestSeqNum = new AtomicLong();
 
     private final Time time;
 
@@ -1024,7 +1024,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
-        HerderRequest req = new HerderRequest(requestIdGen.incrementAndGet(), time.milliseconds() + delayMs, action, callback);
+        HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
@@ -1095,14 +1095,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private static class HerderRequest implements Comparable<HerderRequest> {
-        private final long id;
         private final long at;
+        private final long seq;
         private final Callable<Void> action;
         private final Callback<Void> callback;
 
-        public HerderRequest(long id, long at, Callable<Void> action, Callback<Void> callback) {
-            this.id = id;
+        public HerderRequest(long at, long seq, Callable<Void> action, Callback<Void> callback) {
             this.at = at;
+            this.seq = seq;
             this.action = action;
             this.callback = callback;
         }
@@ -1117,7 +1117,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public int compareTo(HerderRequest o) {
-            return Long.compare(id, o.id);
+            final int cmp = Long.compare(at, o.at);
+            return cmp == 0 ? Long.compare(seq, o.seq) : cmp;
         }
     }
 
