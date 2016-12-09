@@ -126,9 +126,6 @@ public class Fetcher<K, V> {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    public int maxPollRecords() {
-        return maxPollRecords;
-    }
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
      * @return true if there are completed fetches, false otherwise
@@ -146,9 +143,12 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
+     * @return false if no fetches were sent, true otherwise
      */
-    public void sendFetches() {
+    public boolean sendFetches() {
+        boolean fetches = false;
         for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
+            fetches = true;
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -186,6 +186,7 @@ public class Fetcher<K, V> {
                         }
                     });
         }
+        return fetches;
     }
 
     /**
