@@ -411,8 +411,11 @@ class Log(@volatile var dir: File,
                                 maxOffsetInMessages = appendInfo.lastOffset)
 
         // now append to the log
-        segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
-          offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp, largestOffset = appendInfo.lastOffset, messages = validMessages)
+        segment.append(firstOffset = appendInfo.firstOffset,
+                      largestOffset = appendInfo.lastOffset,
+                      largestTimestamp = appendInfo.maxTimestamp,
+                      offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp,
+                      messages = validMessages)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -650,7 +653,7 @@ class Log(@volatile var dir: File,
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
         if (segments.size == numToDelete)
-          roll(0L)
+          roll()
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
       }
@@ -747,10 +750,12 @@ class Log(@volatile var dir: File,
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
         Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
-        min offset. Prior behavior assigned new baseOffset = logEndOffset from old segment.  This was problematic in
-        the case that two consecutive messages differed in offset by Integer.MAX_VALUE.toLong + 2 or more.  In this case,
-        the prior behavior would roll a new log segment whose base offset was too low to contain the next message.  This edge case
-        is possible when a replica is recovering a highly compacted topic from scratch.
+        first offset in the set. Determining the true first offset in the set requires decompression, which the follower
+        is trying to avoid during log append. Prior behavior assigned new baseOffset = logEndOffset from old segment.
+        This was problematic in the case that two consecutive messages differed in offset by
+        Integer.MAX_VALUE.toLong + 2 or more.  In this case, the prior behavior would roll a new log segment whose
+        base offset was too low to contain the next message.  This edge case is possible when a replica is recovering a
+        highly compacted topic from scratch.
        */
       roll(maxOffsetInMessages - Integer.MAX_VALUE)
     } else {
