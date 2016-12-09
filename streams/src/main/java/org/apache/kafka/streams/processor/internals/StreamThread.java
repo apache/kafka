@@ -956,7 +956,7 @@ public class StreamThread extends Thread {
             this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
 
             this.skippedRecordsSensor = metrics.sensor(sensorNamePrefix + ".skipped-records");
-            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The number of skipped records.", metricTags), new Count());
+            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The average per-second number of skipped records.", metricTags), new Rate(new Count()));
         }
 
         @Override
