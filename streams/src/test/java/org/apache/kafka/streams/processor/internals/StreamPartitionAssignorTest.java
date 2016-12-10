@@ -837,7 +837,6 @@ public class StreamPartitionAssignorTest {
                 }
             })
             .through("topic2");
-        stream1.to("topic3");
         builder
             .stream("unknownTopic")
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
