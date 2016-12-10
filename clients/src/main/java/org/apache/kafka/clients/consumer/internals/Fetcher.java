@@ -146,9 +146,8 @@ public class Fetcher<K, V> {
      * @return number of fetches sent
      */
     public int sendFetches() {
-        int fetches = 0;
-        for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
-            fetches++;
+        Map<Node, FetchRequest> fetchRequestMap = createFetchRequests();
+        for (Map.Entry<Node, FetchRequest> fetchEntry : fetchRequestMap.entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -186,7 +185,7 @@ public class Fetcher<K, V> {
                         }
                     });
         }
-        return fetches;
+        return fetchRequestMap.size();
     }
 
     /**
@@ -608,12 +607,16 @@ public class Fetcher<K, V> {
             future.complete(timestampOffsetMap);
     }
 
-    private Set<TopicPartition> fetchablePartitions() {
-        Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isDrained())
-            fetchable.remove(nextInLineRecords.partition);
-        for (CompletedFetch completedFetch : completedFetches)
-            fetchable.remove(completedFetch.partition);
+    private List<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> exclude = new HashSet<>();
+        List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
+        if (nextInLineRecords != null && !nextInLineRecords.isDrained()) {
+            exclude.add(nextInLineRecords.partition);
+        }
+        for (CompletedFetch completedFetch : completedFetches) {
+            exclude.add(completedFetch.partition);
+        }
+        fetchable.removeAll(exclude);
         return fetchable;
     }
 
