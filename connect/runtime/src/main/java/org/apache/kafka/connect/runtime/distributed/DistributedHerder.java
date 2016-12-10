@@ -67,6 +67,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * <p>
@@ -103,6 +104,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
 
+    private final AtomicLong requestSeqNum = new AtomicLong();
+
     private final Time time;
 
     private final String workerGroupId;
@@ -125,7 +128,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
-    private final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
+    final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
     private Set<String> connectorConfigUpdates = new HashSet<>();
@@ -1016,15 +1019,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
-    private void addRequest(Callable<Void> action, Callback<Void> callback) {
-        addRequest(0, action, callback);
+    HerderRequest addRequest(Callable<Void> action, Callback<Void> callback) {
+        return addRequest(0, action, callback);
     }
 
-    private void addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
-        HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, action, callback);
+    HerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
+        HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
+        return req;
     }
 
     private HerderRequest peekWithoutException() {
@@ -1091,13 +1095,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private static class HerderRequest implements Comparable<HerderRequest> {
+    static class HerderRequest implements Comparable<HerderRequest> {
         private final long at;
+        private final long seq;
         private final Callable<Void> action;
         private final Callback<Void> callback;
 
-        public HerderRequest(long at, Callable<Void> action, Callback<Void> callback) {
+        public HerderRequest(long at, long seq, Callable<Void> action, Callback<Void> callback) {
             this.at = at;
+            this.seq = seq;
             this.action = action;
             this.callback = callback;
         }
@@ -1112,9 +1118,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public int compareTo(HerderRequest o) {
-            final int soonest = Long.compare(at, o.at);
-            // If tied, returning a positive value should respect insertion order.
-            return soonest != 0 ? soonest : 1;
+            final int cmp = Long.compare(at, o.at);
+            return cmp == 0 ? Long.compare(seq, o.seq) : cmp;
         }
     }
 
