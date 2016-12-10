@@ -497,7 +497,7 @@ concurrently with reads, it is possible for a consumer to miss delete markers if
 
 Log compaction is handled by the log cleaner, a pool of background threads that recopy log segment files, removing records whose key appears in the head of the log. Each compactor thread works as follows:
 <ol>
-<li>It chooses the log that has the highest ratio of log head to log tail
+<li>It chooses the log that has the highest ratio of log tail to log head
 <li>It creates a succinct summary of the last offset for each key in the head of the log
 <li>It recopies the log from beginning to end removing keys which have a later occurrence in the log. New, clean segments are swapped into the log immediately so the additional disk space required is just one
 additional log segment (not a fully copy of the log).
