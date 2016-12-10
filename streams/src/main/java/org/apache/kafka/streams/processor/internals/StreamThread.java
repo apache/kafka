@@ -1178,7 +1178,7 @@ public class StreamThread extends Thread {
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             long backoffTimeMs = 50L;
             while (true) {
-                final Iterator<Map.Entry<TaskId,Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
+                final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
                 while (it.hasNext()) {
                     final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions = it.next();
                     final TaskId taskId = newTaskAndPartitions.getKey();
@@ -1188,7 +1188,7 @@ public class StreamThread extends Thread {
                         createTask(taskId, partitions);
                         it.remove();
                     } catch (final ProcessorStateException e) {
-                        if(e.getCause() instanceof IOException) {
+                        if (e.getCause() instanceof IOException) {
                             // ignore and retry
                             log.warn("Could not create standby task {}. Will retry.", taskId, e);
                         } else {
@@ -1197,7 +1197,7 @@ public class StreamThread extends Thread {
                     }
                 }
 
-                if(tasksToBeCreated.isEmpty()) {
+                if (tasksToBeCreated.isEmpty()) {
                     break;
                 }
 

@@ -310,7 +310,7 @@ public class StreamThreadTest {
         );
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
-        mockClientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC,0), new TopicPartition(TOPIC,1)));
+        mockClientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
 
         final StreamThread thread1 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 1, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
         final StreamThread thread2 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 2, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
