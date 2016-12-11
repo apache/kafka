@@ -167,6 +167,13 @@ public class StreamThread extends Thread {
         }
     }
 
+    private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
+        if (state == State.PENDING_SHUTDOWN) {
+            return;
+        }
+        setState(newState);
+    }
+
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
@@ -198,7 +205,7 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
-
+    private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
     private long lastCommitMs;
@@ -212,21 +219,21 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+
             try {
                 if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
                         StreamThread.this.getName(), assignment);
-                    return;
                 }
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                     StreamThread.this.getName(), assignment);
 
-                setState(State.ASSIGNING_PARTITIONS);
+                setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-                setState(State.RUNNING);
+                setStateWhenNotInPendingShutdown(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -239,11 +246,10 @@ public class StreamThread extends Thread {
                 if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
                         StreamThread.this.getName(), assignment);
-                    return;
                 }
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                setState(State.PARTITIONS_REVOKED);
+                setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState(true);
@@ -343,6 +349,7 @@ public class StreamThread extends Thread {
 
         try {
             runLoop();
+            cleanRun = true;
         } catch (KafkaException e) {
             // just re-throw the exception as it should be logged already
             throw e;
@@ -368,6 +375,7 @@ public class StreamThread extends Thread {
         return Collections.unmodifiableMap(activeTasks);
     }
 
+
     private void shutdown() {
         log.info("{} Shutting down", logPrefix);
         shutdownTasksAndState(false);
@@ -388,6 +396,11 @@ public class StreamThread extends Thread {
         } catch (Throwable e) {
             log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
+
+        // TODO remove this
+        // hotfix to improve ZK behavior als long as KAFKA-4060 is not fixed (c.f. KAFKA-4369)
+        // when removing this, make StreamPartitionAssignor#internalTopicManager "private" again
+        partitionAssignor.internalTopicManager.zkClient.close();
 
         // remove all tasks
         removeStreamTasks();
@@ -414,8 +427,11 @@ public class StreamThread extends Thread {
         log.debug("{} shutdownTasksAndState: shutting down all active tasks [{}] and standby tasks [{}]", logPrefix,
             activeTasks.keySet(), standbyTasks.keySet());
 
-        // Commit first as there may be cached records that have not been flushed yet.
-        commitOffsets(rethrowExceptions);
+        // only commit under clean exit
+        if (cleanRun) {
+            // Commit first as there may be cached records that have not been flushed yet.
+            commitOffsets(rethrowExceptions);
+        }
         // Close all processors in topology order
         closeAllTasks();
         // flush state
@@ -549,10 +565,12 @@ public class StreamThread extends Thread {
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
+                    int numAddedRecords = 0;
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
-                        task.addRecords(partition, records.records(partition));
+                        numAddedRecords += task.addRecords(partition, records.records(partition));
                     }
+                    sensors.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
                     polledRecords = true;
                 } else {
                     polledRecords = false;
@@ -1020,6 +1038,7 @@ public class StreamThread extends Thread {
         final Sensor punctuateTimeSensor;
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
+        final Sensor skippedRecordsSensor;
 
         public StreamsMetricsImpl(Metrics metrics) {
             this.metrics = metrics;
@@ -1052,6 +1071,9 @@ public class StreamThread extends Thread {
 
             this.taskDestructionSensor = metrics.sensor(sensorNamePrefix + ".task-destruction");
             this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+
+            this.skippedRecordsSensor = metrics.sensor(sensorNamePrefix + ".skipped-records");
+            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The average per-second number of skipped records.", metricTags), new Rate(new Count()));
         }
 
         @Override

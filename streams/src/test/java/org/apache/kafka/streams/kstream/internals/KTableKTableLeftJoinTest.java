@@ -22,8 +22,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -35,6 +38,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Locale;
+import java.util.Random;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -320,6 +325,73 @@ public class KTableKTableLeftJoinTest {
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(XX0+null<-X0+null)", "1:(XX1+null<-X1+null)", "2:(XX2+YY2<-X2+YY2)", "3:(XX3+YY3<-X3+YY3)");
+    }
+
+    /**
+     * This test was written to reproduce https://issues.apache.org/jira/browse/KAFKA-4492
+     * It is based on a fairly complicated join used by the developer that reported the bug.
+     * Before the fix this would trigger an IllegalStateException.
+     */
+    @Test
+    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() throws Exception {
+        final String agg = "agg";
+        final String tableOne = "tableOne";
+        final String tableTwo = "tableTwo";
+        final String tableThree = "tableThree";
+        final String tableFour = "tableFour";
+        final String tableFive = "tableFive";
+        final String tableSix = "tableSix";
+        final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KTable<Long, String> aggTable = builder.table(Serdes.Long(), Serdes.String(), agg, agg)
+                .groupBy(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                    @Override
+                    public KeyValue<Long, String> apply(final Long key, final String value) {
+                        return new KeyValue<>(key, value);
+                    }
+                }, Serdes.Long(), Serdes.String()).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, "agg-store");
+
+        final KTable<Long, String> one = builder.table(Serdes.Long(), Serdes.String(), tableOne, tableOne);
+        final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);
+        final KTable<Long, String> three = builder.table(Serdes.Long(), Serdes.String(), tableThree, tableThree);
+        final KTable<Long, String> four = builder.table(Serdes.Long(), Serdes.String(), tableFour, tableFour);
+        final KTable<Long, String> five = builder.table(Serdes.Long(), Serdes.String(), tableFive, tableFive);
+        final KTable<Long, String> six = builder.table(Serdes.Long(), Serdes.String(), tableSix, tableSix);
+
+        final ValueMapper<String, String> mapper = new ValueMapper<String, String>() {
+            @Override
+            public String apply(final String value) {
+                return value.toUpperCase(Locale.ROOT);
+            }
+        };
+        final KTable<Long, String> seven = one.mapValues(mapper);
+
+
+        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.STRING_JOINER);
+
+        aggTable.leftJoin(one, MockValueJoiner.STRING_JOINER)
+                .leftJoin(two, MockValueJoiner.STRING_JOINER)
+                .leftJoin(three, MockValueJoiner.STRING_JOINER)
+                .leftJoin(four, MockValueJoiner.STRING_JOINER)
+                .leftJoin(five, MockValueJoiner.STRING_JOINER)
+                .leftJoin(eight, MockValueJoiner.STRING_JOINER)
+                .mapValues(mapper);
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 250);
+
+        final String[] values = {"a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
+                                 "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
+                                 "T", "UU", "VVVVVVVVVVVVVVVVVVV"};
+
+        final Random random = new Random();
+        for (int i = 0; i < 1000; i++) {
+            for (String input : inputs) {
+                final Long key = Long.valueOf(random.nextInt(1000));
+                final String value = values[random.nextInt(values.length)];
+                driver.process(input, key, value);
+            }
+        }
     }
 
     private KeyValue<Integer, String> kv(Integer key, String value) {
