@@ -36,7 +36,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -47,7 +46,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -137,7 +136,7 @@ public class ResetIntegrationTest {
         }
     }
 
-    @Ignore
+    @Test
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
 
@@ -158,15 +157,21 @@ public class ResetIntegrationTest {
             60000);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
-        final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+        final List<KeyValue<Long, Long>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2,
-            1
-        ).get(0);
+            10
+        );
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
+
+        // insert bad record to maks sure intermediate user topic gets seekToEnd()
+        mockTime.sleep(1);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                INTERMEDIATE_USER_TOPIC,
+                Collections.singleton(new KeyValue<>(-1L, "badRecord-ShouldBeSkipped")), TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class), mockTime.milliseconds());
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
@@ -184,11 +189,11 @@ public class ResetIntegrationTest {
             OUTPUT_TOPIC,
             10,
             60000);
-        final KeyValue<Object, Object> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+        final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2_RERUN,
-            1
-        ).get(0);
+            10
+        );
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
@@ -219,7 +224,7 @@ public class ResetIntegrationTest {
         }
     }
 
-    @Ignore
+    @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
@@ -274,7 +279,7 @@ public class ResetIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
@@ -316,32 +321,17 @@ public class ResetIntegrationTest {
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
         // use map to trigger internal re-partitioning before groupByKey
-        final KTable<Long, Long> globalCounts = input
-            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+        input.map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                 @Override
                 public KeyValue<Long, String> apply(final Long key, final String value) {
                     return new KeyValue<>(key, value);
                 }
             })
             .groupByKey()
-            .count("global-count");
-        globalCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
+            .count("global-count")
+            .to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
-        final KStream<Long, Long> windowedCounts = input
-            .through(INTERMEDIATE_USER_TOPIC)
-            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
-                private long sleep = 1000;
-
-                @Override
-                public KeyValue<Long, String> apply(final Long key, final String value) {
-                    // must sleep long enough to avoid processing the whole intermediate topic before application gets stopped
-                    // => want to test "skip over" unprocessed records
-                    // increasing the sleep time only has disadvantage that test run time is increased
-                    mockTime.sleep(sleep);
-                    sleep *= 2;
-                    return new KeyValue<>(key, value);
-                }
-            })
+        input.through(INTERMEDIATE_USER_TOPIC)
             .groupByKey()
             .count(TimeWindows.of(35).advanceBy(10), "count")
             .toStream()
@@ -350,8 +340,8 @@ public class ResetIntegrationTest {
                 public KeyValue<Long, Long> apply(final Windowed<Long> key, final Long value) {
                     return new KeyValue<>(key.window().start() + key.window().end(), value);
                 }
-            });
-        windowedCounts.to(Serdes.Long(), Serdes.Long(), outputTopic2);
+            })
+            .to(Serdes.Long(), Serdes.Long(), outputTopic2);
 
         return builder;
     }
