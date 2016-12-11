@@ -167,6 +167,13 @@ public class StreamThread extends Thread {
         }
     }
 
+    private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
+        if (state == State.PENDING_SHUTDOWN) {
+            return;
+        }
+        setState(newState);
+    }
+
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
@@ -212,21 +219,21 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+
             try {
                 if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
                         StreamThread.this.getName(), assignment);
-                    return;
                 }
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                     StreamThread.this.getName(), assignment);
 
-                setState(State.ASSIGNING_PARTITIONS);
+                setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-                setState(State.RUNNING);
+                setStateWhenNotInPendingShutdown(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -239,11 +246,10 @@ public class StreamThread extends Thread {
                 if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
                         StreamThread.this.getName(), assignment);
-                    return;
                 }
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                setState(State.PARTITIONS_REVOKED);
+                setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState(true);
@@ -390,6 +396,11 @@ public class StreamThread extends Thread {
         } catch (Throwable e) {
             log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
+
+        // TODO remove this
+        // hotfix to improve ZK behavior als long as KAFKA-4060 is not fixed (c.f. KAFKA-4369)
+        // when removing this, make StreamPartitionAssignor#internalTopicManager "private" again
+        partitionAssignor.internalTopicManager.zkClient.close();
 
         // remove all tasks
         removeStreamTasks();
