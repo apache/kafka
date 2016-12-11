@@ -432,7 +432,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
               records.asScala.foreach(producer.send)
-              maybeFlushAndCommitOffsets()
+              maybeFlushAndCommitOffsets(true)
             }
           } catch {
             case _: ConsumerTimeoutException =>
@@ -440,7 +440,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             case _: WakeupException =>
               trace("Caught ConsumerWakeupException, continue iteration.")
           }
-          maybeFlushAndCommitOffsets()
+          if (mirrorMakerConsumer.needPurgeAndCommit()) {
+            maybeFlushAndCommitOffsets(false)
+            mirrorMakerConsumer.needPurgeAndCommit(false)
+          } else {
+            maybeFlushAndCommitOffsets(true)
+          }
         }
       } catch {
         case t: Throwable =>
@@ -469,8 +474,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def maybeFlushAndCommitOffsets() {
-      if (System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
+    def maybeFlushAndCommitOffsets(autoCommit: Boolean) {
+      if (!autoCommit || System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
         debug("Committing MirrorMaker state automatically.")
         producer.flush()
         commitOffsets(mirrorMakerConsumer)
@@ -503,12 +508,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[kafka] trait MirrorMakerBaseConsumer extends BaseConsumer {
     def init()
+    def needPurgeAndCommit(): Boolean
+    def needPurgeAndCommit(boolean: Boolean)
     def hasData : Boolean
   }
 
   private class MirrorMakerOldConsumer(connector: ZookeeperConsumerConnector,
                                        filterSpec: TopicFilter) extends MirrorMakerBaseConsumer {
     private var iter: ConsumerIterator[Array[Byte], Array[Byte]] = null
+    private val _needPurgeAndCommit: AtomicBoolean = new AtomicBoolean(false)
 
     override def init() {
       // Creating one stream per each connector instance
@@ -516,6 +524,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       require(streams.size == 1)
       val stream = streams.head
       iter = stream.iterator()
+    }
+
+    override def needPurgeAndCommit(): Boolean = {
+      _needPurgeAndCommit.get()
+    }
+
+    override def needPurgeAndCommit(boolean: Boolean) {
+      _needPurgeAndCommit.set(boolean)
     }
 
     override def hasData = iter.hasNext()
@@ -550,6 +566,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends MirrorMakerBaseConsumer {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
+    private val _needPurgeAndCommit: AtomicBoolean = new AtomicBoolean(false)
 
     // TODO: we need to manually maintain the consumed offsets for new consumer
     // since its internal consumed position is updated in batch rather than one
@@ -568,6 +585,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             throw pse
         }
       }
+    }
+
+    override def needPurgeAndCommit(): Boolean = {
+      _needPurgeAndCommit.get()
+    }
+
+    override def needPurgeAndCommit(boolean: Boolean) {
+      _needPurgeAndCommit.set(boolean)
     }
 
     override def hasData = true
@@ -617,8 +642,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends org.apache.kafka.clients.consumer.ConsumerRebalanceListener {
 
     override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
-      producer.flush()
-      commitOffsets(mirrorMakerConsumer)
+      mirrorMakerConsumer.needPurgeAndCommit(true)
+      while (mirrorMakerConsumer.needPurgeAndCommit()) {
+        Thread.sleep(100)
+      }
       customRebalanceListenerForNewConsumer.foreach(_.onPartitionsRevoked(partitions))
     }
 
@@ -632,8 +659,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends ConsumerRebalanceListener {
 
     override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
-      producer.flush()
-      commitOffsets(mirrorMakerConsumer)
+      mirrorMakerConsumer.needPurgeAndCommit(true)
+      while (mirrorMakerConsumer.needPurgeAndCommit()) {
+        Thread.sleep(100)
+      }
       // invoke custom consumer rebalance listener
       customRebalanceListenerForOldConsumer.foreach(_.beforeReleasingPartitions(partitionOwnership))
     }
