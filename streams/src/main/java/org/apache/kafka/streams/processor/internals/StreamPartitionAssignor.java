@@ -159,7 +159,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<TaskId, Set<TopicPartition>> activeTasks;
 
-    private InternalTopicManager internalTopicManager;
+    InternalTopicManager internalTopicManager;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
