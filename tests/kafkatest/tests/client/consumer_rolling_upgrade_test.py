@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.utils.util import wait_until
+from ducktape.mark.resource import cluster
+
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition
@@ -43,6 +44,7 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
             frozenset([TopicPartition(self.TOPIC, 0), TopicPartition(self.TOPIC, 2)]),
             frozenset([TopicPartition(self.TOPIC, 1), TopicPartition(self.TOPIC, 3)])])
 
+    @cluster(num_nodes=4)
     def rolling_update_test(self):
         """
         Verify rolling updates of partition assignment strategies works correctly. In this

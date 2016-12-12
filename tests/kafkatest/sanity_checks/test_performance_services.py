@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService
@@ -35,6 +36,7 @@ class PerformanceServiceTest(Test):
     def setUp(self):
         self.zk.start()
 
+    @cluster(num_nodes=5)
     # We are keeping 0.8.2 here so that we don't inadvertently break support for it. Since this is just a sanity check,
     # the overhead should be manageable.
     @parametrize(version=str(LATEST_0_8_2), new_consumer=False)
