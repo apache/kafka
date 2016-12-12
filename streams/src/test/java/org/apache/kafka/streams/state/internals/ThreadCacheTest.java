@@ -459,6 +459,40 @@ public class ThreadCacheTest {
         assertEquals(cache.evicts(), 3);
     }
 
+    @Test
+    public void shouldNotLoopForEverWhenEvictingAndCurrentCacheIsEmpty() throws Exception {
+        final int maxCacheSizeInBytes = 100;
+        final ThreadCache threadCache = new ThreadCache(maxCacheSizeInBytes);
+        // trigger a put into another cache on eviction from "name"
+        threadCache.addDirtyEntryFlushListener("name", new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                // put an item into an empty cache when the total cache size
+                // is already > than maxCacheSizeBytes
+                threadCache.put("other", new byte[]{0}, dirtyEntry(new byte[2]));
+            }
+        });
+        threadCache.addDirtyEntryFlushListener("other", new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+               //
+            }
+        });
+        threadCache.addDirtyEntryFlushListener("another", new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+
+            }
+        });
+
+        threadCache.put("another", new byte[]{1}, dirtyEntry(new byte[1]));
+        threadCache.put("name", new byte[]{1}, dirtyEntry(new byte[1]));
+        // Put a large item such that when the eldest item is removed
+        // cache sizeInBytes() > maxCacheSizeBytes
+        int remaining = (int) (maxCacheSizeInBytes - threadCache.sizeBytes());
+        threadCache.put("name", new byte[]{2}, dirtyEntry(new byte[remaining + 100]));
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, true, -1, -1, -1, "");
     }

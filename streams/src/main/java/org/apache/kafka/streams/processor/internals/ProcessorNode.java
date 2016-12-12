@@ -83,7 +83,7 @@ public class ProcessorNode<K, V> {
         }
         this.time = new SystemTime();
         this.nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
-
+        this.nodeMetrics.nodeTaskCreationSensor.record();
     }
 
     public void close() {
@@ -92,6 +92,8 @@ public class ProcessorNode<K, V> {
             nodeMetrics.removeAllSensors();
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
+        } finally {
+            nodeMetrics.nodeTaskDestructionSensor.record();
         }
     }
 

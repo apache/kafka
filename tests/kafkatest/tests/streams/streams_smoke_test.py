@@ -13,11 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import ignore
+
+from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 import time
+
 
 class StreamsSmokeTest(KafkaTest):
     """
@@ -45,6 +47,7 @@ class StreamsSmokeTest(KafkaTest):
         self.processor4 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
     @ignore
+    @cluster(num_nodes=7)
     def test_streams(self):
         """
         Start a few smoke test clients, then repeat start a new one, stop (cleanly) running one a few times.
@@ -56,14 +59,14 @@ class StreamsSmokeTest(KafkaTest):
         self.processor1.start()
         self.processor2.start()
 
-        time.sleep(15);
+        time.sleep(15)
 
         self.processor3.start()
         self.processor1.stop()
 
-        time.sleep(15);
+        time.sleep(15)
 
-        self.processor4.start();
+        self.processor4.start()
 
         self.driver.wait()
         self.driver.stop()

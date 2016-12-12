@@ -276,6 +276,7 @@ public class KerberosLogin extends AbstractLogin {
                 t.join();
             } catch (InterruptedException e) {
                 log.warn("Error while waiting for Login thread to shutdown: " + e, e);
+                Thread.currentThread().interrupt();
             }
         }
     }
