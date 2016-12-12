@@ -19,12 +19,12 @@ package kafka.log
 import kafka.message._
 import kafka.common._
 import kafka.utils._
-import kafka.server.{LogOffsetMetadata, FetchDataInfo}
+import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.utils.Time
 
 import scala.math._
-import java.io.{IOException, File}
-
+import java.io.{File, IOException}
 
  /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
@@ -50,7 +50,7 @@ class LogSegment(val log: FileMessageSet,
                  val rollJitterMs: Long,
                  time: Time) extends Logging {
 
-  var created = time.milliseconds
+  private var created = time.milliseconds
 
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0

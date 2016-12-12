@@ -150,19 +150,21 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
+        final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+
         try {
             long now = time.milliseconds();
 
             // Maybe commit
-            if (!committing && now >= nextCommit) {
+            if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
                 commitOffsets(now, false);
-                nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+                nextCommit += offsetCommitIntervalMs;
+                context.clearCommitRequest();
             }
 
             // Check for timed out commits
-            long commitTimeout = commitStarted + workerConfig.getLong(
-                    WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
-            if (committing && now >= commitTimeout) {
+            if (committing && now >= commitTimeoutMs) {
                 log.warn("Commit of {} offsets timed out", this);
                 commitFailures++;
                 committing = false;
@@ -267,7 +269,9 @@ class WorkerSinkTask extends WorkerTask {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
-                    lastCommittedOffsets = offsets;
+                    if (error == null) {
+                        lastCommittedOffsets = offsets;
+                    }
                     onCommitCompleted(error, seqno);
                 }
             };
@@ -283,27 +287,58 @@ class WorkerSinkTask extends WorkerTask {
         commitSeqno += 1;
         commitStarted = now;
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
+        final Map<TopicPartition, OffsetAndMetadata> taskProvidedOffsets;
         try {
-            task.flush(offsets);
+            taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
-            log.error("Commit of {} offsets failed due to exception while flushing:", this, t);
-            log.error("Rewinding offsets to last committed offsets");
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
-                log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
-                consumer.seek(entry.getKey(), entry.getValue().offset());
+            if (closing) {
+                log.warn("{} Offset commit failed during close");
+                onCommitCompleted(t, commitSeqno);
+            } else {
+                log.error("{} Offset commit failed, rewinding to last committed offsets", this, t);
+                for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
+                    log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
+                    consumer.seek(entry.getKey(), entry.getValue().offset());
+                }
+                currentOffsets = new HashMap<>(lastCommittedOffsets);
+                onCommitCompleted(t, commitSeqno);
             }
-            currentOffsets = new HashMap<>(lastCommittedOffsets);
-            onCommitCompleted(t, commitSeqno);
             return;
         } finally {
-            // Close the task if needed before committing the offsets. This is basically the last chance for
-            // the connector to actually flush data that has been written to it.
+            // Close the task if needed before committing the offsets.
             if (closing)
                 task.close(currentOffsets.keySet());
         }
 
-        doCommit(offsets, closing, commitSeqno);
+        if (taskProvidedOffsets.isEmpty()) {
+            log.debug("{} Skipping offset commit, task opted-out", this);
+            onCommitCompleted(null, commitSeqno);
+            return;
+        }
+
+        final Map<TopicPartition, OffsetAndMetadata> commitableOffsets = new HashMap<>(lastCommittedOffsets);
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> taskProvidedOffsetEntry : taskProvidedOffsets.entrySet()) {
+            final TopicPartition partition = taskProvidedOffsetEntry.getKey();
+            final OffsetAndMetadata taskProvidedOffset = taskProvidedOffsetEntry.getValue();
+            if (commitableOffsets.containsKey(partition)) {
+                if (taskProvidedOffset.offset() <= currentOffsets.get(partition).offset()) {
+                    commitableOffsets.put(partition, taskProvidedOffset);
+                } else {
+                    log.warn("Ignoring invalid task provided offset {}/{} -- not yet consumed", partition, taskProvidedOffset);
+                }
+            } else {
+                log.warn("Ignoring invalid task provided offset {}/{} -- partition not assigned", partition, taskProvidedOffset);
+            }
+        }
+
+        if (commitableOffsets.equals(lastCommittedOffsets)) {
+            log.debug("{} Skipping offset commit, no change since last commit", this);
+            onCommitCompleted(null, commitSeqno);
+            return;
+        }
+
+        log.trace("{} Offsets to commit: {}", this, commitableOffsets);
+        doCommit(commitableOffsets, closing, commitSeqno);
     }
 
 

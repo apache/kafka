@@ -30,19 +30,19 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
+import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
-import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 
@@ -64,7 +64,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
-                val clusterId: String) extends Logging {
+                val clusterId: String,
+                time: Time) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
@@ -117,7 +118,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           error("Error when handling request %s".format(request.body), e)
         }
     } finally
-      request.apiLocalCompleteTimeMs = SystemTime.milliseconds
+      request.apiLocalCompleteTimeMs = time.milliseconds
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
@@ -308,7 +309,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
         //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
         //   - If v2 we use the default expiration timestamp
-        val currentTimestamp = SystemTime.milliseconds
+        val currentTimestamp = time.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedTopics.mapValues { partitionData =>
           val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
@@ -407,7 +408,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = time.milliseconds
 
       quotas.produce.recordAndMaybeThrottle(
         request.session.sanitizedUser,
@@ -515,7 +516,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
+      request.apiRemoteCompleteTimeMs = time.milliseconds
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
@@ -716,18 +717,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    val segsArray = log.logSegments.toArray
-    var offsetTimeArray: Array[(Long, Long)] = null
-    val lastSegmentHasSize = segsArray.last.size > 0
-    if (lastSegmentHasSize)
-      offsetTimeArray = new Array[(Long, Long)](segsArray.length + 1)
-    else
-      offsetTimeArray = new Array[(Long, Long)](segsArray.length)
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segments = log.logSegments.toBuffer
+    val lastSegmentHasSize = segments.last.size > 0
 
-    for (i <- segsArray.indices)
-      offsetTimeArray(i) = (segsArray(i).baseOffset, segsArray(i).lastModified)
+    val offsetTimeArray =
+      if (lastSegmentHasSize)
+        new Array[(Long, Long)](segments.length + 1)
+      else
+        new Array[(Long, Long)](segments.length)
+
+    for (i <- segments.indices)
+      offsetTimeArray(i) = (segments(i).baseOffset, segments(i).lastModified)
     if (lastSegmentHasSize)
-      offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.milliseconds)
+      offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
 
     var startIndex = -1
     timestamp match {

@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
@@ -87,7 +88,17 @@ public class StateDirectory {
             return true;
         }
         final File lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
-        final FileChannel channel = getOrCreateFileChannel(taskId, lockFile.toPath());
+
+        final FileChannel channel;
+
+        try {
+            channel = getOrCreateFileChannel(taskId, lockFile.toPath());
+        } catch (NoSuchFileException e) {
+            // FileChannel.open(..) could throw NoSuchFileException when there is another thread
+            // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
+            // file, in this case we will return immediately indicating locking failed.
+            return false;
+        }
 
         FileLock lock = tryAcquireLock(channel);
         while (lock == null && retry > 0) {

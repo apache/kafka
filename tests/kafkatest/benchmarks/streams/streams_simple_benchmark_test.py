@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import ignore
+from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
-import time
+
 
 class StreamsSimpleBenchmarkTest(KafkaTest):
     """
@@ -29,6 +29,7 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
 
         self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
+    @cluster(num_nodes=3)
     def test_simple_benchmark(self):
         """
         Run simple Kafka Streams benchmark

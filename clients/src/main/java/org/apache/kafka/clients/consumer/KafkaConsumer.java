@@ -40,7 +40,6 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -604,7 +603,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int fetchMaxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             if (this.requestTimeoutMs <= sessionTimeOutMs || this.requestTimeoutMs <= fetchMaxWaitMs)
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG + " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
-            this.time = new SystemTime();
+            this.time = Time.SYSTEM;
 
             String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
@@ -833,9 +832,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to either seek to particular offsets, you should prefer
+     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
-     * to be reset. You should also prefer to provide your own listener if you are doing your own offset
+     * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
      *
      * @param topics The list of topics to subscribe to
@@ -899,10 +898,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Manually assign a list of partition to this consumer. This interface does not allow for incremental assignment
+     * Manually assign a list of partitions to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      *
-     * If the given list of topic partition is empty, it is treated the same as {@link #unsubscribe()}.
+     * If the given list of topic partitions is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
      * Manual topic assignment through this method does not use the consumer's group management

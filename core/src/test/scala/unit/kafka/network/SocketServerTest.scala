@@ -17,27 +17,29 @@
 
 package kafka.network
 
-import java.net._
-import javax.net.ssl._
 import java.io._
-import java.util.HashMap
-import java.util.Random
+import java.net._
 import java.nio.ByteBuffer
+import java.util.{HashMap, Random}
+import javax.net.ssl._
 
+import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.{Metrics => YammerMetrics}
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.NetworkSend
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
-import org.apache.kafka.common.utils.SystemTime
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
@@ -52,7 +54,7 @@ class SocketServerTest extends JUnitSuite {
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
   val metrics = new Metrics
-  val server = new SocketServer(config, metrics, new SystemTime)
+  val server = new SocketServer(config, metrics, Time.SYSTEM)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
@@ -239,7 +241,7 @@ class SocketServerTest extends JUnitSuite {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM)
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -269,7 +271,7 @@ class SocketServerTest extends JUnitSuite {
     overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
 
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM)
     try {
       overrideServer.startup()
       val sslContext = SSLContext.getInstance("TLSv1.2")
@@ -317,7 +319,7 @@ class SocketServerTest extends JUnitSuite {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime) {
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM) {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, protocol, config.values, metrics) {
@@ -367,7 +369,7 @@ class SocketServerTest extends JUnitSuite {
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM)
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
@@ -393,6 +395,20 @@ class SocketServerTest extends JUnitSuite {
       serverMetrics.close()
     }
 
+  }
+
+  @Test
+  def testMetricCollectionAfterShutdown(): Unit = {
+    server.shutdown()
+
+    val sum = YammerMetrics
+      .defaultRegistry
+      .allMetrics.asScala
+      .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
+      .collect { case (_, metric: Gauge[_]) => metric.value.asInstanceOf[Double] }
+      .sum
+
+    assertEquals(0, sum, 0)
   }
 
 }

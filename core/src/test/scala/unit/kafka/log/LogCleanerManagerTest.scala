@@ -40,7 +40,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
   val logConfig = LogConfig(logProps)
-  val time = new MockTime(1400000000000L)  // Tue May 13 16:53:20 UTC 2014
+  val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
 
   @After
   def tearDown(): Unit = {

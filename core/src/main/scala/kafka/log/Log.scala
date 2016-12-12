@@ -28,14 +28,14 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 
-import org.apache.kafka.common.errors.{UnsupportedForMessageFormatException, CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
+import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 
 import scala.collection.Seq
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Message.NoTimestamp, -1L, Message.NoTimestamp, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
@@ -87,7 +87,7 @@ class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
-          time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+          time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -103,20 +103,26 @@ class Log(@volatile var dir: File,
     else
       0
   }
-  val t = time.milliseconds
+
+  @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
+
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-  loadSegments()
+  locally {
+    val startMs = time.milliseconds
 
-  /* Calculate the offset of the next message */
-  @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
+    loadSegments()
+    /* Calculate the offset of the next message */
+    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
+      activeSegment.size.toInt)
+
+    info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
+      .format(name, segments.size(), logEndOffset, time.milliseconds - startMs))
+  }
 
   val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(dir)
 
-  info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
-      .format(name, segments.size(), logEndOffset, time.milliseconds - t))
-
-  val tags = Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
+  private val tags = Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
@@ -599,19 +605,21 @@ class Log(@volatile var dir: File,
           s"for partition $topicAndPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $KAFKA_0_10_0_IV0")
 
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segmentsCopy = logSegments.toBuffer
     // For the earliest and latest, we do not need to return the timestamp.
-    val segsArray = logSegments.toArray
     if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(Message.NoTimestamp, segsArray(0).baseOffset))
+        return Some(TimestampOffset(Message.NoTimestamp, segmentsCopy.head.baseOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
         return Some(TimestampOffset(Message.NoTimestamp, logEndOffset))
 
     val targetSeg = {
       // Get all the segments whose largest timestamp is smaller than target timestamp
-      val earlierSegs = segsArray.takeWhile(_.largestTimestamp < targetTimestamp)
+      val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
       // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-      if (earlierSegs.length < segsArray.length)
-        Some(segsArray(earlierSegs.length))
+      if (earlierSegs.length < segmentsCopy.length)
+        Some(segmentsCopy(earlierSegs.length))
       else
         None
     }

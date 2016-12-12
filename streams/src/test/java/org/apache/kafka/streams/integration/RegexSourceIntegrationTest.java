@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -145,7 +144,7 @@ public class RegexSourceIntegrationTest {
 
         final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
+            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
 
         final TestCondition oneTopicAdded = new TestCondition() {
             @Override
@@ -200,7 +199,7 @@ public class RegexSourceIntegrationTest {
 
         final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
+            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
 
         streamThreads[0] = testStreamThread;
 
@@ -308,7 +307,7 @@ public class RegexSourceIntegrationTest {
 
         final TestStreamThread leaderTestStreamThread = new TestStreamThread(builderLeader, streamsConfig,
                 new DefaultKafkaClientSupplier(),
-                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), new SystemTime());
+                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), Time.SYSTEM);
 
         leaderStreamThreads[0] = leaderTestStreamThread;
 
@@ -328,7 +327,7 @@ public class RegexSourceIntegrationTest {
 
         final TestStreamThread followerTestStreamThread = new TestStreamThread(builderFollower, streamsConfig,
                 new DefaultKafkaClientSupplier(),
-                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), new SystemTime());
+                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), Time.SYSTEM);
 
         followerStreamThreads[0] = followerTestStreamThread;
 
