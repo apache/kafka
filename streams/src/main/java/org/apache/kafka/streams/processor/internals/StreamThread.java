@@ -27,7 +27,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -290,8 +289,7 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         threadClientId = clientId + "-" + threadName;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, "stream-metrics", "thread." + threadClientId,
-            Collections.singletonMap("client-id", threadClientId));
+        this.streamsMetrics = new StreamsMetricsImpl(metrics);
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
@@ -1044,8 +1042,10 @@ public class StreamThread extends Thread {
         final Sensor taskDestructionSensor;
         final Sensor skippedRecordsSensor;
 
-        public StreamsMetricsImpl(Metrics metrics, String metricGrpName, String sensorNamePrefix,
-                                  Map<String, String> tags) {
+        public StreamsMetricsImpl(Metrics metrics) {
+            String metricGrpName = "stream-metrics";
+            String sensorNamePrefix = "thread." + threadClientId;
+            Map<String, String> tags = Collections.singletonMap("client-id", threadClientId);
             this.metrics = metrics;
             this.metricGrpName = metricGrpName;
             this.sensorNamePrefix = sensorNamePrefix;
@@ -1063,8 +1063,8 @@ public class StreamThread extends Thread {
             this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
 
             this.processTimeSensor = metrics.sensor(sensorNamePrefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.processTimeSensor.add(metrics.metricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
-            this.processTimeSensor.add(metrics.metricName("process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
+            this.processTimeSensor.add(metrics.metricName("process-time-avg", metricGrpName, "The average process time in ms", metricTags), new Avg());
+            this.processTimeSensor.add(metrics.metricName("process-time-max", metricGrpName, "The maximum process time in ms", metricTags), new Max());
             this.processTimeSensor.add(metrics.metricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
 
             this.punctuateTimeSensor = metrics.sensor(sensorNamePrefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
@@ -1097,8 +1097,13 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public Sensor sensor(String name, Sensor.RecordLevel recordLevel) {
-            return metrics.sensor(name, recordLevel);
+        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+            return metrics.sensor(sensorName(operationName, entityName), recordLevel);
+        }
+
+        @Override
+        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
+            return metrics.sensor(sensorName(operationName, entityName), recordLevel, parents);
         }
 
         @Override
@@ -1106,11 +1111,17 @@ public class StreamThread extends Thread {
             metrics.removeSensor(name);
         }
 
-        @Override
-        public Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents) {
-            return metrics.sensor(name, config, recordLevel, parents);
+        private String groupNameFromScope(String scopeName) {
+            return "stream-" + scopeName + "-metrics";
         }
 
+        private String sensorName(String operationName, String entityName) {
+            if (entityName == null) {
+                return sensorNamePrefix + "." + operationName;
+            } else {
+                return sensorNamePrefix + "." + entityName + "-" + operationName;
+            }
+        }
 
         /**
          * @throws IllegalArgumentException if tags is not constructed in key-value pairs
@@ -1125,15 +1136,13 @@ public class StreamThread extends Thread {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
 
-            String metricGroupName = "stream-" + scopeName + "-metrics";
-
             // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(sensorNamePrefix + "." + operationName, recordLevel);
-            addLatencyMetrics(metricGroupName, parent, "all", operationName, this.metricTags);
+            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
+            addLatencyMetrics(scopeName, parent, "all", operationName, this.metricTags);
 
             // add the operation metrics with additional tags
-            Sensor sensor = metrics.sensor(sensorNamePrefix + "." + entityName + "-" + operationName, recordLevel, parent);
-            addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
+            addLatencyMetrics(scopeName, sensor, entityName, operationName, tagMap);
 
             return sensor;
         }
@@ -1150,7 +1159,7 @@ public class StreamThread extends Thread {
 
             String metricGroupName = "stream-thread-cache-metrics";
 
-            Sensor sensor = metrics.sensor(sensorNamePrefix + "-" + entityName + "-" + operationName);
+            Sensor sensor = metrics.sensor(sensorName(operationName, entityName));
             addCacheMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
             return sensor;
 
@@ -1165,18 +1174,19 @@ public class StreamThread extends Thread {
                 "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
         }
 
-        private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
+        private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
                 "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
                 "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
                 "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
         }
 
         private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-            if (!metrics.metrics().containsKey(name))
+            if (!metrics.metrics().containsKey(name)) {
                 sensor.add(name, stat);
+            }
         }
     }
 }

@@ -272,7 +272,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // 3) commit consumed offsets if it is dirty already
         commitOffsets();
-        metrics.taskCommitTimeSensor.record(startNs, time.nanoseconds());
+        metrics.metrics.recordLatency(metrics.taskCommitTimeSensor, startNs, time.nanoseconds());
     }
 
     /**
@@ -409,7 +409,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("streams-task-id", name);
 
-            this.taskCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit", Sensor.RecordLevel.SENSOR_DEBUG);
+            this.taskCommitTimeSensor = metrics.addLatencySensor("task", sensorNamePrefix + name, "commit", Sensor.RecordLevel.SENSOR_DEBUG, "streams-task-id", name);
         }
 
         public void removeAllSensors() {

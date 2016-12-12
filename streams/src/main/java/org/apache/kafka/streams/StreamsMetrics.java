@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams;
 
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 
 /**
@@ -26,10 +25,11 @@ import org.apache.kafka.common.metrics.Sensor;
 public interface StreamsMetrics {
 
     /**
-     * Add the latency sensor.
+     * Add a latency sensor. This is equivalent to adding a sensor with metrics on latency and rate.
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.
+     * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
      * @param operationName Name of the operation, could be get / put / delete / etc.
      * @param tags Additional tags of the sensor.
      * @return The added sensor.
@@ -41,11 +41,25 @@ public interface StreamsMetrics {
      */
     void recordLatency(Sensor sensor, long startNs, long endNs);
 
-    Sensor sensor(String name, Sensor.RecordLevel recordLevel);
+    /**
+     * @param scopeName Name of the scope, could be the type of the state store, etc.
+     * @param entityName Name of the entity, could be the name of the state store instance, etc.
+     * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
+     * @param operationName Name of the operation, could be get / put / delete / etc.
+     * @param tags Additional tags of the sensor.
+     */
+    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
+    /**
+     * Same as previous constructor {@link #sensor(String, String, String, Sensor.RecordLevel, Sensor...)} sensor}, but takes a set of parents as well.
+     */
+    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents);
+
+    /**
+     * Remove a sensor with the given name.
+     * @param name Sensor name to be removed.
+     */
     void removeSensor(String name);
-
-    Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents);
 
 }
 

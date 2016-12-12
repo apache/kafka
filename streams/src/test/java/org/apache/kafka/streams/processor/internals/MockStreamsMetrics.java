@@ -22,7 +22,6 @@ import java.util.Map;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -93,18 +92,18 @@ public class MockStreamsMetrics implements StreamsMetrics {
     }
 
     @Override
-    public Sensor sensor(String name, Sensor.RecordLevel recordLevel) {
-        return metrics.sensor(name, recordLevel);
+    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+        return metrics.sensor(scopeName + entityName + operationName, recordLevel);
     }
 
+    @Override
+    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
+        return metrics.sensor(scopeName + entityName + operationName, recordLevel, parents);
+    }
 
     @Override
     public void removeSensor(String name) {
         metrics.removeSensor(name);
     }
 
-    @Override
-    public Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents) {
-        return metrics.sensor(name, config, recordLevel, parents);
-    }
 }

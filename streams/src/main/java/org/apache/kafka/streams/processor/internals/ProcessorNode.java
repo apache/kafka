@@ -55,6 +55,7 @@ public class ProcessorNode<K, V> {
         this.processor = processor;
         this.children = new ArrayList<>();
         this.stateStores = stateStores;
+        this.time = new SystemTime();
     }
 
 
@@ -76,24 +77,24 @@ public class ProcessorNode<K, V> {
 
 
     public void init(ProcessorContext context) {
+        long startNs = time.nanoseconds();
         try {
             processor.init(context);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
-        this.time = new SystemTime();
         this.nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
-        this.nodeMetrics.nodeTaskCreationSensor.record();
+        this.nodeMetrics.metrics.recordLatency(nodeMetrics.nodeCreationSensor, startNs, time.nanoseconds());
     }
 
     public void close() {
+        long startNs = time.nanoseconds();
         try {
             processor.close();
+            nodeMetrics.metrics.recordLatency(nodeMetrics.nodeDestructionSensor, startNs, time.nanoseconds());
             nodeMetrics.removeAllSensors();
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
-        } finally {
-            nodeMetrics.nodeTaskDestructionSensor.record();
         }
     }
 
@@ -155,38 +156,32 @@ public class ProcessorNode<K, V> {
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
         final Sensor nodeThroughputSensor;
-        final Sensor nodeTaskCreationSensor;
-        final Sensor nodeTaskDestructionSensor;
+        final Sensor nodeCreationSensor;
+        final Sensor nodeDestructionSensor;
 
 
         public NodeMetrics(StreamsMetrics metrics, String name, String sensorNamePrefix) {
             String scope = "processor-node";
             this.metrics = metrics;
-            this.metricGrpName = "streams-processor-node-metrics" + name;
+            this.metricGrpName = "stream-processor-node-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("processor-node-id", name);
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, name, "process", Sensor.RecordLevel.SENSOR_DEBUG);
-            this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, name, "punctuate", Sensor.RecordLevel.SENSOR_DEBUG);
-
-            this.nodeThroughputSensor = metrics.sensor(sensorNamePrefix + ".process-throughput", Sensor.RecordLevel.SENSOR_DEBUG);
-            this.nodeThroughputSensor.add(new MetricName("record-process-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
-
-            this.nodeTaskCreationSensor = metrics.sensor(sensorNamePrefix + ".node-task-create-time", Sensor.RecordLevel.SENSOR_DEBUG);
-            this.nodeTaskCreationSensor.add(new MetricName("node-task-create-rate", metricGrpName, "The average per-second tasks created", metricTags), new Rate(new Count()));
-
-            this.nodeTaskDestructionSensor = metrics.sensor(sensorNamePrefix + ".node-task-destruction", Sensor.RecordLevel.SENSOR_DEBUG);
-            this.nodeTaskDestructionSensor.add(new MetricName("node-task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
-
+            this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, sensorNamePrefix + name, "process", Sensor.RecordLevel.SENSOR_DEBUG, "processor-node-id", name);
+            this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, sensorNamePrefix + name, "punctuate", Sensor.RecordLevel.SENSOR_DEBUG, "processor-node-id", name);
+            this.nodeCreationSensor = metrics.addLatencySensor(scope, sensorNamePrefix + name, "create", Sensor.RecordLevel.SENSOR_DEBUG, "processor-node-id", name);
+            this.nodeDestructionSensor = metrics.addLatencySensor(scope, sensorNamePrefix + name, "destroy", Sensor.RecordLevel.SENSOR_DEBUG, "processor-node-id", name);
+            this.nodeThroughputSensor = metrics.sensor(scope, sensorNamePrefix + name, "process-throughput", Sensor.RecordLevel.SENSOR_DEBUG, "processor-node-id", name);
+            this.nodeThroughputSensor.add(new MetricName(sensorNamePrefix + "record-process-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
         }
 
         public void removeAllSensors() {
             metrics.removeSensor(nodeProcessTimeSensor.name());
             metrics.removeSensor(nodePunctuateTimeSensor.name());
             metrics.removeSensor(nodeThroughputSensor.name());
-            metrics.removeSensor(nodeTaskCreationSensor.name());
-            metrics.removeSensor(nodeTaskDestructionSensor.name());
+            metrics.removeSensor(nodeCreationSensor.name());
+            metrics.removeSensor(nodeDestructionSensor.name());
         }
     }
 }
