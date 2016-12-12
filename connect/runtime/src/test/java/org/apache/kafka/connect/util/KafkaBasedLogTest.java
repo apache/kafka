@@ -31,6 +31,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
@@ -210,6 +211,43 @@ public class KafkaBasedLogTest {
 
         assertEquals(TP0_VALUE, consumedRecords.get(TP0).get(0).value());
         assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
+
+        store.stop();
+
+        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        assertTrue(consumer.closed());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
+        expectStart();
+        expectStop();
+
+        PowerMock.replayAll();
+
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 7L);
+        endOffsets.put(TP1, 7L);
+        consumer.updateEndOffsets(endOffsets);
+        // Better test with an advanced offset other than just 0L
+        consumer.updateBeginningOffsets(endOffsets);
+
+        consumer.schedulePollTask(new Runnable() {
+            @Override
+            public void run() {
+                // Throw an exception that will not be ignored or handled by Connect framework. In
+                // reality a misplaced call to poll blocks indefinitely and connect aborts due to
+                // time outs (for instance via ConnectRestException)
+                throw new WakeupException();
+            }
+        });
+
+        store.start();
+
+        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
+        assertEquals(7L, consumer.position(TP0));
+        assertEquals(7L, consumer.position(TP1));
 
         store.stop();
 

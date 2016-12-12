@@ -105,8 +105,9 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        def value = allMetricNames.map( metricName =>
-          metrics.metrics().get(metricName).value()).sum / totalProcessorThreads
+        def value = allMetricNames.map { metricName =>
+          Option(metrics.metric(metricName)).fold(0.0)(_.value)
+        }.sum / totalProcessorThreads
       }
     )
 
@@ -389,7 +390,7 @@ private[kafka] class Processor(val id: Int,
   newGauge("IdlePercent",
     new Gauge[Double] {
       def value = {
-        metrics.metrics().get(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags)).value()
+        Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },
     metricTags.asScala

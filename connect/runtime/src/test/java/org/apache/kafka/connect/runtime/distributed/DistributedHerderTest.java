@@ -732,6 +732,19 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testRequestProcessingOrder() throws Exception {
+        final DistributedHerder.HerderRequest req1 = herder.addRequest(100, null, null);
+        final DistributedHerder.HerderRequest req2 = herder.addRequest(10, null, null);
+        final DistributedHerder.HerderRequest req3 = herder.addRequest(200, null, null);
+        final DistributedHerder.HerderRequest req4 = herder.addRequest(200, null, null);
+
+        assertEquals(req2, herder.requests.pollFirst()); // lowest delay
+        assertEquals(req1, herder.requests.pollFirst()); // next lowest delay
+        assertEquals(req3, herder.requests.pollFirst()); // same delay as req4, but added first
+        assertEquals(req4, herder.requests.pollFirst());
+    }
+
+    @Test
     public void testRestartTaskRedirectToLeader() throws Exception {
         // get the initial assignment
         EasyMock.expect(member.memberId()).andStubReturn("member");

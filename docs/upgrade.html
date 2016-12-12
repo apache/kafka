@@ -26,6 +26,19 @@ can upgrade the brokers one at a time: shut down the broker, update the code, an
         Please refer to the <code>KafkaConsumer</code> Javadoc for a more in-depth explanation of this change.</li>
 </ul>
 
+<h4><a id="upgrade_10_2" href="#upgrade_10_2">Upgrading from 0.8.x, 0.9.x, 0.10.0.X, or 0.10.1.X to 0.10.2.0</a></h4>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+  <li>Upgrading a Kafka Streams Applications:
+    <ul>
+      <li>You need to recompile your code. Just swapping the jar file will not work and will break your appliation.</li>
+      <li>If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface got changed.</li>
+    </ul>
+  </li>
+</ol>
+
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
 0.10.1.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
 However, please notice the <a href="#upgrade_10_1_breaking">Potential breaking changes in 0.10.1.0</a> before upgrade.

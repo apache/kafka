@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -199,7 +200,7 @@ public class KeyValueStoreTestDriver<K, V> {
         ByteArraySerializer rawSerializer = new ByteArraySerializer();
         Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
-        this.recordCollector = new RecordCollector(producer, "KeyValueStoreTestDriver") {
+        this.recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
             @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {

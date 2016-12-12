@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.zookeeper import ZookeeperService
@@ -32,6 +33,7 @@ class KafkaVersionTest(Test):
     def setUp(self):
         self.zk.start()
 
+    @cluster(num_nodes=2)
     def test_0_8_2(self):
         """Test kafka service node-versioning api - verify that we can bring up a single-node 0.8.2.X cluster."""
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
@@ -42,6 +44,7 @@ class KafkaVersionTest(Test):
 
         assert is_version(node, [LATEST_0_8_2])
 
+    @cluster(num_nodes=3)
     def test_multi_version(self):
         """Test kafka service node-versioning api - ensure we can bring up a 2-node cluster, one on version 0.8.2.X,
         the other on trunk."""

@@ -55,7 +55,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final Map<TopicPartition, RecordQueue> partitionQueues;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final RecordCollector recordCollector;
+    private final RecordCollectorImpl recordCollector;
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
@@ -110,7 +110,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer, id().toString());
+        this.recordCollector = new RecordCollectorImpl(producer, id().toString());
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -123,22 +123,27 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * Adds records to queues
+     * Adds records to queues. If a record has an invalid (i.e., negative) timestamp, the record is skipped
+     * and not added to the queue for processing
      *
      * @param partition the partition
      * @param records  the records
+     * @returns the number of added records
      */
     @SuppressWarnings("unchecked")
-    public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        int queueSize = partitionGroup.addRawRecords(partition, records);
+    public int addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        final int oldQueueSize = partitionGroup.numBuffered();
+        final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, queueSize);
+        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (queueSize > this.maxBufferedSize) {
+        if (newQueueSize > this.maxBufferedSize) {
             consumer.pause(singleton(partition));
         }
+
+        return newQueueSize - oldQueueSize;
     }
 
     /**
