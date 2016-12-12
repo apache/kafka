@@ -304,7 +304,8 @@ class VerifiableConnector(object):
                     self.logger.debug("Ignoring unparseable line: %s", line)
                     continue
                 # Filter to only ones matching our name to support multiple verifiable producers
-                if data['name'] != self.name: continue
+                if data['name'] != self.name:
+                    continue
                 data['node'] = node
                 records.append(data)
         return records
