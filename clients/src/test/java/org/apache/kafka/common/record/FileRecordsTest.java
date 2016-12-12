@@ -160,7 +160,7 @@ public class FileRecordsTest {
     @Test
     public void testIteratorWithLimits() throws IOException {
         LogEntry entry = shallowEntries(fileRecords).get(1);
-        long start = fileRecords.searchForOffsetWithSize(1, 0).position;
+        int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
         assertEquals(Collections.singletonList(entry), shallowEntries(slice));
@@ -174,8 +174,8 @@ public class FileRecordsTest {
     @Test
     public void testTruncate() throws IOException {
         LogEntry entry = shallowEntries(fileRecords).get(0);
-        long end = fileRecords.searchForOffsetWithSize(1, 0).position;
-        fileRecords.truncateTo((int) end);
+        int end = fileRecords.searchForOffsetWithSize(1, 0).position;
+        fileRecords.truncateTo(end);
         assertEquals(Collections.singletonList(entry), shallowEntries(fileRecords));
         assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
     }
@@ -298,7 +298,7 @@ public class FileRecordsTest {
     @Test
     public void testFormatConversionWithPartialMessage() throws IOException {
         LogEntry entry = shallowEntries(fileRecords).get(1);
-        long start = fileRecords.searchForOffsetWithSize(1, 0).position;
+        int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
         Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0);

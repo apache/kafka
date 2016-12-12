@@ -30,7 +30,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
@@ -39,22 +39,22 @@ import java.util.concurrent.atomic.AtomicLong;
 public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
     private final FileChannel channel;
-    private final long start;
-    private final long end;
+    private final int start;
+    private final int end;
     private volatile File file;
-    private final AtomicLong size;
+    private final AtomicInteger size;
 
     public FileRecords(File file,
                        FileChannel channel,
-                       long start,
-                       long end,
+                       int start,
+                       int end,
                        boolean isSlice) throws IOException {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = isSlice;
-        this.size = new AtomicLong();
+        this.size = new AtomicInteger();
 
         // set the initial size of the buffer
         resize();
@@ -64,17 +64,18 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (isSlice) {
             size.set(end - start);
         } else {
-            size.set(Math.min(channel.size(), end) - start);
+            int limit = Math.min((int) channel.size(), end);
+            size.set(limit - start);
 
             // if this is not a slice, update the file pointer to the end of the file
             // set the file position to the last byte in the file
-            channel.position(Math.min(channel.size(), end));
+            channel.position(limit);
         }
     }
 
     @Override
     public int sizeInBytes() {
-        return (int) size.get();
+        return size.get();
     }
 
     /**
@@ -118,13 +119,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    public FileRecords read(long position, int size) throws IOException {
+    public FileRecords read(int position, int size) throws IOException {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position);
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size);
 
-        final long end;
+        final int end;
         if (this.start + position + size < 0)
             end = sizeInBytes();
         else
@@ -323,12 +324,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return shallowIteratorFrom(maxRecordSize, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowIteratorFrom(long start) {
+    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int start) {
         return shallowIteratorFrom(Integer.MAX_VALUE, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int maxRecordSize, long start) {
-        final long end;
+    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int maxRecordSize, int start) {
+        final int end;
         if (isSlice)
             end = this.end;
         else
@@ -339,7 +340,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public Iterator<LogEntry> deepIterator() {
-        final long end;
+        final int end;
         if (isSlice)
             end = this.end;
         else
@@ -407,10 +408,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     public static class LogEntryPosition {
         public final long offset;
-        public final long position;
+        public final int position;
         public final int size;
 
-        public LogEntryPosition(long offset, long position, int size) {
+        public LogEntryPosition(long offset, int position, int size) {
             this.offset = offset;
             this.position = position;
             this.size = size;
@@ -426,12 +427,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (offset != that.offset) return false;
             if (position != that.position) return false;
             return size == that.size;
+
         }
 
         @Override
         public int hashCode() {
             int result = (int) (offset ^ (offset >>> 32));
-            result = 31 * result + (int) (position ^ (position >>> 32));
+            result = 31 * result + position;
             result = 31 * result + size;
             return result;
         }

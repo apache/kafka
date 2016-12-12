@@ -27,8 +27,8 @@ import java.nio.channels.FileChannel;
  * A log input stream which is backed by a {@link FileChannel}.
  */
 public class FileLogInputStream implements LogInputStream<FileLogInputStream.FileChannelLogEntry> {
-    private long position;
-    private final long end;
+    private int position;
+    private final int end;
     private final FileChannel channel;
     private final int maxRecordSize;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
@@ -42,8 +42,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      */
     public FileLogInputStream(FileChannel channel,
                               int maxRecordSize,
-                              long start,
-                              long end) {
+                              int start,
+                              int end) {
         this.channel = channel;
         this.maxRecordSize = maxRecordSize;
         this.position = start;
@@ -86,13 +86,13 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     public static class FileChannelLogEntry extends LogEntry {
         private final long offset;
         private final FileChannel channel;
-        private final long position;
+        private final int position;
         private final int recordSize;
         private Record record = null;
 
         private FileChannelLogEntry(long offset,
                                    FileChannel channel,
-                                   long position,
+                                   int position,
                                    int recordSize) {
             this.offset = offset;
             this.channel = channel;
@@ -105,7 +105,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return offset;
         }
 
-        public long position() {
+        public int position() {
             return position;
         }
 
