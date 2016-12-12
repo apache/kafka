@@ -107,7 +107,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Return a log buffer which is a view into this set starting from the given position and with the given size limit.
+     * Return a slice of records from this instance, which is a view into this set starting from the given position
+     * and with the given size limit.
      *
      * If the size is beyond the end of the file, the end will be based on the size of the file at the time of the read.
      *
