@@ -44,6 +44,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
+    private volatile Exception sendException;
 
 
     public RecordCollectorImpl(Producer<byte[], byte[]> producer, String streamTaskId) {
@@ -60,6 +61,7 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
                             StreamPartitioner<K, V> partitioner) {
+        checkForException();
         byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
         byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
         Integer partition = record.partition();
@@ -79,9 +81,17 @@ public class RecordCollectorImpl implements RecordCollector {
                     @Override
                     public void onCompletion(RecordMetadata metadata, Exception exception) {
                         if (exception == null) {
+                            if (sendException != null) {
+                                log.warn("{} not updating offset for topic {} partition {} due to previous exception",
+                                         logPrefix,
+                                         metadata.topic(),
+                                         metadata.partition());
+                                return;
+                            }
                             TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
+                            sendException = exception;
                             log.error("{} Error sending record to topic {}", logPrefix, topic, exception);
                         }
                     }
@@ -98,10 +108,17 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
+    private void checkForException() {
+        if (sendException != null) {
+            throw new StreamsException(String.format("%s exception caught when producing", logPrefix), sendException);
+        }
+    }
+
     @Override
     public void flush() {
         log.debug("{} Flushing producer", logPrefix);
         this.producer.flush();
+        checkForException();
     }
 
     /**
@@ -110,6 +127,7 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         producer.close();
+        checkForException();
     }
 
     /**
