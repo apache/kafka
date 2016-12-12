@@ -28,7 +28,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 public class JsonTimestampExtractor implements TimestampExtractor {
 
     @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
         if (record.value() instanceof PageViewTypedDemo.PageView) {
             return ((PageViewTypedDemo.PageView) record.value()).timestamp;
         }

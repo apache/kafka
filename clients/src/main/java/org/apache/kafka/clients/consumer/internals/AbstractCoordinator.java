@@ -784,6 +784,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         HeartbeatThread() {
             super("kafka-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId));
+            setDaemon(true);
         }
 
         public void enable() {

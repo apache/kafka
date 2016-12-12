@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import ignore
+from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 import time
+
 
 class StreamsBounceTest(KafkaTest):
     """
@@ -41,6 +42,7 @@ class StreamsBounceTest(KafkaTest):
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
+    @cluster(num_nodes=5)
     def test_bounce(self):
         """
         Start a smoke test client, then abort (kill -9) and restart it a few times.
@@ -51,11 +53,11 @@ class StreamsBounceTest(KafkaTest):
 
         self.processor1.start()
 
-        time.sleep(15);
+        time.sleep(15)
 
         self.processor1.abortThenRestart()
 
-        time.sleep(15);
+        time.sleep(15)
 
         # enable this after we add change log partition replicas
         #self.kafka.signal_leader("data")
