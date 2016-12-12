@@ -28,6 +28,7 @@ import kafka.controller.KafkaController
 import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.RequestChannel
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -449,7 +450,8 @@ class ReplicaManager(val config: KafkaConfig,
    * Fetch messages from the leader replica, and wait until enough data can be fetched and return;
    * the callback function will be triggered either when timeout or required fetch info is satisfied
    */
-  def fetchMessages(timeout: Long,
+  def fetchMessages(request: RequestChannel.Request,
+                    timeout: Long,
                     replicaId: Int,
                     fetchMinBytes: Int,
                     fetchInfo: immutable.Map[TopicAndPartition, PartitionFetchInfo],
@@ -463,8 +465,11 @@ class ReplicaManager(val config: KafkaConfig,
 
     // if the fetch comes from the follower,
     // update its corresponding log end offset
-    if(Request.isValidBrokerId(replicaId))
+    if(Request.isValidBrokerId(replicaId)) {
+      request.followerLogReadCompleteTimeMs = SystemTime.milliseconds
       updateFollowerLogReadResults(replicaId, logReadResults)
+      request.followerUpdateOffsetCompleteTimeMs = SystemTime.milliseconds
+    }
 
     // check if this fetch request can be satisfied right away
     val bytesReadable = logReadResults.values.map(_.info.messageSet.sizeInBytes).sum
