@@ -18,11 +18,11 @@ import json
 import os.path
 import re
 import signal
-import subprocess
 import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -121,8 +121,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol,
-                              zk_sasl = self.zk.zk_sasl,
+        return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+                              zk_sasl=self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
 
     def open_port(self, protocol):
@@ -208,7 +208,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
-            monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+            monitor.wait_until("Kafka Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -221,7 +221,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def signal_node(self, node, sig=signal.SIGTERM):

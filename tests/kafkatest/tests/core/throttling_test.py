@@ -16,6 +16,7 @@
 import time
 import math
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.performance import ProducerPerformanceService
@@ -137,6 +138,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                 estimated_throttled_time,
                 time_taken))
 
+    @cluster(num_nodes=10)
     @parametrize(bounce_brokers=False)
     @parametrize(bounce_brokers=True)
     def test_throttled_reassignment(self, bounce_brokers):

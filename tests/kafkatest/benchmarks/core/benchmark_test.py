@@ -15,6 +15,7 @@
 
 from ducktape.mark import matrix
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.services.service import Service
 from ducktape.tests.test import Test
 
@@ -63,11 +64,13 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
+    @cluster(num_nodes=5)
     @parametrize(acks=1, topic=TOPIC_REP_ONE)
     @parametrize(acks=1, topic=TOPIC_REP_THREE)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
     @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['PLAINTEXT', 'SSL'])
+    @cluster(num_nodes=7)
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
                                  compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
                                  broker_version=str(TRUNK)):
@@ -97,6 +100,7 @@ class Benchmark(Test):
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
+    @cluster(num_nodes=5)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_long_term_producer_throughput(self, compression_type="none", security_protocol='PLAINTEXT',
@@ -152,8 +156,11 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
+    @cluster(num_nodes=5)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    @cluster(num_nodes=6)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
     def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT",
                                 interbroker_security_protocol=None, client_version=str(TRUNK),
                                 broker_version=str(TRUNK)):
@@ -181,6 +188,7 @@ class Benchmark(Test):
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
+    @cluster(num_nodes=6)
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
@@ -229,6 +237,7 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
+    @cluster(num_nodes=6)
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
