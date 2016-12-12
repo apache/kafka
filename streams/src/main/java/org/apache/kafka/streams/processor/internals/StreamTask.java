@@ -22,13 +22,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -71,7 +66,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private boolean requiresPoll = true;
     private final Time time;
     private final TaskMetrics metrics;
-    private Sensor taskCommitTimeSensor;
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -101,7 +95,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.taskCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit", Sensor.RecordLevel.SENSOR_DEBUG);
         this.metrics = new TaskMetrics(metrics, id.toString(), "streams-task");
 
         // create queues for each assigned partition and associate them
@@ -256,9 +249,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
 
         try {
-            long now = time.milliseconds();
-            node.processor().punctuate(timestamp);
-            node.nodeMetrics.nodePunctuateTimeSensor.record(time.milliseconds() - now);
+            node.punctuate(timestamp);
         } catch (KafkaException ke) {
             throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
@@ -379,6 +370,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.partitionGroup.close();
         this.consumedOffsets.clear();
         closeTopology();
+        metrics.removeAllSensors();
     }
 
     @Override
@@ -417,10 +409,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("streams-task-id", name);
 
-            this.taskCommitTimeSensor = metrics.sensor(sensorNamePrefix + ".commit-time", Sensor.RecordLevel.SENSOR_DEBUG);
-            this.taskCommitTimeSensor.add(new MetricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
-            this.taskCommitTimeSensor.add(new MetricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
-            this.taskCommitTimeSensor.add(new MetricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
+            this.taskCommitTimeSensor = metrics.addLatencySensor("task", id().toString(), "commit", Sensor.RecordLevel.SENSOR_DEBUG);
         }
 
         public void removeAllSensors() {

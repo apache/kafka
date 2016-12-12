@@ -1131,7 +1131,7 @@ public class StreamThread extends Thread {
             Sensor parent = metrics.sensor(sensorNamePrefix + "." + operationName, recordLevel);
             addLatencyMetrics(metricGroupName, parent, "all", operationName, this.metricTags);
 
-            // add the store operation metrics with additional tags
+            // add the operation metrics with additional tags
             Sensor sensor = metrics.sensor(sensorNamePrefix + "." + entityName + "-" + operationName, recordLevel, parent);
             addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 

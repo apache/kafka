@@ -102,11 +102,20 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
+        if (maybeRecord()) {
             record(1.0);
         }
     }
 
+    /**
+     * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
+     */
+    public boolean maybeRecord() {
+        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
+            return true;
+        }
+        return false;
+    }
     /**
      * Record a value with this sensor
      * @param value The value to record
@@ -114,7 +123,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
+        if (maybeRecord()) {
             record(value, time.milliseconds());
         }
     }
@@ -128,7 +137,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
+        if (maybeRecord()) {
             this.lastRecordTime = timeMs;
             synchronized (this) {
                 // increment all the stats

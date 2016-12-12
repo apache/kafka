@@ -98,9 +98,36 @@ public class ProcessorNode<K, V> {
     }
 
     public void process(final K key, final V value) {
-        long startNs = time.nanoseconds();
+        long startNs = -1;
+        // expensive operation. Only perform if we are recording this metric
+        if (nodeMetrics.nodeProcessTimeSensor.maybeRecord()) {
+            startNs = time.nanoseconds();
+        }
+
         processor.process(key, value);
-        nodeMetrics.metrics.recordLatency(nodeMetrics.nodeProcessTimeSensor, startNs, time.nanoseconds());
+
+        // record latency
+        if (startNs != -1) {
+            nodeMetrics.metrics.recordLatency(nodeMetrics.nodeProcessTimeSensor, startNs, time.nanoseconds());
+        }
+
+        // record throughput
+        nodeMetrics.nodeThroughputSensor.record();
+    }
+
+    public void punctuate(long timestamp) {
+        long startNs = -1;
+
+        // expensive operation. Only perform if we are recording this metric
+        if (nodeMetrics.nodePunctuateTimeSensor.maybeRecord()) {
+            startNs = time.nanoseconds();
+        }
+
+        processor().punctuate(timestamp);
+
+        if (startNs != -1) {
+            nodeMetrics.metrics.recordLatency(nodeMetrics.nodePunctuateTimeSensor, startNs, time.nanoseconds());
+        }
     }
 
     /**
