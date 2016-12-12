@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -51,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1188,9 +1188,9 @@ public class StreamThread extends Thread {
                         createTask(taskId, partitions);
                         it.remove();
                     } catch (final ProcessorStateException e) {
-                        if (e.getCause() instanceof IOException) {
+                        if (e.getCause() instanceof LockException) {
                             // ignore and retry
-                            log.warn("Could not create standby task {}. Will retry.", taskId, e);
+                            log.warn("Could not create task {}. Will retry.", taskId, e);
                         } else {
                             throw e;
                         }

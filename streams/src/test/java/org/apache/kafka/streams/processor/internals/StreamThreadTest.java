@@ -54,9 +54,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class StreamThreadTest {
@@ -325,6 +327,15 @@ public class StreamThreadTest {
         thread1.rebalanceListener.onPartitionsAssigned(assignmentThread1);
         thread2.rebalanceListener.onPartitionsAssigned(assignmentThread2);
 
+        final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
+        for (TaskId tid : thread1.tasks().keySet()) {
+            originalTaskAssignmentThread1.add(tid);
+        }
+        final Set<TaskId> originalTaskAssignmentThread2 = new HashSet<>();
+        for (TaskId tid : thread2.tasks().keySet()) {
+            originalTaskAssignmentThread2.add(tid);
+        }
+
         // revoke (task will be suspended)
         thread1.rebalanceListener.onPartitionsRevoked(assignmentThread1);
         thread2.rebalanceListener.onPartitionsRevoked(assignmentThread2);
@@ -341,6 +352,11 @@ public class StreamThreadTest {
         thread2.rebalanceListener.onPartitionsAssigned(assignmentThread1);
 
         runIt.join();
+
+        assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
+        assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread1.prevTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevTasks(), equalTo(originalTaskAssignmentThread2));
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
