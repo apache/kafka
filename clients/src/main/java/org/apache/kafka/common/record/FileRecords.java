@@ -33,8 +33,8 @@ import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * An on-disk log buffer. An optional start and end position can be applied to the message set
- * which will allow slicing a subset of the file.File-backed log buffer.
+ * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
+ * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
@@ -209,7 +209,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (targetSize > originalSize || targetSize < 0)
             throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
                     " size of this log segment is " + originalSize + " bytes.");
-        if (targetSize < Long.valueOf(channel.size()).intValue()) {
+        if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
             channel.position(targetSize);
             size.set(targetSize);
@@ -244,7 +244,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param startingPosition The starting position in the file to begin searching from.
      */
     public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        Iterator<FileChannelLogEntry> iterator = shallowEntriesFrom(Integer.MAX_VALUE, startingPosition);
+        Iterator<FileChannelLogEntry> iterator = shallowIteratorFrom(Integer.MAX_VALUE, startingPosition);
         while (iterator.hasNext()) {
             FileChannelLogEntry entry = iterator.next();
             long offset = entry.offset();
@@ -262,7 +262,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return The timestamp and offset of the message found. None, if no message is found.
      */
     public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition) {
-        Iterator<FileChannelLogEntry> shallowIterator = shallowEntriesFrom(startingPosition);
+        Iterator<FileChannelLogEntry> shallowIterator = shallowIteratorFrom(startingPosition);
         while (shallowIterator.hasNext()) {
             LogEntry shallowEntry = shallowIterator.next();
             Record shallowRecord = shallowEntry.record();
@@ -290,7 +290,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         long maxTimestamp = Record.NO_TIMESTAMP;
         long offsetOfMaxTimestamp = -1L;
 
-        Iterator<FileChannelLogEntry> shallowIterator = shallowEntriesFrom(startingPosition);
+        Iterator<FileChannelLogEntry> shallowIterator = shallowIteratorFrom(startingPosition);
         while (shallowIterator.hasNext()) {
             LogEntry shallowEntry = shallowIterator.next();
             long timestamp = shallowEntry.record().timestamp();
@@ -310,24 +310,29 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     @Override
     public Iterator<FileChannelLogEntry> shallowIterator() {
-        return shallowEntriesFrom(start);
+        return shallowIteratorFrom(start);
     }
 
-    public Iterator<FileChannelLogEntry> shallowEntries(int maxMessageSize) {
-        return shallowEntriesFrom(maxMessageSize, start);
+    /**
+     * Get an iterator over the shallow entries, enforcing a maximum record size
+     * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
+     * @return An iterator over the shallow entries
+     */
+    public Iterator<FileChannelLogEntry> shallowIterator(int maxRecordSize) {
+        return shallowIteratorFrom(maxRecordSize, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowEntriesFrom(long start) {
-        return shallowEntriesFrom(Integer.MAX_VALUE, start);
+    private Iterator<FileChannelLogEntry> shallowIteratorFrom(long start) {
+        return shallowIteratorFrom(Integer.MAX_VALUE, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowEntriesFrom(int maxMessageSize, long start) {
+    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int maxRecordSize, long start) {
         final long end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, maxMessageSize, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(channel, maxRecordSize, start, end);
         return RecordsIterator.shallowIterator(inputStream);
     }
 

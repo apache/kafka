@@ -415,7 +415,7 @@ class Log(@volatile var dir: File,
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
-          offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp, entries = MemoryRecords.readableRecords(validRecords.buffer))
+          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp, entries = MemoryRecords.readableRecords(validRecords.buffer))
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)

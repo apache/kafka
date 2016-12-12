@@ -106,7 +106,7 @@ public class MemoryRecordsTest {
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
         builder.append(3L, 13L, null, "d".getBytes());
-        builder.append(4L, 14L, "4".getBytes(), "e".getBytes());
+        builder.append(4L, 20L, "4".getBytes(), "e".getBytes());
         builder.append(5L, 15L, "5".getBytes(), "f".getBytes());
         builder.close();
 
@@ -126,8 +126,11 @@ public class MemoryRecordsTest {
         assertEquals(buffer.limit(), result.bytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
         if (magic > 0) {
-            assertEquals(16L, result.maxTimestamp);
-            assertEquals(6L, result.offsetOfMaxTimestamp);
+            assertEquals(20L, result.maxTimestamp);
+            if (compression == CompressionType.NONE)
+                assertEquals(4L, result.shallowOffsetOfMaxTimestamp);
+            else
+                assertEquals(5L, result.shallowOffsetOfMaxTimestamp);
         }
 
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -154,7 +157,7 @@ public class MemoryRecordsTest {
 
         LogEntry second = deepEntries.get(1);
         assertEquals(4L, second.offset());
-        assertEquals(Record.create(magic, 14L, "4".getBytes(), "e".getBytes()), second.record());
+        assertEquals(Record.create(magic, 20L, "4".getBytes(), "e".getBytes()), second.record());
 
         LogEntry third = deepEntries.get(2);
         assertEquals(5L, third.offset());

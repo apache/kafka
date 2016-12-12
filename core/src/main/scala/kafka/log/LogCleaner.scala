@@ -479,7 +479,7 @@ private[log] class Cleaner(val id: Int,
 
         val retained = MemoryRecords.readableRecords(writeBuffer)
         dest.append(firstOffset = retained.deepIterator().next().offset, largestTimestamp = result.maxTimestamp,
-          offsetOfLargestTimestamp = result.offsetOfMaxTimestamp, entries = retained)
+          shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp, entries = retained)
         throttler.maybeThrottle(writeBuffer.limit)
       }
       

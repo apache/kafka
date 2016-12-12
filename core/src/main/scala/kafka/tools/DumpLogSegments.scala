@@ -311,7 +311,7 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1l
-    val shallowIterator = messageSet.shallowEntries(maxMessageSize).asScala
+    val shallowIterator = messageSet.shallowIterator(maxMessageSize).asScala
     for (shallowLogEntry <- shallowIterator) { // this only does shallow iteration
       val itr = getIterator(shallowLogEntry, isDeepIteration)
       for (deepLogEntry <- itr) {

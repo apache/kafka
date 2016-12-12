@@ -78,7 +78,7 @@ private[kafka] object LogValidator {
       val expectedInnerOffset = new LongRef(0)
       val validatedRecords = new mutable.ArrayBuffer[Record]
 
-      records.deepEntries(true).asScala.foreach { logEntry =>
+      records.deepIterator(true).asScala.foreach { logEntry =>
         val record = logEntry.record
         validateKey(record, compactedTopic)
 

@@ -21,7 +21,7 @@ import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
 /**
- * A log buffer is a sequence of log entries. Each log entry consists of a 4 byte size, an 8 byte offset,
+ * Records implementations contain the records Each log entry consists of a 4 byte size, an 8 byte offset,
  * and the record bytes. See {@link MemoryRecords} for the in-memory representation and {@link FileRecords}
  * for an on-disk representation.
  */

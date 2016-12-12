@@ -33,6 +33,7 @@ public class MemoryRecords extends AbstractRecords {
 
     // the underlying buffer used for read; while the records are still writable it is null
     private ByteBuffer buffer;
+    private int validBytes = -1;
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer) {
@@ -54,7 +55,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     /**
-     * Write the full contents of this log buffer to the given channel (including partial records).
+     * Write all records to the given channel (including partial records).
      * @param channel The channel to write to
      * @return The number of bytes written
      * @throws IOException For any IO errors writing to the channel
@@ -74,11 +75,15 @@ public class MemoryRecords extends AbstractRecords {
      * @return The number of valid bytes
      */
     public int validBytes() {
-        // TODO: old version cached the computed value. is it worth it?
+        if (validBytes >= 0)
+            return validBytes;
+
         int bytes = 0;
         Iterator<ByteBufferLogEntry> iterator = shallowIterator();
         while (iterator.hasNext())
             bytes += iterator.next().sizeInBytes();
+
+        this.validBytes = bytes;
         return bytes;
     }
 
@@ -90,7 +95,7 @@ public class MemoryRecords extends AbstractRecords {
      */
     public FilterResult filterTo(LogEntryFilter filter, ByteBuffer buffer) {
         long maxTimestamp = Record.NO_TIMESTAMP;
-        long offsetOfMaxTimestamp = -1L;
+        long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
         int bytesRead = 0;
         int messagesRetained = 0;
@@ -122,22 +127,21 @@ public class MemoryRecords extends AbstractRecords {
                         writeOriginalEntry = false;
 
                     retainedEntries.add(deepEntry);
-                    // We need the max timestamp and last offset for time index
-                    if (deepRecord.timestamp() > maxTimestamp)
-                        maxTimestamp = deepRecord.timestamp();
                 } else {
                     writeOriginalEntry = false;
                 }
             }
-
-            if (!retainedEntries.isEmpty())
-                offsetOfMaxTimestamp = retainedEntries.get(retainedEntries.size() - 1).offset();
 
             if (writeOriginalEntry) {
                 // There are no messages compacted out and no message format conversion, write the original message set back
                 shallowEntry.writeTo(buffer);
                 messagesRetained += retainedEntries.size();
                 bytesRetained += shallowEntry.sizeInBytes();
+
+                if (shallowRecord.timestamp() > maxTimestamp) {
+                    maxTimestamp = shallowRecord.timestamp();
+                    shallowOffsetOfMaxTimestamp = shallowEntry.offset();
+                }
             } else if (!retainedEntries.isEmpty()) {
                 ByteBuffer slice = buffer.slice();
                 MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),
@@ -146,10 +150,16 @@ public class MemoryRecords extends AbstractRecords {
                 buffer.position(buffer.position() + slice.position());
                 messagesRetained += retainedEntries.size();
                 bytesRetained += records.sizeInBytes();
+
+                MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                if (info.maxTimestamp > maxTimestamp) {
+                    maxTimestamp = info.maxTimestamp;
+                    shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
+                }
             }
         }
 
-        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, offsetOfMaxTimestamp);
+        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
     /**
@@ -166,14 +176,14 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public Iterator<LogEntry> deepIterator() {
-        return deepEntries(false);
+        return deepIterator(false);
     }
 
-    public Iterator<LogEntry> deepEntries(boolean ensureMatchingMagic) {
-        return deepEntries(ensureMatchingMagic, Integer.MAX_VALUE);
+    public Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic) {
+        return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE);
     }
 
-    public Iterator<LogEntry> deepEntries(boolean ensureMatchingMagic, int maxMessageSize) {
+    public Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize) {
         return new RecordsIterator(new ByteBufferLogInputStream(buffer.duplicate(), maxMessageSize), false,
                 ensureMatchingMagic, maxMessageSize);
     }
@@ -224,20 +234,20 @@ public class MemoryRecords extends AbstractRecords {
         public final int messagesRetained;
         public final int bytesRetained;
         public final long maxTimestamp;
-        public final long offsetOfMaxTimestamp;
+        public final long shallowOffsetOfMaxTimestamp;
 
         public FilterResult(int messagesRead,
                             int bytesRead,
                             int messagesRetained,
                             int bytesRetained,
                             long maxTimestamp,
-                            long offsetOfMaxTimestamp) {
+                            long shallowOffsetOfMaxTimestamp) {
             this.messagesRead = messagesRead;
             this.bytesRead = bytesRead;
             this.messagesRetained = messagesRetained;
             this.bytesRetained = bytesRetained;
             this.maxTimestamp = maxTimestamp;
-            this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }
     }
 

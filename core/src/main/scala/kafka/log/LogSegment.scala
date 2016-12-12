@@ -87,14 +87,14 @@ class LogSegment(val log: FileRecords,
    *
    * @param firstOffset The first offset in the message set.
    * @param largestTimestamp The largest timestamp in the message set.
-   * @param offsetOfLargestTimestamp The offset of the message that has the largest timestamp in the messages to append.
+   * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param entries The log entries to append.
    */
   @nonthreadsafe
-  def append(firstOffset: Long, largestTimestamp: Long, offsetOfLargestTimestamp: Long, entries: MemoryRecords) {
+  def append(firstOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, entries: MemoryRecords) {
     if (entries.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at offset %d"
-          .format(entries.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, offsetOfLargestTimestamp))
+          .format(entries.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
@@ -105,7 +105,7 @@ class LogSegment(val log: FileRecords,
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampSoFar = largestTimestamp
-        offsetOfMaxTimestamp = offsetOfLargestTimestamp
+        offsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp
       }
       // append an entry to the index (if needed)
       if(bytesSinceLastIndexEntry > indexIntervalBytes) {
@@ -212,7 +212,7 @@ class LogSegment(val log: FileRecords,
     timeIndex.resize(timeIndex.maxIndexSize)
     var validBytes = 0
     var lastIndexEntry = 0
-    val iter = log.shallowEntries(maxMessageSize)
+    val iter = log.shallowIterator(maxMessageSize)
     maxTimestampSoFar = Record.NO_TIMESTAMP
     try {
       for (entry <- iter.asScala) {

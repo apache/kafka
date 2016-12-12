@@ -322,12 +322,12 @@ public class MemoryRecordsBuilder {
      * Get an estimate of the number of bytes written (based on the estimation factor hard-coded in {@link CompressionType}.
      * @return The estimated number of bytes written
      */
-    private long estimatedBytesWritten() {
+    private int estimatedBytesWritten() {
         if (compressionType == CompressionType.NONE) {
             return buffer().position();
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (long) (writtenUncompressed * TYPE_TO_RATE[compressionType.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return (int) (writtenUncompressed * TYPE_TO_RATE[compressionType.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
@@ -358,7 +358,7 @@ public class MemoryRecordsBuilder {
     }
 
     public int sizeInBytes() {
-        return builtRecords != null ? builtRecords.sizeInBytes() : buffer().position();
+        return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 
     private static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, byte messageVersion, int bufferSize) {
