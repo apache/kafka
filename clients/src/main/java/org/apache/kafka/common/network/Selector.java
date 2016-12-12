@@ -43,6 +43,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.utils.LogRateLimiter;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,6 +99,8 @@ public class Selector implements Selectable {
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
     private final IdleExpiryManager idleExpiryManager;
+    private long loggerCount = 0;
+    private final long loggerCountMax = 1000;
 
     /**
      * Create a new nioSelector
@@ -362,8 +365,13 @@ public class Selector implements Selectable {
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof ConnectException)
-                    log.warn("Cannot connect to {}", desc, e);
+                if (e instanceof ConnectException) {
+                    if (LogRateLimiter.warn(log, "Cannot connect to {}", desc, e,
+                            loggerCount, loggerCountMax))
+                        loggerCount++;
+                    else
+                        loggerCount = 0;
+                }
                 else if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
                 else
@@ -371,6 +379,7 @@ public class Selector implements Selectable {
                 close(channel);
                 this.disconnected.add(channel.id());
             }
+            loggerCount = 0;
         }
     }
 
