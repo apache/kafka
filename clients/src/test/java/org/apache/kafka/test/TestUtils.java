@@ -313,7 +313,7 @@ public class TestUtils {
 
     public static <T> List<T> toList(final Iterator<T> iterator) {
         final List<T> results = new ArrayList<>();
-        while(iterator.hasNext()) {
+        while (iterator.hasNext()) {
             results.add(iterator.next());
         }
         return results;
