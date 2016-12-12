@@ -59,7 +59,7 @@ public class CachingKeyValueStoreTest {
         cacheFlushListener = new CacheFlushListenerStub<>();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
         store.setFlushListener(cacheFlushListener);
-        cache = new ThreadCache(150);
+        cache = new ThreadCache(maxCacheSizeBytes);
         final MockProcessorContext context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
