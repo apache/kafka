@@ -457,7 +457,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       val shallowOffset = shallowMessageAndOffset.offset
       val size = MessageSet.entrySize(shallowMessageAndOffset.message)
 
-      messagesRead += 1
       bytesRead += size
 
       if (shallowMessageAndOffset.message.compressionCodec == NoCompressionCodec) {
@@ -481,9 +480,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         var writeOriginalMessageSet = true
         val retainedMessages = ArrayBuffer[MessageAndOffset]()
         val shallowMagic = shallowMessage.magic
-
+        var deepMessagesCount = 0
         for (deepMessageAndOffset <- ByteBufferMessageSet.deepIterator(shallowMessageAndOffset)) {
           messagesRead += 1
+          deepMessagesCount += 1
           if (filter(deepMessageAndOffset)) {
             // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
             // the corrupted entry with correct data.
@@ -492,18 +492,20 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
             retainedMessages += deepMessageAndOffset
             // We need the max timestamp and last offset for time index
-            if (deepMessageAndOffset.message.timestamp > maxTimestamp)
+            if (deepMessageAndOffset.message.timestamp > maxTimestamp) {
               maxTimestamp = deepMessageAndOffset.message.timestamp
+              offsetOfMaxTimestamp = deepMessageAndOffset.offset
+            }
           }
           else writeOriginalMessageSet = false
         }
-        offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
         // There are no messages compacted out and no message format conversion, write the original message set back
-        if (writeOriginalMessageSet)
+        if (writeOriginalMessageSet) {
           ByteBufferMessageSet.writeMessage(buffer, shallowMessage, shallowOffset)
-        else if (retainedMessages.nonEmpty) {
+          messagesRetained += deepMessagesCount
+        } else if (retainedMessages.nonEmpty) {
           val compressedSize = ByteBufferMessageSet.writeCompressedMessages(buffer, shallowMessage.compressionCodec, retainedMessages)
-          messagesRetained += 1
+          messagesRetained += retainedMessages.size
           bytesRetained += compressedSize
         }
       }

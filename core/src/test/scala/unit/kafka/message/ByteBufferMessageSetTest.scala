@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -29,7 +29,7 @@ import org.junit.Test
 
 class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
-  override def createMessageSet(messages: Seq[Message]): ByteBufferMessageSet = 
+  override def createMessageSet(messages: Seq[Message]): ByteBufferMessageSet =
     new ByteBufferMessageSet(NoCompressionCodec, messages: _*)
 
   @Test
@@ -72,7 +72,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
     assertTrue(messages.equals(moreMessages))
   }
-  
+
 
   @Test
   def testIterator() {
@@ -436,10 +436,36 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     checkWriteFullyToWithMessageSet(createMessageSet(messages))
   }
 
+  @Test
+  def testFilterInto() {
+    // Prepare a read buffer containing two messages.
+    val m0 = new Message(bytes = "0".getBytes, key = "0".getBytes, timestamp = 10L, magicValue = Message.CurrentMagicValue)
+    val m1 = new Message(bytes = "1".getBytes, key = "1".getBytes, timestamp = 11L, magicValue = Message.CurrentMagicValue)
+    val messageSet0 = new ByteBufferMessageSet(compressionCodec = CompressionCodec.getCompressionCodec("gzip"), offsetSeq = Seq(0L), m0)
+    val messageSet1 = new ByteBufferMessageSet(compressionCodec = CompressionCodec.getCompressionCodec("gzip"), offsetSeq = Seq(1L), m1)
+    val readBuffer = ByteBuffer.allocate(messageSet0.sizeInBytes + messageSet1.sizeInBytes)
+    messageSet0.buffer.get(readBuffer.array(), 0, messageSet0.sizeInBytes)
+    messageSet1.buffer.get(readBuffer.array(), messageSet0.sizeInBytes, messageSet1.sizeInBytes)
+    val messageSetToFilter = new ByteBufferMessageSet(readBuffer)
+
+    // filter out m1
+    val writeBuffer = ByteBuffer.allocate(messageSet0.sizeInBytes + messageSet1.sizeInBytes)
+    val filterResult = messageSetToFilter.filterInto(writeBuffer, (m: MessageAndOffset) => m.offset < 1L)
+
+    assertEquals("Two messages should be read", 2, filterResult.messagesRead)
+    assertEquals("Only one message should be retained", 1, filterResult.messagesRetained)
+    assertEquals("Largest timestamp should be 10", 10L, filterResult.maxTimestamp)
+    assertEquals("Offset of largest timestamp should be 0", 0L, filterResult.offsetOfMaxTimestamp)
+    writeBuffer.flip()
+    val filtered = new ByteBufferMessageSet(writeBuffer)
+    assertEquals("Should only have one message left", 1, filtered.size)
+    assertEquals("The retained message should be m0", 10L, filtered.iterator.next().message.timestamp)
+  }
+
   def checkWriteFullyToWithMessageSet(messageSet: ByteBufferMessageSet) {
     checkWriteWithMessageSet(messageSet, messageSet.writeFullyTo)
   }
-  
+
   /* check that offsets are assigned based on byte offset from the given base offset */
   def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
     assertTrue("Message set should not be empty", messages.nonEmpty)
