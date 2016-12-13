@@ -494,14 +494,15 @@ private[log] class Cleaner(val id: Int,
                 writeOriginalMessageSet = false
 
               retainedMessages += deepMessageAndOffset
-              // We need the max timestamp and last offset for time index
-              if (deepMessageAndOffset.message.timestamp > maxTimestamp)
+              // We need the max timestamp and message offset for time index
+              if (deepMessageAndOffset.message.timestamp > maxTimestamp) {
                 maxTimestamp = deepMessageAndOffset.message.timestamp
+                offsetOfMaxTimestamp = deepMessageAndOffset.offset
+              }
             } else {
               writeOriginalMessageSet = false
             }
           }
-          offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
           // There are no messages compacted out and no message format conversion, write the original message set back
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
@@ -758,7 +759,7 @@ private case class CleanerStats(time: Time = SystemTime) {
   def elapsedSecs = (endTime - startTime)/1000.0
   
   def elapsedIndexSecs = (mapCompleteTime - startTime)/1000.0
-  
+
   def clear() {
     startTime = time.milliseconds
     mapCompleteTime = -1L
