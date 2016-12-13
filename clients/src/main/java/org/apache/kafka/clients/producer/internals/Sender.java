@@ -345,7 +345,7 @@ public class Sender implements Runnable {
         final Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<>(batches.size());
         for (RecordBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
-            produceRecordsByPartition.put(tp, batch.records);
+            produceRecordsByPartition.put(tp, batch.records());
             recordsByPartition.put(tp, batch);
         }
 
@@ -505,17 +505,17 @@ public class Sender implements Runnable {
                     // per-topic bytes send rate
                     String topicByteRateName = "topic." + topic + ".bytes";
                     Sensor topicByteRate = Utils.notNull(this.metrics.getSensor(topicByteRateName));
-                    topicByteRate.record(batch.records.sizeInBytes());
+                    topicByteRate.record(batch.sizeInBytes());
 
                     // per-topic compression rate
                     String topicCompressionRateName = "topic." + topic + ".compression-rate";
                     Sensor topicCompressionRate = Utils.notNull(this.metrics.getSensor(topicCompressionRateName));
-                    topicCompressionRate.record(batch.records.compressionRate());
+                    topicCompressionRate.record(batch.compressionRate());
 
                     // global metrics
-                    this.batchSizeSensor.record(batch.records.sizeInBytes(), now);
+                    this.batchSizeSensor.record(batch.sizeInBytes(), now);
                     this.queueTimeSensor.record(batch.drainedMs - batch.createdMs, now);
-                    this.compressionRateSensor.record(batch.records.compressionRate());
+                    this.compressionRateSensor.record(batch.compressionRate());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;
                 }

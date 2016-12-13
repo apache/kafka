@@ -70,7 +70,7 @@ class MessageCompressionTest extends JUnitSuite {
     testCompressSize(GZIPCompressionCodec, messages, 396)
 
     if(isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 502)
+      testCompressSize(SnappyCompressionCodec, messages, 1063)
 
     if(isLZ4Available)
       testCompressSize(LZ4CompressionCodec, messages, 387)
