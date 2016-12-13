@@ -17,11 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -37,9 +32,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -56,6 +53,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class StreamThreadTest {
 
@@ -118,6 +122,7 @@ public class StreamThreadTest {
                 setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
             }
         };
     }
@@ -290,6 +295,79 @@ public class StreamThreadTest {
             (thread.state() == StreamThread.State.NOT_RUNNING));
     }
 
+    final static String TOPIC = "topic";
+    final Set<TopicPartition> assignmentThread1 = Collections.singleton(new TopicPartition(TOPIC, 0));
+    final Set<TopicPartition> assignmentThread2 = Collections.singleton(new TopicPartition(TOPIC, 1));
+
+    @Test
+    public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addStateStore(
+            Stores
+                .create("store")
+                .withByteArrayKeys()
+                .withByteArrayValues()
+                .persistent()
+                .build()
+        );
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+        mockClientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
+
+        final StreamThread thread1 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 1, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
+        final StreamThread thread2 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 2, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
+        thread1.partitionAssignor(new MockStreamsPartitionAssignor());
+        thread2.partitionAssignor(new MockStreamsPartitionAssignor());
+
+        // revoke (to get threads in correct state)
+        thread1.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
+        thread2.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
+
+        // assign
+        thread1.rebalanceListener.onPartitionsAssigned(assignmentThread1);
+        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+
+        final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
+        for (TaskId tid : thread1.tasks().keySet()) {
+            originalTaskAssignmentThread1.add(tid);
+        }
+        final Set<TaskId> originalTaskAssignmentThread2 = new HashSet<>();
+        for (TaskId tid : thread2.tasks().keySet()) {
+            originalTaskAssignmentThread2.add(tid);
+        }
+
+        // revoke (task will be suspended)
+        thread1.rebalanceListener.onPartitionsRevoked(assignmentThread1);
+        thread2.rebalanceListener.onPartitionsRevoked(assignmentThread2);
+
+        // assign reverted
+        Thread runIt = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                thread1.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+            }
+        });
+        runIt.start();
+
+        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread1);
+
+        runIt.join();
+
+        assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
+        assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread1.prevTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevTasks(), equalTo(originalTaskAssignmentThread2));
+    }
+
+    private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
+        @Override
+        Map<TaskId, Set<TopicPartition>> activeTasks() {
+            Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+            activeTasks.put(new TaskId(0, 0), assignmentThread1);
+            activeTasks.put(new TaskId(0, 1), assignmentThread2);
+            return activeTasks;
+        }
+    }
 
     @Test
     public void testMaybeClean() throws Exception {
