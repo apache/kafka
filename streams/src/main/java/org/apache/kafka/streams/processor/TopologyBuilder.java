@@ -692,6 +692,13 @@ public class TopologyBuilder {
     private void connectStateStoreNameToSourceTopics(final String stateStoreName,
                                                      final ProcessorNodeFactory processorNodeFactory) {
 
+        // we should never update the mapping from state store names to source topics if the store name already exists
+        // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
+        // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
+        if (stateStoreNameToSourceTopics.containsKey(stateStoreName)) {
+            return;
+        }
+
         final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
         if (sourceTopics.isEmpty()) {
             throw new TopologyBuilderException("can't find source topic for state store " +
