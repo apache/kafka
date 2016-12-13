@@ -88,7 +88,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     /**
-     * Filter this log buffer into the provided ByteBuffer.
+     * Filter the records into the provided ByteBuffer.
      * @param filter The filter function
      * @param buffer The byte buffer to write the filtered records to
      * @return A FilterResult with a summary of the output (for metrics)

@@ -22,13 +22,13 @@ import java.util.Iterator;
 
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries.
- * Each log entry consists of a 4 byte size, an 8 byte offset, and a "shallow" {@link Record record}. If
- * the entry is not compressed, then each entry will have only the shallow record contained inside it. If it is
+ * Each log entry consists of a 4 byte size, an 8 byte offset, a 4 byte record size, and a "shallow" {@link Record record}.
+ * If the entry is not compressed, then each entry will have only the shallow record contained inside it. If it is
  * compressed, the entry contains "deep" records, which are packed into the value field of the shallow record. To iterate
  * over the shallow records, use {@link #shallowIterator()}; for the deep records, use {@link #deepIterator()}. Note
  * that the deep iterator handles both compressed and non-compressed entries: if the entry is not compressed, the
  * shallow record is returned; otherwise, the shallow record is decompressed and the deep entries are returned.
- * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for an on-disk representation.
+ * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
 public interface Records {
 
@@ -40,7 +40,7 @@ public interface Records {
 
     /**
      * The size of these records in bytes.
-     * @return The size in bytes of the entries
+     * @return The size in bytes of the records
      */
     int sizeInBytes();
 

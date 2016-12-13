@@ -74,8 +74,7 @@ public abstract class AbstractRecords implements Records {
     }
 
     /**
-     * Get the records from this log buffer (note this requires "deep" iteration into the
-     * compressed message sets.
+     * Get an iterator over the deep records.
      * @return An iterator over the records
      */
     public Iterator<Record> records() {
