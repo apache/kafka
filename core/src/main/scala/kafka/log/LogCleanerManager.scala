@@ -289,7 +289,7 @@ private[log] object LogCleanerManager extends Logging {
     }
 
     // dirty log segments
-    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset).toArray
+    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
 
     val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
 

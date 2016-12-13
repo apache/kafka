@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -123,6 +124,7 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
     public void close() {
         flush();
         underlying.close();
+        cache.close(name);
     }
 
     @Override
@@ -143,6 +145,7 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
 
     @Override
     public synchronized void put(final K key, final V value, final long timestamp) {
+        validateStoreOpen();
         final byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
@@ -151,6 +154,7 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
 
     @Override
     public synchronized WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        validateStoreOpen();
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes);
 
@@ -165,6 +169,12 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
                 return null;
             }
             return serdes.valueFrom(iterator.next().value);
+        }
+    }
+
+    private void validateStoreOpen() {
+        if (!isOpen()) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
         }
     }
 }

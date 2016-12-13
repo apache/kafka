@@ -61,6 +61,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -143,9 +144,11 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
+     * @return number of fetches sent
      */
-    public void sendFetches() {
-        for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
+    public int sendFetches() {
+        Map<Node, FetchRequest> fetchRequestMap = createFetchRequests();
+        for (Map.Entry<Node, FetchRequest> fetchEntry : fetchRequestMap.entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -183,6 +186,7 @@ public class Fetcher<K, V> {
                         }
                     });
         }
+        return fetchRequestMap.size();
     }
 
     /**
@@ -605,11 +609,15 @@ public class Fetcher<K, V> {
     }
 
     private List<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> exclude = new HashSet<>();
         List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isDrained())
-            fetchable.remove(nextInLineRecords.partition);
-        for (CompletedFetch completedFetch : completedFetches)
-            fetchable.remove(completedFetch.partition);
+        if (nextInLineRecords != null && !nextInLineRecords.isDrained()) {
+            exclude.add(nextInLineRecords.partition);
+        }
+        for (CompletedFetch completedFetch : completedFetches) {
+            exclude.add(completedFetch.partition);
+        }
+        fetchable.removeAll(exclude);
         return fetchable;
     }
 
@@ -679,16 +687,17 @@ public class Fetcher<K, V> {
                 }
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                for (LogEntry logEntry : partition.records) {
+                Iterator<LogEntry> deepIterator = partition.records.deepIterator();
+                while (deepIterator.hasNext()) {
+                    LogEntry logEntry = deepIterator.next();
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.size();
+                        bytes += logEntry.sizeInBytes();
                     }
                 }
 
                 recordsCount = parsed.size();
-                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
 
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
@@ -833,11 +842,11 @@ public class Fetcher<K, V> {
         private final FetchManagerMetrics sensors;
         private final Set<TopicPartition> unrecordedPartitions;
 
-        private int totalBytes;
-        private int totalRecords;
+        private final FetchMetrics fetchMetrics = new FetchMetrics();
+        private final Map<String, FetchMetrics> topicFetchMetrics = new HashMap<>();
 
-        public FetchResponseMetricAggregator(FetchManagerMetrics sensors,
-                                             Set<TopicPartition> partitions) {
+        private FetchResponseMetricAggregator(FetchManagerMetrics sensors,
+                                              Set<TopicPartition> partitions) {
             this.sensors = sensors;
             this.unrecordedPartitions = partitions;
         }
@@ -847,14 +856,38 @@ public class Fetcher<K, V> {
          * and number of records parsed. After all partitions have reported, we write the metric.
          */
         public void record(TopicPartition partition, int bytes, int records) {
-            unrecordedPartitions.remove(partition);
-            totalBytes += bytes;
-            totalRecords += records;
+            this.unrecordedPartitions.remove(partition);
+            this.fetchMetrics.increment(bytes, records);
 
-            if (unrecordedPartitions.isEmpty()) {
+            // collect and aggregate per-topic metrics
+            String topic = partition.topic();
+            FetchMetrics topicFetchMetric = this.topicFetchMetrics.get(topic);
+            if (topicFetchMetric == null) {
+                topicFetchMetric = new FetchMetrics();
+                this.topicFetchMetrics.put(topic, topicFetchMetric);
+            }
+            topicFetchMetric.increment(bytes, records);
+
+            if (this.unrecordedPartitions.isEmpty()) {
                 // once all expected partitions from the fetch have reported in, record the metrics
-                sensors.bytesFetched.record(totalBytes);
-                sensors.recordsFetched.record(totalRecords);
+                this.sensors.bytesFetched.record(topicFetchMetric.fetchBytes);
+                this.sensors.recordsFetched.record(topicFetchMetric.fetchRecords);
+
+                // also record per-topic metrics
+                for (Map.Entry<String, FetchMetrics> entry: this.topicFetchMetrics.entrySet()) {
+                    FetchMetrics metric = entry.getValue();
+                    this.sensors.recordTopicFetchMetrics(entry.getKey(), metric.fetchBytes, metric.fetchRecords);
+                }
+            }
+        }
+
+        private static class FetchMetrics {
+            private int fetchBytes;
+            private int fetchRecords;
+
+            protected void increment(int bytes, int records) {
+                this.fetchBytes += bytes;
+                this.fetchRecords += records;
             }
         }
     }
