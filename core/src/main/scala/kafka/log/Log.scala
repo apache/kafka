@@ -415,7 +415,7 @@ class Log(@volatile var dir: File,
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
-          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp, entries = MemoryRecords.readableRecords(validRecords.buffer))
+          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp, records = validRecords)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -496,25 +496,26 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
+    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec,
+      targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
   /**
    * Trim any invalid bytes from the end of this message set (if there are any)
    *
-   * @param entries The message set to trim
+   * @param records The records to trim
    * @param info The general information of the message set
    * @return A trimmed message set. This may be the same as what was passed in or it may not.
    */
-  private def trimInvalidBytes(entries: MemoryRecords, info: LogAppendInfo): MemoryRecords = {
+  private def trimInvalidBytes(records: MemoryRecords, info: LogAppendInfo): MemoryRecords = {
     val validBytes = info.validBytes
     if (validBytes < 0)
       throw new CorruptRecordException("Illegal length of message set " + validBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
-    if (validBytes == entries.sizeInBytes) {
-      entries
+    if (validBytes == records.sizeInBytes) {
+      records
     } else {
       // trim invalid bytes
-      val validByteBuffer = entries.buffer.duplicate()
+      val validByteBuffer = records.buffer.duplicate()
       validByteBuffer.limit(validBytes)
       MemoryRecords.readableRecords(validByteBuffer)
     }

@@ -88,18 +88,18 @@ class LogSegment(val log: FileRecords,
    * @param firstOffset The first offset in the message set.
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
-   * @param entries The log entries to append.
+   * @param records The log entries to append.
    */
   @nonthreadsafe
-  def append(firstOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, entries: MemoryRecords) {
-    if (entries.sizeInBytes > 0) {
-      trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at offset %d"
-          .format(entries.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
+  def append(firstOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords) {
+    if (records.sizeInBytes > 0) {
+      trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at shallow offset %d"
+          .format(records.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
       // append the messages
-      val appendedBytes = log.append(entries)
+      val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file()} at offset $firstOffset")
 
       // Update the in memory max timestamp and corresponding offset.
@@ -113,7 +113,7 @@ class LogSegment(val log: FileRecords,
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
         bytesSinceLastIndexEntry = 0
       }
-      bytesSinceLastIndexEntry += entries.sizeInBytes
+      bytesSinceLastIndexEntry += records.sizeInBytes
     }
   }
 

@@ -186,7 +186,7 @@ private[kafka] object LogValidator {
       val offset = offsetCounter.getAndIncrement()
       entry.setOffset(offset)
 
-      if (record.magic > 0) {
+      if (record.magic > Record.MAGIC_VALUE_V0) {
         validateTimestamp(record, now, timestampType, timestampDiffMaxMs)
 
         if (timestampType == TimestampType.LOG_APPEND_TIME)

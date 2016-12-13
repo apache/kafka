@@ -130,8 +130,6 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
                 if (entry == null)
                     return allDone();
                 return entry;
-            } catch (EOFException e) {
-                return allDone();
             } catch (IOException e) {
                 throw new KafkaException(e);
             }

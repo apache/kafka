@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
+import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 
 /**
  * A byte buffer backed log input stream. This class avoids the need to copy records by returning
@@ -39,21 +40,23 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
 
     public ByteBufferLogEntry nextEntry() throws IOException {
         int remaining = buffer.remaining();
-        if (Records.LOG_OVERHEAD > remaining)
+        if (remaining < LOG_OVERHEAD)
             return null;
 
-        int size = buffer.getInt(buffer.position() + Records.SIZE_OFFSET);
-        if (size < Record.RECORD_OVERHEAD_V0)
+        int recordSize = buffer.getInt(buffer.position() + Records.SIZE_OFFSET);
+        if (recordSize < Record.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", Record.RECORD_OVERHEAD_V0));
-        if (size > maxMessageSize)
+        if (recordSize > maxMessageSize)
             throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
 
-        if (size + Records.LOG_OVERHEAD > remaining)
+        int entrySize = recordSize + LOG_OVERHEAD;
+        if (remaining < entrySize)
             return null;
 
-        ByteBufferLogEntry slice = new ByteBufferLogEntry(buffer);
-        buffer.position(buffer.position() + slice.sizeInBytes());
-        return slice;
+        ByteBuffer entrySlice = buffer.slice();
+        entrySlice.limit(entrySize);
+        buffer.position(buffer.position() + entrySize);
+        return new ByteBufferLogEntry(entrySlice);
     }
 
     public static class ByteBufferLogEntry extends LogEntry {
@@ -61,19 +64,15 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         private final Record record;
 
         private ByteBufferLogEntry(ByteBuffer buffer) {
-            ByteBuffer entryBuffer = buffer.duplicate();
-            int size = entryBuffer.getInt(entryBuffer.position() + Records.SIZE_OFFSET);
-            entryBuffer.limit(entryBuffer.position() + LOG_OVERHEAD + size);
-            this.buffer = entryBuffer.slice();
-
-            ByteBuffer recordBuffer = this.buffer.duplicate();
-            recordBuffer.position(LOG_OVERHEAD);
-            this.record = new Record(recordBuffer.slice());
+            this.buffer = buffer;
+            buffer.position(LOG_OVERHEAD);
+            this.record = new Record(buffer.slice());
+            buffer.position(OFFSET_OFFSET);
         }
 
         @Override
         public long offset() {
-            return buffer.getLong(0);
+            return buffer.getLong(OFFSET_OFFSET);
         }
 
         @Override
@@ -82,7 +81,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         }
 
         public void setOffset(long offset) {
-            buffer.putLong(Records.OFFSET_OFFSET, offset);
+            buffer.putLong(OFFSET_OFFSET, offset);
         }
 
         public void setCreateTime(long timestamp) {
