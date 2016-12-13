@@ -12,17 +12,19 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A batch of records that is or will be sent.
@@ -39,21 +41,21 @@ public final class RecordBatch {
     public final long createdMs;
     public long drainedMs;
     public long lastAttemptMs;
-    public final MemoryRecords records;
     public final TopicPartition topicPartition;
     public final ProduceRequestResult produceFuture;
     public long lastAppendTime;
     private final List<Thunk> thunks;
     private long offsetCounter = 0L;
     private boolean retry;
+    private final MemoryRecordsBuilder recordsBuilder;
 
-    public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
+    public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
         this.lastAttemptMs = now;
-        this.records = records;
+        this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();
-        this.thunks = new ArrayList<Thunk>();
+        this.thunks = new ArrayList<>();
         this.lastAppendTime = createdMs;
         this.retry = false;
     }
@@ -64,10 +66,10 @@ public final class RecordBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
-        if (!this.records.hasRoomFor(key, value)) {
+        if (!recordsBuilder.hasRoomFor(key, value)) {
             return null;
         } else {
-            long checksum = this.records.append(offsetCounter++, timestamp, key, value);
+            long checksum = this.recordsBuilder.append(offsetCounter++, timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
@@ -94,9 +96,8 @@ public final class RecordBatch {
                   baseOffset,
                   exception);
         // execute callbacks
-        for (int i = 0; i < this.thunks.size(); i++) {
+        for (Thunk thunk : thunks) {
             try {
-                Thunk thunk = this.thunks.get(i);
                 if (exception == null) {
                     // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
                     RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
@@ -156,7 +157,7 @@ public final class RecordBatch {
         }
 
         if (expire) {
-            this.records.close();
+            close();
             this.done(-1L, Record.NO_TIMESTAMP,
                       new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + errorMessage));
         }
@@ -177,4 +178,37 @@ public final class RecordBatch {
     public void setRetry() {
         this.retry = true;
     }
+
+    public MemoryRecords records() {
+        return recordsBuilder.build();
+    }
+
+    public int sizeInBytes() {
+        return recordsBuilder.sizeInBytes();
+    }
+
+    public double compressionRate() {
+        return recordsBuilder.compressionRate();
+    }
+
+    public boolean isFull() {
+        return recordsBuilder.isFull();
+    }
+
+    public void close() {
+        recordsBuilder.close();
+    }
+
+    public ByteBuffer buffer() {
+        return recordsBuilder.buffer();
+    }
+
+    public int initialCapacity() {
+        return recordsBuilder.initialCapacity();
+    }
+
+    public boolean isWritable() {
+        return !recordsBuilder.isClosed();
+    }
+
 }

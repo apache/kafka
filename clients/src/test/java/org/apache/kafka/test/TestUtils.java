@@ -23,8 +23,10 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.xml.bind.DatatypeConverter;
@@ -35,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -46,6 +49,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -185,13 +189,13 @@ public class TestUtils {
     public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
         int bufferSize = 0;
         for (final Record record : records)
-            bufferSize += Records.LOG_OVERHEAD + record.size();
+            bufferSize += Records.LOG_OVERHEAD + record.sizeInBytes();
         final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        final MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compressionType, TimestampType.CREATE_TIME);
+        long nextOffset = offset;
         for (final Record record : records)
-            memoryRecords.append(offset, record);
-        memoryRecords.close();
-        return memoryRecords.buffer();
+            builder.append(nextOffset++, record);
+        return builder.build().buffer();
     }
 
     public static Properties producerConfig(final String bootstrapServers,
@@ -308,5 +312,23 @@ public class TestUtils {
         } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
         }
+    }
+
+    /**
+     * Throw an exception if the two iterators are of differing lengths or contain
+     * different messages on their Nth element
+     */
+    public static <T> void checkEquals(Iterator<T> s1, Iterator<T> s2) {
+        while (s1.hasNext() && s2.hasNext())
+            assertEquals(s1.next(), s2.next());
+        assertFalse("Iterators have uneven length--first has more", s1.hasNext());
+        assertFalse("Iterators have uneven length--second has more", s2.hasNext());
+    }
+
+    public static <T> List<T> toList(Iterator<T> iterator) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext())
+            res.add(iterator.next());
+        return res;
     }
 }

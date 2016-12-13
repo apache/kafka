@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -149,6 +150,27 @@ public class CachingWindowStoreTest {
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP + WINDOW_SIZE, "b"), fetch.next());
         assertFalse(fetch.hasNext());
     }
+
+    @Test
+    public void shouldClearNamespaceCacheOnClose() throws Exception {
+        cachingStore.put("a", "a");
+        assertEquals(1, cache.size());
+        cachingStore.close();
+        assertEquals(0, cache.size());
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToFetchFromClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.fetch("a", 0, 10);
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToWriteToClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.put("a", "a");
+    }
+
 
     private int addItemsToCache() throws IOException {
         int cachedSize = 0;

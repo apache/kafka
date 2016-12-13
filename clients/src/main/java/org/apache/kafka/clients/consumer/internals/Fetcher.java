@@ -61,6 +61,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -143,9 +144,11 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
+     * @return number of fetches sent
      */
-    public void sendFetches() {
-        for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
+    public int sendFetches() {
+        Map<Node, FetchRequest> fetchRequestMap = createFetchRequests();
+        for (Map.Entry<Node, FetchRequest> fetchEntry : fetchRequestMap.entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -183,6 +186,7 @@ public class Fetcher<K, V> {
                         }
                     });
         }
+        return fetchRequestMap.size();
     }
 
     /**
@@ -605,11 +609,15 @@ public class Fetcher<K, V> {
     }
 
     private List<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> exclude = new HashSet<>();
         List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isDrained())
-            fetchable.remove(nextInLineRecords.partition);
-        for (CompletedFetch completedFetch : completedFetches)
-            fetchable.remove(completedFetch.partition);
+        if (nextInLineRecords != null && !nextInLineRecords.isDrained()) {
+            exclude.add(nextInLineRecords.partition);
+        }
+        for (CompletedFetch completedFetch : completedFetches) {
+            exclude.add(completedFetch.partition);
+        }
+        fetchable.removeAll(exclude);
         return fetchable;
     }
 
@@ -679,11 +687,13 @@ public class Fetcher<K, V> {
                 }
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                for (LogEntry logEntry : partition.records) {
+                Iterator<LogEntry> deepIterator = partition.records.deepIterator();
+                while (deepIterator.hasNext()) {
+                    LogEntry logEntry = deepIterator.next();
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.size();
+                        bytes += logEntry.sizeInBytes();
                     }
                 }
 

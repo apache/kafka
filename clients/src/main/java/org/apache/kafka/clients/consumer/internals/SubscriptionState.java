@@ -285,7 +285,7 @@ public class SubscriptionState {
     }
 
     public List<TopicPartition> fetchablePartitions() {
-        List<TopicPartition> fetchable = new ArrayList<>();
+        List<TopicPartition> fetchable = new ArrayList<>(assignment.size());
         for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (state.value().isFetchable())
                 fetchable.add(state.topicPartition());
