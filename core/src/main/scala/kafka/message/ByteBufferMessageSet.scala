@@ -497,6 +497,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
             // We need the max timestamp and last offset for time index
             if (deepMessageAndOffset.message.timestamp > maxTimestamp)
               maxTimestamp = deepMessageAndOffset.message.timestamp
+            maxOffset = deepMessageAndOffset.offset
           }
           else writeOriginalMessageSet = false
         }
