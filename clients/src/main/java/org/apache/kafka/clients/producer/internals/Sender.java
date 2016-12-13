@@ -150,7 +150,10 @@ public class Sender implements Runnable {
             this.accumulator.abortIncompleteBatches();
         }
         try {
-            this.client.close();
+            if (!forceClose)
+                this.client.closeGracefully();
+            else
+                this.client.close();
         } catch (Exception e) {
             log.error("Failed to close network client", e);
         }

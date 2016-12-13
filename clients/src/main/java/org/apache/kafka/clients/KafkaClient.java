@@ -132,4 +132,9 @@ public interface KafkaClient extends Closeable {
      */
     public void wakeup();
 
+    /**
+     * Flush any outgoing buffers and close the client.
+     */
+    public void closeGracefully();
+
 }

@@ -17,6 +17,11 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -27,6 +32,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -261,6 +267,31 @@ public class SelectorTest {
         assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
     }
 
+    @Test
+    public void testGracefulClose() throws Exception {
+        String node = "0";
+        final int sendSize = BUFFER_SIZE * 64;
+        String request = TestUtils.randomString(sendSize);
+        final DataOutputStream serverStream = new DataOutputStream(new ByteArrayOutputStream(sendSize * 2));
+        server.echoOutputStream(serverStream);
+        blockingConnect(node);
+        selector.send(createSend(node, request));
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<?> future = executor.submit(new Runnable() {
+            public void run() {
+                selector.closeGracefully();
+            }
+        });
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return serverStream.size() == sendSize + 4;
+            }
+        }, "Data not flushed during graceful close, flushed=" + serverStream.size());
+        serverStream.close();
+        assertTrue("Graceful close did not complete", future.isDone());
+        executor.shutdownNow();
+    }
     
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

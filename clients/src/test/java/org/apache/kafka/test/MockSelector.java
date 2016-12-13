@@ -53,6 +53,10 @@ public class MockSelector implements Selectable {
     }
 
     @Override
+    public void closeGracefully() {
+    }
+
+    @Override
     public void close(String id) {
         this.disconnected.add(id);
         for (int i = 0; i < this.connected.size(); i++) {

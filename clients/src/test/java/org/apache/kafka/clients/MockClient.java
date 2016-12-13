@@ -299,6 +299,11 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public void closeGracefully() {
+        close();
+    }
+
+    @Override
     public void close(String node) {
         ready.remove(node);
     }
