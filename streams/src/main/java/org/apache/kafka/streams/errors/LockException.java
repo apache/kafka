@@ -19,8 +19,18 @@ package org.apache.kafka.streams.errors;
  */
 public class LockException extends StreamsException {
 
+    private static final long serialVersionUID = 1L;
+
     public LockException(final String s) {
         super(s);
+    }
+
+    public LockException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public LockException(Throwable throwable) {
+        super(throwable);
     }
 
 }
