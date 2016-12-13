@@ -296,6 +296,14 @@ class NamedCache {
         return dirtyKeys.size();
     }
 
+    synchronized void close() {
+        head = tail = null;
+        listener = null;
+        currentSizeBytes = 0;
+        dirtyKeys.clear();
+        cache.clear();
+    }
+
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
