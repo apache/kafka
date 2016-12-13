@@ -22,7 +22,7 @@ import java.util.Iterator;
 
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries.
- * Each log entry consists of a 4 byte size, an 8 byte offset, a 4 byte record size, and a "shallow" {@link Record record}.
+ * Each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow" {@link Record record}.
  * If the entry is not compressed, then each entry will have only the shallow record contained inside it. If it is
  * compressed, the entry contains "deep" records, which are packed into the value field of the shallow record. To iterate
  * over the shallow records, use {@link #shallowIterator()}; for the deep records, use {@link #deepIterator()}. Note
