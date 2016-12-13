@@ -692,6 +692,13 @@ public class TopologyBuilder {
     private void connectStateStoreNameToSourceTopics(final String stateStoreName,
                                                      final ProcessorNodeFactory processorNodeFactory) {
 
+        // we should never update the mapping for a stateStoreName, but this is called
+        // from connectProcessorAndStateStores which is not always called in the context
+        // of adding a new state store.
+        if (stateStoreNameToSourceTopics.containsKey(stateStoreName)) {
+            return;
+        }
+
         final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
         if (sourceTopics.isEmpty()) {
             throw new TopologyBuilderException("can't find source topic for state store " +
