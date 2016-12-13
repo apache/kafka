@@ -710,6 +710,26 @@ class LogCleanerTest extends JUnitSuite {
       assertEquals(offset, value)
     }
   }
+  
+  @Test
+  def testCleanTombstone(): Unit = {
+    val logConfig = LogConfig(new Properties())
+
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(10)
+    
+    // Append a message with a large timestamp.
+    log.append(TestUtils.singleMessageSet(payload = "0".getBytes(),
+                                          key = "0".getBytes(),
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000))
+    log.roll()
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    // Append a tombstone with a small timestamp and roll out a new log segment.
+    log.append(TestUtils.singleMessageSet(payload = null, key = "0".getBytes(), timestamp = time.milliseconds()))
+    log.roll()
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 1, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.head.offset)
+  }
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
