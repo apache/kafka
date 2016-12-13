@@ -131,10 +131,11 @@ public class StreamThread extends Thread {
 
         /**
          * Called when state changes
+         * @param thread       thread changing state
          * @param newState     current state
          * @param oldState     previous state
          */
-        void onChange(final State newState, final State oldState);
+        void onChange(final StreamThread thread, final State newState, final State oldState);
     }
 
     /**
@@ -162,7 +163,7 @@ public class StreamThread extends Thread {
         state = newState;
         if (stateListener != null) {
             synchronized (stateListener) {
-                stateListener.onChange(state, oldState);
+                stateListener.onChange(this, state, oldState);
             }
         }
     }
