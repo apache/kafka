@@ -154,7 +154,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldNotModifyStateStoreSourceIfItExistsAndAnotherProcessorConnectingToIt() throws Exception {
+    public void shouldMapStateStoresToCorrectSourceTopics() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId("app-id");
 
@@ -162,20 +162,6 @@ public class KStreamBuilderTest {
 
         final KTable<String, String> table = builder.table("table-topic", "table-store");
         assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
-
-        final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
-        mapped.leftJoin(table, MockValueJoiner.STRING_JOINER);
-        assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
-    }
-
-    @Test
-    public void shouldMapStateStoreToRepartitionTopic() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId("app-id");
-
-        final KStream<String, String> playEvents = builder.stream("events");
-
-        final KTable<String, String> table = builder.table("table-topic", "table-store");
 
         final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.STRING_JOINER).groupByKey().count("count");
