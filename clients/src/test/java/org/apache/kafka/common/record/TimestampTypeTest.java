@@ -5,40 +5,33 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+ **/
+package org.apache.kafka.common.record;
 
-package kafka.message
+import org.junit.Test;
 
-import org.apache.kafka.common.record.LogEntry
+import static org.junit.Assert.assertEquals;
 
-object MessageAndOffset {
-  def fromLogEntry(logEntry : LogEntry): MessageAndOffset = {
-    MessageAndOffset(Message.fromRecord(logEntry.record), logEntry.offset)
-  }
+public class TimestampTypeTest {
+
+    @Test
+    public void toAndFromAttributesCreateTime() {
+        byte attributes = TimestampType.CREATE_TIME.updateAttributes((byte) 0);
+        assertEquals(TimestampType.CREATE_TIME, TimestampType.forAttributes(attributes));
+    }
+
+    @Test
+    public void toAndFromAttributesLogAppendTime() {
+        byte attributes = TimestampType.LOG_APPEND_TIME.updateAttributes((byte) 0);
+        assertEquals(TimestampType.LOG_APPEND_TIME, TimestampType.forAttributes(attributes));
+    }
+
 }
-
-case class MessageAndOffset(message: Message, offset: Long) {
-  
-  /**
-   * Compute the offset of the next message in the log
-   */
-  def nextOffset: Long = offset + 1
-
-  /**
-   * We need to decompress the message, if required, to get the offset of the first uncompressed message.
-   */
-  def firstOffset: Long = toLogEntry.firstOffset
-
-  def toLogEntry: LogEntry = {
-    LogEntry.create(offset, message.asRecord)
-  }
-}
-
