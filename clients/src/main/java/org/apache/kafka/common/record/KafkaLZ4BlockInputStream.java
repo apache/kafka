@@ -190,13 +190,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     @Override
     public int read() throws IOException {
-        if (finished) {
-            return -1;
-        }
         if (available() == 0) {
-            readBlock();
-        }
-        if (finished) {
             return -1;
         }
         int value = buffer[bufferOffset++] & 0xFF;
@@ -207,16 +201,11 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
         net.jpountz.util.SafeUtils.checkRange(b, off, len);
-        if (finished) {
+        int available = available();
+        if (available == 0) {
             return -1;
         }
-        if (available() == 0) {
-            readBlock();
-        }
-        if (finished) {
-            return -1;
-        }
-        len = Math.min(len, available());
+        len = Math.min(len, available);
         System.arraycopy(buffer, bufferOffset, b, off, len);
         bufferOffset += len;
         return len;
@@ -224,23 +213,27 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     @Override
     public long skip(long n) throws IOException {
-        if (finished) {
+        int available = available();
+        if (available == 0) {
             return 0;
         }
-        if (available() == 0) {
-            readBlock();
-        }
-        if (finished) {
-            return 0;
-        }
-        n = Math.min(n, available());
+        n = Math.min(n, available);
         bufferOffset += n;
         return n;
     }
 
     @Override
     public int available() throws IOException {
-        return bufferSize - bufferOffset;
+        if (finished) {
+            return 0;
+        }
+        if (bufferSize == bufferOffset) {
+            readBlock();
+            if (finished) {
+                return 0;
+            }
+        }
+        return bufferSize - bufferOffset; //must be > 0
     }
 
     @Override

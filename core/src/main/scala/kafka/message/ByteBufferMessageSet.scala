@@ -90,7 +90,7 @@ object ByteBufferMessageSet {
 
         val innerMessageAndOffsets = new ArrayDeque[MessageAndOffset]()
         try {
-          while (true)
+          while (compressed.available() > 0)
             innerMessageAndOffsets.add(readMessageFromStream(compressed))
         } catch {
           case _: EOFException =>

@@ -134,4 +134,22 @@ public class KafkaLZ4Test {
             assertTrue(this.useBrokenFlagDescriptorChecksum && !this.ignoreFlagDescriptorChecksum);
         }
     }
+
+    @Test
+    public void testCloseImpliesFlush() throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(output, this.useBrokenFlagDescriptorChecksum);
+        lz4.write(this.payload);
+        lz4.close();
+        byte[] arr1 = output.toByteArray();
+
+        output = new ByteArrayOutputStream();
+        lz4 = new KafkaLZ4BlockOutputStream(output, this.useBrokenFlagDescriptorChecksum);
+        lz4.write(this.payload);
+        lz4.flush();
+        lz4.close();
+        byte[] arr2 = output.toByteArray();
+
+        assertArrayEquals(arr2, arr1);
+    }
 }

@@ -14,42 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.record;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
+import java.util.zip.GZIPInputStream;
+
 
 /**
- * A byte buffer backed input inputStream
+ * this class extends GZIPInputStream and overrides available()
+ * in a way that does not return 1 if end of data has been reached
  */
-public class ByteBufferInputStream extends InputStream {
+public class KafkaGZIPInputStream extends GZIPInputStream {
 
-    private ByteBuffer buffer;
-
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
-    }
-
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
-    }
-
-    public int read(byte[] bytes, int off, int len) {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
+    public KafkaGZIPInputStream(InputStream in) throws IOException {
+        super(in);
     }
 
     @Override
     public int available() throws IOException {
-        return buffer.remaining();
+        int superResult = super.available();
+        if (superResult < 1) {
+            return superResult;
+        }
+        //parent class will return 1 even when inflater is finished.
+        //in this case the next read() will return -1. so we ask inflater.
+        return inf.finished() ? 0 : 1;
     }
 }

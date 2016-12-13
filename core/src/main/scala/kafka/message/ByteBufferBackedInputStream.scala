@@ -37,4 +37,8 @@ class ByteBufferBackedInputStream(buffer:ByteBuffer) extends InputStream {
     } else
       -1
   }
+
+  override def available(): Int = {
+    buffer.remaining()
+  }
 }
