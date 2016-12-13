@@ -37,18 +37,32 @@ public interface StreamsMetrics {
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
     /**
-     * Record the given latency value of the sensor.
-     */
-    void recordLatency(Sensor sensor, long startNs, long endNs);
-
-    /**
+     * Add a throughput sensor. This is equivalent to adding a sensor with metrics rate.
+     *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.
      * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
      * @param operationName Name of the operation, could be get / put / delete / etc.
      * @param tags Additional tags of the sensor.
+     * @return The added sensor.
      */
-    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
+    Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
+
+    /**
+     * Record the given latency value of the sensor.
+     */
+    void recordLatency(Sensor sensor, long startNs, long endNs);
+
+    /**
+     * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordLevel, String...)}
+     * of {@link #addLatencySensor(String, String, String, Sensor.RecordLevel, String...)} to ensure metric name well-formedness and conformity with the rest
+     * of the streams code base.
+     * @param scopeName Name of the scope, could be the type of the state store, etc.
+     * @param entityName Name of the entity, could be the name of the state store instance, etc.
+     * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
+     * @param operationName Name of the operation, could be get / put / delete / etc.
+     */
+    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel);
 
     /**
      * Same as previous constructor {@link #sensor(String, String, String, Sensor.RecordLevel, Sensor...)} sensor}, but takes a set of parents as well.

@@ -1030,9 +1030,9 @@ public class StreamThread extends Thread {
 
     private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         final Metrics metrics;
-        final String metricGrpName;
-        final String sensorNamePrefix;
-        final Map<String, String> metricTags;
+        final String defaultGroupName;
+        final String defaultPrefix;
+        final Map<String, String> defaultTags;
 
         final Sensor commitTimeSensor;
         final Sensor pollTimeSensor;
@@ -1043,43 +1043,40 @@ public class StreamThread extends Thread {
         final Sensor skippedRecordsSensor;
 
         public StreamsMetricsImpl(Metrics metrics) {
-            String metricGrpName = "stream-metrics";
-            String sensorNamePrefix = "thread." + threadClientId;
-            Map<String, String> tags = Collections.singletonMap("client-id", threadClientId);
             this.metrics = metrics;
-            this.metricGrpName = metricGrpName;
-            this.sensorNamePrefix = sensorNamePrefix;
-            this.metricTags = tags;
+            this.defaultGroupName = "stream-metrics";
+            this.defaultPrefix = "thread." + threadClientId;
+            this.defaultTags = Collections.singletonMap("client-id", threadClientId);
 
 
-            this.commitTimeSensor = metrics.sensor(sensorNamePrefix + ".commit-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
-            this.commitTimeSensor.add(metrics.metricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
-            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
+            this.commitTimeSensor = metrics.sensor(this.defaultPrefix + ".commit-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", this.defaultGroupName, "The average commit time in ms", defaultTags), new Avg());
+            this.commitTimeSensor.add(metrics.metricName("commit-time-max", this.defaultGroupName, "The maximum commit time in ms", defaultTags), new Max());
+            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", this.defaultGroupName, "The average per-second number of commit calls", defaultTags), new Rate(new Count()));
 
-            this.pollTimeSensor = metrics.sensor(sensorNamePrefix + ".poll-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
-            this.pollTimeSensor.add(metrics.metricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
-            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
+            this.pollTimeSensor = metrics.sensor(this.defaultPrefix + ".poll-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", this.defaultGroupName, "The average poll time in ms", defaultTags), new Avg());
+            this.pollTimeSensor.add(metrics.metricName("poll-time-max", this.defaultGroupName, "The maximum poll time in ms", defaultTags), new Max());
+            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", this.defaultGroupName, "The average per-second number of record-poll calls", defaultTags), new Rate(new Count()));
 
-            this.processTimeSensor = metrics.sensor(sensorNamePrefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.processTimeSensor.add(metrics.metricName("process-time-avg", metricGrpName, "The average process time in ms", metricTags), new Avg());
-            this.processTimeSensor.add(metrics.metricName("process-time-max", metricGrpName, "The maximum process time in ms", metricTags), new Max());
-            this.processTimeSensor.add(metrics.metricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
+            this.processTimeSensor = metrics.sensor(this.defaultPrefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.processTimeSensor.add(metrics.metricName("process-time-avg", this.defaultGroupName, "The average process time in ms", defaultTags), new Avg());
+            this.processTimeSensor.add(metrics.metricName("process-time-max", this.defaultGroupName, "The maximum process time in ms", defaultTags), new Max());
+            this.processTimeSensor.add(metrics.metricName("process-calls-rate", this.defaultGroupName, "The average per-second number of process calls", defaultTags), new Rate(new Count()));
 
-            this.punctuateTimeSensor = metrics.sensor(sensorNamePrefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
+            this.punctuateTimeSensor = metrics.sensor(this.defaultPrefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", this.defaultGroupName, "The average punctuate time in ms", defaultTags), new Avg());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", this.defaultGroupName, "The maximum punctuate time in ms", defaultTags), new Max());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", this.defaultGroupName, "The average per-second number of punctuate calls", defaultTags), new Rate(new Count()));
 
-            this.taskCreationSensor = metrics.sensor(sensorNamePrefix + ".task-creation", Sensor.RecordLevel.SENSOR_INFO);
-            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
+            this.taskCreationSensor = metrics.sensor(this.defaultPrefix + ".task-creation", Sensor.RecordLevel.SENSOR_INFO);
+            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", this.defaultGroupName, "The average per-second number of newly created tasks", defaultTags), new Rate(new Count()));
 
-            this.taskDestructionSensor = metrics.sensor(sensorNamePrefix + ".task-destruction", Sensor.RecordLevel.SENSOR_INFO);
-            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+            this.taskDestructionSensor = metrics.sensor(this.defaultPrefix + ".task-destruction", Sensor.RecordLevel.SENSOR_INFO);
+            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", this.defaultGroupName, "The average per-second number of destructed tasks", defaultTags), new Rate(new Count()));
 
-            this.skippedRecordsSensor = metrics.sensor(sensorNamePrefix + ".skipped-records");
-            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The average per-second number of skipped records.", metricTags), new Rate(new Count()));
+            this.skippedRecordsSensor = metrics.sensor(this.defaultPrefix + ".skipped-records");
+            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.defaultGroupName, "The average per-second number of skipped records.", defaultTags), new Rate(new Count()));
         }
 
         public Metrics metrics() {
@@ -1097,7 +1094,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
             return metrics.sensor(sensorName(operationName, entityName), recordLevel);
         }
 
@@ -1117,9 +1114,9 @@ public class StreamThread extends Thread {
 
         private String sensorName(String operationName, String entityName) {
             if (entityName == null) {
-                return sensorNamePrefix + "." + operationName;
+                return defaultPrefix + "." + operationName;
             } else {
-                return sensorNamePrefix + "." + entityName + "-" + operationName;
+                return defaultPrefix + "." + entityName + "-" + operationName;
             }
         }
 
@@ -1129,7 +1126,7 @@ public class StreamThread extends Thread {
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
             // extract the additional tags if there are any
-            Map<String, String> tagMap = new HashMap<>(this.metricTags);
+            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
             if ((tags.length % 2) != 0)
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
 
@@ -1138,7 +1135,7 @@ public class StreamThread extends Thread {
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
-            addLatencyMetrics(scopeName, parent, "all", operationName, this.metricTags);
+            addLatencyMetrics(scopeName, parent, "all", operationName, this.defaultTags);
 
             // add the operation metrics with additional tags
             Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
@@ -1147,10 +1144,34 @@ public class StreamThread extends Thread {
             return sensor;
         }
 
+        /**
+         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+         */
+        @Override
+        public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+            // extract the additional tags if there are any
+            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
+            if ((tags.length % 2) != 0)
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+
+            for (int i = 0; i < tags.length; i += 2)
+                tagMap.put(tags[i], tags[i + 1]);
+
+            // first add the global operation metrics if not yet, with the global tags only
+            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
+            addThroughputMetrics(scopeName, parent, "all", operationName, this.defaultTags);
+
+            // add the operation metrics with additional tags
+            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
+            addThroughputMetrics(scopeName, sensor, entityName, operationName, tagMap);
+
+            return sensor;
+        }
+
         @Override
         public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
             // extract the additional tags if there are any
-            Map<String, String> tagMap = new HashMap<>(this.metricTags);
+            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
             if ((tags.length % 2) != 0)
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
 
@@ -1179,13 +1200,22 @@ public class StreamThread extends Thread {
                 "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
                 "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+            addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
+        }
+
+        private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
                 "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
         }
 
         private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
+            if (name.toString().contains("all-process-avg-latency")) {
+                log.warn("Trying to add metric twice " + name);
+            }
             if (!metrics.metrics().containsKey(name)) {
                 sensor.add(name, stat);
+            } else {
+                log.warn("Trying to add metric twice " + name);
             }
         }
     }

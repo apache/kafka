@@ -72,11 +72,34 @@ public class MockStreamsMetrics implements StreamsMetrics {
 
         return sensor;
     }
+
+    @Override
+    public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+        Map<String, String> tagMap = new HashMap<>();
+        String metricGroupName = "stream-" + scopeName + "-metrics";
+
+        // first add the global operation metrics if not yet, with the global tags only
+        Sensor parent = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + operationName, recordLevel);
+        addThroughputMetrics(metricGroupName, parent, "all", operationName, tagMap);
+
+        // add the store operation metrics with additional tags
+        Sensor sensor = metrics.sensor("sensorNamePrefix" + "." + scopeName + "-" + entityName + "-" + operationName, recordLevel, parent);
+        addThroughputMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+
+        return sensor;
+    }
+
     private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
             "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
             "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
+            "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
+    }
+
+
+    private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
             "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
     }
@@ -92,7 +115,7 @@ public class MockStreamsMetrics implements StreamsMetrics {
     }
 
     @Override
-    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
         return metrics.sensor(scopeName + entityName + operationName, recordLevel);
     }
 

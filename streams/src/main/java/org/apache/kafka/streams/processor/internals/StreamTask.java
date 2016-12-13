@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static java.lang.String.format;
@@ -95,7 +94,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.metrics = new TaskMetrics(metrics, id.toString(), "streams-task");
+        this.metrics = new TaskMetrics(metrics);
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -397,19 +396,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     protected class TaskMetrics  {
         final StreamsMetrics metrics;
-        final String metricGrpName;
-        final Map<String, String> metricTags;
-
         final Sensor taskCommitTimeSensor;
 
 
-        public TaskMetrics(StreamsMetrics metrics, String name, String sensorNamePrefix) {
+        public TaskMetrics(StreamsMetrics metrics) {
+            String name = id.toString();
             this.metrics = metrics;
-            this.metricGrpName = "streams-task-metrics" + name;
-            this.metricTags = new LinkedHashMap<>();
-            this.metricTags.put("streams-task-id", name);
-
-            this.taskCommitTimeSensor = metrics.addLatencySensor("task", sensorNamePrefix + name, "commit", Sensor.RecordLevel.SENSOR_DEBUG, "streams-task-id", name);
+            this.taskCommitTimeSensor = metrics.addLatencySensor("task", name, "commit", Sensor.RecordLevel.SENSOR_DEBUG, "streams-task-id", name);
         }
 
         public void removeAllSensors() {
