@@ -21,6 +21,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -37,17 +38,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.kafka.common.requests.ApiVersionsResponse.API_KEY_NAME;
-import static org.apache.kafka.common.requests.ApiVersionsResponse.API_VERSIONS_KEY_NAME;
-import static org.apache.kafka.common.requests.ApiVersionsResponse.ERROR_CODE_KEY_NAME;
-import static org.apache.kafka.common.requests.ApiVersionsResponse.MAX_VERSION_KEY_NAME;
-import static org.apache.kafka.common.requests.ApiVersionsResponse.MIN_VERSION_KEY_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -163,17 +158,7 @@ public class NetworkClientTest {
         if (expectedApiVersions == null)
             return;
         ResponseHeader respHeader = new ResponseHeader(0);
-        Struct resp = new Struct(ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id));
-        resp.set(ERROR_CODE_KEY_NAME, (short) 0);
-        List<Struct> apiVersionList = new ArrayList<>();
-        for (ApiVersionsResponse.ApiVersion apiVersion : expectedApiVersions) {
-            Struct apiVersionStruct = resp.instance(API_VERSIONS_KEY_NAME);
-            apiVersionStruct.set(API_KEY_NAME, apiVersion.apiKey);
-            apiVersionStruct.set(MIN_VERSION_KEY_NAME, apiVersion.minVersion);
-            apiVersionStruct.set(MAX_VERSION_KEY_NAME, apiVersion.maxVersion);
-            apiVersionList.add(apiVersionStruct);
-        }
-        resp.set(API_VERSIONS_KEY_NAME, apiVersionList.toArray());
+        Struct resp = new ApiVersionsResponse(Errors.NONE.code(), (List<ApiVersionsResponse.ApiVersion>) getExpectedApiVersions()).toStruct();
         int size = respHeader.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
         respHeader.writeTo(buffer);

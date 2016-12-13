@@ -81,7 +81,7 @@ public class MockSelector implements Selectable {
     public void poll(long timeout) throws IOException {
         this.completedSends.addAll(this.initiatedSends);
         this.initiatedSends.clear();
-        for (Send completedSend: completedSends) {
+        for (Send completedSend : completedSends) {
             Iterator<DelayedReceive> delayedReceiveIterator = delayedReceives.iterator();
             while (delayedReceiveIterator.hasNext()) {
                 DelayedReceive delayedReceive = delayedReceiveIterator.next();

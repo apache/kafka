@@ -359,7 +359,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void handleApiVersionsRequest(RequestHeader requestHeader) throws IOException, UnsupportedSaslMechanismException {
-        sendKafkaResponse(requestHeader, ApiVersionsResponse.apiVersionsResponse());
+        sendKafkaResponse(requestHeader, ApiVersionsResponse.API_VERSIONS_RESPONSE);
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {

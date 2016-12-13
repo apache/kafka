@@ -40,11 +40,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Random;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Set;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -55,11 +56,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class NetworkClient implements KafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
-    private static final Collection<ApiVersionsResponse.ApiVersion> NO_APIS = null;
     private static final Metadata NO_METADATA = null;
     private static final MetadataUpdater NO_METADATA_UPDATER = null;
 
-    /* apis used by this client */
+    /* apis used by this client. If this is null, client won't perform api version check against connecting brokers */
     private final Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions;
 
     /* the selector used to perform network i/o */
@@ -97,7 +97,7 @@ public class NetworkClient implements KafkaClient {
 
     private final Map<Integer, Collection<ApiVersionsResponse.ApiVersion>> nodeApiVersions = new HashMap<>();
 
-    private final Queue<String> apiVersionsRequestQueue = new ConcurrentLinkedQueue<>();
+    private final Set<String> apiVersionsRequests = new HashSet<>();
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -108,9 +108,9 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         Collection<ApiVersionsResponse.ApiVersion> apis) {
+                         Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
         this(NO_METADATA_UPDATER, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, apis);
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, requiredApiVersions);
     }
 
     public NetworkClient(Selectable selector,
@@ -123,7 +123,7 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time) {
         this(NO_METADATA_UPDATER, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, NO_APIS);
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, null);
     }
 
     public NetworkClient(Selectable selector,
@@ -135,9 +135,9 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         Collection<ApiVersionsResponse.ApiVersion> apis) {
+                         Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
         this(metadataUpdater, NO_METADATA, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, apis);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, requiredApiVersions);
     }
 
     public NetworkClient(Selectable selector,
@@ -150,7 +150,7 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time) {
         this(metadataUpdater, NO_METADATA, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, NO_APIS);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, null);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -163,9 +163,9 @@ public class NetworkClient implements KafkaClient {
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
                           Time time,
-                          Collection<ApiVersionsResponse.ApiVersion> apis) {
+                          Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
 
-        this.requiredApiVersions = apis;
+        this.requiredApiVersions = requiredApiVersions;
 
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
@@ -268,17 +268,22 @@ public class NetworkClient implements KafkaClient {
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
     }
 
-    private boolean canSendRequest(String node, short apiKey) {
-        return this.requiredApiVersions != null && apiKey == ApiKeys.API_VERSIONS.id && apiVersionsRequestQueue.contains(node) || canSendRequest(node);
-    }
-
     /**
      * Are we connected and ready and able to send more requests to the given connection?
      *
      * @param node The node
      */
     private boolean canSendRequest(String node) {
-        return (this.requiredApiVersions == null ? connectionStates.isConnected(node) : connectionStates.isReady(node)) && selector.isChannelReady(node) && inFlightRequests.canSendMore(node);
+        return connectionStates.isReady(node) && selector.isChannelReady(node) && inFlightRequests.canSendMore(node);
+    }
+
+    /**
+     * Are we connected and able to send API versions request to the given connection?
+     *
+     * @param node The node
+     */
+    private boolean canSendApiVersionsRequest(String node) {
+        return this.requiredApiVersions != null && apiVersionsRequests.contains(node);
     }
 
     /**
@@ -299,7 +304,10 @@ public class NetworkClient implements KafkaClient {
 
     private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
         String nodeId = request.destination();
-        if (!canSendRequest(nodeId, request.header().apiKey()))
+        if (request.header().apiKey() == ApiKeys.API_VERSIONS.id) {
+            if (!canSendApiVersionsRequest(nodeId))
+                throw new IllegalStateException("Attempt to send API Versions request to node " + nodeId + " which is not ready.");
+        } else if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
 
         Send send = request.body().toSend(nodeId, request.header());
@@ -430,7 +438,7 @@ public class NetworkClient implements KafkaClient {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
-            if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {
+            if (currInflight == 0 && this.connectionStates.isReady(node.idString())) {
                 // if we find an established connection with no in-flight requests we can stop right away
                 return node;
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
@@ -463,7 +471,7 @@ public class NetworkClient implements KafkaClient {
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
         nodeApiVersions.remove(nodeId);
-        apiVersionsRequestQueue.remove(nodeId);
+        apiVersionsRequests.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
             if (request.isInternalMetadataRequest)
@@ -525,15 +533,15 @@ public class NetworkClient implements KafkaClient {
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
             if (req.isInternalMetadataRequest)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
-            if (req.header.apiKey() == ApiKeys.API_VERSIONS.id)
-                handleApiVersionsResponse(req, now, body.toStruct());
-            else
+            else if (req.header.apiKey() == ApiKeys.API_VERSIONS.id) {
+                if (body instanceof ApiVersionsResponse)
+                    handleApiVersionsResponse(req, (ApiVersionsResponse) body);
+            } else
                 responses.add(req.completed(body, now));
         }
     }
 
-    private void handleApiVersionsResponse(InFlightRequest req, long now, Struct responseBody) {
-        ApiVersionsResponse apiVersionsResponse = new ApiVersionsResponse(responseBody);
+    private void handleApiVersionsResponse(InFlightRequest req, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
         for (ApiVersionsResponse.ApiVersion requiredApiVersion : requiredApiVersions) {
             final ApiVersionsResponse.ApiVersion supportedApiVersion = apiVersionsResponse.apiVersion(requiredApiVersion.apiKey);
@@ -575,11 +583,15 @@ public class NetworkClient implements KafkaClient {
     private void handleConnections(long now) {
         for (String node : this.selector.connected()) {
             log.debug("Completed connection to node {}", node);
-            this.connectionStates.connected(node);
             // Though the node is connected, we might not still be able to send requests. For instance,
             // in case of SSL connection, SSL handshake happens after connection is established.
-            if (!apiVersionsRequestQueue.contains(node))
-                apiVersionsRequestQueue.add(node);
+            if (this.requiredApiVersions == null) {
+                this.connectionStates.ready(node);
+            } else {
+                this.connectionStates.checkingApiVersions(node);
+                if (!apiVersionsRequests.contains(node))
+                    apiVersionsRequests.add(node);
+            }
         }
         maybeInitiateApiVersionsFetch(now);
     }
@@ -588,15 +600,16 @@ public class NetworkClient implements KafkaClient {
         if (this.requiredApiVersions == null)
             return;
 
-        for (String node : apiVersionsRequestQueue) {
+        Iterator<String> iter = apiVersionsRequests.iterator();
+        while (iter.hasNext()) {
+            String node = iter.next();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
                 this.connectionStates.checkingApiVersions(node);
-                ApiVersionsRequest apiVersionRequest = new ApiVersionsRequest();
                 ClientRequest clientRequest = new ClientRequest(node, now, true,
-                        nextRequestHeader(ApiKeys.API_VERSIONS), apiVersionRequest, null);
+                        nextRequestHeader(ApiKeys.API_VERSIONS), ApiVersionsRequest.API_VERSIONS_REQUEST, null);
                 doSend(clientRequest, false, now);
-                apiVersionsRequestQueue.remove();
+                iter.remove();
             }
         }
     }

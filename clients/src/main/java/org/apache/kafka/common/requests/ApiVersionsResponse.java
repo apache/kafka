@@ -30,8 +30,8 @@ import java.util.Map;
 public class ApiVersionsResponse extends AbstractResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id);
-    private static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse();
 
+    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse();
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String API_VERSIONS_KEY_NAME = "api_versions";
     public static final String API_KEY_NAME = "api_key";
@@ -106,10 +106,6 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionsResponse fromError(Errors error) {
         return new ApiVersionsResponse(error.code(), Collections.<ApiVersion>emptyList());
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse() {
-        return API_VERSIONS_RESPONSE;
     }
 
     private static ApiVersionsResponse createApiVersionsResponse() {

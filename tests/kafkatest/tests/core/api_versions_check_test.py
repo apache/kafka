@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_9, LATEST_0_8_2, TRUNK, KafkaVersion
+from kafkatest.version import LATEST_0_9, LATEST_0_8_2, TRUNK, LATEST_0_10, KafkaVersion
 
 
 # Tests to check api versions check is performed correctly.
@@ -45,9 +45,10 @@ class ApiVersionsCheckTest(ProduceConsumeValidateTest):
         self.messages_per_producer = 1000
 
     @parametrize(broker_version=str(TRUNK), should_fail=False)
+    @parametrize(broker_version=str(LATEST_0_10), should_fail=True)
     @parametrize(broker_version=str(LATEST_0_9), should_fail=True)
     @parametrize(broker_version=str(LATEST_0_8_2), should_fail=True)
-    def test_api_versions_check(self, broker_version, should_fail=False):
+    def test_api_versions_check(self, broker_version, should_fail):
 
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=KafkaVersion(broker_version), topics={self.topic: {
                                                                     "partitions": 1,

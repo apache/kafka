@@ -30,7 +30,6 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -39,46 +38,41 @@ import static org.apache.kafka.common.requests.ApiVersionsResponse.API_VERSIONS_
 import static org.apache.kafka.common.requests.ApiVersionsResponse.ERROR_CODE_KEY_NAME;
 import static org.apache.kafka.common.requests.ApiVersionsResponse.MAX_VERSION_KEY_NAME;
 import static org.apache.kafka.common.requests.ApiVersionsResponse.MIN_VERSION_KEY_NAME;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class NetworkClientApiVersionsCheckTest extends NetworkClientTest {
 
-    private static final List<Short> USED_API_KEYS = Arrays.asList(
-            ApiKeys.METADATA.id,
-            ApiKeys.FETCH.id,
-            ApiKeys.GROUP_COORDINATOR.id,
-            ApiKeys.HEARTBEAT.id,
-            ApiKeys.JOIN_GROUP.id,
-            ApiKeys.LEAVE_GROUP.id,
-            ApiKeys.LIST_OFFSETS.id,
-            ApiKeys.OFFSET_COMMIT.id,
-            ApiKeys.OFFSET_FETCH.id,
-            ApiKeys.SYNC_GROUP.id);
+    private static final ApiKeys USED_API_KEY = ApiKeys.METADATA;
+    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = createExpectedApiVersions();
+
+    private static Collection<ApiVersionsResponse.ApiVersion> createExpectedApiVersions() {
+        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
+        expectedApiVersions.add(new ApiVersionsResponse.ApiVersion(USED_API_KEY.id, Protocol.MIN_VERSIONS[USED_API_KEY.id], Protocol.CURR_VERSION[USED_API_KEY.id]));
+        return expectedApiVersions;
+    }
 
     @Override
     protected Collection<ApiVersionsResponse.ApiVersion> getExpectedApiVersions() {
-        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
-        for (Short apiKey: this.USED_API_KEYS)
-            expectedApiVersions.add(new ApiVersionsResponse.ApiVersion(apiKey, Protocol.MIN_VERSIONS[apiKey], Protocol.CURR_VERSION[apiKey]));
-        return expectedApiVersions;
+        return EXPECTED_API_VERSIONS;
     }
 
     @Test
     public void testUnsupportedLesserApiVersions() {
-        unsupportedApiVersionsCheck(getExpectedApiVersions(), (short) (Short.MAX_VALUE - 2), Short.MAX_VALUE);
+        unsupportedApiVersionsCheck(getExpectedApiVersions(), (short) (ProtoUtils.latestVersion(USED_API_KEY.id) + 1), Short.MAX_VALUE, "Node 0 does not support required versions for Api " + USED_API_KEY.id);
     }
 
     @Test
     public void testUnsupportedGreaterApiVersions() {
-        unsupportedApiVersionsCheck(getExpectedApiVersions(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2));
+        unsupportedApiVersionsCheck(getExpectedApiVersions(), Short.MIN_VALUE, (short) (ProtoUtils.oldestVersion(USED_API_KEY.id) - 1), "Node 0 does not support required versions for Api " + USED_API_KEY.id);
     }
 
     @Test
     public void testUnsupportedMissingApiVersions() {
-        unsupportedApiVersionsCheck(new ArrayList<ApiVersionsResponse.ApiVersion>(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2));
+        unsupportedApiVersionsCheck(new ArrayList<ApiVersionsResponse.ApiVersion>(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2), "Node 0 does not support Api " + USED_API_KEY.id);
     }
 
-    private void unsupportedApiVersionsCheck(final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions, short minVersion, short maxVersion) {
+    private void unsupportedApiVersionsCheck(final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions, short minVersion, short maxVersion, String errorMessage) {
         ResponseHeader respHeader = new ResponseHeader(0);
         Struct resp = new Struct(ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id));
         resp.set(ERROR_CODE_KEY_NAME, (short) 0);
@@ -100,9 +94,9 @@ public class NetworkClientApiVersionsCheckTest extends NetworkClientTest {
         try {
             while (!client.ready(node, time.milliseconds()))
                 client.poll(1, time.milliseconds());
-            fail("Api versions check failed.");
+            fail("Api versions check failed. Should have thrown KafkaException as required api versions are not supported.");
         } catch (KafkaException kex) {
-            // Expected
+            assertTrue("Api versions check should have failed.", kex.getMessage().contains(errorMessage));
         }
     }
 }

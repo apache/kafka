@@ -22,8 +22,12 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
-
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id);
+    public static final ApiVersionsRequest API_VERSIONS_REQUEST = createApiVersionsRequest();
+
+    private static ApiVersionsRequest createApiVersionsRequest() {
+        return new ApiVersionsRequest();
+    }
 
     public ApiVersionsRequest() {
         super(new Struct(CURRENT_SCHEMA));

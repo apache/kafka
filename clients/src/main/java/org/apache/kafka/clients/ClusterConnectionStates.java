@@ -95,24 +95,6 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true iff a specific connection is connected.
-     * @param id the id of the connection to check
-     */
-    public boolean isConnected(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.CONNECTED;
-    }
-
-    /**
-     * Enter the connected state for the given connection.
-     * @param id the connection identifier
-     */
-    public void connected(String id) {
-        NodeConnectionState nodeState = nodeState(id);
-        nodeState.state = ConnectionState.CONNECTED;
-    }
-
-    /**
      * Enter the disconnected state for the given node.
      * @param id the connection we have disconnected
      * @param now the current time
@@ -130,6 +112,15 @@ final class ClusterConnectionStates {
     public void checkingApiVersions(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.CHECKING_API_VERSIONS;
+    }
+
+    /**
+     * Return true if the connection is checking_api_versions.
+     * @param id the connection identifier
+     */
+    public boolean isCheckingApiVersions(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state == ConnectionState.CHECKING_API_VERSIONS;
     }
 
     /**

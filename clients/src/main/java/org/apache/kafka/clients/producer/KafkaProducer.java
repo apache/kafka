@@ -40,7 +40,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
@@ -53,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -139,9 +137,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * APIs used by KafkaProducer
      */
-    private static final List<Short> USED_API_KEYS = Arrays.asList(
-            ApiKeys.METADATA.id,
-            ApiKeys.PRODUCE.id);
+    private static final List<ApiKeys> PRODUCER_APIS = Arrays.asList(
+            ApiKeys.METADATA,
+            ApiKeys.PRODUCE);
+    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(PRODUCER_APIS);
 
     private String clientId;
     private final Partitioner partitioner;
@@ -321,7 +320,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                     this.requestTimeoutMs,
                     time,
-                    expectedApiVersions());
+                    EXPECTED_API_VERSIONS);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
@@ -349,15 +348,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
-    }
-
-    private Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions() {
-        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
-        for (Short apiKey : this.USED_API_KEYS)
-            expectedApiVersions.add(
-                    new ApiVersionsResponse.ApiVersion(
-                            apiKey, Protocol.MIN_VERSIONS[apiKey], Protocol.CURR_VERSION[apiKey]));
-        return expectedApiVersions;
     }
 
     private static int parseAcks(String acksString) {

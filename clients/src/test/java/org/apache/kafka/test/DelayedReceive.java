@@ -22,8 +22,8 @@ import org.apache.kafka.common.network.NetworkReceive;
  * Used by MockSelector to allow clients to add responses whose associated requests are added later.
  */
 public class DelayedReceive {
-    private String source;
-    private NetworkReceive receive;
+    private final String source;
+    private final NetworkReceive receive;
 
     public DelayedReceive(String source, NetworkReceive receive) {
         this.source = source;
