@@ -493,6 +493,17 @@ public class ThreadCacheTest {
         threadCache.put("name", new byte[]{2}, dirtyEntry(new byte[remaining + 100]));
     }
 
+    @Test
+    public void shouldCleanupNamedCacheOnClose() throws Exception {
+        final ThreadCache cache = new ThreadCache(100000);
+        cache.put("one", new byte[]{1}, cleanEntry(new byte[] {1}));
+        cache.put("two", new byte[]{1}, cleanEntry(new byte[] {1}));
+        assertEquals(cache.size(), 2);
+        cache.close("two");
+        assertEquals(cache.size(), 1);
+        assertNull(cache.get("two", new byte[] {1}));
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, true, -1, -1, -1, "");
     }
