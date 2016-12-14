@@ -57,6 +57,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -886,6 +887,54 @@ public class StreamPartitionAssignorTest {
             new TopicPartition("topic2", 2)
         );
         assertThat(expectedAssignment, equalTo(assignment.get(client).partitions()));
+    }
+
+    @Test
+    public void shouldDoSomethingCorrectlyWithStandbyTasks() throws Exception {
+        final Properties props = configProps();
+        props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String applicationId = "appId";
+        builder.setApplicationId(applicationId);
+        builder.stream("topic1").groupByKey().count("count");
+
+        final UUID uuid = UUID.randomUUID();
+        final String client = "client1";
+
+        final StreamThread streamThread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, client, uuid, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
+
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        partitionAssignor.configure(config.getConsumerConfigs(streamThread, applicationId, client));
+
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.<TaskId>emptySet();
+        subscriptions.put(
+                "consumer1",
+                new PartitionAssignor.Subscription(
+                        Collections.singletonList("topic1"),
+                        new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
+                )
+        );
+
+        subscriptions.put(
+                "consumer2",
+                new PartitionAssignor.Subscription(
+                        Collections.singletonList("topic1"),
+                        new SubscriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, "other:9090").encode()
+                )
+        );
+        final Set<TopicPartition> allPartitions = Utils.mkSet(t1p0, t1p1, t1p2);
+        final Map<String, PartitionAssignor.Assignment> assign = partitionAssignor.assign(metadata, subscriptions);
+        final PartitionAssignor.Assignment consumer1Assignment = assign.get("consumer1");
+        final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumer1Assignment.userData());
+        final Set<TopicPartition> consumer1partitions = assignmentInfo.partitionsByHost.get(new HostInfo("localhost", 2171));
+        final Set<TopicPartition> consumer2Partitions = assignmentInfo.partitionsByHost.get(new HostInfo("other", 9090));
+        final HashSet<TopicPartition> allAssignedPartitions = new HashSet<>(consumer1partitions);
+        allAssignedPartitions.addAll(consumer2Partitions);
+        assertThat(consumer1partitions, not(allPartitions));
+        assertThat(consumer2Partitions, not(allPartitions));
+        assertThat(allAssignedPartitions, equalTo(allPartitions));
     }
 
     private AssignmentInfo checkAssignment(Set<String> expectedTopics, PartitionAssignor.Assignment assignment) {

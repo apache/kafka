@@ -481,7 +481,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final ClientState<TaskId> state = entry.getValue().state;
 
-                for (TaskId id : state.assignedTasks) {
+                for (TaskId id : state.activeTasks) {
                     topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
