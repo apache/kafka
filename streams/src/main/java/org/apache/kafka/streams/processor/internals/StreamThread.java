@@ -1231,15 +1231,17 @@ public class StreamThread extends Thread {
             log.debug("{} creating new standby task {}", logPrefix, taskId);
             final StandbyTask task = createStandbyTask(taskId, partitions);
 
-            standbyTasks.put(taskId, task);
+            if (task != null) {
+                standbyTasks.put(taskId, task);
 
-            for (TopicPartition partition : partitions) {
-                standbyTasksByPartition.put(partition, task);
-            }
-            // collect checked pointed offsets to position the restore consumer
-            // this include all partitions from which we restore states
-            for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
-                standbyTasksByPartition.put(partition, task);
+                for (TopicPartition partition : partitions) {
+                    standbyTasksByPartition.put(partition, task);
+                }
+                // collect checked pointed offsets to position the restore consumer
+                // this include all partitions from which we restore states
+                for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                    standbyTasksByPartition.put(partition, task);
+                }
             }
         }
     }

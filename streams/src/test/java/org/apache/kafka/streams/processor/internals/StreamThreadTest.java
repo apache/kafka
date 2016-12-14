@@ -593,6 +593,28 @@ public class StreamThreadTest {
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
     }
 
+    @Test
+    public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.setApplicationId("appId")
+                .addSource("name", "topic")
+                .addSink("out", "output");
+
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId,
+                                               clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
+
+        thread.partitionAssignor(new StreamPartitionAssignor() {
+            @Override
+            Map<TaskId, Set<TopicPartition>> standbyTasks() {
+                return Collections.singletonMap(new TaskId(0, 0), Utils.mkSet(new TopicPartition("topic", 0)));
+            }
+        });
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+    }
+
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {
 
         StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
