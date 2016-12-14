@@ -84,7 +84,7 @@ public class SessionWindows {
      *
      * @return  itself
      */
-    public SessionWindows until(long durationMs) {
+    public SessionWindows until(final long durationMs) {
         this.maintainDurationMs = durationMs;
         return this;
     }

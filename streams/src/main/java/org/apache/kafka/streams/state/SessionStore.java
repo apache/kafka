@@ -30,7 +30,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * Fetch any session aggregates with the matching key and the sessions end is >= earliestEndTime and the sessions
      * start is <= latestStartTime
      */
-    KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(K key, long earliestSessionEndTime, long latestSessionStartTime);
+    KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store
