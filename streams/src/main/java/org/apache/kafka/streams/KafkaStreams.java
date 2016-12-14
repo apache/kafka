@@ -309,7 +309,7 @@ public class KafkaStreams {
             setState(KafkaStreams.State.RUNNING);
 
             for (final StreamThread thread : threads) {
-                threadState.put(thread.getId(), StreamThread.State.RUNNING);
+                threadState.put(thread.getId(), thread.state());
                 thread.start();
             }
 
