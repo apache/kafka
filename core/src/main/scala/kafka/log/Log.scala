@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
@@ -47,7 +47,6 @@ object LogAppendInfo {
  *
  * @param firstOffset The first offset in the message set
  * @param lastOffset The last offset in the message set
- * @param maxOffset the maximum offset of the message set.
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
@@ -59,7 +58,6 @@ object LogAppendInfo {
  */
 case class LogAppendInfo(var firstOffset: Long,
                          var lastOffset: Long,
-                         var maxOffset: Long,
                          var maxTimestamp: Long,
                          var offsetOfMaxTimestamp: Long,
                          var logAppendTime: Long,
@@ -415,12 +413,12 @@ class Log(@volatile var dir: File,
         // maybe roll the log if this segment is full
         val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
           maxTimestampInMessages = appendInfo.maxTimestamp,
-          maxOffsetInMessages = appendInfo.maxOffset)
+          maxOffsetInMessages = appendInfo.lastOffset)
 
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset,
-          largestOffset = appendInfo.maxOffset,
+          largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
@@ -463,7 +461,6 @@ class Log(@volatile var dir: File,
     var validBytesCount = 0
     var firstOffset = -1L
     var lastOffset = -1L
-    var maxOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     var maxTimestamp = Record.NO_TIMESTAMP
@@ -475,9 +472,6 @@ class Log(@volatile var dir: File,
       // check that offsets are monotonically increasing
       if(lastOffset >= entry.offset)
         monotonic = false
-      // keep track of the highest offset seen
-      if (maxOffset < entry.offset)
-        maxOffset = entry.offset
       // update the last offset seen
       lastOffset = entry.offset
 
@@ -509,7 +503,7 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
-    LogAppendInfo(firstOffset, lastOffset, maxOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec,
+    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec,
       targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
