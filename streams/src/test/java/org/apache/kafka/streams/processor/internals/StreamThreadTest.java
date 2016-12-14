@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -600,6 +602,7 @@ public class StreamThreadTest {
                 .addSource("name", "topic")
                 .addSink("out", "output");
 
+
         final StreamsConfig config = new StreamsConfig(configProps());
         final StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId,
                                                clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
@@ -613,6 +616,58 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+    }
+
+    @Test
+    public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("appId");
+        builder.stream("t1").groupByKey().count("count-one");
+        builder.stream("t2").groupByKey().count("count-two");
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
+
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+        restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
+                                         Collections.singletonList(new PartitionInfo("stream-thread-test-count-one-changelog",
+                                                                                     0,
+                                                                                     null,
+                                                                                     new Node[0],
+                                                                                     new Node[0])));
+        restoreConsumer.updatePartitions("stream-thread-test-count-two-changelog",
+                                         Collections.singletonList(new PartitionInfo("stream-thread-test-count-two-changelog",
+                                                                                     0,
+                                                                                     null,
+                                                                                     new Node[0],
+                                                                                     new Node[0])));
+
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final TopicPartition t1 = new TopicPartition("t1", 0);
+        standbyTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
+
+        thread.partitionAssignor(new StreamPartitionAssignor() {
+            @Override
+            Map<TaskId, Set<TopicPartition>> standbyTasks() {
+                return standbyTasks;
+            }
+        });
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+
+        assertThat(restoreConsumer.assignment(), equalTo(Utils.mkSet(new TopicPartition("stream-thread-test-count-one-changelog", 0))));
+
+        // assign an existing standby plus a new one
+        standbyTasks.put(new TaskId(1, 0), Utils.mkSet(new TopicPartition("t2", 0)));
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+
+        assertThat(restoreConsumer.assignment(), equalTo(Utils.mkSet(new TopicPartition("stream-thread-test-count-one-changelog", 0),
+                                                                     new TopicPartition("stream-thread-test-count-two-changelog", 0))));
+
     }
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {
