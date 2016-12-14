@@ -66,7 +66,6 @@ public class WorkerGroupMember {
             ApiKeys.HEARTBEAT,
             ApiKeys.JOIN_GROUP,
             ApiKeys.LEAVE_GROUP,
-            ApiKeys.LIST_OFFSETS,
             ApiKeys.SYNC_GROUP);
     private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(WORKER_GROUP_MEMBER_APIS);
 

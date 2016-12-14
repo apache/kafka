@@ -534,7 +534,7 @@ public class NetworkClient implements KafkaClient {
             if (req.isInternalMetadataRequest)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
             else if (body instanceof ApiVersionsResponse)
-                    handleApiVersionsResponse(req, (ApiVersionsResponse) body);
+                handleApiVersionsResponse(req, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
         }
