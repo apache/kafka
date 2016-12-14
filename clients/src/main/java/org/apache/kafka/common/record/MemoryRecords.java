@@ -127,6 +127,9 @@ public class MemoryRecords extends AbstractRecords {
                     if (shallowMagic != deepRecord.magic())
                         writeOriginalEntry = false;
 
+                    if (deepEntry.offset() > maxOffset)
+                        maxOffset = deepEntry.offset();
+
                     retainedEntries.add(deepEntry);
                 } else {
                     writeOriginalEntry = false;
@@ -143,9 +146,6 @@ public class MemoryRecords extends AbstractRecords {
                     maxTimestamp = shallowRecord.timestamp();
                     shallowOffsetOfMaxTimestamp = shallowEntry.offset();
                 }
-                if (shallowEntry.offset() > maxOffset) {
-                    maxOffset = shallowEntry.offset();
-                }
             } else if (!retainedEntries.isEmpty()) {
                 ByteBuffer slice = buffer.slice();
                 MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),
@@ -159,9 +159,6 @@ public class MemoryRecords extends AbstractRecords {
                 if (info.maxTimestamp > maxTimestamp) {
                     maxTimestamp = info.maxTimestamp;
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
-                }
-                if (shallowEntry.offset() > maxOffset) {
-                    maxOffset = shallowEntry.offset();
                 }
             }
         }
