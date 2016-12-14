@@ -95,7 +95,8 @@ public class MemoryRecords extends AbstractRecords {
      */
     public FilterResult filterTo(LogEntryFilter filter, ByteBuffer buffer) {
         long maxTimestamp = Record.NO_TIMESTAMP;
-        long maxOffset = -1L, shallowOffsetOfMaxTimestamp = -1L;
+        long maxOffset = -1L;
+        long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
         int bytesRead = 0;
         int messagesRetained = 0;

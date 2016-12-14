@@ -461,7 +461,9 @@ class Log(@volatile var dir: File,
   private def analyzeAndValidateRecords(records: MemoryRecords): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset, lastOffset, maxOffset = -1L
+    var firstOffset = -1L
+    var lastOffset = -1L
+    var maxOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     var maxTimestamp = Record.NO_TIMESTAMP
