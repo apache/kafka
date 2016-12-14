@@ -129,6 +129,8 @@ public class SimpleBenchmark {
         benchmark.processStreamWithSink(SOURCE_TOPIC);
         // simple stream performance source->store
         benchmark.processStreamWithStateStore(SOURCE_TOPIC);
+        // simple stream performance source->cache->store
+        benchmark.processStreamWithCachedStateStore(SOURCE_TOPIC);
         // simple streams performance KSTREAM-KTABLE join
         benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "kStreamKTable", JOIN_TOPIC_2_PREFIX + "kStreamKTable");
         // simple streams performance KSTREAM-KSTREAM join
@@ -303,11 +305,8 @@ public class SimpleBenchmark {
         }
     }
 
-    public void processStreamWithStateStore(String topic) {
-        CountDownLatch latch = new CountDownLatch(1);
-
-        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, zookeeper, latch);
-
+    private void internalProcessStreamWithStore(final KafkaStreams streams, final CountDownLatch latch,
+                                                final String message) {
         Thread thread = new Thread() {
             public void run() {
                 streams.start();
@@ -327,7 +326,7 @@ public class SimpleBenchmark {
 
         long endTime = System.currentTimeMillis();
 
-        System.out.println("Streams Performance [MB/sec read+store]: " + megaBytePerSec(endTime - startTime));
+        System.out.println(message + megaBytePerSec(endTime - startTime));
 
         streams.close();
         try {
@@ -335,6 +334,21 @@ public class SimpleBenchmark {
         } catch (Exception ex) {
             // ignore
         }
+    }
+    public void processStreamWithStateStore(String topic) {
+        CountDownLatch latch = new CountDownLatch(1);
+
+        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, zookeeper, latch, false);
+        internalProcessStreamWithStore(streams, latch, "Streams Performance [MB/sec read+store]: ");
+
+    }
+
+    public void processStreamWithCachedStateStore(String topic) {
+        CountDownLatch latch = new CountDownLatch(1);
+
+        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, zookeeper, latch, true);
+
+        internalProcessStreamWithStore(streams, latch, "Streams Performance [MB/sec read+cache+store]: ");
     }
 
     /**
@@ -555,9 +569,10 @@ public class SimpleBenchmark {
     }
 
     private KafkaStreams createKafkaStreamsWithStateStore(String topic, File stateDir, String kafka, String zookeeper,
-                                                          final CountDownLatch latch) {
+                                                          final CountDownLatch latch,
+                                                          boolean enableCaching) {
         Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-streams-with-store");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-streams-with-store" + enableCaching);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
@@ -566,8 +581,11 @@ public class SimpleBenchmark {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().build());
-
+        if (enableCaching) {
+            builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().enableCaching().build());
+        } else {
+            builder.addStateStore(Stores.create("store").withIntegerKeys().withByteArrayValues().persistent().build());
+        }
         KStream<Integer, byte[]> source = builder.stream(INTEGER_SERDE, BYTE_SERDE, topic);
 
         source.process(new ProcessorSupplier<Integer, byte[]>() {

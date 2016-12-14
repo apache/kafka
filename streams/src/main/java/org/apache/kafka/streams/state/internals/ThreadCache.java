@@ -328,15 +328,14 @@ public class ThreadCache {
 
     public static class NullThreadCacheMetrics implements ThreadCacheMetrics {
         @Override
-        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
+        public Sensor addCacheSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
             return null;
         }
 
         @Override
         public void recordCacheSensor(Sensor sensor, double value) {
-            // do nothing
+            return;
         }
-
     }
 
 }

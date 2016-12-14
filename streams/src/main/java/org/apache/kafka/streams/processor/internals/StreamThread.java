@@ -1062,6 +1062,7 @@ public class StreamThread extends Thread {
         final Sensor taskDestructionSensor;
         final Sensor skippedRecordsSensor;
 
+
         public StreamsMetricsImpl(Metrics metrics) {
             this.metrics = metrics;
             this.defaultGroupName = "stream-metrics";
@@ -1140,11 +1141,7 @@ public class StreamThread extends Thread {
             }
         }
 
-        /**
-         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-         */
-        @Override
-        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+        private Map<String, String> tagMap(String... tags) {
             // extract the additional tags if there are any
             Map<String, String> tagMap = new HashMap<>(this.defaultTags);
             if ((tags.length % 2) != 0)
@@ -1152,6 +1149,18 @@ public class StreamThread extends Thread {
 
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
+
+            return tagMap;
+        }
+
+
+
+        /**
+         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+         */
+        @Override
+        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+            Map<String, String> tagMap = tagMap(tags);
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
@@ -1169,13 +1178,7 @@ public class StreamThread extends Thread {
          */
         @Override
         public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
-            // extract the additional tags if there are any
-            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
-            if ((tags.length % 2) != 0)
-                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
-
-            for (int i = 0; i < tags.length; i += 2)
-                tagMap.put(tags[i], tags[i + 1]);
+            Map<String, String> tagMap = tagMap(tags);
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
@@ -1189,29 +1192,26 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
-            // extract the additional tags if there are any
-            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
-            if ((tags.length % 2) != 0)
-                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+        public Sensor addCacheSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel,  String... tags) {
+            Map<String, String> tagMap = tagMap(tags);
 
-            for (int i = 0; i < tags.length; i += 2)
-                tagMap.put(tags[i], tags[i + 1]);
+            // first add the global operation metrics if not yet, with the global tags only
+            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
+            addCacheMetrics(scopeName, parent, "all", operationName, this.defaultTags);
 
-            String metricGroupName = "stream-thread-cache-metrics";
-
-            Sensor sensor = metrics.sensor(sensorName(operationName, entityName));
-            addCacheMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+            // add additional parents
+            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
+            addCacheMetrics(scopeName, sensor, entityName, operationName, tagMap);
             return sensor;
 
         }
 
-        private void addCacheMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", metricGrpName,
+        private void addCacheMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", groupNameFromScope(scopeName),
                 "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", groupNameFromScope(scopeName),
                 "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", groupNameFromScope(scopeName),
                 "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
         }
 
@@ -1235,7 +1235,7 @@ public class StreamThread extends Thread {
             if (!metrics.metrics().containsKey(name)) {
                 sensor.add(name, stat);
             } else {
-                log.warn("Trying to add metric twice " + name);
+                log.debug("Trying to add metric twice " + name);
             }
         }
     }

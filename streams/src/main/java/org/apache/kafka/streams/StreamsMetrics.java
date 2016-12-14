@@ -37,6 +37,11 @@ public interface StreamsMetrics {
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
     /**
+     * Record the given latency value of the sensor.
+     */
+    void recordLatency(Sensor sensor, long startNs, long endNs);
+
+    /**
      * Add a throughput sensor. This is equivalent to adding a sensor with metrics rate.
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
@@ -48,10 +53,6 @@ public interface StreamsMetrics {
      */
     Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
-    /**
-     * Record the given latency value of the sensor.
-     */
-    void recordLatency(Sensor sensor, long startNs, long endNs);
 
     /**
      * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordLevel, String...)}

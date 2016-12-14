@@ -56,10 +56,13 @@ class NamedCache {
     }
 
     NamedCache(final String name, final ThreadCacheMetrics metrics) {
+        final String scope = "record-cache";
+        final String tagKey = "record-cache-id";
+        final String tagValue = name;
         this.name = name;
         this.metrics = metrics != null ? metrics : new ThreadCache.NullThreadCacheMetrics();
 
-        this.hitRatio = this.metrics.addCacheSensor(name, "hitRatio");
+        this.hitRatio = this.metrics.addCacheSensor("record-cache", name, "hitRatio", Sensor.RecordLevel.SENSOR_DEBUG, tagKey, tagValue);
     }
 
     synchronized long hits() {
