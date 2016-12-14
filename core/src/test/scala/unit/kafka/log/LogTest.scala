@@ -1034,10 +1034,10 @@ class LogTest extends JUnitSuite {
     //Writes into an empty log with baseOffset 0
     log.append(set1, false)
     assertEquals(0L, log.activeSegment.baseOffset)
-    //This write will roll the segment, yielding a new segment with base offset = max(1, 2) = 2
+    //This write will roll the segment, yielding a new segment with base offset = max(2, 1) = 2
     log.append(set2, false)
     assertEquals(2L, log.activeSegment.baseOffset)
-    //This will also roll the segment, yielding a new segment with base offset = max(Integer.MAX_VALUE+3, 3) = Integer.MAX_VALUE+3
+    //This will also roll the segment, yielding a new segment with base offset = max(3, Integer.MAX_VALUE+3) = Integer.MAX_VALUE+3
     log.append(set3, false)
     assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
     //This will go into the existing log
