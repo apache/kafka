@@ -160,6 +160,9 @@ public class MemoryRecords extends AbstractRecords {
                     maxTimestamp = info.maxTimestamp;
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
                 }
+                if (shallowEntry.offset() > maxOffset) {
+                    maxOffset = shallowEntry.offset();
+                }
             }
         }
 
