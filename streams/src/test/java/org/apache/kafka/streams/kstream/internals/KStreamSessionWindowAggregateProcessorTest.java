@@ -263,9 +263,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("b", "1");
         processor.process("c", "1");
 
-        assertEquals(results, Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(1L, null)),
-                                            KeyValue.pair(new Windowed<>("b", new TimeWindow(0, 0)), new Change<>(1L, null)),
-                                            KeyValue.pair(new Windowed<>("c", new TimeWindow(0, 0)), new Change<>(1L, null))));
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(1L, null)),
+                                   KeyValue.pair(new Windowed<>("b", new TimeWindow(0, 0)), new Change<>(1L, null)),
+                                   KeyValue.pair(new Windowed<>("c", new TimeWindow(0, 0)), new Change<>(1L, null))), results);
     }
 
     @Test
@@ -277,10 +277,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("a", "1");
         context.setTime(5);
         processor.process("a", "1");
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(1L, null)),
+                                   KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(null, null)),
+                                   KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 5)), new Change<>(2L, null))), results);
 
-        assertEquals(results, Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(1L, null)),
-                                            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 5)), new Change<>(2L, null)),
-                                            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), new Change<>(null, null))));
     }
 
 }

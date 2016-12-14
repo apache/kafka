@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
@@ -59,6 +60,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
     public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        validateStoreOpen();
         final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(name, key));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name,
                                                                                   keySchema.lowerRange(binarySessionId,
@@ -74,10 +76,12 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
 
 
     public void remove(final Windowed<K> sessionKey) {
+        validateStoreOpen();
         put(sessionKey, null);
     }
 
     public void put(final Windowed<K> key, AGG value) {
+        validateStoreOpen();
         final Bytes binaryKey = SessionKeyBinaryConverter.toBinary(key, keySerde.serializer());
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
@@ -120,28 +124,31 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    final Bytes binaryKey = entry.key();
-                    final RecordContext current = context.recordContext();
-                    context.setRecordContext(entry.recordContext());
-                    try {
-                        if (flushListener != null) {
-                            final Windowed<K> key = SessionKeyBinaryConverter.from(binaryKey.get(), keySerde.deserializer());
-                            final AGG newValue = serdes.valueFrom(entry.newValue());
-                            final AGG oldValue = fetchPrevious(binaryKey);
-                            if (!(newValue == null && oldValue == null)) {
-                                flushListener.apply(key,
-                                                    newValue == null ? null : newValue, oldValue);
-                            }
-
-                        }
-                        bytesStore.put(binaryKey, entry.newValue());
-                    } finally {
-                        context.setRecordContext(current);
-                    }
+                    putAndMaybeForward(entry, context);
                 }
             }
         });
 
+    }
+
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+        final Bytes binaryKey = entry.key();
+        final RecordContext current = context.recordContext();
+        context.setRecordContext(entry.recordContext());
+        try {
+            if (flushListener != null) {
+                final Windowed<K> key = SessionKeyBinaryConverter.from(binaryKey.get(), keySerde.deserializer());
+                final AGG newValue = serdes.valueFrom(entry.newValue());
+                final AGG oldValue = fetchPrevious(binaryKey);
+                if (!(newValue == null && oldValue == null)) {
+                    flushListener.apply(key, newValue == null ? null : newValue, oldValue);
+                }
+
+            }
+            bytesStore.put(binaryKey, entry.newValue());
+        } finally {
+            context.setRecordContext(current);
+        }
     }
 
     private AGG fetchPrevious(final Bytes key) {
@@ -159,7 +166,9 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
     }
 
     public void close() {
+        flush();
         bytesStore.close();
+        cache.close(name);
     }
 
     public boolean persistent() {
@@ -174,6 +183,11 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         this.flushListener = flushListener;
     }
 
+    private void validateStoreOpen() {
+        if (!isOpen()) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
+        }
+    }
 
 
     private static class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {

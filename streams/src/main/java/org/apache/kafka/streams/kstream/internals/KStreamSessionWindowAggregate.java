@@ -103,15 +103,14 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
-            store.put(sessionKey, agg);
-            tupleForwarder.maybeForward(sessionKey, agg, null);
             if (!mergedWindow.equals(newTimeWindow)) {
                 for (final KeyValue<Windowed<K>, T> session : merged) {
                     store.remove(session.key);
                     tupleForwarder.maybeForward(session.key, null, session.value);
                 }
             }
-
+            store.put(sessionKey, agg);
+            tupleForwarder.maybeForward(sessionKey, agg, null);
         }
 
     }

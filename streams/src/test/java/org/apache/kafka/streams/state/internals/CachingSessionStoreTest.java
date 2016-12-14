@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -146,6 +147,39 @@ public class CachingSessionStoreTest {
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldClearNamespaceCacheOnClose() throws Exception {
+        final Windowed<String> a1 = new Windowed<>("a", new TimeWindow(0, 0));
+        cachingStore.put(a1, 1L);
+        assertEquals(1, cache.size());
+        cachingStore.close();
+        assertEquals(0, cache.size());
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToFetchFromClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.fetch("a");
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.findSessionsToMerge("a", 0, Long.MAX_VALUE);
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToRemoveFromClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.remove(new Windowed<>("a", new TimeWindow(0, 0)));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToPutIntoClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.put(new Windowed<>("a", new TimeWindow(0, 0)), 1L);
     }
 
     private List<KeyValue<Windowed<String>, Long>> addSessionsUntilOverflow(final String...sessionIds) {
