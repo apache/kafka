@@ -292,6 +292,7 @@ public class KafkaStreams {
                 time,
                 streamsMetadataState);
             threads[i].setStateListener(streamStateListener);
+            threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
         queryableStoreProvider = new QueryableStoreProvider(storeProviders);
@@ -309,7 +310,6 @@ public class KafkaStreams {
             setState(KafkaStreams.State.RUNNING);
 
             for (final StreamThread thread : threads) {
-                threadState.put(thread.getId(), thread.state());
                 thread.start();
             }
 
