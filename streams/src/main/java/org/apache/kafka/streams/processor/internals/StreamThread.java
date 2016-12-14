@@ -165,9 +165,7 @@ public class StreamThread extends Thread {
         }
         state = newState;
         if (stateListener != null) {
-            synchronized (stateListener) {
-                stateListener.onChange(this, state, oldState);
-            }
+            stateListener.onChange(this, state, oldState);
         }
     }
 

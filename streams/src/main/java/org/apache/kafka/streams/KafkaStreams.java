@@ -207,7 +207,7 @@ public class KafkaStreams {
 
     private class StreamStateListener implements StreamThread.StateListener {
         @Override
-        public void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
+        public synchronized void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
             threadState.put(thread.getId(), newState);
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
