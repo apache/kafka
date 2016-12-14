@@ -56,6 +56,15 @@ public class ApiVersionsResponse extends AbstractResponse {
             this.minVersion = minVersion;
             this.maxVersion = maxVersion;
         }
+
+        @Override
+        public String toString() {
+            return "ApiVersion {" +
+                    " apiKey: " + apiKey +
+                    " minVersion: " + minVersion +
+                    " maxVersion: " + maxVersion +
+                    "}";
+        }
     }
 
     public ApiVersionsResponse(short errorCode, List<ApiVersion> apiVersions) {

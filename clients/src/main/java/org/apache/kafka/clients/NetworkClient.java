@@ -97,7 +97,7 @@ public class NetworkClient implements KafkaClient {
 
     private final Map<Integer, Collection<ApiVersionsResponse.ApiVersion>> nodeApiVersions = new HashMap<>();
 
-    private final Set<String> apiVersionsRequests = new HashSet<>();
+    private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -283,7 +283,7 @@ public class NetworkClient implements KafkaClient {
      * @param node The node
      */
     private boolean canSendApiVersionsRequest(String node) {
-        return this.requiredApiVersions != null && apiVersionsRequests.contains(node);
+        return this.requiredApiVersions != null && nodesNeedingApiVersionsFetch.contains(node);
     }
 
     /**
@@ -471,7 +471,7 @@ public class NetworkClient implements KafkaClient {
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
         nodeApiVersions.remove(nodeId);
-        apiVersionsRequests.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
             if (request.isInternalMetadataRequest)
@@ -533,10 +533,9 @@ public class NetworkClient implements KafkaClient {
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
             if (req.isInternalMetadataRequest)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
-            else if (req.header.apiKey() == ApiKeys.API_VERSIONS.id) {
-                if (body instanceof ApiVersionsResponse)
+            else if (body instanceof ApiVersionsResponse)
                     handleApiVersionsResponse(req, (ApiVersionsResponse) body);
-            } else
+            else
                 responses.add(req.completed(body, now));
         }
     }
@@ -589,8 +588,7 @@ public class NetworkClient implements KafkaClient {
                 this.connectionStates.ready(node);
             } else {
                 this.connectionStates.checkingApiVersions(node);
-                if (!apiVersionsRequests.contains(node))
-                    apiVersionsRequests.add(node);
+                nodesNeedingApiVersionsFetch.add(node);
             }
         }
         maybeInitiateApiVersionsFetch(now);
@@ -600,12 +598,11 @@ public class NetworkClient implements KafkaClient {
         if (this.requiredApiVersions == null)
             return;
 
-        Iterator<String> iter = apiVersionsRequests.iterator();
+        Iterator<String> iter = nodesNeedingApiVersionsFetch.iterator();
         while (iter.hasNext()) {
             String node = iter.next();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
-                this.connectionStates.checkingApiVersions(node);
                 ClientRequest clientRequest = new ClientRequest(node, now, true,
                         nextRequestHeader(ApiKeys.API_VERSIONS), ApiVersionsRequest.API_VERSIONS_REQUEST, null);
                 doSend(clientRequest, false, now);

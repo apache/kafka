@@ -93,8 +93,9 @@ public class ClientUtils {
         List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
         for (ApiKeys apiKey : apiKeys)
             expectedApiVersions.add(
+                    // once backwards client compatibility is added, expected min API version for an API should be set to it's min version
                     new ApiVersionsResponse.ApiVersion(
-                            apiKey.id, Protocol.MIN_VERSIONS[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+                            apiKey.id, Protocol.CURR_VERSION[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
         return expectedApiVersions;
     }
 }
