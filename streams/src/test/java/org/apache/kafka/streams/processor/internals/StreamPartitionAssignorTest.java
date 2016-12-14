@@ -890,7 +890,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldDoSomethingCorrectlyWithStandbyTasks() throws Exception {
+    public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() throws Exception {
         final Properties props = configProps();
         props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
         final StreamsConfig config = new StreamsConfig(props);
