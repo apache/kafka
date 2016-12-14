@@ -302,7 +302,7 @@ public class NetworkClient implements KafkaClient {
         doSend(clientRequest, true, now);
     }
 
-    private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
+    private void doSend(ClientRequest request, boolean isInternalRequest, long now) {
         String nodeId = request.destination();
         if (request.header().apiKey() == ApiKeys.API_VERSIONS.id) {
             if (!canSendApiVersionsRequest(nodeId))
@@ -317,7 +317,7 @@ public class NetworkClient implements KafkaClient {
                 request.destination(),
                 request.callback(),
                 request.expectResponse(),
-                isInternalMetadataRequest,
+                isInternalRequest,
                 send,
                 now);
 
@@ -533,7 +533,7 @@ public class NetworkClient implements KafkaClient {
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
             if (req.isInternalMetadataRequest)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
-            else if (body instanceof ApiVersionsResponse)
+            else if (req.isInternalApiVersionRequest)
                 handleApiVersionsResponse(req, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
@@ -605,7 +605,7 @@ public class NetworkClient implements KafkaClient {
                 log.debug("Initiating API versions fetch from node {}.", node);
                 ClientRequest clientRequest = new ClientRequest(node, now, true,
                         nextRequestHeader(ApiKeys.API_VERSIONS), ApiVersionsRequest.API_VERSIONS_REQUEST, null);
-                doSend(clientRequest, false, now);
+                doSend(clientRequest, true, now);
                 iter.remove();
             }
         }
@@ -790,6 +790,7 @@ public class NetworkClient implements KafkaClient {
         final RequestCompletionHandler callback;
         final boolean expectResponse;
         final boolean isInternalMetadataRequest; // used to flag metadata fetches which are triggered internally by NetworkClient
+        final boolean isInternalApiVersionRequest; // used to flag api version fetches which are triggered internally by NetworkClient
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
@@ -799,14 +800,15 @@ public class NetworkClient implements KafkaClient {
                                String destination,
                                RequestCompletionHandler callback,
                                boolean expectResponse,
-                               boolean isInternalMetadataRequest,
+                               boolean isInternalRequest,
                                Send send,
                                long sendTimeMs) {
             this.header = header;
             this.destination = destination;
             this.callback = callback;
             this.expectResponse = expectResponse;
-            this.isInternalMetadataRequest = isInternalMetadataRequest;
+            this.isInternalMetadataRequest = isInternalRequest && header.apiKey() == ApiKeys.METADATA.id;
+            this.isInternalApiVersionRequest = isInternalRequest && header.apiKey() == ApiKeys.API_VERSIONS.id;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;

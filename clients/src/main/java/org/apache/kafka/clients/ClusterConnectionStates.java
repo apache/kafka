@@ -115,15 +115,6 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true if the connection is checking_api_versions.
-     * @param id the connection identifier
-     */
-    public boolean isCheckingApiVersions(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.CHECKING_API_VERSIONS;
-    }
-
-    /**
      * Enter the ready state for the given node.
      * @param id the connection identifier
      */
