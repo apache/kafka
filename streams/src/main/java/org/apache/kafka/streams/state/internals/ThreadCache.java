@@ -49,6 +49,8 @@ public class ThreadCache {
     private long numEvicts = 0;
     private long numFlushes = 0;
 
+
+
     public interface DirtyEntryFlushListener {
         void apply(final List<DirtyEntry> dirty);
     }
@@ -189,6 +191,13 @@ public class ThreadCache {
             sizeInBytes += namedCache.sizeInBytes();
         }
         return sizeInBytes;
+    }
+
+    synchronized void close(final String namespace) {
+        final NamedCache removed = caches.remove(namespace);
+        if (removed != null) {
+            removed.close();
+        }
     }
 
     private void maybeEvict(final String namespace) {

@@ -27,6 +27,7 @@ public enum TimestampType {
 
     public final int id;
     public final String name;
+
     TimestampType(int id, String name) {
         this.id = id;
         this.name = name;

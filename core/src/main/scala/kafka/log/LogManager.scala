@@ -440,7 +440,7 @@ class LogManager(val logDirs: Array[File],
         removedLog.dir = renamedDir
         // change the file pointers for log and index file
         for (logSegment <- removedLog.logSegments) {
-          logSegment.log.file = new File(renamedDir, logSegment.log.file.getName)
+          logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
           logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
         }
 
