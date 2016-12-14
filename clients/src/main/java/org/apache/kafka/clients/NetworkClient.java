@@ -222,7 +222,7 @@ public class NetworkClient implements KafkaClient {
     public void close(String nodeId) {
         selector.close(nodeId);
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
-            if (request.isInternalMetadataRequest)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
@@ -474,7 +474,7 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
-            if (request.isInternalMetadataRequest)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
             else
                 responses.add(request.disconnected(now));
@@ -531,9 +531,9 @@ public class NetworkClient implements KafkaClient {
             InFlightRequest req = inFlightRequests.completeNext(source);
             AbstractResponse body = parseResponse(receive.payload(), req.header);
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
-            if (req.isInternalMetadataRequest)
-                metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
-            else if (req.isInternalApiVersionRequest)
+            if (req.isInternalRequest && body instanceof MetadataResponse)
+                metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
+            else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(req, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
@@ -700,10 +700,8 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse response) {
-            if (!(response instanceof MetadataResponse))
-                throw new IllegalStateException("Unexpected response type in metadata handler: " + response);
-            handleMetadataResponse(requestHeader, (MetadataResponse) response, now);
+        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+            handleMetadataResponse(requestHeader, response, now);
         }
 
         @Override
@@ -789,8 +787,7 @@ public class NetworkClient implements KafkaClient {
         final String destination;
         final RequestCompletionHandler callback;
         final boolean expectResponse;
-        final boolean isInternalMetadataRequest; // used to flag metadata fetches which are triggered internally by NetworkClient
-        final boolean isInternalApiVersionRequest; // used to flag api version fetches which are triggered internally by NetworkClient
+        final boolean isInternalRequest; // used to flag requests which are initiated internally by NetworkClient
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
@@ -807,8 +804,7 @@ public class NetworkClient implements KafkaClient {
             this.destination = destination;
             this.callback = callback;
             this.expectResponse = expectResponse;
-            this.isInternalMetadataRequest = isInternalRequest && header.apiKey() == ApiKeys.METADATA.id;
-            this.isInternalApiVersionRequest = isInternalRequest && header.apiKey() == ApiKeys.API_VERSIONS.id;
+            this.isInternalRequest = isInternalRequest;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;
