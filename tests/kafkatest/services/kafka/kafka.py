@@ -119,6 +119,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
 
+
+    def set_version(self, version):
+        for node in self.nodes:
+            node.version = version
+
     @property
     def security_config(self):
         return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
