@@ -41,7 +41,7 @@ class KTableGlobalKTableLeftJoin<K1, K2, R, V1, V2> implements KTableProcessorSu
 
     @Override
     public Processor<K1, Change<V1>> get() {
-        return new KTableKTableLeftJoinProcessor<>(globalTableValueGetterSupplier.get(),
+        return new KTableGlobalKTableLeftJoinProcessor<>(globalTableValueGetterSupplier.get(),
                                                    joiner,
                                                    mapper,
                                                    sendOldValues);

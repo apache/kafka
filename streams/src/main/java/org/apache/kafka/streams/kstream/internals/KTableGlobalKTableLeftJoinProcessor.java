@@ -22,17 +22,17 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableKTableLeftJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, Change<V1>> {
+class KTableGlobalKTableLeftJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, Change<V1>> {
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final ValueJoiner<V1, V2, R> joiner;
     private final KeyValueMapper<K1, V1, K2> keyValueMapper;
     private final boolean sendOldValues;
 
-    KTableKTableLeftJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
-                                  final ValueJoiner<V1, V2, R> joiner,
-                                  final KeyValueMapper<K1, V1, K2> keyValueMapper,
-                                  final boolean sendOldValues) {
+    KTableGlobalKTableLeftJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
+                                        final ValueJoiner<V1, V2, R> joiner,
+                                        final KeyValueMapper<K1, V1, K2> keyValueMapper,
+                                        final boolean sendOldValues) {
         this.valueGetter = valueGetter;
         this.joiner = joiner;
         this.keyValueMapper = keyValueMapper;
@@ -52,27 +52,23 @@ class KTableKTableLeftJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor
     @Override
     public void process(final K1 key, final Change<V1> change) {
         // the keys should never be null
-        if (key == null)
+        if (key == null) {
             throw new StreamsException("Record key for KTable left-join operator should not be null.");
+        }
+        final R newValue = applyJoin(key, change.newValue, true);
+        final R oldValue = applyJoin(key, change.oldValue, sendOldValues);
 
-        R newValue = null;
-        R oldValue = null;
-
-        final V2 value2 = change.newValue == null
-                ? null
-                : valueGetter.get(keyValueMapper.apply(key, change.newValue));
-
-        if (value2 == null && change.newValue == null && change.oldValue == null) {
-            return;
+        if (newValue != null || oldValue != null) {
+            context().forward(key, new Change<>(newValue, oldValue));
         }
 
-        if (change.newValue != null) {
-            newValue = joiner.apply(change.newValue, value2);
-        }
-
-        if (sendOldValues && change.oldValue != null)
-            oldValue = joiner.apply(change.oldValue, value2);
-
-        context().forward(key, new Change<>(newValue, oldValue));
     }
+
+    private R applyJoin(final K1 key, final V1 value, final boolean shouldJoin) {
+        if (shouldJoin && value != null) {
+            return joiner.apply(value, valueGetter.get(keyValueMapper.apply(key, value)));
+        }
+        return null;
+    }
+
 }
