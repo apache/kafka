@@ -208,6 +208,11 @@ public class CachingKeyValueStoreTest {
         store.delete("key");
     }
 
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(store.get(null));
+    }
+
     private int addItemsToCache() throws IOException {
         int cachedSize = 0;
         int i = 0;

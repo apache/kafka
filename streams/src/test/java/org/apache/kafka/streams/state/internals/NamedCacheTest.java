@@ -259,4 +259,9 @@ public class NamedCacheTest {
         cache.put(key, dirty);
         cache.evict();
     }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(cache.get(null));
+    }
 }

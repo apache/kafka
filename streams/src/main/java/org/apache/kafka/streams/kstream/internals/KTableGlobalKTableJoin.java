@@ -99,8 +99,8 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
                 throw new StreamsException("Record key for KTable join operator should not be null.");
             }
 
-            final V2 newOtherValue = change.newValue == null ? null : valueGetter.get(mapper.apply(key, change.newValue));
-            final V2 oldOtherValue = change.oldValue == null ? null : valueGetter.get(mapper.apply(key, change.oldValue));
+            final V2 newOtherValue = valueGetter.get(mapper.apply(key, change.newValue));
+            final V2 oldOtherValue = valueGetter.get(mapper.apply(key, change.oldValue));
 
 
             if (newOtherValue != null || oldOtherValue != null) {

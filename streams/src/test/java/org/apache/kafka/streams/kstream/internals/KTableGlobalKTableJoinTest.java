@@ -17,14 +17,13 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.test.KTableValueGetterStub;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
-
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -36,17 +35,12 @@ import static org.junit.Assert.assertNull;
 public class KTableGlobalKTableJoinTest {
 
     private final KTableValueGetterStub<String, String> global = new KTableValueGetterStub<>();
-    private final KeyValueMapper<String, String, String> keyValueMapper = new KeyValueMapper<String, String, String>() {
-        @Override
-        public String apply(final String key, final String value) {
-            return value;
-        }
-    };
+
     private final KTableGlobalKTableJoin<String, String, String, String, String> join
             = new KTableGlobalKTableJoin<>(new ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
                                            new ValueGetterSupplier<>(global),
                                            MockValueJoiner.STRING_JOINER,
-                                           keyValueMapper);
+                                           MockKeyValueMapper.<String, String>SelectValueMapper());
 
     private NoOpProcessorContext context;
 
@@ -118,6 +112,23 @@ public class KTableGlobalKTableJoinTest {
         processor.init(context);
         processor.process("A", new Change<>(null, "1"));
         final Change<String> a = (Change<String>) context.forwardedValues.get("A");
+        assertThat(a.newValue, is(nullValue()));
+        assertThat(a.oldValue, is(nullValue()));
+    }
+
+    @Test
+    public void shouldSendDeleteIfBothNewAndOldValuesAreNullButKeyMappingReturnsKey() throws Exception {
+        final KTableGlobalKTableJoin<String, String, String, String, String> join
+                = new KTableGlobalKTableJoin<>(new ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
+                                               new ValueGetterSupplier<>(global),
+                                               MockValueJoiner.STRING_JOINER,
+                                               MockKeyValueMapper.<String, String>SelectKeyKeyValueMapper());
+
+        global.put("1", "A");
+        final Processor<String, Change<String>> processor = join.get();
+        processor.init(context);
+        processor.process("1", new Change<String>(null, null));
+        final Change<String> a = (Change<String>) context.forwardedValues.get("1");
         assertThat(a.newValue, is(nullValue()));
         assertThat(a.oldValue, is(nullValue()));
     }

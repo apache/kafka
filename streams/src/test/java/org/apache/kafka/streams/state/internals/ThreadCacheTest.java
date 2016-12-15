@@ -504,6 +504,13 @@ public class ThreadCacheTest {
         assertNull(cache.get("two", new byte[] {1}));
     }
 
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        final ThreadCache threadCache = new ThreadCache(10);
+        threadCache.put("one", new byte[]{1}, cleanEntry(new byte[] {1}));
+        assertNull(threadCache.get("one", null));
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, true, -1, -1, -1, "");
     }

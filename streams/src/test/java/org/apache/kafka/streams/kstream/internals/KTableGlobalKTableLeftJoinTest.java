@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.test.KTableValueGetterStub;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.junit.Before;
@@ -34,17 +34,11 @@ import static org.hamcrest.core.IsEqual.equalTo;
 public class KTableGlobalKTableLeftJoinTest {
 
     private final KTableValueGetterStub<String, String> global = new KTableValueGetterStub<>();
-    private final KeyValueMapper<String, String, String> keyValueMapper = new KeyValueMapper<String, String, String>() {
-        @Override
-        public String apply(final String key, final String value) {
-            return value;
-        }
-    };
     private final KTableGlobalKTableLeftJoin<String, String, String, String, String> join
             = new KTableGlobalKTableLeftJoin<>(new ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
                                                new ValueGetterSupplier<>(global),
                                                MockValueJoiner.STRING_JOINER,
-                                               keyValueMapper);
+                                               MockKeyValueMapper.<String, String>SelectValueMapper());
 
     private NoOpProcessorContext context;
 
@@ -132,12 +126,29 @@ public class KTableGlobalKTableLeftJoinTest {
     }
 
     @Test
-    public void shouldNotSendAnythingIfChangeIsNullNull() throws Exception {
+    public void shouldNotSendAnythingIfChangeIsNullNullAndKeyMapsToNullInOtherTable() throws Exception {
         global.put("1", "A");
         final Processor<String, Change<String>> processor = join.get();
         processor.init(context);
         processor.process("A", new Change<String>(null, null));
         assertThat(context.forwardedValues.get("A"), is(nullValue()));
+    }
+
+    @Test
+    public void shouldSendDeleteIfBothNewAndOldValuesAreNullButKeyMappingReturnsKey() throws Exception {
+        final KTableGlobalKTableLeftJoin<String, String, String, String, String> join
+                = new KTableGlobalKTableLeftJoin<>(new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
+                                               new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(global),
+                                               MockValueJoiner.STRING_JOINER,
+                                               MockKeyValueMapper.<String, String>SelectKeyKeyValueMapper());
+
+        global.put("1", "A");
+        final Processor<String, Change<String>> processor = join.get();
+        processor.init(context);
+        processor.process("1", new Change<String>(null, null));
+        final Change<String> a = (Change<String>) context.forwardedValues.get("1");
+        assertThat(a.newValue, is(nullValue()));
+        assertThat(a.oldValue, is(nullValue()));
     }
 
     static class ValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {

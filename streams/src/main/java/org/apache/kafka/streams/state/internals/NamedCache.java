@@ -79,6 +79,10 @@ class NamedCache {
     }
 
     synchronized LRUCacheEntry get(final Bytes key) {
+        if (key == null) {
+            return null;
+        }
+
         final LRUNode node = getInternal(key);
         if (node == null) {
             return null;
