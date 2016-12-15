@@ -18,13 +18,11 @@
 package kafka.message
 
 import java.nio.ByteBuffer
-import java.nio.channels.{FileChannel, GatheringByteChannel}
-import java.nio.file.StandardOpenOption
+import java.nio.channels.GatheringByteChannel
 
 import org.junit.Assert._
 import kafka.utils.TestUtils._
-import kafka.log.FileMessageSet
-import kafka.utils.TestUtils
+import org.apache.kafka.common.record.FileRecords
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
@@ -94,7 +92,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testWriteToChannelThatConsumesPartially() {
     val bytesToConsumePerBuffer = 50
-    val messages = (0 until 10).map(_ => new Message(TestUtils.randomString(100).getBytes))
+    val messages = (0 until 10).map(_ => new Message(randomString(100).getBytes))
     val messageSet = createMessageSet(messages)
     val messageSetSize = messageSet.sizeInBytes
 
@@ -119,15 +117,15 @@ trait BaseMessageSetTestCases extends JUnitSuite {
     // do the write twice to ensure the message set is restored to its original state
     for (_ <- 0 to 1) {
       val file = tempFile()
-      val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
+      val fileRecords = FileRecords.open(file, true)
       try {
-        val written = write(channel)
+        val written = write(fileRecords.channel)
+        fileRecords.resize() // resize since we wrote to the channel directly
+
         assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-        val newSet = new FileMessageSet(file, channel)
-        checkEquals(set.iterator, newSet.iterator)
-      } finally channel.close()
+        checkEquals(set.asRecords.deepIterator, fileRecords.deepIterator())
+      } finally fileRecords.close()
     }
   }
   
 }
-
