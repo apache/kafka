@@ -103,6 +103,7 @@ public class MemoryRecords extends AbstractRecords {
      */
     public FilterResult filterTo(LogEntryFilter filter, ByteBuffer buffer) {
         long maxTimestamp = Record.NO_TIMESTAMP;
+        long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
         int bytesRead = 0;
@@ -131,6 +132,9 @@ public class MemoryRecords extends AbstractRecords {
                     // the corrupted entry with correct data.
                     if (shallowMagic != deepRecord.magic())
                         writeOriginalEntry = false;
+
+                    if (deepEntry.offset() > maxOffset)
+                        maxOffset = deepEntry.offset();
 
                     retainedEntries.add(deepEntry);
                 } else {
@@ -165,7 +169,7 @@ public class MemoryRecords extends AbstractRecords {
             }
         }
 
-        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, shallowOffsetOfMaxTimestamp);
+        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
     /**
@@ -248,6 +252,7 @@ public class MemoryRecords extends AbstractRecords {
         public final int bytesRead;
         public final int messagesRetained;
         public final int bytesRetained;
+        public final long maxOffset;
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
@@ -255,12 +260,14 @@ public class MemoryRecords extends AbstractRecords {
                             int bytesRead,
                             int messagesRetained,
                             int bytesRetained,
+                            long maxOffset,
                             long maxTimestamp,
                             long shallowOffsetOfMaxTimestamp) {
             this.messagesRead = messagesRead;
             this.bytesRead = bytesRead;
             this.messagesRetained = messagesRetained;
             this.bytesRetained = bytesRetained;
+            this.maxOffset = maxOffset;
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }

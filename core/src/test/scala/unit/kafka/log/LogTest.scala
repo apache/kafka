@@ -1016,6 +1016,46 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
+  def testOverCompactedLogRecovery(): Unit = {
+    // append some messages to create some segments
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.MaxMessageBytesProp, 64*1024: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    val config = LogConfig(logProps)
+    val log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    val set1 = MemoryRecords.withRecords(0, Record.create("v1".getBytes(), "k1".getBytes()))
+    val set2 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 2, Record.create("v3".getBytes(), "k3".getBytes()))
+    val set3 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 3, Record.create("v4".getBytes(), "k4".getBytes()))
+    val set4 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 4, Record.create("v5".getBytes(), "k5".getBytes()))
+    //Writes into an empty log with baseOffset 0
+    log.append(set1, false)
+    assertEquals(0L, log.activeSegment.baseOffset)
+    //This write will roll the segment, yielding a new segment with base offset = max(2, 1) = 2
+    log.append(set2, false)
+    assertEquals(2L, log.activeSegment.baseOffset)
+    //This will also roll the segment, yielding a new segment with base offset = max(3, Integer.MAX_VALUE+3) = Integer.MAX_VALUE+3
+    log.append(set3, false)
+    assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
+    //This will go into the existing log
+    log.append(set4, false)
+    assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
+    log.close()
+    val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
+    assertEquals(3, indexFiles.length)
+    for (file <- indexFiles) {
+      val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
+      assertTrue(offsetIndex.lastOffset >= 0)
+      offsetIndex.close()
+    }
+    Utils.delete(logDir)
+  }
+
+  @Test
   def testCleanShutdownFile() {
     // append some messages to create some segments
     val logProps = new Properties()
