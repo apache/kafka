@@ -235,6 +235,9 @@ public class StreamThread extends Thread {
                     StreamThread.this.getName(), assignment);
 
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
+                // do this first as we may have suspended standby tasks that
+                // will become active
+                closeNonAssignedSuspendedStandbyTasks();
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
@@ -812,6 +815,26 @@ public class StreamThread extends Thread {
         return null;
     }
 
+    private void closeNonAssignedSuspendedStandbyTasks() {
+        final Map<TaskId, Set<TopicPartition>> newStandbyTasks = partitionAssignor.standbyTasks();
+        final Iterator<Map.Entry<TaskId, StandbyTask>> standbyTaskIterator = suspendedStandbyTasks.entrySet().iterator();
+        while(standbyTaskIterator.hasNext()) {
+            final Map.Entry<TaskId, StandbyTask> entry = standbyTaskIterator.next();
+            if (!newStandbyTasks.containsKey(entry.getKey())) {
+                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, entry.getKey());
+                final StandbyTask task = entry.getValue();
+                try {
+                    task.close();
+                    task.closeStateManager();
+                } catch (Exception e) {
+                    log.error("{} Failed to remove suspended standby task {}", logPrefix, entry.getKey(), e);
+                } finally {
+                    standbyTaskIterator.remove(); 
+                }
+            }
+        }
+    }
+
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
@@ -907,9 +930,6 @@ public class StreamThread extends Thread {
             }
         }
 
-        // destroy any remaining suspended tasks
-        removeSuspendedStandbyTasks();
-
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
         standbyTaskCreator.retryWithBackoff(newStandbyTasks);
@@ -963,29 +983,9 @@ public class StreamThread extends Thread {
             // Close task and state manager
             for (final AbstractTask task : suspendedTasks.values()) {
                 task.close();
-                task.flushState();
                 task.closeStateManager();
-                // flush out any extra data sent during close
-                producer.flush();
             }
             suspendedTasks.clear();
-        } catch (Exception e) {
-            log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
-        }
-    }
-
-    private void removeSuspendedStandbyTasks() {
-        log.info("{} Removing all suspended standby tasks [{}]", logPrefix, suspendedStandbyTasks.keySet());
-        try {
-            // Close task and state manager
-            for (final AbstractTask task : suspendedStandbyTasks.values()) {
-                task.close();
-                task.flushState();
-                task.closeStateManager();
-                // flush out any extra data sent during close
-                producer.flush();
-            }
-            suspendedStandbyTasks.clear();
         } catch (Exception e) {
             log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
         }
