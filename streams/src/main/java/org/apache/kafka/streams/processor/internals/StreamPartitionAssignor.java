@@ -577,26 +577,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             assignedPartitions.add(partition);
         }
 
-        // only need to update the host partitions map if it is not leader
-        if (this.partitionsByHostState == null) {
-            this.partitionsByHostState = info.partitionsByHost;
-        }
+        this.partitionsByHostState = info.partitionsByHost;
 
-        // only need to build if it is not leader
-        if (metadataWithInternalTopics == null) {
-            final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
-            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-            for (Set<TopicPartition> value : values) {
-                for (TopicPartition topicPartition : value) {
-                    topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                                                                               topicPartition.partition(),
-                                                                               null,
-                                                                               new Node[0],
-                                                                               new Node[0]));
-                }
+        final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        for (Set<TopicPartition> value : values) {
+            for (TopicPartition topicPartition : value) {
+                topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
+                                                                           topicPartition.partition(),
+                                                                           null,
+                                                                           new Node[0],
+                                                                           new Node[0]));
             }
-            metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
         }
+        metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
     }
 
     /**

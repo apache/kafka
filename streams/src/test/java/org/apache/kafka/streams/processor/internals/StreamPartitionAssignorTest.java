@@ -888,6 +888,50 @@ public class StreamPartitionAssignorTest {
         assertThat(expectedAssignment, equalTo(assignment.get(client).partitions()));
     }
 
+    @Test
+    public void shouldUpdatePartitionHostInfoMapOnAssignment() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        final TopicPartition partitionOne = new TopicPartition("topic", 1);
+        final TopicPartition partitionTwo = new TopicPartition("topic", 2);
+        final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
+                new HostInfo("localhost", 9090), Utils.mkSet(partitionOne, partitionTwo));
+
+        final Map<HostInfo, Set<TopicPartition>> secondHostState = new HashMap<>();
+        secondHostState.put(new HostInfo("localhost", 9090), Utils.mkSet(partitionOne));
+        secondHostState.put(new HostInfo("other", 9090), Utils.mkSet(partitionTwo));
+
+        partitionAssignor.onAssignment(createAssignment(firstHostState));
+        assertEquals(firstHostState, partitionAssignor.getPartitionsByHostState());
+        partitionAssignor.onAssignment(createAssignment(secondHostState));
+        assertEquals(secondHostState, partitionAssignor.getPartitionsByHostState());
+    }
+
+    @Test
+    public void shouldUpdateClusterMetadataOnAssignment() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        final TopicPartition topicOne = new TopicPartition("topic", 1);
+        final TopicPartition topicTwo = new TopicPartition("topic2", 2);
+        final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
+                new HostInfo("localhost", 9090), Utils.mkSet(topicOne));
+
+        final Map<HostInfo, Set<TopicPartition>> secondHostState = Collections.singletonMap(
+                new HostInfo("localhost", 9090), Utils.mkSet(topicOne, topicTwo));
+
+        partitionAssignor.onAssignment(createAssignment(firstHostState));
+        assertEquals(Utils.mkSet("topic"), partitionAssignor.clusterMetadata().topics());
+        partitionAssignor.onAssignment(createAssignment(secondHostState));
+        assertEquals(Utils.mkSet("topic", "topic2"), partitionAssignor.clusterMetadata().topics());
+    }
+
+    private PartitionAssignor.Assignment createAssignment(final Map<HostInfo, Set<TopicPartition>> firstHostState) {
+        final AssignmentInfo info = new AssignmentInfo(Collections.<TaskId>emptyList(),
+                                                       Collections.<TaskId, Set<TopicPartition>>emptyMap(),
+                                                       firstHostState);
+
+        return new PartitionAssignor.Assignment(
+                Collections.<TopicPartition>emptyList(), info.encode());
+    }
+
     private AssignmentInfo checkAssignment(Set<String> expectedTopics, PartitionAssignor.Assignment assignment) {
 
         // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
