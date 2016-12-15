@@ -24,20 +24,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -47,7 +39,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.streams.state.internals.ThreadCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -204,7 +195,7 @@ public class StreamThread extends Thread {
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
-    private final StreamsMetricsImpl streamsMetrics;
+    private final StreamsMetricsThreadImpl streamsMetrics;
     final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
@@ -274,6 +265,10 @@ public class StreamThread extends Thread {
         return state == State.RUNNING;
     }
 
+    public String threadClientId() {
+        return threadClientId;
+    }
+
     public StreamThread(TopologyBuilder builder,
                         StreamsConfig config,
                         KafkaClientSupplier clientSupplier,
@@ -295,7 +290,8 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         threadClientId = clientId + "-" + threadName;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics);
+        this.streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
+            Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
@@ -1048,195 +1044,19 @@ public class StreamThread extends Thread {
         return sb.toString();
     }
 
-    private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
-        final Metrics metrics;
-        final String defaultGroupName;
-        final String defaultPrefix;
-        final Map<String, String> defaultTags;
-
-        final Sensor commitTimeSensor;
-        final Sensor pollTimeSensor;
-        final Sensor processTimeSensor;
-        final Sensor punctuateTimeSensor;
-        final Sensor taskCreationSensor;
-        final Sensor taskDestructionSensor;
-        final Sensor skippedRecordsSensor;
-
-
-        public StreamsMetricsImpl(Metrics metrics) {
-            this.metrics = metrics;
-            this.defaultGroupName = "stream-metrics";
-            this.defaultPrefix = "thread." + threadClientId;
-            this.defaultTags = Collections.singletonMap("client-id", threadClientId);
-
-
-            this.commitTimeSensor = metrics.sensor(this.defaultPrefix + ".commit-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", this.defaultGroupName, "The average commit time in ms", defaultTags), new Avg());
-            this.commitTimeSensor.add(metrics.metricName("commit-time-max", this.defaultGroupName, "The maximum commit time in ms", defaultTags), new Max());
-            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", this.defaultGroupName, "The average per-second number of commit calls", defaultTags), new Rate(new Count()));
-
-            this.pollTimeSensor = metrics.sensor(this.defaultPrefix + ".poll-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", this.defaultGroupName, "The average poll time in ms", defaultTags), new Avg());
-            this.pollTimeSensor.add(metrics.metricName("poll-time-max", this.defaultGroupName, "The maximum poll time in ms", defaultTags), new Max());
-            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", this.defaultGroupName, "The average per-second number of record-poll calls", defaultTags), new Rate(new Count()));
-
-            this.processTimeSensor = metrics.sensor(this.defaultPrefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.processTimeSensor.add(metrics.metricName("process-time-avg", this.defaultGroupName, "The average process time in ms", defaultTags), new Avg());
-            this.processTimeSensor.add(metrics.metricName("process-time-max", this.defaultGroupName, "The maximum process time in ms", defaultTags), new Max());
-            this.processTimeSensor.add(metrics.metricName("process-calls-rate", this.defaultGroupName, "The average per-second number of process calls", defaultTags), new Rate(new Count()));
-
-            this.punctuateTimeSensor = metrics.sensor(this.defaultPrefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", this.defaultGroupName, "The average punctuate time in ms", defaultTags), new Avg());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", this.defaultGroupName, "The maximum punctuate time in ms", defaultTags), new Max());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", this.defaultGroupName, "The average per-second number of punctuate calls", defaultTags), new Rate(new Count()));
-
-            this.taskCreationSensor = metrics.sensor(this.defaultPrefix + ".task-creation", Sensor.RecordLevel.SENSOR_INFO);
-            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", this.defaultGroupName, "The average per-second number of newly created tasks", defaultTags), new Rate(new Count()));
-
-            this.taskDestructionSensor = metrics.sensor(this.defaultPrefix + ".task-destruction", Sensor.RecordLevel.SENSOR_INFO);
-            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", this.defaultGroupName, "The average per-second number of destructed tasks", defaultTags), new Rate(new Count()));
-
-            this.skippedRecordsSensor = metrics.sensor(this.defaultPrefix + ".skipped-records");
-            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.defaultGroupName, "The average per-second number of skipped records.", defaultTags), new Rate(new Count()));
+    /**
+     * This class extends {@link #StreamsMetricsImpl(Metrics, String, String, Map)} and
+     * overrides one of its functions for efficiency
+     */
+    private class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
+        public StreamsMetricsThreadImpl(Metrics metrics, String groupName, String prefix, Map<String, String> tags) {
+            super(metrics, groupName, prefix, tags);
         }
 
-        public Metrics metrics() {
-            return metrics;
-        }
 
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
             sensor.record(endNs - startNs, timerStartedMs);
-        }
-
-        @Override
-        public void recordCacheSensor(Sensor sensor, double count) {
-            sensor.record(count);
-        }
-
-        @Override
-        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
-            return metrics.sensor(sensorName(operationName, entityName), recordLevel);
-        }
-
-        @Override
-        public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
-            return metrics.sensor(sensorName(operationName, entityName), recordLevel, parents);
-        }
-
-        @Override
-        public void removeSensor(String name) {
-            metrics.removeSensor(name);
-        }
-
-        private String groupNameFromScope(String scopeName) {
-            return "stream-" + scopeName + "-metrics";
-        }
-
-        private String sensorName(String operationName, String entityName) {
-            if (entityName == null) {
-                return defaultPrefix + "." + operationName;
-            } else {
-                return defaultPrefix + "." + entityName + "-" + operationName;
-            }
-        }
-
-        private Map<String, String> tagMap(String... tags) {
-            // extract the additional tags if there are any
-            Map<String, String> tagMap = new HashMap<>(this.defaultTags);
-            if ((tags.length % 2) != 0)
-                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
-
-            for (int i = 0; i < tags.length; i += 2)
-                tagMap.put(tags[i], tags[i + 1]);
-
-            return tagMap;
-        }
-
-
-
-        /**
-         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-         */
-        @Override
-        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
-            Map<String, String> tagMap = tagMap(tags);
-
-            // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
-            addLatencyMetrics(scopeName, parent, "all", operationName, this.defaultTags);
-
-            // add the operation metrics with additional tags
-            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
-            addLatencyMetrics(scopeName, sensor, entityName, operationName, tagMap);
-
-            return sensor;
-        }
-
-        /**
-         * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-         */
-        @Override
-        public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
-            Map<String, String> tagMap = tagMap(tags);
-
-            // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
-            addThroughputMetrics(scopeName, parent, "all", operationName, this.defaultTags);
-
-            // add the operation metrics with additional tags
-            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
-            addThroughputMetrics(scopeName, sensor, entityName, operationName, tagMap);
-
-            return sensor;
-        }
-
-        @Override
-        public Sensor addCacheSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel,  String... tags) {
-            Map<String, String> tagMap = tagMap(tags);
-
-            // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
-            addCacheMetrics(scopeName, parent, "all", operationName, this.defaultTags);
-
-            // add additional parents
-            Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
-            addCacheMetrics(scopeName, sensor, entityName, operationName, tagMap);
-            return sensor;
-
-        }
-
-        private void addCacheMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", groupNameFromScope(scopeName),
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", groupNameFromScope(scopeName),
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", groupNameFromScope(scopeName),
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
-        }
-
-        private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
-                "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
-                "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
-            addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
-        }
-
-        private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
-                "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
-        }
-
-        private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-            if (name.toString().contains("all-process-avg-latency")) {
-                log.warn("Trying to add metric twice " + name);
-            }
-            if (!metrics.metrics().containsKey(name)) {
-                sensor.add(name, stat);
-            } else {
-                log.debug("Trying to add metric twice " + name);
-            }
         }
     }
 

@@ -320,7 +320,8 @@ public class StandbyTaskTest {
         builder.stream("topic").groupByKey().count("my-store");
         final ProcessorTopology topology = builder.build(0);
         StreamsConfig config = createConfig(baseDir);
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
+        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config,
+            new MockStreamsMetrics(new Metrics()), stateDirectory);
 
     }
     private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

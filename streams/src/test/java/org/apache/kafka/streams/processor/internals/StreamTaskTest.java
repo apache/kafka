@@ -58,6 +58,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -169,7 +170,33 @@ public class StreamTaskTest {
 
         task.close();
 
+    }
 
+    @Test
+    public void testMetrics() throws Exception {
+        StreamsConfig config = createConfig(baseDir);
+        String prefix = "mock-prefix." + 0;
+
+        Metrics metrics = new Metrics();
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, new MockStreamsMetrics(metrics), stateDirectory, null, new MockTime());
+        String name = task.id().toString();
+        String[] entities = {"all", name};
+        String operation = "commit";
+
+        String groupName = "stream-task-metrics";
+        Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
+
+        assertNotNull(metrics.getSensor(prefix + "." + operation));
+        assertNotNull(metrics.getSensor(prefix + "." + name + "-" + operation));
+
+        for (String entity : entities) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,
+                "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
+                "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+                "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+        }
     }
 
     @SuppressWarnings("unchecked")

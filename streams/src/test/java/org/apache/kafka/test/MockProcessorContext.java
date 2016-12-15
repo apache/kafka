@@ -112,6 +112,10 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         this.timestamp = timestamp;
     }
 
+    public Metrics baseMetrics() {
+        return metrics;
+    }
+
     @Override
     public TaskId taskId() {
         return new TaskId(0, 0);
