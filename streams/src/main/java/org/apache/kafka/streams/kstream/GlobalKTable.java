@@ -18,13 +18,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KafkaStreams;
 
 /**
  * {@link GlobalKTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  * Each record in this stream is an update on the primary-keyed table with the record key as the primary key.
  * <p>
- * A {@link GlobalKTable} is fully replicated per KafkaStreams instance. Every partition of the underlying topic
- * is consumed by each {@link GlobalKTable}, such that the full set of data is available in every KafkaStreams instance.
+ * A {@link GlobalKTable} is fully replicated per {@link KafkaStreams} instance. Every partition of the underlying topic
+ * is consumed by each {@link GlobalKTable}, such that the full set of data is available in every {@link KafkaStreams} instance.
  * This provides the ability to perform joins with {@link KStream}, {@link KTable}, and other {@link GlobalKTable}s
  * without having to repartition the input streams. All joins with the {@link GlobalKTable} require that a {@link KeyValueMapper}
  * is provided that can map from the (key, value) of the left hand side to the key of the right hand side {@link GlobalKTable}
@@ -33,7 +34,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * <pre>
  *     builder.globalTable("topic-name", "queryable-store-name");
  * </pre>
- * all {@link GlobalKTable}s are backed by a {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
+ * all {@link GlobalKTable}s are backed by a {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
  * and are therefore queryable via the interactive queries API.
  * For example:
  * <pre>
@@ -54,7 +55,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
  *
- * @see KStream
+ * @see KTable
  */
 @InterfaceStability.Unstable
 public interface GlobalKTable<K, V> {
@@ -65,14 +66,14 @@ public interface GlobalKTable<K, V> {
      * The {@link KeyValueMapper} is used to map the (key,value) from this {@link GlobalKTable} to the
      * key of the other {@link GlobalKTable}.
      *
-     * The {@link GlobalKTable}s produced as the result of a join are just a view on top of the joined tables, with
-     * the join being resolved on demand.
+     * The {@link GlobalKTable}s produced as the result of a join are just a view, i.e., it is not materialized in
+     * to a physical state store, on top of the joined tables with the join being resolved on demand.
      *
      * @param otherTable            instance of {@link GlobalKTable} to join with
      * @param keyMapper             instance of {@link KeyValueMapper} used to map from the (key, value) of this
      *                              {@link GlobalKTable} to the key of the other {@link GlobalKTable}
      * @param joiner                the instance of {@link ValueJoiner}
-     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
+     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
      *                              that can be used to query the values of the resulting {@link GlobalKTable}
      * @param <K1>                  key type of the other {@link GlobalKTable}
      * @param <V1>                  value type of the other {@link GlobalKTable}
@@ -98,7 +99,7 @@ public interface GlobalKTable<K, V> {
      * @param keyMapper             instance of {@link KeyValueMapper} used to map from the (key, value) of this
      *                              {@link GlobalKTable} to the key of the other {@link GlobalKTable}
      * @param joiner                the instance of {@link ValueJoiner}
-     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
+     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
      *                              that can be used to query the values of the resulting {@link GlobalKTable}
      * @param <K1>                  key type of the other {@link GlobalKTable}
      * @param <V1>                  value type of the other {@link GlobalKTable}

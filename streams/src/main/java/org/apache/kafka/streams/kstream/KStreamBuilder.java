@@ -194,12 +194,12 @@ public class KStreamBuilder extends TopologyBuilder {
         final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        StateStore store = new RocksDBKeyValueStoreSupplier<>(storeName,
-                                                                         keySerde,
-                                                                         valSerde,
-                                                                         false,
-                                                                         Collections.<String, String>emptyMap(),
-                                                                         true).get();
+        final StateStore store = new RocksDBKeyValueStoreSupplier<>(storeName,
+                                                                    keySerde,
+                                                                    valSerde,
+                                                                    false,
+                                                                    Collections.<String, String>emptyMap(),
+                                                                    true).get();
 
         addGlobalStore(store, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
         return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeName), (ReadOnlyKeyValueStore<K, V>) store, this);

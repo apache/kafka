@@ -44,12 +44,12 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
 
     @Override
     public Processor<K1, Change<V1>> get() {
-        return new TheJoinProcessor(globalTableValueGetterSupplier.get());
+        return new KTableGlobalKTableJoinJoinProcessor(globalTableValueGetterSupplier.get());
     }
 
     @Override
     public KTableValueGetterSupplier<K1, R> view() {
-        return new TheValueGetterSupplier();
+        return new KTableGlobalKTableJoinGetterSupplier();
     }
 
     @Override
@@ -57,7 +57,7 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
         sendOldValues = true;
     }
 
-    private class TheValueGetterSupplier implements KTableValueGetterSupplier<K1, R> {
+    private class KTableGlobalKTableJoinGetterSupplier implements KTableValueGetterSupplier<K1, R> {
 
         @Override
         public KTableValueGetter<K1, R> get() {
@@ -69,16 +69,16 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
 
         @Override
         public String[] storeNames() {
-            return valueGetterSupplier.storeNames(); // shouldn't need global?
+            return valueGetterSupplier.storeNames();
         }
     }
 
 
-    private class TheJoinProcessor extends AbstractProcessor<K1, Change<V1>> {
+    private class KTableGlobalKTableJoinJoinProcessor extends AbstractProcessor<K1, Change<V1>> {
 
         private final KTableValueGetter<K2, V2> valueGetter;
 
-        TheJoinProcessor(final KTableValueGetter<K2, V2> valueGetter) {
+        KTableGlobalKTableJoinJoinProcessor(final KTableValueGetter<K2, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
@@ -95,24 +95,33 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
         @Override
         public void process(final K1 key, final Change<V1> change) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable join operator should not be null.");
+            }
 
             final V2 v2 = change.newValue == null ? null : valueGetter.get(mapper.apply(key, change.newValue));
             if (v2 != null) {
-                R oldValue = null;
-                if (sendOldValues && change.oldValue != null) {
-                    oldValue = joiner.apply(change.oldValue, valueGetter.get(mapper.apply(key, change.oldValue)));
-                }
-                context().forward(key, new Change<>(joiner.apply(change.newValue, v2), oldValue));
+                processNewValue(key, change, v2);
             } else if (sendOldValues && change.oldValue != null) {
-                final V2 value2 = valueGetter.get(mapper.apply(key, change.oldValue));
-                if (value2 == null) {
-                    return;
-                }
-                final R oldValue = joiner.apply(change.oldValue, value2);
-                context().forward(key, new Change<>(null, oldValue));
+                processOldValue(key, change);
             }
+        }
+
+        private void processOldValue(final K1 key, final Change<V1> change) {
+            final V2 value2 = valueGetter.get(mapper.apply(key, change.oldValue));
+            if (value2 == null) {
+                return;
+            }
+            final R oldValue = joiner.apply(change.oldValue, value2);
+            context().forward(key, new Change<>(null, oldValue));
+        }
+
+        private void processNewValue(final K1 key, final Change<V1> change, final V2 v2) {
+            R oldValue = null;
+            if (sendOldValues && change.oldValue != null) {
+                oldValue = joiner.apply(change.oldValue, valueGetter.get(mapper.apply(key, change.oldValue)));
+            }
+            context().forward(key, new Change<>(joiner.apply(change.newValue, v2), oldValue));
         }
     }
 

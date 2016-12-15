@@ -272,8 +272,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> globalTable, final ValueJoiner<V, V1, R> joiner) {
-        return doJoin(globalTable, joiner, true, false);
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
+        return doJoin(other, joiner, true, false);
     }
 
     @SuppressWarnings("unchecked")

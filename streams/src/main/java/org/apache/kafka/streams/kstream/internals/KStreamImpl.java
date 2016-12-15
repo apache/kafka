@@ -99,6 +99,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
+
     private final boolean repartitionRequired;
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes,
@@ -590,7 +591,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final KTableValueGetterSupplier valueGetterSupplier = ((GlobalKTableImpl) globalTable).valueGetterSupplier();
         final String name = topology.newName(LEFTJOIN_NAME);
-        topology.addProcessor(name, new KStreamKGlobalTableJoin(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
+        topology.addProcessor(name, new KStreamGlobalKTableJoin(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
         return new KStreamImpl<>(topology, name, sourceNodes, false);
     }
 
@@ -603,7 +604,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         final String name = topology.newName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-
         topology.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
         topology.connectProcessorAndStateStores(name, other.getStoreName());
         topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);

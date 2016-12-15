@@ -848,7 +848,7 @@ public class TopologyBuilder {
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
         } else {
-            // when nodeGroup is null, we build the full topology minus the global groups
+            // when topicGroupId is null, we build the full topology minus the global groups
             final Set<String> globalNodeGroups = globalNodeGroups();
             final Collection<Set<String>> values = nodeGroups().values();
             nodeGroup = new HashSet<>();
