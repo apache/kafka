@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -37,8 +38,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,11 +72,13 @@ public class ProcessorStateManager {
     private final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap;
 
     /**
-     * @throws IOException if any error happens while creating or locking the state directory
+     * @throws LockException if the state directory cannot be locked because another thread holds the lock
+     *                       (this might be recoverable by retrying)
+     * @throws IOException if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(String applicationId, TaskId taskId, Collection<TopicPartition> sources, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
                                  StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic,
-                                 final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap) throws IOException {
+                                 final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap) throws LockException, IOException {
         this.applicationId = applicationId;
         this.defaultPartition = taskId.partition;
         this.taskId = taskId;
@@ -98,7 +101,7 @@ public class ProcessorStateManager {
         this.logPrefix = String.format("task [%s]", taskId);
 
         if (!stateDirectory.lock(taskId, 5)) {
-            throw new IOException(String.format("%s Failed to lock the state directory: %s", logPrefix, baseDir.getCanonicalPath()));
+            throw new LockException(String.format("%s Failed to lock the state directory: %s", logPrefix, baseDir.getCanonicalPath()));
         }
 
         // load the checkpoint information
