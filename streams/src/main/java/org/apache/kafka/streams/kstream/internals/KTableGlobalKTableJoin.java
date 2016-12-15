@@ -99,30 +99,28 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
                 throw new StreamsException("Record key for KTable join operator should not be null.");
             }
 
-            final V2 v2 = change.newValue == null ? null : valueGetter.get(mapper.apply(key, change.newValue));
-            if (v2 != null) {
-                processNewValue(key, change, v2);
-            } else if (sendOldValues && change.oldValue != null) {
-                processOldValue(key, change);
-            }
-        }
+            final R newValue = doJoin(key, change.newValue, true);
+            final R oldValue = doJoin(key, change.oldValue, sendOldValues);
 
-        private void processOldValue(final K1 key, final Change<V1> change) {
-            final V2 value2 = valueGetter.get(mapper.apply(key, change.oldValue));
-            if (value2 == null) {
+            if (newValue == null && oldValue == null) {
                 return;
             }
-            final R oldValue = joiner.apply(change.oldValue, value2);
-            context().forward(key, new Change<>(null, oldValue));
+
+            context().forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
         }
 
-        private void processNewValue(final K1 key, final Change<V1> change, final V2 v2) {
-            R oldValue = null;
-            if (sendOldValues && change.oldValue != null) {
-                oldValue = joiner.apply(change.oldValue, valueGetter.get(mapper.apply(key, change.oldValue)));
+        private R doJoin(final K1 key, final V1 value, boolean shouldJoin) {
+            if (!shouldJoin || value == null) {
+                return null;
             }
-            context().forward(key, new Change<>(joiner.apply(change.newValue, v2), oldValue));
+            final V2 v2 = valueGetter.get(mapper.apply(key, value));
+            if (v2 == null) {
+                return null;
+            }
+
+            return joiner.apply(value, v2);
         }
+
     }
 
 
