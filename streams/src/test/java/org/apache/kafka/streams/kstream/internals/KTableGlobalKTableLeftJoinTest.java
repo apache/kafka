@@ -121,6 +121,25 @@ public class KTableGlobalKTableLeftJoinTest {
         assertThat(context.forwardedValues.get("A"), is(nullValue()));
     }
 
+    @Test
+    public void shouldSendDeletesIfChangeHasOldValue() throws Exception {
+        global.put("1", "A");
+        final Processor<String, Change<String>> processor = join.get();
+        processor.init(context);
+        processor.process("A", new Change<>(null, "1"));
+        final Change<String> a = (Change<String>) context.forwardedValues.get("A");
+        assertThat(a.newValue, is(nullValue()));
+    }
+
+    @Test
+    public void shouldNotSendAnythingIfChangeIsNullNull() throws Exception {
+        global.put("1", "A");
+        final Processor<String, Change<String>> processor = join.get();
+        processor.init(context);
+        processor.process("A", new Change<String>(null, null));
+        assertThat(context.forwardedValues.get("A"), is(nullValue()));
+    }
+
     static class ValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
         private final KTableValueGetterStub<K, V> valueGetter;

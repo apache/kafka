@@ -44,7 +44,7 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
 
     @Override
     public Processor<K1, Change<V1>> get() {
-        return new KTableGlobalKTableJoinJoinProcessor(globalTableValueGetterSupplier.get());
+        return new KTableGlobalKTableJoinProcessor(globalTableValueGetterSupplier.get());
     }
 
     @Override
@@ -74,11 +74,11 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
     }
 
 
-    private class KTableGlobalKTableJoinJoinProcessor extends AbstractProcessor<K1, Change<V1>> {
+    private class KTableGlobalKTableJoinProcessor extends AbstractProcessor<K1, Change<V1>> {
 
         private final KTableValueGetter<K2, V2> valueGetter;
 
-        KTableGlobalKTableJoinJoinProcessor(final KTableValueGetter<K2, V2> valueGetter) {
+        KTableGlobalKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
@@ -99,26 +99,22 @@ class KTableGlobalKTableJoin<K1, K2, R, V1, V2> implements KTableProcessorSuppli
                 throw new StreamsException("Record key for KTable join operator should not be null.");
             }
 
-            final R newValue = doJoin(key, change.newValue, true);
-            final R oldValue = doJoin(key, change.oldValue, sendOldValues);
+            final V2 newOtherValue = change.newValue == null ? null : valueGetter.get(mapper.apply(key, change.newValue));
+            final V2 oldOtherValue = change.oldValue == null ? null : valueGetter.get(mapper.apply(key, change.oldValue));
 
-            if (newValue == null && oldValue == null) {
-                return;
+
+            if (newOtherValue != null || oldOtherValue != null) {
+                context().forward(key, new Change<>(doJoin(change.newValue, newOtherValue, true),
+                                                    doJoin(change.oldValue, oldOtherValue, sendOldValues)));
             }
 
-            context().forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
         }
 
-        private R doJoin(final K1 key, final V1 value, boolean shouldJoin) {
-            if (!shouldJoin || value == null) {
-                return null;
+        private R doJoin(final V1 value, final V2 other, boolean shouldJoin) {
+            if (shouldJoin && value != null && other != null) {
+                return joiner.apply(value, other);
             }
-            final V2 v2 = valueGetter.get(mapper.apply(key, value));
-            if (v2 == null) {
-                return null;
-            }
-
-            return joiner.apply(value, v2);
+            return null;
         }
 
     }

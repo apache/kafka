@@ -26,6 +26,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -99,7 +102,7 @@ public class KTableGlobalKTableJoinTest {
     }
 
     @Test
-    public void shouldNotForwardIfOldKeyNotInOtherStoreAndSendOldValues() throws Exception {
+    public void shouldNotForwardIfDeleteAndOldKeyNotInOtherStoreAndSendOldValues() throws Exception {
         join.enableSendingOldValues();
         final Processor<String, Change<String>> processor = join.get();
         processor.init(context);
@@ -107,6 +110,18 @@ public class KTableGlobalKTableJoinTest {
         final Change<String> a = (Change<String>) context.forwardedValues.get("A");
         assertNull(a);
     }
+
+    @Test
+    public void shouldSendDeletesIfChangeHasOldValue() throws Exception {
+        global.put("1", "A");
+        final Processor<String, Change<String>> processor = join.get();
+        processor.init(context);
+        processor.process("A", new Change<>(null, "1"));
+        final Change<String> a = (Change<String>) context.forwardedValues.get("A");
+        assertThat(a.newValue, is(nullValue()));
+        assertThat(a.oldValue, is(nullValue()));
+    }
+
 
     static class ValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
