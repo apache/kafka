@@ -601,6 +601,7 @@ public class StreamThread extends Thread {
                     } else {
 
                         if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                            setState(State.PENDING_SHUTDOWN);
                             String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
                                     " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
                                     "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
@@ -620,7 +621,7 @@ public class StreamThread extends Thread {
                 if (rebalanceException != null)
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
-                if (!records.isEmpty()) {
+                if (records != null && !records.isEmpty()) {
                     int numAddedRecords = 0;
 
                     for (TopicPartition partition : records.partitions()) {
