@@ -78,7 +78,7 @@ private[kafka] object LogValidator {
       val expectedInnerOffset = new LongRef(0)
       val validatedRecords = new mutable.ArrayBuffer[Record]
 
-      records.deepIterator(true).asScala.foreach { logEntry =>
+      records.deepEntries(true).asScala.foreach { logEntry =>
         val record = logEntry.record
         validateKey(record, compactedTopic)
 
@@ -121,7 +121,7 @@ private[kafka] object LogValidator {
         validatedRecords.foreach(_.ensureValid)
 
         // we can update the wrapper message only and write the compressed payload as is
-        val entry = records.shallowIterator.next()
+        val entry = records.shallowEntries.iterator.next()
         val offset = offsetCounter.addAndGet(validatedRecords.size) - 1
         entry.setOffset(offset)
         if (messageTimestampType == TimestampType.CREATE_TIME)
@@ -144,7 +144,7 @@ private[kafka] object LogValidator {
                                                    timestampType: TimestampType,
                                                    messageTimestampDiffMaxMs: Long,
                                                    toMagicValue: Byte): ValidationAndOffsetAssignResult = {
-    val sizeInBytesAfterConversion = records.shallowIterator.asScala.map { logEntry =>
+    val sizeInBytesAfterConversion = records.shallowEntries.asScala.map { logEntry =>
       logEntry.record.convertedSize(toMagicValue)
     }.sum
 
@@ -152,7 +152,7 @@ private[kafka] object LogValidator {
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now)
 
-    records.shallowIterator.asScala.foreach { logEntry =>
+    records.shallowEntries.asScala.foreach { logEntry =>
       val record = logEntry.record
       validateKey(record, compactedTopic)
       validateTimestamp(record, now, timestampType, messageTimestampDiffMaxMs)
@@ -179,7 +179,7 @@ private[kafka] object LogValidator {
     var offsetOfMaxTimestamp = -1L
     val firstOffset = offsetCounter.value
 
-    for (entry <- records.shallowIterator.asScala) {
+    for (entry <- records.shallowEntries.asScala) {
       val record = entry.record
       validateKey(record, compactedTopic)
 

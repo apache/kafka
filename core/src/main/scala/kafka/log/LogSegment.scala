@@ -212,10 +212,9 @@ class LogSegment(val log: FileRecords,
     timeIndex.resize(timeIndex.maxIndexSize)
     var validBytes = 0
     var lastIndexEntry = 0
-    val iter = log.shallowIterator(maxMessageSize)
     maxTimestampSoFar = Record.NO_TIMESTAMP
     try {
-      for (entry <- iter.asScala) {
+      for (entry <- log.shallowEntries(maxMessageSize).asScala) {
         val record = entry.record
         record.ensureValid()
 
@@ -306,7 +305,7 @@ class LogSegment(val log: FileRecords,
     if (ms == null) {
       baseOffset
     } else {
-      ms.records.shallowIterator.asScala.toSeq.lastOption match {
+      ms.records.shallowEntries.asScala.toSeq.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }
@@ -367,9 +366,9 @@ class LogSegment(val log: FileRecords,
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
     if (rollingBasedTimestamp.isEmpty) {
-      val iter = log.shallowIterator
+      val iter = log.shallowEntries.iterator()
       if (iter.hasNext)
-        rollingBasedTimestamp = Some(iter.next.record.timestamp)
+        rollingBasedTimestamp = Some(iter.next().record.timestamp)
     }
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t

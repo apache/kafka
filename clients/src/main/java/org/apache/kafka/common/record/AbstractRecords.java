@@ -16,19 +16,37 @@
  **/
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.utils.AbstractIterator;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 public abstract class AbstractRecords implements Records {
 
+    private final Iterable<Record> records = new Iterable<Record>() {
+        @Override
+        public Iterator<Record> iterator() {
+            return new Iterator<Record>() {
+                private final Iterator<? extends LogEntry> deepEntries = deepEntries().iterator();
+                @Override
+                public boolean hasNext() {
+                    return deepEntries.hasNext();
+                }
+                @Override
+                public Record next() {
+                    return deepEntries.next().record();
+                }
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException("Removal not supported");
+                }
+            };
+        }
+    };
+
     @Override
     public boolean hasMatchingShallowMagic(byte magic) {
-        Iterator<? extends LogEntry> iterator = shallowIterator();
-        while (iterator.hasNext())
-            if (iterator.next().magic() != magic)
+        for (LogEntry entry : shallowEntries())
+            if (entry.magic() != magic)
                 return false;
         return true;
     }
@@ -39,11 +57,8 @@ public abstract class AbstractRecords implements Records {
     @Override
     public Records toMessageFormat(byte toMagic) {
         List<LogEntry> converted = new ArrayList<>();
-        Iterator<LogEntry> deepIterator = deepIterator();
-        while (deepIterator.hasNext()) {
-            LogEntry entry = deepIterator.next();
+        for (LogEntry entry : deepEntries())
             converted.add(LogEntry.create(entry.offset(), entry.record().convert(toMagic)));
-        }
 
         if (converted.isEmpty()) {
             // This indicates that the message is too large, which indicates that the buffer is not large
@@ -60,7 +75,7 @@ public abstract class AbstractRecords implements Records {
             // cause some timestamp information to be lost (e.g. if the timestamp type was changed) since
             // we are essentially merging multiple message sets. However, currently this method is only
             // used for down-conversion, so we've ignored the problem.
-            CompressionType compressionType = shallowIterator().next().record().compressionType();
+            CompressionType compressionType = shallowEntries().iterator().next().record().compressionType();
             return MemoryRecords.withLogEntries(compressionType, converted);
         }
     }
@@ -77,16 +92,8 @@ public abstract class AbstractRecords implements Records {
      * Get an iterator over the deep records.
      * @return An iterator over the records
      */
-    public Iterator<Record> records() {
-        return new AbstractIterator<Record>() {
-            private final Iterator<? extends LogEntry> deepEntries = deepIterator();
-            @Override
-            protected Record makeNext() {
-                if (deepEntries.hasNext())
-                    return deepEntries.next().record();
-                return allDone();
-            }
-        };
+    public Iterable<Record> records() {
+        return records;
     }
 
 }

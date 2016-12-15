@@ -35,6 +35,15 @@ public class MemoryRecords extends AbstractRecords {
     private ByteBuffer buffer;
     private int validBytes = -1;
 
+    private Iterable<ByteBufferLogEntry> shallowEntries = new Iterable<ByteBufferLogEntry>() {
+        @Override
+        public Iterator<ByteBufferLogEntry> iterator() {
+            return shallowIterator();
+        }
+    };
+
+    private final Iterable<LogEntry> deepEntries = deepEntries(false);
+
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer) {
         this.buffer = buffer;
@@ -79,9 +88,8 @@ public class MemoryRecords extends AbstractRecords {
             return validBytes;
 
         int bytes = 0;
-        Iterator<ByteBufferLogEntry> iterator = shallowIterator();
-        while (iterator.hasNext())
-            bytes += iterator.next().sizeInBytes();
+        for (LogEntry entry : shallowEntries())
+            bytes += entry.sizeInBytes();
 
         this.validBytes = bytes;
         return bytes;
@@ -101,9 +109,7 @@ public class MemoryRecords extends AbstractRecords {
         int messagesRetained = 0;
         int bytesRetained = 0;
 
-        Iterator<ByteBufferLogEntry> shallowIterator = shallowIterator();
-        while (shallowIterator.hasNext()) {
-            ByteBufferLogEntry shallowEntry = shallowIterator.next();
+        for (ByteBufferLogEntry shallowEntry : shallowEntries()) {
             bytesRead += shallowEntry.sizeInBytes();
 
             // We use the absolute offset to decide whether to retain the message or not (this is handled by the
@@ -170,27 +176,36 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Iterator<ByteBufferLogEntry> shallowIterator() {
+    public Iterable<ByteBufferLogEntry> shallowEntries() {
+        return shallowEntries;
+    }
+
+    private Iterator<ByteBufferLogEntry> shallowIterator() {
         return RecordsIterator.shallowIterator(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
     }
 
     @Override
-    public Iterator<LogEntry> deepIterator() {
-        return deepIterator(false);
+    public Iterable<LogEntry> deepEntries() {
+        return deepEntries;
     }
 
-    public Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic) {
-        return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE);
+    public Iterable<LogEntry> deepEntries(final boolean ensureMatchingMagic) {
+        return new Iterable<LogEntry>() {
+            @Override
+            public Iterator<LogEntry> iterator() {
+                return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE);
+            }
+        };
     }
 
-    public Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize) {
+    private Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize) {
         return new RecordsIterator(new ByteBufferLogInputStream(buffer.duplicate(), maxMessageSize), false,
                 ensureMatchingMagic, maxMessageSize);
     }
 
     @Override
     public String toString() {
-        Iterator<LogEntry> iter = deepIterator();
+        Iterator<LogEntry> iter = deepEntries().iterator();
         StringBuilder builder = new StringBuilder();
         builder.append('[');
         while (iter.hasNext()) {

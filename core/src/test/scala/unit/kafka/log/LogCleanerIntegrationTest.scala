@@ -250,7 +250,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
   private def readFromLog(log: Log): Iterable[(Int, String, Long)] = {
     import JavaConverters._
-    for (segment <- log.logSegments; deepLogEntry <- segment.log.deepIterator.asScala) yield {
+    for (segment <- log.logSegments; deepLogEntry <- segment.log.deepEntries.asScala) yield {
       val key = TestUtils.readString(deepLogEntry.record.key).toInt
       val value = TestUtils.readString(deepLogEntry.record.value)
       (key, value, deepLogEntry.offset)
