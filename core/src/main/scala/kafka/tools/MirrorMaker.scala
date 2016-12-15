@@ -432,7 +432,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
               records.asScala.foreach(producer.send)
-              maybeFlushAndCommitOffsets(true)
+              maybeFlushAndCommitOffsets()
             }
           } catch {
             case _: ConsumerTimeoutException =>
@@ -440,12 +440,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             case _: WakeupException =>
               trace("Caught ConsumerWakeupException, continue iteration.")
           }
-          if (mirrorMakerConsumer.commitRequested()) {
-            maybeFlushAndCommitOffsets(false)
-            mirrorMakerConsumer.notifyCommit()
-          } else {
-            maybeFlushAndCommitOffsets(true)
-          }
+          maybeFlushAndCommitOffsets()
         }
       } catch {
         case t: Throwable =>
@@ -474,12 +469,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def maybeFlushAndCommitOffsets(autoCommit: Boolean) {
-      if (!autoCommit || System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
-        debug("Committing MirrorMaker state automatically.")
+    def maybeFlushAndCommitOffsets() {
+      val commitRequested = mirrorMakerConsumer.commitRequested()
+      if (commitRequested || System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
+        debug("Committing MirrorMaker state.")
         producer.flush()
         commitOffsets(mirrorMakerConsumer)
         lastOffsetCommitMs = System.currentTimeMillis()
+        if (commitRequested)
+          mirrorMakerConsumer.notifyCommit()
       }
     }
 
@@ -517,7 +515,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private class MirrorMakerOldConsumer(connector: ZookeeperConsumerConnector,
                                        filterSpec: TopicFilter) extends MirrorMakerBaseConsumer {
     private var iter: ConsumerIterator[Array[Byte], Array[Byte]] = null
-    private var _immediateCommitRequested: Boolean = false
+    private var immediateCommitRequested: Boolean = false
 
     override def init() {
       // Creating one stream per each connector instance
@@ -529,21 +527,24 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def requestAndWaitForCommit() {
       this.synchronized {
-        _immediateCommitRequested = true
-        this.wait()
+        // skip wait() if mirrorMakerConsumer has not been initialized
+        if (iter != null) {
+          immediateCommitRequested = true
+          this.wait()
+        }
       }
     }
 
     override def notifyCommit() {
       this.synchronized {
-        _immediateCommitRequested = false
+        immediateCommitRequested = false
         this.notifyAll()
       }
     }
 
     override def commitRequested(): Boolean = {
       this.synchronized {
-        _immediateCommitRequested
+        immediateCommitRequested
       }
     }
 
@@ -579,8 +580,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends MirrorMakerBaseConsumer {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
-    var _immediateCommitRequested: Boolean = false
-    
+
     // TODO: we need to manually maintain the consumed offsets for new consumer
     // since its internal consumed position is updated in batch rather than one
     // record at a time, this can be resolved when we break the unification of both consumers
@@ -601,23 +601,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def requestAndWaitForCommit() {
-      this.synchronized {
-        _immediateCommitRequested = true
-        this.wait()
-      }
+      // Do nothing
     }
 
     override def notifyCommit() {
-      this.synchronized {
-        _immediateCommitRequested = false
-        this.notifyAll()
-      }
+      // Do nothing
     }
     
     override def commitRequested(): Boolean = {
-      this.synchronized {
-        _immediateCommitRequested
-      }
+      false
     }
 
     override def hasData = true
@@ -667,7 +659,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends org.apache.kafka.clients.consumer.ConsumerRebalanceListener {
 
     override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
-      mirrorMakerConsumer.requestAndWaitForCommit()
+      producer.flush()
+      commitOffsets(mirrorMakerConsumer)
       customRebalanceListenerForNewConsumer.foreach(_.onPartitionsRevoked(partitions))
     }
 
@@ -681,6 +674,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     extends ConsumerRebalanceListener {
 
     override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
+      // The zookeeper listener thread, which executes this method, needs to wait for MirrorMakerThread to flush data and commit offset
       mirrorMakerConsumer.requestAndWaitForCommit()
       // invoke custom consumer rebalance listener
       customRebalanceListenerForOldConsumer.foreach(_.beforeReleasingPartitions(partitionOwnership))
