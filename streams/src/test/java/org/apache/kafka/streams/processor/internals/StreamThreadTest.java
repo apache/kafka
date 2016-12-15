@@ -663,7 +663,7 @@ public class StreamThreadTest {
         public StreamThread.State newState = null;
 
         @Override
-        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+        public void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
             this.numChanges++;
             if (this.newState != null) {
                 if (this.newState != oldState) {
