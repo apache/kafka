@@ -32,7 +32,7 @@ public interface ChannelBuilder {
      * returns a Channel with TransportLayer and Authenticator configured.
      * @param  id  channel id
      * @param  key SelectionKey
-     * @param  maxReceiveSize MaxReceiveSize
+     * @param  maxReceiveSize
      * @return KafkaChannel
      */
     KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
