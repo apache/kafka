@@ -107,7 +107,7 @@ class ReplicaManagerTest {
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
-        entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(Record.create("first message".getBytes()))),
+        entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(Record.create("first message".getBytes))),
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -133,7 +133,7 @@ class ReplicaManagerTest {
       }
 
       var fetchCallbackFired = false
-      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchPartitionData)]) = {
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
         assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.map(_._2).head.error)
         fetchCallbackFired = true
       }
@@ -228,7 +228,7 @@ class ReplicaManagerTest {
       var fetchCallbackFired = false
       var fetchError = 0
       var fetchedRecords: Records = null
-      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchPartitionData)]) = {
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
         fetchError = responseStatus.map(_._2).head.error
         fetchedRecords = responseStatus.map(_._2).head.records
         fetchCallbackFired = true

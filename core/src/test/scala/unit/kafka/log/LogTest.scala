@@ -1094,8 +1094,8 @@ class LogTest extends JUnitSuite {
     val partition = "143"
     val dir = new File(logDir + topicPartitionName(topic, partition))
     val topicAndPartition = Log.parseTopicPartitionName(dir)
-    assertEquals(topic, topicAndPartition.asTuple._1)
-    assertEquals(partition.toInt, topicAndPartition.asTuple._2)
+    assertEquals(topic, topicAndPartition.topic)
+    assertEquals(partition.toInt, topicAndPartition.partition)
   }
 
   @Test

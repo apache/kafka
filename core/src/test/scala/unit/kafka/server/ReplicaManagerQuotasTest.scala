@@ -20,7 +20,6 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Replica
-import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -39,8 +38,8 @@ class ReplicaManagerQuotasTest {
   val time = new MockTime
   val metrics = new Metrics
   val record = Record.create("some-data-in-a-message".getBytes())
-  val topicAndPartition1 = TopicAndPartition("test-topic", 1)
-  val topicAndPartition2 = TopicAndPartition("test-topic", 2)
+  val topicAndPartition1 = new TopicPartition("test-topic", 1)
+  val topicAndPartition2 = new TopicPartition("test-topic", 2)
   val fetchInfo = Seq(new TopicPartition(topicAndPartition1.topic, topicAndPartition1.partition) -> new PartitionData(0, 100),
     new TopicPartition(topicAndPartition2.topic, topicAndPartition2.partition) -> new PartitionData(0, 100))
   var replicaManager: ReplicaManager = null

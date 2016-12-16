@@ -295,7 +295,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
                 messageInfoFromFirstReplicaOpt match {
                   case None =>
                     messageInfoFromFirstReplicaOpt = Some(
-                      MessageInfo(replicaId, logEntry.offset,logEntry.nextOffset, logEntry.record.checksum))
+                      MessageInfo(replicaId, logEntry.offset, logEntry.nextOffset, logEntry.record.checksum))
                   case Some(messageInfoFromFirstReplica) =>
                     if (messageInfoFromFirstReplica.offset != logEntry.offset) {
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition

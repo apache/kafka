@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 
-import kafka.common.TopicAndPartition
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException}
@@ -43,7 +42,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchOnlyCommitted: Boolean,
                          isFromFollower: Boolean,
                          replicaId: Int,
-                         fetchPartitionStatus: Seq[(TopicAndPartition, FetchPartitionStatus)]) {
+                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
                           "onlyLeader:" + fetchOnlyLeader + ", "
@@ -58,7 +57,7 @@ class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
-                   responseCallback: Seq[(TopicAndPartition, FetchPartitionData)] => Unit)
+                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**

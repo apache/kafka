@@ -25,7 +25,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
-import kafka.common.{MessageFormatter, TopicAndPartition, _}
+import kafka.common.{MessageFormatter, _}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
@@ -366,7 +366,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def loadGroupsForPartition(offsetsPartition: Int,
                              onGroupLoaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
 
     def loadGroupsAndOffsets() {
@@ -510,7 +510,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
@@ -532,11 +532,11 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-        .format(numOffsetsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
+      if (numOffsetsRemoved > 0)
+        info(s"Removed $numOffsetsRemoved cached offsets for $topicPartition on follower transition.")
 
-      if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
-        .format(numGroupsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
+      if (numGroupsRemoved > 0)
+        info(s"Removed $numGroupsRemoved cached groups for $topicPartition on follower transition.")
     }
   }
 
@@ -561,7 +561,7 @@ class GroupMetadataManager(val brokerId: Int,
         case Some((magicValue, timestampType, timestamp)) =>
           val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
           partitionOpt.foreach { partition =>
-            val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+            val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
             val tombstones = expiredOffsets.map { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
@@ -589,7 +589,7 @@ class GroupMetadataManager(val brokerId: Int,
               } catch {
                 case t: Throwable =>
                   error(s"Failed to append ${tombstones.size} tombstones to $appendPartition for expired offsets and/or metadata for group $groupId.", t)
-                // ignore and continue
+                  // ignore and continue
               }
             }
           }
@@ -648,8 +648,8 @@ class GroupMetadataManager(val brokerId: Int,
    * @return  Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
    */
   private def getMagicAndTimestamp(partition: Int): Option[(Byte, TimestampType, Long)] = {
-    val groupMetadataTopicAndPartition = TopicAndPartition(Topic.GroupMetadataTopicName, partition)
-    replicaManager.getMagicAndTimestampType(groupMetadataTopicAndPartition).map { case (messageFormatVersion, timestampType) =>
+    val groupMetadataTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partition)
+    replicaManager.getMagicAndTimestampType(groupMetadataTopicPartition).map { case (messageFormatVersion, timestampType) =>
       val timestamp = if (messageFormatVersion == Record.MAGIC_VALUE_V0) Record.NO_TIMESTAMP else time.milliseconds()
       (messageFormatVersion, timestampType, timestamp)
     }

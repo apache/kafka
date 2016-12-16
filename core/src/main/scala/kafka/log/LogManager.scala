@@ -24,9 +24,11 @@ import kafka.utils._
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import kafka.common.{KafkaStorageException, KafkaException, TopicAndPartition}
+import kafka.common.{KafkaException, KafkaStorageException}
 import kafka.server.{BrokerState, OffsetCheckpoint, RecoveringFromUncleanShutdown}
 import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
+
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -56,7 +58,7 @@ class LogManager(val logDirs: Array[File],
   val InitialTaskDelayMs = 30*1000
 
   private val logCreationOrDeletionLock = new Object
-  private val logs = new Pool[TopicAndPartition, Log]()
+  private val logs = new Pool[TopicPartition, Log]()
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   createAndValidateLogDirs(logDirs)
@@ -132,7 +134,7 @@ class LogManager(val logDirs: Array[File],
         brokerState.newState(RecoveringFromUncleanShutdown)
       }
 
-      var recoveryPoints = Map[TopicAndPartition, Long]()
+      var recoveryPoints = Map[TopicPartition, Long]()
       try {
         recoveryPoints = this.recoveryPointCheckpoints(dir).read
       } catch {
@@ -287,7 +289,7 @@ class LogManager(val logDirs: Array[File],
    *
    * @param partitionAndOffsets Partition logs that need to be truncated
    */
-  def truncateTo(partitionAndOffsets: Map[TopicAndPartition, Long]) {
+  def truncateTo(partitionAndOffsets: Map[TopicPartition, Long]) {
     for ((topicAndPartition, truncateOffset) <- partitionAndOffsets) {
       val log = logs.get(topicAndPartition)
       // If the log does not exist, skip it
@@ -310,17 +312,17 @@ class LogManager(val logDirs: Array[File],
    *  Delete all data in a partition and start the log at the new offset
    *  @param newOffset The new offset to start the log with
    */
-  def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
-    val log = logs.get(topicAndPartition)
+  def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long) {
+    val log = logs.get(topicPartition)
     // If the log does not exist, skip it
     if (log != null) {
         //Abort and pause the cleaning of the log, and resume after truncation is done.
       if (cleaner != null)
-        cleaner.abortAndPauseCleaning(topicAndPartition)
+        cleaner.abortAndPauseCleaning(topicPartition)
       log.truncateFullyAndStartAt(newOffset)
       if (cleaner != null) {
-        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicAndPartition, log.activeSegment.baseOffset)
-        cleaner.resumeCleaning(topicAndPartition)
+        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+        cleaner.resumeCleaning(topicPartition)
       }
     }
     checkpointRecoveryPointOffsets()
@@ -347,7 +349,7 @@ class LogManager(val logDirs: Array[File],
   /**
    * Get the log if it exists, otherwise return None
    */
-  def getLog(topicAndPartition: TopicAndPartition): Option[Log] = {
+  def getLog(topicAndPartition: TopicPartition): Option[Log] = {
     val log = logs.get(topicAndPartition)
     if (log == null)
       None
@@ -359,7 +361,7 @@ class LogManager(val logDirs: Array[File],
    * Create a log for the given topic and the given partition
    * If the log already exists, just return a copy of the existing log
    */
-  def createLog(topicAndPartition: TopicAndPartition, config: LogConfig): Log = {
+  def createLog(topicAndPartition: TopicPartition, config: LogConfig): Log = {
     logCreationOrDeletionLock synchronized {
       var log = logs.get(topicAndPartition)
       
@@ -397,7 +399,7 @@ class LogManager(val logDirs: Array[File],
         if (removedLog != null) {
           try {
             removedLog.delete()
-            info(s"Deleted log for partition ${removedLog.topicAndPartition} in ${removedLog.dir.getAbsolutePath}.")
+            info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
             case e: Throwable =>
               error(s"Exception in deleting $removedLog. Moving it to the end of the queue.", e)
@@ -417,7 +419,7 @@ class LogManager(val logDirs: Array[File],
     * add it in the queue for deletion. 
     * @param topicAndPartition TopicPartition that needs to be deleted
     */
-  def asyncDelete(topicAndPartition: TopicAndPartition) = {
+  def asyncDelete(topicAndPartition: TopicPartition) = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
                             logs.remove(topicAndPartition)
                           }
@@ -446,7 +448,7 @@ class LogManager(val logDirs: Array[File],
 
         logsToBeDeleted.add(removedLog)
         removedLog.removeLogMetrics()
-        info(s"Log for partition ${removedLog.topicAndPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
       } else {
         throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
       }
@@ -495,9 +497,9 @@ class LogManager(val logDirs: Array[File],
   def allLogs(): Iterable[Log] = logs.values
 
   /**
-   * Get a map of TopicAndPartition => Log
+   * Get a map of TopicPartition => Log
    */
-  def logsByTopicPartition: Map[TopicAndPartition, Log] = logs.toMap
+  def logsByTopicPartition: Map[TopicPartition, Log] = logs.toMap
 
   /**
    * Map of log dir to logs by topic and partitions in that dir

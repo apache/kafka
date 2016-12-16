@@ -461,7 +461,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for sending a fetch response
-    def sendResponseCallback(responsePartitionData: Seq[(TopicAndPartition, FetchPartitionData)]) {
+    def sendResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
       val convertedPartitionData = {
         // Need to down-convert message when consumer only takes magic value 0.
         responsePartitionData.map { case (tp, data) =>
@@ -544,7 +544,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         quota: ReplicationQuotaManager): Int = {
     val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]()
     mergedPartitionData.foreach { case (tp, data) =>
-      if (quota.isThrottled(TopicAndPartition(tp.topic(), tp.partition())))
+      if (quota.isThrottled(tp))
         partitionData.put(tp, data)
     }
     FetchResponse.sizeOf(versionId, partitionData)
@@ -690,7 +690,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
+    logManager.getLog(topicPartition) match {
       case Some(log) =>
         fetchOffsetsBefore(log, timestamp, maxNumOffsets)
       case None =>
@@ -702,7 +702,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
-    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
+    logManager.getLog(topicPartition) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)
       case None =>
