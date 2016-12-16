@@ -31,6 +31,8 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +71,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(stateListener.numChanges, 1);
         Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
 
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initCountDifference = newInitCount - oldInitCount;
@@ -78,6 +81,8 @@ public class KafkaStreamsTest {
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
     }
 
     @Test
@@ -262,12 +267,15 @@ public class KafkaStreamsTest {
         public int numChanges = 0;
         public KafkaStreams.State oldState;
         public KafkaStreams.State newState;
+        public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+            Long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
             this.numChanges++;
             this.oldState = oldState;
             this.newState = newState;
+            this.mapStates.put(newState, prevCount + 1);
         }
     }
 }
