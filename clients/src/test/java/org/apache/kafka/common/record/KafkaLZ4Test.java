@@ -64,7 +64,7 @@ public class KafkaLZ4Test {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(output, this.useBrokenFlagDescriptorChecksum);
         lz4.write(this.payload, 0, this.payload.length);
-        lz4.flush();
+        lz4.close();
         byte[] compressed = output.toByteArray();
 
         // Check magic bytes stored as little-endian
