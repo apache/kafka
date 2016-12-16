@@ -255,7 +255,8 @@ class Partition(val topic: String,
         replica.updateLogReadResult(logReadResult)
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        maybeExpandIsr(replicaId)
+        maybeExpandIsr(replicaId, logReadResult)
+
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId,
@@ -273,20 +274,21 @@ class Partition(val topic: String,
   }
 
   /**
-   * Check and maybe expand the ISR of the partition.
+   * Check and maybe expand the ISR of the partition. A replica is in ISR of the partition if and only if
+   * replica's LEO >= HW and replica's lag <= replicaLagTimeMaxMs.
    *
    * This function can be triggered when a replica's LEO has incremented
    */
-  def maybeExpandIsr(replicaId: Int) {
+  def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult) {
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       // check if this replica needs to be added to the ISR
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
-          val leaderHW = leaderReplica.highWatermark
           if(!inSyncReplicas.contains(replica) &&
              assignedReplicas.map(_.brokerId).contains(replicaId) &&
-                  replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
+             logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.hw &&
+             logReadResult.fetchTimeMs - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs) {
             val newInSyncReplicas = inSyncReplicas + replica
             info("Expanding ISR for partition [%s,%d] from %s to %s"
                          .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","),
@@ -298,7 +300,8 @@ class Partition(val topic: String,
 
           // check if the HW of the partition can now be incremented
           // since the replica maybe now be in the ISR and its LEO has just incremented
-          maybeIncrementLeaderHW(leaderReplica)
+          // TODO: is this maybeIncrementLeaderHW() necessary?
+          maybeIncrementLeaderHW(leaderReplica, logReadResult.fetchTimeMs)
 
         case None => false // nothing to do if no longer leader
       }
@@ -362,12 +365,18 @@ class Partition(val topic: String,
    * 1. Partition ISR changed
    * 2. Any replica's LEO changed
    *
+   * We only increase HW if HW is smaller than LEO of all replicas whose lag <= replicaLagTimeMaxMs.
+   * This means that if a replica does not lag much behind leader and the replica's LEO is smaller than HW, HW will
+   * wait for this replica to catch up so that this replica can be added to ISR set.
+   *
    * Returns true if the HW was incremented, and false otherwise.
    * Note There is no need to acquire the leaderIsrUpdate lock here
    * since all callers of this private API acquire that lock
    */
-  private def maybeIncrementLeaderHW(leaderReplica: Replica): Boolean = {
-    val allLogEndOffsets = inSyncReplicas.map(_.logEndOffset)
+  private def maybeIncrementLeaderHW(leaderReplica: Replica, curTime: Long = time.milliseconds): Boolean = {
+    val allLogEndOffsets = assignedReplicas.filter(replica => {
+      curTime - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
+    }).map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
     val oldHighWatermark = leaderReplica.highWatermark
     if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset || oldHighWatermark.onOlderSegment(newHighWatermark)) {

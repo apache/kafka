@@ -36,25 +36,41 @@ class Replica(val brokerId: Int,
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
 
+  // The log end offset value at the time the leader receives last FetchRequest from this follower.
+  // This is used to determine the last catch-up time of the follower
+  @volatile var lastFetchLeaderLogEndOffset: Long = 0L
+
+  // The time when the leader receives last FetchRequest from this follower
+  // This is used to determine the last catch-up time of the follower
+  @volatile var lastFetchTimeMs: Long = 0L
+
   val topic = partition.topic
   val partitionId = partition.partitionId
 
   def isLocal: Boolean = log.isDefined
 
+  // lastCatchUpTimeMs is the largest time t such that the begin offset of most recent FetchRequest from this follower >=
+  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
 
   def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
 
+  /*
+   * If the FetchRequest reads up to the log end offset of the leader when the current fetch request was received,
+   * set the lastCaughtUpTimeMsUnderlying to the time when the current fetch request was received.
+   *
+   * Else if the FetchRequest reads up to the log end offset of the the leader when the previous fetch request was received,
+   * set the lastCaughtUpTimeMsUnderlying to the time when the previous fetch request was received.
+   */
   def updateLogReadResult(logReadResult : LogReadResult) {
-    logEndOffset = logReadResult.info.fetchOffsetMetadata
+    if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
+      lastCaughtUpTimeMsUnderlying.set(logReadResult.fetchTimeMs)
+    else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
+      lastCaughtUpTimeMsUnderlying.set(lastFetchTimeMs)
 
-    /* If the request read up to the log end offset snapshot when the read was initiated,
-     * set the lastCaughtUpTimeMsUnderlying to the current time.
-     * This means that the replica is fully caught up.
-     */
-    if(logReadResult.isReadFromLogEnd) {
-      lastCaughtUpTimeMsUnderlying.set(time.milliseconds)
-    }
+    logEndOffset = logReadResult.info.fetchOffsetMetadata
+    lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
+    lastFetchTimeMs = logReadResult.fetchTimeMs
   }
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
