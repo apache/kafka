@@ -29,6 +29,9 @@ import org.junit.Test;
 import java.util.Arrays;
 
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -114,6 +117,11 @@ public class KeyValueStoreJoinViewTest {
                 KeyValue.pair(3L, "C+c"),
                 KeyValue.pair(4L, "D+null")
         ), toList(leftJoin.range(3L, 10L)));
+    }
+
+    @Test
+    public void shouldReturnNullWhenGetNull() throws Exception {
+        assertThat(leftJoin.get(null), is(nullValue()));
     }
 
 }

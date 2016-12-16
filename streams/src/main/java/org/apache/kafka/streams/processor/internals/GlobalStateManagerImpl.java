@@ -81,7 +81,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         try {
             this.checkpointableOffsets = new HashMap<>(checkpoint.read());
+            checkpoint.delete();
         } catch (IOException e) {
+            try {
+                stateDirectory.unlockGlobalState();
+            } catch (IOException e1) {
+                log.error("failed to unlock the global state directory", e);
+            }
             throw new StreamsException("Failed to read checkpoints for global state stores", e);
         }
 
@@ -128,8 +134,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         log.info("restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
-        final Map<Integer, Long> highWatermarks = loadHighwatermarks(topicPartitions);
-
+        consumer.assign(topicPartitions);
+        final Map<TopicPartition, Long> highWatermarks = consumer.endOffsets(topicPartitions);
         try {
             restoreState(stateRestoreCallback, topicPartitions, highWatermarks);
             stores.put(store.name(), store);
@@ -137,16 +143,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             consumer.assign(Collections.<TopicPartition>emptyList());
         }
 
-    }
-
-    private Map<Integer, Long> loadHighwatermarks(final List<TopicPartition> topicPartitions) {
-        consumer.assign(topicPartitions);
-        consumer.seekToEnd(topicPartitions);
-        final Map<Integer, Long> highWatermarks = new HashMap<>();
-        for (final TopicPartition topicPartition : topicPartitions) {
-            highWatermarks.put(topicPartition.partition(), consumer.position(topicPartition));
-        }
-        return highWatermarks;
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -165,7 +161,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
-                              final Map<Integer, Long> highWatermarks) {
+                              final Map<TopicPartition, Long> highWatermarks) {
         for (final TopicPartition topicPartition : topicPartitions) {
             consumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
@@ -176,7 +172,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             }
 
             long offset = consumer.position(topicPartition);
-            final Long highWatermark = highWatermarks.get(topicPartition.partition());
+            final Long highWatermark = highWatermarks.get(topicPartition);
 
             while (offset < highWatermark) {
                 final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
@@ -190,19 +186,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     public void flush(final InternalProcessorContext context) {
-        if (!this.stores.isEmpty()) {
-            log.debug("Flushing all global stores registered in the state manager");
-            for (StateStore store : this.stores.values()) {
-                final ProcessorNode processorNode = topology.storeToProcessorNodeMap().get(store);
-                if (processorNode != null) {
-                    context.setCurrentNode(processorNode);
-                }
-                try {
-                    log.trace("Flushing global store={}", store.name());
-                    store.flush();
-                } catch (Exception e) {
-                    throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
-                }
+        log.debug("Flushing all global stores registered in the state manager");
+        for (StateStore store : this.stores.values()) {
+            final ProcessorNode processorNode = topology.storeToProcessorNodeMap().get(store);
+            if (processorNode != null) {
+                context.setCurrentNode(processorNode);
+            }
+            try {
+                log.trace("Flushing global store={}", store.name());
+                store.flush();
+            } catch (Exception e) {
+                throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
             }
         }
     }

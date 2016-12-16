@@ -90,6 +90,9 @@ class KeyValueStoreJoinView<K, V, K1, V1, R> implements ReadOnlyKeyValueStore<K,
     @Override
     public R get(final K key) {
         validateStoreOpen();
+        if (key == null) {
+            return null;
+        }
         return doJoin(key, storeOne.get(key));
     }
 

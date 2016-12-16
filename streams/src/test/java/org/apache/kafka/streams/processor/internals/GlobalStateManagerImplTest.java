@@ -66,6 +66,7 @@ public class GlobalStateManagerImplTest {
     private NoOpReadOnlyStore<Object, Object> store1;
     private NoOpReadOnlyStore store2;
     private MockConsumer<byte[], byte[]> consumer;
+    private File checkpointFile;
 
     @Before
     public void before() throws IOException {
@@ -91,6 +92,7 @@ public class GlobalStateManagerImplTest {
         stateDirectory = new StateDirectory("appId", stateDirPath);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         stateManager = new GlobalStateManagerImpl(topology, consumer, stateDirectory);
+        checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
     }
 
     @After
@@ -117,14 +119,18 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldReadCheckpointOffsets() throws Exception {
-        final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
-        final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 1L);
-        checkpoint.write(expected);
+        final Map<TopicPartition, Long> expected = writeCheckpoint();
 
         stateManager.initialize(context);
         final Map<TopicPartition, Long> offsets = stateManager.checkpointedOffsets();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldDeleteCheckpointFileAfteLoaded() throws Exception {
+        writeCheckpoint();
+        stateManager.initialize(context);
+        assertFalse(checkpointFile.exists());
     }
 
     @Test(expected = StreamsException.class)
@@ -300,7 +306,7 @@ public class GlobalStateManagerImplTest {
         final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
         try {
             // should be able to get the lock now as it should've been released in close
-            stateDir.lockGlobalState(1);
+            assertTrue(stateDir.lockGlobalState(1));
         } finally {
             stateDir.unlockGlobalState();
         }
@@ -347,6 +353,26 @@ public class GlobalStateManagerImplTest {
         assertFalse(store2.isOpen());
     }
 
+    @Test
+    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws Exception {
+        final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
+            stream.write("0\n1\nblah".getBytes());
+        }
+        try {
+            stateManager.initialize(context);
+        } catch (StreamsException e) {
+            // expected
+        }
+        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
+        try {
+            // should be able to get the lock now as it should've been released
+            assertTrue(stateDir.lockGlobalState(1));
+        } finally {
+            stateDir.unlockGlobalState();
+        }
+    }
+
     private void initializeConsumer(final long numRecords, final long startOffset, final TopicPartition topicPartition) {
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(topicPartition, 1L);
@@ -360,6 +386,13 @@ public class GlobalStateManagerImplTest {
         for (int i = 0; i < numRecords; i++) {
             consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), startOffset + i, "key".getBytes(), "value".getBytes()));
         }
+    }
+
+    private Map<TopicPartition, Long> writeCheckpoint() throws IOException {
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
+        final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 1L);
+        checkpoint.write(expected);
+        return expected;
     }
 
     private static class TheStateRestoreCallback implements StateRestoreCallback {
