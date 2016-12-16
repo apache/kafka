@@ -685,10 +685,10 @@ public interface KGroupedStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                            final Aggregator<? super K, ? super V, VR> aggregator,
-                                                            final Windows<W> windows,
-                                                            final Serde<VR> aggValueSerde,
-                                                            final String storeName);
+                                                             final Aggregator<? super K, ? super V, VR> aggregator,
+                                                             final Windows<W> windows,
+                                                             final Serde<VR> aggValueSerde,
+                                                             final String storeName);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.

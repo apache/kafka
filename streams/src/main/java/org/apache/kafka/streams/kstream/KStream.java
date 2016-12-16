@@ -98,7 +98,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #flatMapValues(ValueMapper)
      */
-    <KR> KStream<KR, V> selectKey(KeyValueMapper<? super K, ? super V, KR> mapper);
+    <KR> KStream<KR, V> selectKey(KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
      * Transform each record of the input stream into a new record in the output stream
@@ -131,7 +131,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #flatMapValues(ValueMapper)
      */
-    <KR, VR> KStream<KR, VR> map(KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> mapper);
+    <KR, VR> KStream<KR, VR> map(KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -162,7 +162,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #transformValues(ValueTransformerSupplier, String...)
      */
-    <VR> KStream<K, VR> mapValues(ValueMapper<? super V, VR> mapper);
+    <VR> KStream<K, VR> mapValues(ValueMapper<? super V, ? extends VR> mapper);
 
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
@@ -205,7 +205,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #transform(TransformerSupplier, String...)
      */
-    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, Iterable<KeyValue<KR, VR>>> mapper);
+    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper);
 
     /**
      * Create a new instance of {@link KStream} by transforming the value of each element in this stream into zero or
@@ -241,7 +241,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, Iterable<VR>> processor);
+    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> processor);
 
     /**
      * Print the elements of this stream to {@code System.out}.
@@ -623,7 +623,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier,
                                        final String... stateStoreNames);
 
     /**
@@ -698,7 +698,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #transform(TransformerSupplier, String...)
      */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, VR> valueTransformerSupplier,
+    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
 
     /**
@@ -949,7 +949,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                 final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows);
 
     /**
@@ -1026,7 +1026,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                 final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
                                  final Serde<K> keySerde,
                                  final Serde<V> thisValueSerde,
@@ -1106,7 +1106,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows);
 
     /**
@@ -1188,7 +1188,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows,
                                      final Serde<K> keySerde,
                                      final Serde<V> thisValSerde,
@@ -1269,7 +1269,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows);
 
     /**
@@ -1352,7 +1352,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<? super V, ? super VO, VR> joiner,
+                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
                                       final Serde<K> keySerde,
                                       final Serde<V> thisValueSerde,
@@ -1424,7 +1424,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KTable, ValueJoiner)
      */
     <VT, VR> KStream<K, VR> join(final KTable<K, VT> table,
-                                 final ValueJoiner<? super V, ? super VT, VR> joiner);
+                                 final ValueJoiner<? super V, ? super VT, ? extends VR> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi join.
@@ -1495,7 +1495,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KTable, ValueJoiner, Serde, Serde)
      */
     <VT, VR> KStream<K, VR> join(final KTable<K, VT> table,
-                                 final ValueJoiner<? super V, ? super VT, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
                                  final Serde<K> keySerde,
                                  final Serde<V> valSerde);
 
@@ -1568,7 +1568,7 @@ public interface KStream<K, V> {
      * @see #join(KTable, ValueJoiner)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
-                                     final ValueJoiner<? super V, ? super VT, VR> joiner);
+                                     final ValueJoiner<? super V, ? super VT, ? extends VR> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed left equi join.
@@ -1642,7 +1642,7 @@ public interface KStream<K, V> {
      * @see #join(KTable, ValueJoiner, Serde, Serde)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
-                                     final ValueJoiner<? super V, ? super VT, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde);
 

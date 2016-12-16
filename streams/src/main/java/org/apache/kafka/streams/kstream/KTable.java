@@ -67,7 +67,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KTable} that contains records with unmodified keys and new values of different type
      */
-    <V1> KTable<K, V1> mapValues(ValueMapper<? super V, V1> mapper);
+    <V1> KTable<K, V1> mapValues(ValueMapper<? super V, ? extends V1> mapper);
 
 
     /**
@@ -310,7 +310,7 @@ public interface KTable<K, V> {
      *         the records are no longer treated as updates on a primary-keyed table,
      *         but rather as normal key-value pairs in a record stream
      */
-    <K1> KStream<K1, V> toStream(KeyValueMapper<? super K, ? super V, K1> mapper);
+    <K1> KStream<K1, V> toStream(KeyValueMapper<? super K, ? super V, ? extends K1> mapper);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Inner Join.
@@ -323,7 +323,7 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, R> joiner);
+    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Outer Join.
@@ -336,7 +336,7 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, R> joiner);
+    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Left Join.
@@ -349,7 +349,7 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, R> joiner);
+    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
     /**
      * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.

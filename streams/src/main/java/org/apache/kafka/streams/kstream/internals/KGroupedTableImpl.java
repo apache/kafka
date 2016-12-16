@@ -46,14 +46,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final Serde<K> keySerde;
-    protected final Serde<V> valSerde;
+    protected final Serde<? extends K> keySerde;
+    protected final Serde<? extends V> valSerde;
 
     public KGroupedTableImpl(KStreamBuilder topology,
                              String name,
                              String sourceName,
-                             Serde<K> keySerde,
-                             Serde<V> valSerde) {
+                             Serde<? extends K> keySerde,
+                             Serde<? extends V> valSerde) {
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -99,13 +99,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         String topic = storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+        Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
+        Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
+        ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
