@@ -176,6 +176,13 @@ public class StreamThread extends Thread {
         setState(newState);
     }
 
+    private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
+        if (state == State.PENDING_SHUTDOWN) {
+            return;
+        }
+        setState(newState);
+    }
+
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
