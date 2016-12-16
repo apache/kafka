@@ -32,7 +32,6 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -62,10 +61,10 @@ public class NetworkClientApiVersionsCheckTest extends NetworkClientTest {
 
     @Test
     public void testUnsupportedMissingApiVersions() {
-        unsupportedApiVersionsCheck(Collections.emptyList(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2), "Node 0 does not support Api " + ApiKeys.METADATA.id);
+        unsupportedApiVersionsCheck(Collections.<ApiVersionsResponse.ApiVersion>emptyList(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2), "Node 0 does not support Api " + ApiKeys.METADATA.id);
     }
 
-    private void unsupportedApiVersionsCheck(final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions,
+    private void unsupportedApiVersionsCheck(final List<ApiVersionsResponse.ApiVersion> expectedApiVersions,
                                              short minVersion, short maxVersion, String errorMessage) {
         ResponseHeader responseHeader = new ResponseHeader(0);
         List<ApiVersionsResponse.ApiVersion> apiVersions = new ArrayList<>();
