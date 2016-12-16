@@ -131,7 +131,7 @@ may not be dedicated to Kafka's build.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForms=1 test`.
+The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
 
 * `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
