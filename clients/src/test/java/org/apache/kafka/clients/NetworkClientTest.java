@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.AbstractRequestResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
@@ -50,19 +51,19 @@ import static org.junit.Assert.assertTrue;
 public class NetworkClientTest {
 
     protected final int requestTimeoutMs = 1000;
-    protected MockTime time = new MockTime();
-    protected MockSelector selector = new MockSelector(time);
-    protected Metadata metadata = new Metadata(0, Long.MAX_VALUE);
-    protected int nodeId = 1;
-    protected Cluster cluster = TestUtils.singletonCluster("test", nodeId);
-    protected Node node = cluster.nodes().get(0);
-    protected long reconnectBackoffMsTest = 10 * 1000;
-    protected NetworkClient client = getNetworkClient();
+    protected final MockTime time = new MockTime();
+    protected final MockSelector selector = new MockSelector(time);
+    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    protected final int nodeId = 1;
+    protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
+    protected final Node node = cluster.nodes().get(0);
+    protected final long reconnectBackoffMsTest = 10 * 1000;
+    protected final NetworkClient client = createNetworkClient();
 
-    private NetworkClient clientWithStaticNodes = getNetworkClientWithStaticNodes();
+    private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
 
-    private NetworkClient getNetworkClient() {
-        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+    private NetworkClient createNetworkClient() {
+        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = expectedApiVersions();
         if (expectedApiVersions == null)
             return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
                     64 * 1024, 64 * 1024, requestTimeoutMs, time);
@@ -72,8 +73,8 @@ public class NetworkClientTest {
 
     }
 
-    private NetworkClient getNetworkClientWithStaticNodes() {
-        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+    private NetworkClient createNetworkClientWithStaticNodes() {
+        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = expectedApiVersions();
         if (expectedApiVersions == null)
             return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
                     "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
@@ -82,7 +83,7 @@ public class NetworkClientTest {
                     "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time, expectedApiVersions);
     }
 
-    protected Collection<ApiVersionsResponse.ApiVersion> getExpectedApiVersions() {
+    protected List<ApiVersionsResponse.ApiVersion> expectedApiVersions() {
         return null;
     }
 
@@ -154,16 +155,13 @@ public class NetworkClientTest {
     }
 
     private void maybeSetExpectedApiVersionsResponse() {
-        final Collection<ApiVersionsResponse.ApiVersion> expectedApiVersions = getExpectedApiVersions();
+        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = expectedApiVersions();
         if (expectedApiVersions == null)
             return;
-        ResponseHeader respHeader = new ResponseHeader(0);
-        Struct resp = new ApiVersionsResponse(Errors.NONE.code(), (List<ApiVersionsResponse.ApiVersion>) getExpectedApiVersions()).toStruct();
-        int size = respHeader.sizeOf() + resp.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        respHeader.writeTo(buffer);
-        resp.writeTo(buffer);
-        buffer.flip();
+
+        ResponseHeader responseHeader = new ResponseHeader(0);
+        ByteBuffer buffer = AbstractRequestResponse.serialize(responseHeader, new ApiVersionsResponse(Errors.NONE.code(),
+                expectedApiVersions));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 

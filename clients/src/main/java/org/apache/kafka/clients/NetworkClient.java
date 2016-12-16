@@ -701,30 +701,26 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-            handleMetadataResponse(requestHeader, response, now);
-        }
-
-        @Override
-        public void requestUpdate() {
-            this.metadata.requestUpdate();
-        }
-
-        private void handleMetadataResponse(RequestHeader header, MetadataResponse response, long now) {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
-                log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), errors);
+                log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
 
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists
             if (cluster.nodes().size() > 0) {
                 this.metadata.update(cluster, now);
             } else {
-                log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
+                log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             }
+        }
+
+        @Override
+        public void requestUpdate() {
+            this.metadata.requestUpdate();
         }
 
         /**

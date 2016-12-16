@@ -59,11 +59,11 @@ public class ApiVersionsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "ApiVersion {" +
-                    " apiKey: " + apiKey +
-                    " minVersion: " + minVersion +
-                    " maxVersion: " + maxVersion +
-                    "}";
+            return "ApiVersion(" +
+                    "apiKey=" + apiKey +
+                    ", minVersion=" + minVersion +
+                    ", maxVersion= " + maxVersion +
+                    ")";
         }
     }
 
