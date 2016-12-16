@@ -31,11 +31,9 @@ public class MemoryRecords extends AbstractRecords {
 
     public final static MemoryRecords EMPTY = MemoryRecords.readableRecords(ByteBuffer.allocate(0));
 
-    // the underlying buffer used for read; while the records are still writable it is null
-    private ByteBuffer buffer;
-    private int validBytes = -1;
+    private final ByteBuffer buffer;
 
-    private Iterable<ByteBufferLogEntry> shallowEntries = new Iterable<ByteBufferLogEntry>() {
+    private final Iterable<ByteBufferLogEntry> shallowEntries = new Iterable<ByteBufferLogEntry>() {
         @Override
         public Iterator<ByteBufferLogEntry> iterator() {
             return shallowIterator();
@@ -43,6 +41,8 @@ public class MemoryRecords extends AbstractRecords {
     };
 
     private final Iterable<LogEntry> deepEntries = deepEntries(false);
+
+    private int validBytes = -1;
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer) {
