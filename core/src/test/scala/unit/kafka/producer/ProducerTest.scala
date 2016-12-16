@@ -18,7 +18,7 @@
 package kafka.producer
 
 import org.apache.kafka.common.config.ConfigException
-import org.scalatest.TestFailedException
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message

@@ -128,7 +128,7 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.useAnt = false
+    //scalaCompileOptions.useAnt = false
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
@@ -137,7 +137,7 @@ subprojects {
   }
 }
 
-for ( sv in ['2_9_1', '2_9_2', '2_10_4', '2_11_5'] ) {
+for ( sv in ['2_10_4', '2_11_5', '2_12_1'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
@@ -177,20 +177,20 @@ for ( sv in ['2_9_1', '2_9_2', '2_10_4', '2_11_5'] ) {
   }
 }
 
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_4', 'jar_core_2_11_5', 'clients:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_4', 'jar_core_2_11_5', 'jar_core_2_12_1', 'clients:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
 }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_4', 'srcJar_2_11_5', 'clients:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_4', 'srcJar_2_11_5', 'srcJar_2_12_1','clients:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_4', 'docsJar_2_11_5', 'clients:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_4', 'docsJar_2_11_5', 'docsJar_2_12_1','clients:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
 
-tasks.create(name: "testAll", dependsOn: ['test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_4', 'test_core_2_11_5', 'clients:test']) {
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10_4', 'test_core_2_11_5', 'test_core_2_12_1','clients:test']) {
 }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_4', 'releaseTarGz_2_11_5']) {
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_4', 'releaseTarGz_2_11_5', 'releaseTarGz_2_12_1']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_4', 'uploadCoreArchives_2_11_5', 'clients:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_4', 'uploadCoreArchives_2_11_5', 'uploadCoreArchives_2_12_1','clients:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
 }
 
 project(':core') {
@@ -213,14 +213,16 @@ project(':core') {
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile project(':clients')
-    if (scalaVersion.startsWith('2.10')) {
-      testCompile 'org.scalatest:scalatest_2.10:1.9.1'
-    } else if (scalaVersion.startsWith('2.11')) {
+    if (scalaVersion.startsWith('2.11')) {
       compile 'org.scala-lang.modules:scala-xml_2.11:1.0.2'
       compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.2'
-      testCompile "org.scalatest:scalatest_2.11:2.2.0"
+      testCompile 'org.scalatest:scalatest_2.11:3.0.1'
+    } else if (scalaVersion.startsWith('2.12')) {
+      compile 'org.scala-lang.modules:scala-xml_2.12:1.0.6'
+      compile 'org.scala-lang.modules:scala-parser-combinators_2.12:1.0.4'
+      testCompile 'org.scalatest:scalatest_2.12:3.0.1'
     } else {
-      testCompile "org.scalatest:scalatest_$scalaVersion:1.8"
+      testCompile 'org.scalatest:scalatest_2.10:3.0.1'
     }
     testRuntime "$slf4jlog4j"
 
