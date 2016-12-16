@@ -61,7 +61,7 @@ public class NetworkClientApiVersionsCheckTest extends NetworkClientTest {
 
     @Test
     public void testUnsupportedMissingApiVersions() {
-        unsupportedApiVersionsCheck(Collections.<ApiVersionsResponse.ApiVersion>emptyList(), Short.MIN_VALUE, (short) (Short.MAX_VALUE + 2), "Node 0 does not support Api " + ApiKeys.METADATA.id);
+        unsupportedApiVersionsCheck(Collections.<ApiVersionsResponse.ApiVersion>emptyList(), Short.MIN_VALUE, Short.MAX_VALUE, "Node 0 does not support Api " + ApiKeys.METADATA.id);
     }
 
     private void unsupportedApiVersionsCheck(final List<ApiVersionsResponse.ApiVersion> expectedApiVersions,
