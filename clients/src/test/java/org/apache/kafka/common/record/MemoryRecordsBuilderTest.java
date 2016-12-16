@@ -24,7 +24,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -121,9 +120,7 @@ public class MemoryRecordsBuilderTest {
 
         assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
-        Iterator<Record> iterator = records.records();
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             assertEquals(TimestampType.LOG_APPEND_TIME, record.timestampType());
             assertEquals(logAppendTime, record.timestamp());
         }
@@ -148,9 +145,7 @@ public class MemoryRecordsBuilderTest {
 
         assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
-        Iterator<Record> iterator = records.records();
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             assertEquals(TimestampType.LOG_APPEND_TIME, record.timestampType());
             assertEquals(logAppendTime, record.timestamp());
         }
@@ -177,11 +172,9 @@ public class MemoryRecordsBuilderTest {
         else
             assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
-        Iterator<Record> iterator = records.records();
         int i = 0;
         long[] expectedTimestamps = new long[] {0L, 2L, 1L};
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
             assertEquals(expectedTimestamps[i++], record.timestamp());
         }
@@ -206,10 +199,8 @@ public class MemoryRecordsBuilderTest {
         assertEquals(2L, info.maxTimestamp);
         assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
-        Iterator<Record> iterator = records.records();
         long i = 0L;
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
             assertEquals(i++, record.timestamp());
         }
@@ -233,9 +224,7 @@ public class MemoryRecordsBuilderTest {
         assertEquals(Record.NO_TIMESTAMP, info.maxTimestamp);
         assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
 
-        Iterator<Record> iterator = records.records();
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
             assertEquals(Record.NO_TIMESTAMP, record.timestamp());
         }

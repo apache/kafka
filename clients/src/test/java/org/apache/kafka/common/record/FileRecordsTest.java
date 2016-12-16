@@ -26,10 +26,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import static org.apache.kafka.test.TestUtils.tempFile;
@@ -85,7 +83,7 @@ public class FileRecordsTest {
         fileRecords.channel().write(buffer);
 
         // appending those bytes should not change the contents
-        TestUtils.checkEquals(Arrays.asList(records).iterator(), fileRecords.records());
+        TestUtils.checkEquals(Arrays.asList(records), fileRecords.records());
     }
 
     /**
@@ -94,7 +92,7 @@ public class FileRecordsTest {
     @Test
     public void testIterationDoesntChangePosition() throws IOException {
         long position = fileRecords.channel().position();
-        TestUtils.checkEquals(Arrays.asList(records).iterator(), fileRecords.records());
+        TestUtils.checkEquals(Arrays.asList(records), fileRecords.records());
         assertEquals(position, fileRecords.channel().position());
     }
 
@@ -104,7 +102,7 @@ public class FileRecordsTest {
     @Test
     public void testRead() throws IOException {
         FileRecords read = fileRecords.read(0, fileRecords.sizeInBytes());
-        TestUtils.checkEquals(fileRecords.shallowIterator(), read.shallowIterator());
+        TestUtils.checkEquals(fileRecords.shallowEntries(), read.shallowEntries());
 
         List<LogEntry> items = shallowEntries(read);
         LogEntry second = items.get(1);
@@ -383,21 +381,11 @@ public class FileRecordsTest {
     }
 
     private static List<LogEntry> shallowEntries(Records buffer) {
-        List<LogEntry> entries = new ArrayList<>();
-        Iterator<? extends LogEntry> iterator = buffer.shallowIterator();
-        while (iterator.hasNext())
-            entries.add(iterator.next());
-        return entries;
+        return TestUtils.toList(buffer.shallowEntries().iterator());
     }
 
     private static List<LogEntry> deepEntries(Records buffer) {
-        List<LogEntry> entries = new ArrayList<>();
-        Iterator<? extends LogEntry> iterator = buffer.shallowIterator();
-        while (iterator.hasNext()) {
-            for (LogEntry deepEntry : iterator.next())
-                entries.add(deepEntry);
-        }
-        return entries;
+        return TestUtils.toList(buffer.deepEntries().iterator());
     }
 
     private FileRecords createFileRecords(Record ... records) throws IOException {

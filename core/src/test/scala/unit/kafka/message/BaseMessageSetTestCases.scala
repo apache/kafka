@@ -27,6 +27,7 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters._
 
 trait BaseMessageSetTestCases extends JUnitSuite {
 
@@ -61,7 +62,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testWrittenEqualsRead() {
     val messageSet = createMessageSet(messages)
-    checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
+    assertEquals(messages.toVector, messageSet.toVector.map(m => m.message))
   }
 
   @Test
@@ -123,7 +124,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
         fileRecords.resize() // resize since we wrote to the channel directly
 
         assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-        checkEquals(set.asRecords.deepIterator, fileRecords.deepIterator())
+        assertEquals(set.asRecords.deepEntries.asScala.toVector, fileRecords.deepEntries.asScala.toVector)
       } finally fileRecords.close()
     }
   }

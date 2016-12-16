@@ -140,7 +140,7 @@ object TestLogCleaning {
     require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
     for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
       val fileRecords = FileRecords.open(new File(dir, file))
-      for (entry <- fileRecords.shallowIterator.asScala) {
+      for (entry <- fileRecords.shallowEntries.asScala) {
         val key = TestUtils.readString(entry.record.key)
         val content = 
           if(entry.record.hasNullValue)

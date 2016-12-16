@@ -64,10 +64,10 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowEntries.asScala.size)
 
     assertEquals("But we shouldn't get the second", 0,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowEntries.asScala.size)
   }
 
   @Test
@@ -89,9 +89,9 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowEntries.asScala.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowEntries.asScala.size)
   }
 
   @Test
@@ -113,9 +113,9 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowEntries.asScala.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowEntries.asScala.size)
   }
 
   @Test
@@ -137,10 +137,10 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.records.shallowEntries.asScala.size)
 
     assertEquals("But we should get the second too since it's throttled but in sync", 1,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowIterator.asScala.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.records.shallowEntries.asScala.size)
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: Record = this.record, bothReplicasInSync: Boolean = false) {
