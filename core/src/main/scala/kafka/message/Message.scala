@@ -227,7 +227,7 @@ class Message(val buffer: ByteBuffer,
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum: Long =
-    CoreUtils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
+    Utils.computeChecksum(buffer, MagicOffset, buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message

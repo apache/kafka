@@ -130,26 +130,6 @@ object CoreUtils extends Logging {
   }
 
   /**
-   * Compute the CRC32 of the byte array
-   * @param bytes The array to compute the checksum for
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
-
-  /**
-   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
-   * @param bytes The bytes to checksum
-   * @param offset the offset at which to begin checksumming
-   * @param size the number of bytes to checksum
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new Crc32()
-    crc.update(bytes, offset, size)
-    crc.getValue()
-  }
-
-  /**
    * Read some bytes into the provided buffer, and return the number of bytes read. If the
    * channel has been closed or we get -1 on the read for any reason, throw an EOFException
    */

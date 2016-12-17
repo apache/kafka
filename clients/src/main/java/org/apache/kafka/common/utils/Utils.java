@@ -606,7 +606,6 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-
     /*
      * Create a string from a collection
      * @param coll the collection
@@ -779,9 +778,7 @@ public class Utils {
      * @param size The number of bytes to include
      */
     public static long computeChecksum(ByteBuffer buffer, int start, int size) {
-        Crc32 crc = new Crc32();
-        crc.update(buffer.array(), buffer.arrayOffset() + start, size);
-        return crc.getValue();
+        return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
 }
