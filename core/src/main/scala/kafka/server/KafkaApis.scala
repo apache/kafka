@@ -463,7 +463,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
       val convertedPartitionData = {
-        // Need to down-convert message when consumer only takes magic value 0.
         responsePartitionData.map { case (tp, data) =>
 
           // We only do down-conversion when:
@@ -480,7 +479,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V0))
           } else data
 
-          new TopicPartition(tp.topic, tp.partition) -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
+          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
         }
       }
 
