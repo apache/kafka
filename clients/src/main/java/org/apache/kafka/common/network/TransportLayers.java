@@ -14,28 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.network;
 
-import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 
-/**
- * A size delimited Send that consists of a 4 byte network-ordered size N followed by N bytes of content
- */
-public class NetworkSend extends ByteBufferSend {
+public final class TransportLayers {
 
-    public NetworkSend(String destination, ByteBuffer buffer) {
-        super(destination, sizeDelimit(buffer));
+    private TransportLayers() {}
+
+    // This is temporary workaround as Send and Receive interfaces are used by BlockingChannel.
+    // Once BlockingChannel is removed we can make Send and Receive work with TransportLayer rather than
+    // GatheringByteChannel or ScatteringByteChannel.
+    public static boolean hasPendingWrites(GatheringByteChannel channel) {
+        if (channel instanceof TransportLayer)
+            return ((TransportLayer) channel).hasPendingWrites();
+        return false;
     }
-
-    private static ByteBuffer[] sizeDelimit(ByteBuffer buffer) {
-        return new ByteBuffer[] {sizeBuffer(buffer.remaining()), buffer};
-    }
-
-    private static ByteBuffer sizeBuffer(int size) {
-        ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
-        sizeBuffer.putInt(size);
-        sizeBuffer.rewind();
-        return sizeBuffer;
-    }
-
 }
