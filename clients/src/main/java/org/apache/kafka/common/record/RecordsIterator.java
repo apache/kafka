@@ -88,7 +88,7 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         return innerIter == null || !innerIter.hasNext();
     }
 
-    private static class DataLogInputStream implements LogInputStream<LogEntry> {
+    private static final class DataLogInputStream implements LogInputStream<LogEntry> {
         private final DataInputStream stream;
         protected final int maxMessageSize;
 
