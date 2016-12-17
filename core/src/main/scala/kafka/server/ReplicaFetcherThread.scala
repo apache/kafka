@@ -94,17 +94,16 @@ class ReplicaFetcherThread(name: String,
       false,
       channelBuilder
     )
-    new NetworkClient(
-      selector,
-      new ManualMetadataUpdater(),
-      clientId,
-      1,
-      0,
-      Selectable.USE_DEFAULT_BUFFER_SIZE,
-      brokerConfig.replicaSocketReceiveBufferBytes,
-      brokerConfig.requestTimeoutMs,
-      time
-    )
+    new NetworkClient.Builder().
+      selector(selector).
+      metadataUpdater(new ManualMetadataUpdater()).
+      clientId(clientId).
+      maxInFlightRequestsPerConnection(1).
+      reconnectBackoffMs(0).
+      socketSendBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE).
+      socketReceiveBuffer(brokerConfig.replicaSocketReceiveBufferBytes).
+      requestTimeoutMs(brokerConfig.requestTimeoutMs).
+      time(time).build()
   }
 
   override def shutdown(): Unit = {

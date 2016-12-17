@@ -108,17 +108,16 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         false,
         channelBuilder
       )
-      new NetworkClient(
-        selector,
-        new ManualMetadataUpdater(Seq(brokerNode).asJava),
-        config.brokerId.toString,
-        1,
-        0,
-        Selectable.USE_DEFAULT_BUFFER_SIZE,
-        Selectable.USE_DEFAULT_BUFFER_SIZE,
-        config.requestTimeoutMs,
-        time
-      )
+      new NetworkClient.Builder().
+        selector(selector).
+        metadataUpdater(new ManualMetadataUpdater(Seq(brokerNode).asJava)).
+        clientId(config.brokerId.toString).
+        maxInFlightRequestsPerConnection(1).
+        reconnectBackoffMs(0).
+        socketSendBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE).
+        socketReceiveBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE).
+        requestTimeoutMs(config.requestTimeoutMs).
+        time(time).build()
     }
     val threadName = threadNamePrefix match {
       case None => "Controller-%d-to-broker-%d-send-thread".format(config.brokerId, broker.id)

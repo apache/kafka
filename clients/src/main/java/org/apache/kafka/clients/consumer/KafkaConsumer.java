@@ -648,15 +648,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.update(Cluster.bootstrap(addresses), 0);
             String metricGrpPrefix = "consumer";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
-            NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
-                    this.metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
+            NetworkClient netClient = new NetworkClient.Builder().
+                    selector(new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                                    metrics, time, metricGrpPrefix, channelBuilder)).
+                    metadata(this.metadata).
+                    clientId(clientId).
+                    maxInFlightRequestsPerConnection(100).// a fixed large enough value will suffice
+                    reconnectBackoffMs(config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG)).
+                    socketSendBuffer(config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG)).
+                    socketReceiveBuffer(config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG)).
+                    requestTimeoutMs(config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG)).
+                    time(time).build();
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));

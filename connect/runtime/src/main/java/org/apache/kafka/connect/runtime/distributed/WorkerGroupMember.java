@@ -91,15 +91,17 @@ public class WorkerGroupMember {
             this.metadata.update(Cluster.bootstrap(addresses), 0);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
-            NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
-                    this.metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG), time);
+            NetworkClient netClient = new NetworkClient.Builder().
+                    selector(new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                                    metrics, time, metricGrpPrefix, channelBuilder)).
+                    metadata(this.metadata).
+                    clientId(clientId).
+                    maxInFlightRequestsPerConnection(100). // a fixed large enough value will suffice
+                    reconnectBackoffMs(config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG)).
+                    socketSendBuffer(config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG)).
+                    socketReceiveBuffer(config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG)).
+                    requestTimeoutMs(config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)).
+                    time(time).build();
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG));
             this.coordinator = new WorkerCoordinator(this.client,

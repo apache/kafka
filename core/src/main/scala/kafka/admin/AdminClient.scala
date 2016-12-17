@@ -216,16 +216,16 @@ object AdminClient {
       "admin",
       channelBuilder)
 
-    val networkClient = new NetworkClient(
-      selector,
-      metadata,
-      "admin-" + AdminClientIdSequence.getAndIncrement(),
-      DefaultMaxInFlightRequestsPerConnection,
-      DefaultReconnectBackoffMs,
-      DefaultSendBufferBytes,
-      DefaultReceiveBufferBytes,
-      DefaultRequestTimeoutMs,
-      time)
+    val networkClient = new NetworkClient.Builder().
+      selector(selector).
+      metadata(metadata).
+      clientId("admin-" + AdminClientIdSequence.getAndIncrement()).
+      maxInFlightRequestsPerConnection(DefaultMaxInFlightRequestsPerConnection).
+      reconnectBackoffMs(DefaultReconnectBackoffMs).
+      socketSendBuffer(DefaultSendBufferBytes).
+      socketReceiveBuffer(DefaultReceiveBufferBytes).
+      requestTimeoutMs(DefaultRequestTimeoutMs).
+      time(time).build()
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,
