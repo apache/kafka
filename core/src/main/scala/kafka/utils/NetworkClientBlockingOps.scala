@@ -103,7 +103,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  def blockingSendAndReceive(request: ClientRequest, body: AbstractRequest)(implicit time: Time): ClientResponse = {
+  def blockingSendAndReceive(request: ClientRequest)(implicit time: Time): ClientResponse = {
     client.send(request, time.milliseconds())
 
     pollContinuously { responses =>
