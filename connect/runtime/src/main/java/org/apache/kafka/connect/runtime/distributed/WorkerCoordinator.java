@@ -209,7 +209,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         Map<String, List<String>> connectorAssignments = new HashMap<>();
         Map<String, List<ConnectorTaskId>> taskAssignments = new HashMap<>();
 
-        // Perform round-robin task assignment
+        // Perform round-robin task assignment. Assign all connectors and then all tasks because not assigning both
+        // connector and its tasks can lead to very uneven distribution of work in some common cases (e.g. for connectors
+        // that generate only 1 task each; in a cluster of 2 or an even # of nodes, only even nodes will be assigned
+        // connectors and only odd nodes will be assigned tasks, but tasks are, on average, actually more resource
+        // intensive than connectors.
         CircularIterator<String> memberIt = new CircularIterator<>(sorted(allConfigs.keySet()));
         for (String connectorId : sorted(configSnapshot.connectors())) {
             String connectorAssignedTo = memberIt.next();
@@ -220,7 +224,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 connectorAssignments.put(connectorAssignedTo, memberConnectors);
             }
             memberConnectors.add(connectorId);
-
+        }
+        for (String connectorId : sorted(configSnapshot.connectors())) {
             for (ConnectorTaskId taskId : sorted(configSnapshot.tasks(connectorId))) {
                 String taskAssignedTo = memberIt.next();
                 log.trace("Assigning task {} to {}", taskId, taskAssignedTo);
