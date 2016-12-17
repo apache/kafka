@@ -112,8 +112,8 @@ public class FetchResponse extends AbstractResponse {
     }
 
     public FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)));
-        writeStruct(struct, version, responseData, throttleTime);
+        super(writeStruct(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)), version, responseData,
+                throttleTime));
         this.responseData = responseData;
         this.throttleTime = throttleTime;
     }
@@ -215,7 +215,7 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new RecordsSend(dest, records));
     }
 
-    private static void writeStruct(Struct struct,
+    private static Struct writeStruct(Struct struct,
                                     int version,
                                     LinkedHashMap<TopicPartition, PartitionData> responseData,
                                     int throttleTime) {
@@ -243,6 +243,8 @@ public class FetchResponse extends AbstractResponse {
 
         if (version >= 1)
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+
+        return struct;
     }
 
     public static int sizeOf(int version, LinkedHashMap<TopicPartition, PartitionData> responseData) {
