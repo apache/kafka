@@ -143,15 +143,29 @@ public class FetchResponse extends AbstractResponse {
     public Send toSend(String dest, RequestHeader requestHeader) {
         ResponseHeader responseHeader = new ResponseHeader(requestHeader.correlationId());
 
+        boolean hasThrottleTime = struct.hasField(THROTTLE_TIME_KEY_NAME);
+        int throttleTimeSize = hasThrottleTime ? 4 : 0;
+        int totalSizeSize = 4;
+        int numTopicsSize = 4;
+        int headerSize = responseHeader.sizeOf();
+
         // write the total size and the response header
-        ByteBuffer buffer = ByteBuffer.allocate(responseHeader.sizeOf() + 4);
-        buffer.putInt(responseHeader.sizeOf() + struct.sizeOf());
+        ByteBuffer buffer = ByteBuffer.allocate(totalSizeSize + headerSize + throttleTimeSize + numTopicsSize);
+        buffer.putInt(headerSize + struct.sizeOf());
         responseHeader.writeTo(buffer);
+
+        if (hasThrottleTime)
+            buffer.putInt(struct.getInt(THROTTLE_TIME_KEY_NAME));
+        Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
+        buffer.putInt(allTopicData.length);
         buffer.rewind();
 
         List<Send> sends = new ArrayList<>();
         sends.add(new ByteBufferSend(dest, buffer));
-        addResponseData(dest, sends);
+
+        for (Object topicData : allTopicData)
+            addTopicData(dest, sends, (Struct) topicData);
+
         return new MultiSend(dest, sends);
     }
 
@@ -169,27 +183,6 @@ public class FetchResponse extends AbstractResponse {
 
     public static FetchResponse parse(ByteBuffer buffer, int version) {
         return new FetchResponse(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version).read(buffer));
-    }
-
-    private void addResponseData(String dest, List<Send> sends) {
-        Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
-
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME)) {
-            int throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
-            ByteBuffer buffer = ByteBuffer.allocate(8);
-            buffer.putInt(throttleTime);
-            buffer.putInt(allTopicData.length);
-            buffer.rewind();
-            sends.add(new ByteBufferSend(dest, buffer));
-        } else {
-            ByteBuffer buffer = ByteBuffer.allocate(4);
-            buffer.putInt(allTopicData.length);
-            buffer.rewind();
-            sends.add(new ByteBufferSend(dest, buffer));
-        }
-
-        for (Object topicData : allTopicData)
-            addTopicData(dest, sends, (Struct) topicData);
     }
 
     private void addTopicData(String dest, List<Send> sends, Struct topicData) {
