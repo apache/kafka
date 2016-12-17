@@ -40,6 +40,12 @@ public class ProtoUtils {
         return Protocol.CURR_VERSION[apiKey];
     }
 
+    public static short oldestVersion(int apiKey) {
+        if (apiKey < 0 || apiKey >= Protocol.CURR_VERSION.length)
+            throw new IllegalArgumentException("Invalid api key: " + apiKey);
+        return Protocol.MIN_VERSIONS[apiKey];
+    }
+
     public static Schema requestSchema(int apiKey, int version) {
         return schemaFor(Protocol.REQUESTS, apiKey, version);
     }

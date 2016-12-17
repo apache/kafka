@@ -15,6 +15,7 @@ package org.apache.kafka.test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.kafka.common.network.NetworkReceive;
@@ -34,6 +35,7 @@ public class MockSelector implements Selectable {
     private final List<NetworkReceive> completedReceives = new ArrayList<NetworkReceive>();
     private final List<String> disconnected = new ArrayList<String>();
     private final List<String> connected = new ArrayList<String>();
+    private final List<DelayedReceive> delayedReceives = new ArrayList<>();
 
     public MockSelector(Time time) {
         this.time = time;
@@ -79,6 +81,16 @@ public class MockSelector implements Selectable {
     public void poll(long timeout) throws IOException {
         this.completedSends.addAll(this.initiatedSends);
         this.initiatedSends.clear();
+        for (Send completedSend : completedSends) {
+            Iterator<DelayedReceive> delayedReceiveIterator = delayedReceives.iterator();
+            while (delayedReceiveIterator.hasNext()) {
+                DelayedReceive delayedReceive = delayedReceiveIterator.next();
+                if (delayedReceive.source().equals(completedSend.destination())) {
+                    completedReceives.add(delayedReceive.receive());
+                    delayedReceiveIterator.remove();
+                }
+            }
+        }
         time.sleep(timeout);
     }
 
@@ -100,6 +112,10 @@ public class MockSelector implements Selectable {
         this.completedReceives.add(receive);
     }
 
+    public void delayedReceive(DelayedReceive receive) {
+        this.delayedReceives.add(receive);
+    }
+
     @Override
     public List<String> disconnected() {
         return disconnected;
@@ -107,7 +123,9 @@ public class MockSelector implements Selectable {
 
     @Override
     public List<String> connected() {
-        return connected;
+        List<String> currentConnected = new ArrayList<>(connected);
+        connected.clear();
+        return currentConnected;
     }
 
     @Override
