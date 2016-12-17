@@ -61,7 +61,7 @@ public class MemoryRecords extends AbstractRecords {
         int pos = (int) position;
         ByteBuffer dup = buffer.duplicate();
         dup.position(pos);
-        dup.limit(pos + length);
+        dup.limit(Math.min(pos + length, buffer.limit()));
         return channel.write(dup);
     }
 
