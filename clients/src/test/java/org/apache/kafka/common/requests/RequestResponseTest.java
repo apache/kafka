@@ -580,7 +580,9 @@ public class RequestResponseTest {
         private boolean closed = false;
 
         private ByteBufferChannel(long size) {
-            this.buf = ByteBuffer.allocate(Long.valueOf(size).intValue());
+            if (size > Integer.MAX_VALUE)
+                throw new IllegalArgumentException("size should be not be greater than Integer.MAX_VALUE");
+            this.buf = ByteBuffer.allocate((int) size);
         }
 
         @Override
