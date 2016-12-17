@@ -14,7 +14,12 @@ package org.apache.kafka.clients;
 
 /**
  * The states of a node connection
+ *
+ * DISCONNECTED: connection has not been successfully established yet
+ * CONNECTING: connection is under progress
+ * CHECKING_API_VERSIONS: connection has been established and api versions check is in progress. Failure of this check will cause connection to close
+ * READY: connection is ready to send requests
  */
 public enum ConnectionState {
-    DISCONNECTED, CONNECTING, CONNECTED
+    DISCONNECTED, CONNECTING, CHECKING_API_VERSIONS, READY
 }

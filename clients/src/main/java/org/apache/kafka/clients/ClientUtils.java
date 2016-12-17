@@ -15,6 +15,7 @@ package org.apache.kafka.clients;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,10 +23,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.LoginType;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,4 +89,13 @@ public class ClientUtils {
         return ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, configs, clientSaslMechanism, true);
     }
 
+    public static Collection<ApiVersionsResponse.ApiVersion> buildExpectedApiVersions(Collection<ApiKeys> apiKeys) {
+        List<ApiVersionsResponse.ApiVersion> expectedApiVersions = new ArrayList<>();
+        for (ApiKeys apiKey : apiKeys)
+            expectedApiVersions.add(
+                    // once backwards client compatibility is added, expected min API version for an API should be set to it's min version
+                    new ApiVersionsResponse.ApiVersion(
+                            apiKey.id, Protocol.CURR_VERSION[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+        return expectedApiVersions;
+    }
 }

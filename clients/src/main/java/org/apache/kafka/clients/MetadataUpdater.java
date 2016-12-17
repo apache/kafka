@@ -14,7 +14,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 import java.util.List;
@@ -64,7 +64,7 @@ interface MetadataUpdater {
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
      */
-    void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse body);
+    void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
 
     /**
      * Schedules an update of the current cluster metadata info. A subsequent call to `maybeUpdate` would trigger the
