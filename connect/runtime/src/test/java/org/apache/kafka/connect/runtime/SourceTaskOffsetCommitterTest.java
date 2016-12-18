@@ -187,7 +187,6 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
             committer.remove(taskId);
             fail("Expected ConnectException to be raised");
         } catch (ConnectException e) {
-            //ignore
             assertThat(e.getMessage(), containsString(String.format("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: %s", taskId.toString())));
         }
 
