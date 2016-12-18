@@ -286,8 +286,10 @@ class Partition(val topic: String,
           val replica = getReplica(replicaId).get
           if(!inSyncReplicas.contains(replica) &&
              assignedReplicas.map(_.brokerId).contains(replicaId) &&
-             logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.hw &&
-             logReadResult.fetchTimeMs - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs) {
+             // This approximates the requirement logReadResult.fetchTimeMs - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs.
+             // We don't directly specify the above requirement in order to make maybeExpandIsr() consistent with ReplicaFetcherThread.shouldFollowerThrottle()
+             // A offset replica whose lag > ReplicaFetcherThread may still exceed hw because maybeShrinkIsr() is called periodically
+             logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.hw) {
             val newInSyncReplicas = inSyncReplicas + replica
             info("Expanding ISR for partition [%s,%d] from %s to %s"
                          .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","),
