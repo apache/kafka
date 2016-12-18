@@ -186,8 +186,8 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.controllerEpoch
-      // add replicas that are new
-      allReplicas.foreach(replica => getOrCreateReplica(replica))
+      // add replicas that are new and reset lastCatchUpTime of all replicas to exclude offline replicas from ISR
+      allReplicas.foreach(replica => getOrCreateReplica(replica).resetLastCatchUpTime())
       val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica)
@@ -257,7 +257,6 @@ class Partition(val topic: String,
         // if it is not in the ISR yet
         maybeExpandIsr(replicaId, logReadResult)
 
-
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId,
                   logReadResult.info.fetchOffsetMetadata.messageOffset,
@@ -299,8 +298,7 @@ class Partition(val topic: String,
           }
 
           // check if the HW of the partition can now be incremented
-          // since the replica maybe now be in the ISR and its LEO has just incremented
-          // TODO: is this maybeIncrementLeaderHW() necessary?
+          // since the replica may already be in the ISR and its LEO has just incremented
           maybeIncrementLeaderHW(leaderReplica, logReadResult.fetchTimeMs)
 
         case None => false // nothing to do if no longer leader

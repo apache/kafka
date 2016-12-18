@@ -77,7 +77,8 @@ public class CommonClientConfigs {
     public static final String REQUEST_TIMEOUT_MS_DOC = "The configuration controls the maximum amount of time the client will wait "
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
-                                                         + "retries are exhausted.";
+                                                         + "retries are exhausted. request.timeout.ms should be larger than replica.lag.time.max.ms "
+                                                         + "to reduce message duplication caused by unnecessary producer retry.";
 
     private static List<String> nonTestingSecurityProtocolNames() {
         List<String> names = new ArrayList<>();

@@ -51,7 +51,7 @@ class Replica(val brokerId: Int,
 
   // lastCatchUpTimeMs is the largest time t such that the begin offset of most recent FetchRequest from this follower >=
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
-  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
+  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(0L)
 
   def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
 
@@ -61,6 +61,10 @@ class Replica(val brokerId: Int,
    *
    * Else if the FetchRequest reads up to the log end offset of the the leader when the previous fetch request was received,
    * set the lastCaughtUpTimeMsUnderlying to the time when the previous fetch request was received.
+   *
+   * This is needed to enforce the semantics of ISR, i.e. a replica is in ISR if and only if it lags behind leader's LEO
+   * by at most replicaLagTimeMaxMs. This semantics allows a follower to be added to the ISR even if offset of its fetch request is
+   * always smaller than leader's LEO, which can happen if there are constant small produce requests at high frequency.
    */
   def updateLogReadResult(logReadResult : LogReadResult) {
     if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
@@ -71,6 +75,12 @@ class Replica(val brokerId: Int,
     logEndOffset = logReadResult.info.fetchOffsetMetadata
     lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
     lastFetchTimeMs = logReadResult.fetchTimeMs
+  }
+
+  def resetLastCatchUpTime() {
+    lastFetchLeaderLogEndOffset = 0L
+    lastFetchTimeMs = 0L
+    lastCaughtUpTimeMsUnderlying.set(0L)
   }
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
