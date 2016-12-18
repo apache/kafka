@@ -204,7 +204,7 @@ public class MetadataTest {
             metadata.awaitUpdate(metadata.requestUpdate(), twoSecondWait);
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
-            assertThat(te.getMessage(), containsString(String.format("Failed to update metadata after %s ms.",twoSecondWait)));
+            assertThat(te.getMessage(), containsString(String.format("Failed to update metadata after %s ms.", twoSecondWait)));
         }
     }
 
