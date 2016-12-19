@@ -39,7 +39,6 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.LockException;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -197,7 +196,7 @@ public class StreamThread extends Thread {
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
     private final Map<TopicPartition, StandbyTask> standbyTasksByPartition;
     private final Set<TaskId> prevTasks;
-    private final Map<TaskId, StreamTask> suspendedTasks;
+    private final Map<TaskId, StreamTask> suspendedActiveTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
     private final Time time;
     private final long pollTimeMs;
@@ -323,7 +322,7 @@ public class StreamThread extends Thread {
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
         this.prevTasks = new HashSet<>();
-        this.suspendedTasks = new HashMap<>();
+        this.suspendedActiveTasks = new HashMap<>();
         this.suspendedStandbyTasks = new HashMap<>();
 
         // standby ktables
@@ -794,8 +793,8 @@ public class StreamThread extends Thread {
     }
 
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-        if (suspendedTasks.containsKey(taskId)) {
-            final StreamTask task = suspendedTasks.get(taskId);
+        if (suspendedActiveTasks.containsKey(taskId)) {
+            final StreamTask task = suspendedActiveTasks.get(taskId);
             if (task.partitions.equals(partitions)) {
                 return task;
             }
@@ -827,7 +826,7 @@ public class StreamThread extends Thread {
                 } catch (Exception e) {
                     log.error("{} Failed to remove suspended standby task {}", logPrefix, entry.getKey(), e);
                 } finally {
-                    standbyTaskIterator.remove(); 
+                    standbyTaskIterator.remove();
                 }
             }
         }
@@ -850,7 +849,7 @@ public class StreamThread extends Thread {
                     StreamTask task = findMatchingSuspendedTask(taskId, partitions);
                     if (task != null) {
                         log.debug("{} recycling old task {}", logPrefix, taskId);
-                        suspendedTasks.remove(taskId);
+                        suspendedActiveTasks.remove(taskId);
                         task.initTopology();
 
                         activeTasks.put(taskId, task);
@@ -951,8 +950,8 @@ public class StreamThread extends Thread {
 
     private void updateSuspendedTasks() {
         log.info("{} Updating suspended tasks to contain active tasks [{}]", logPrefix, activeTasks.keySet());
-        suspendedTasks.clear();
-        suspendedTasks.putAll(activeTasks);
+        suspendedActiveTasks.clear();
+        suspendedActiveTasks.putAll(activeTasks);
         suspendedStandbyTasks.putAll(standbyTasks);
     }
 
@@ -980,14 +979,14 @@ public class StreamThread extends Thread {
     }
 
     private void removeSuspendedTasks() {
-        log.info("{} Removing all suspended tasks [{}]", logPrefix, suspendedTasks.keySet());
+        log.info("{} Removing all suspended tasks [{}]", logPrefix, suspendedActiveTasks.keySet());
         try {
             // Close task and state manager
-            for (final AbstractTask task : suspendedTasks.values()) {
+            for (final AbstractTask task : suspendedActiveTasks.values()) {
                 task.close();
                 task.closeStateManager();
             }
-            suspendedTasks.clear();
+            suspendedActiveTasks.clear();
         } catch (Exception e) {
             log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
         }
@@ -1189,13 +1188,9 @@ public class StreamThread extends Thread {
                     try {
                         createTask(taskId, partitions);
                         it.remove();
-                    } catch (final ProcessorStateException e) {
-                        if (e.getCause() instanceof LockException) {
-                            // ignore and retry
-                            log.warn("Could not create task {}. Will retry.", taskId, e);
-                        } else {
-                            throw e;
-                        }
+                    } catch (final LockException e) {
+                        // ignore and retry
+                        log.warn("Could not create task {}. Will retry.", taskId, e);
                     }
                 }
 
