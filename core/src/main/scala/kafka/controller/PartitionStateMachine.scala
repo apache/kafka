@@ -408,7 +408,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     protected def logName = "TopicChangeListener"
 
-    @throws[Exception]
     def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
@@ -457,7 +456,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         var topicsToBeDeleted = children.toSet
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
         val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
-        if(nonExistentTopics.nonEmpty) {
+        if (nonExistentTopics.nonEmpty) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
@@ -487,7 +486,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
     }
 
-    @throws[Exception]
     def doHandleDataDeleted(dataPath: String) {}
   }
 
@@ -495,7 +493,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     protected def logName = "AddPartitionsListener"
 
-    @throws[Exception]
     def doHandleDataChange(dataPath: String, data: AnyRef) {
       inLock(controllerContext.controllerLock) {
         try {
@@ -514,13 +511,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             }
           }
         } catch {
-          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
+          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e)
         }
       }
     }
 
     // this is not implemented for partition change
-    @throws[Exception]
     def doHandleDataDeleted(parentPath: String): Unit = {}
   }
 }
