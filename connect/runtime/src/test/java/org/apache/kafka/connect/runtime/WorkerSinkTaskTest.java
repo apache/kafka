@@ -149,6 +149,9 @@ public class WorkerSinkTaskTest {
         consumer.pause(partitions);
         PowerMock.expectLastCall();
 
+        statusListener.onPause(taskId);
+        PowerMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -230,6 +233,8 @@ public class WorkerSinkTaskTest {
         EasyMock.expect(consumer.assignment()).andReturn(partitions);
         consumer.pause(partitions);
         PowerMock.expectLastCall();
+        statusListener.onPause(taskId);
+        PowerMock.expectLastCall();
 
         // Retry delivery should succeed
         expectConsumerPoll(0);
@@ -240,6 +245,8 @@ public class WorkerSinkTaskTest {
         consumer.resume(singleton(TOPIC_PARTITION));
         PowerMock.expectLastCall();
         consumer.resume(singleton(TOPIC_PARTITION2));
+        PowerMock.expectLastCall();
+        statusListener.onResume(taskId);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -351,6 +358,9 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
 
         consumer.resume(Collections.singleton(TOPIC_PARTITION2));
+        EasyMock.expectLastCall();
+
+        statusListener.onResume(taskId);
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
