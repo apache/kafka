@@ -176,7 +176,6 @@ public class StreamTaskTest {
     @Test
     public void testMetrics() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        String prefix = "mock-prefix." + 0;
 
         Metrics metrics = new Metrics();
         StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, new MockStreamsMetrics(metrics), stateDirectory, null, new MockTime());
@@ -187,8 +186,8 @@ public class StreamTaskTest {
         String groupName = "stream-task-metrics";
         Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
 
-        assertNotNull(metrics.getSensor(prefix + "." + operation));
-        assertNotNull(metrics.getSensor(prefix + "." + name + "-" + operation));
+        assertNotNull(metrics.getSensor(operation));
+        assertNotNull(metrics.getSensor(name + "-" + operation));
 
         for (String entity : entities) {
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,

@@ -38,53 +38,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     final Metrics metrics;
     final String groupName;
-    final String prefix;
     final Map<String, String> tags;
 
-    final Sensor commitTimeSensor;
-    final Sensor pollTimeSensor;
-    final Sensor processTimeSensor;
-    final Sensor punctuateTimeSensor;
-    final Sensor taskCreationSensor;
-    final Sensor taskDestructionSensor;
-    final Sensor skippedRecordsSensor;
-
-
-    public StreamsMetricsImpl(Metrics metrics, String groupName, String prefix, Map<String, String> tags) {
+    public StreamsMetricsImpl(Metrics metrics, String groupName,  Map<String, String> tags) {
         this.metrics = metrics;
         this.groupName = groupName;
-        this.prefix = prefix;
         this.tags = tags;
 
-
-        this.commitTimeSensor = metrics.sensor(this.prefix + ".commit-time", Sensor.RecordLevel.SENSOR_INFO);
-        this.commitTimeSensor.add(metrics.metricName("commit-time-avg", this.groupName, "The average commit time in ms", this.tags), new Avg());
-        this.commitTimeSensor.add(metrics.metricName("commit-time-max", this.groupName, "The maximum commit time in ms", this.tags), new Max());
-        this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", this.groupName, "The average per-second number of commit calls", this.tags), new Rate(new Count()));
-
-        this.pollTimeSensor = metrics.sensor(this.prefix + ".poll-time", Sensor.RecordLevel.SENSOR_INFO);
-        this.pollTimeSensor.add(metrics.metricName("poll-time-avg", this.groupName, "The average poll time in ms", this.tags), new Avg());
-        this.pollTimeSensor.add(metrics.metricName("poll-time-max", this.groupName, "The maximum poll time in ms", this.tags), new Max());
-        this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", this.groupName, "The average per-second number of record-poll calls", this.tags), new Rate(new Count()));
-
-        this.processTimeSensor = metrics.sensor(this.prefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
-        this.processTimeSensor.add(metrics.metricName("process-time-avg", this.groupName, "The average process time in ms", this.tags), new Avg());
-        this.processTimeSensor.add(metrics.metricName("process-time-max", this.groupName, "The maximum process time in ms", this.tags), new Max());
-        this.processTimeSensor.add(metrics.metricName("process-calls-rate", this.groupName, "The average per-second number of process calls", this.tags), new Rate(new Count()));
-
-        this.punctuateTimeSensor = metrics.sensor(this.prefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
-        this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
-        this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
-        this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
-
-        this.taskCreationSensor = metrics.sensor(this.prefix + ".task-creation", Sensor.RecordLevel.SENSOR_INFO);
-        this.taskCreationSensor.add(metrics.metricName("task-creation-rate", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
-
-        this.taskDestructionSensor = metrics.sensor(this.prefix + ".task-destruction", Sensor.RecordLevel.SENSOR_INFO);
-        this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", this.groupName, "The average per-second number of destructed tasks", this.tags), new Rate(new Count()));
-
-        this.skippedRecordsSensor = metrics.sensor(this.prefix + ".skipped-records");
-        this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
     }
 
     @Override
@@ -119,9 +79,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     private String sensorName(String operationName, String entityName) {
         if (entityName == null) {
-            return prefix + "." + operationName;
+            return operationName;
         } else {
-            return prefix + "." + entityName + "-" + operationName;
+            return entityName + "-" + operationName;
         }
     }
 

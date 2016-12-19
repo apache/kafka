@@ -104,15 +104,14 @@ public class ProcessorNodeTest {
         String[] entities = {"all", name};
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         String throughputOperation =  "process-throughput";
-        String prefix = "mock-prefix." + 0;
         String groupName = "stream-processor-node-metrics";
         Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
 
         for (String operation : latencyOperations) {
-            assertNotNull(metrics.getSensor(prefix + "." + operation));
-            assertNotNull(metrics.getSensor(prefix + "." + name + "-" + operation));
+            assertNotNull(metrics.getSensor(operation));
+            assertNotNull(metrics.getSensor(name + "-" + operation));
         }
-        assertNotNull(metrics.getSensor(prefix + "." + throughputOperation));
+        assertNotNull(metrics.getSensor(throughputOperation));
 
         for (String entity : entities) {
             for (String operation : latencyOperations) {

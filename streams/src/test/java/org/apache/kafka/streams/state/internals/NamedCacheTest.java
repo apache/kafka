@@ -76,7 +76,6 @@ public class NamedCacheTest {
 
     @Test
     public void testMetrics() throws Exception {
-        final String prefix = "mock-prefix." + 0;
         final String scope = "record-cache";
         final String entityName = cache.name();
         final String opName = "hitRatio";
@@ -86,7 +85,7 @@ public class NamedCacheTest {
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put(tagKey, tagValue);
 
-        assertNotNull(streamMetrics.registry().getSensor(prefix + "." + entityName + "-" + opName));
+        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
         assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
             "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
             " operation.", metricTags)));

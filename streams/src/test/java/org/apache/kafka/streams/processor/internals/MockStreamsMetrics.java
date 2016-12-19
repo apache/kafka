@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 public class MockStreamsMetrics extends StreamsMetricsImpl {
 
     public MockStreamsMetrics(Metrics metrics) {
-        super(metrics, "mock-stream-metrics", "mock-prefix." + 0,
+        super(metrics, "mock-stream-metrics",
             Collections.<String, String>emptyMap());
     }
 }
