@@ -221,7 +221,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
         ensureNotClosed();
-        return subscriptions.committed(partition);
+        if (subscriptions.isAssigned(partition)) {
+            return subscriptions.committed(partition);
+        }
+        return new OffsetAndMetadata(0);
     }
 
     @Override

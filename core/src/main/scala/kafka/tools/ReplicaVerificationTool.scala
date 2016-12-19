@@ -275,9 +275,8 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       assert(fetchResponsePerReplica.size == expectedReplicasPerTopicAndPartition(topicAndPartition),
             "fetched " + fetchResponsePerReplica.size + " replicas for " + topicAndPartition + ", but expected "
             + expectedReplicasPerTopicAndPartition(topicAndPartition) + " replicas")
-      val logEntryIteratorMap = fetchResponsePerReplica.map {
-        case(replicaId, fetchResponse) =>
-          replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.shallowIterator.asScala
+      val logEntriesMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
+        replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.shallowEntries.asScala
       }
       val maxHw = fetchResponsePerReplica.values.map(_.hw).max
 
@@ -285,10 +284,11 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       var isMessageInAllReplicas = true
       while (isMessageInAllReplicas) {
         var messageInfoFromFirstReplicaOpt: Option[MessageInfo] = None
-        for ( (replicaId, logEntries) <- logEntryIteratorMap) {
+        for ((replicaId, logEntries) <- logEntriesMap) {
           try {
-            if (logEntries.hasNext) {
-              val logEntry = logEntries.next()
+            val logEntriesIterator = logEntries.iterator
+            if (logEntriesIterator.hasNext) {
+              val logEntry = logEntriesIterator.next()
 
               // only verify up to the high watermark
               if (logEntry.offset >= fetchResponsePerReplica.get(replicaId).hw)

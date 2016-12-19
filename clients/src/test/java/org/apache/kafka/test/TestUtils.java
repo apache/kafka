@@ -325,7 +325,14 @@ public class TestUtils {
         assertFalse("Iterators have uneven length--second has more", s2.hasNext());
     }
 
-    public static <T> List<T> toList(Iterator<T> iterator) {
+    /**
+     * Checks the two iterables for equality by first converting both to a list.
+     */
+    public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
+        assertEquals(toList(it1.iterator()), toList(it2.iterator()));
+    }
+
+    public static <T> List<T> toList(Iterator<? extends T> iterator) {
         List<T> res = new ArrayList<>();
         while (iterator.hasNext())
             res.add(iterator.next());

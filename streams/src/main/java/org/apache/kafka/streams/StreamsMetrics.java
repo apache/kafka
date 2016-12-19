@@ -17,12 +17,18 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
  */
 public interface StreamsMetrics {
+
+    /**
+     * @return The base registry where all the metrics are recorded.
+     */
+    Metrics registry();
 
     /**
      * Add a latency sensor. This is equivalent to adding a sensor with metrics on latency and rate.
@@ -56,7 +62,7 @@ public interface StreamsMetrics {
 
     /**
      * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordLevel, String...)}
-     * of {@link #addLatencySensor(String, String, String, Sensor.RecordLevel, String...)} to ensure metric name well-formedness and conformity with the rest
+     * or {@link #addLatencySensor(String, String, String, Sensor.RecordLevel, String...)} to ensure metric name well-formedness and conformity with the rest
      * of the streams code base.
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.

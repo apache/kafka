@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +41,7 @@ public class ThreadCache {
     private final String name;
     private final long maxCacheSizeBytes;
     private final Map<String, NamedCache> caches = new HashMap<>();
-    private final ThreadCacheMetrics metrics;
+    private final StreamsMetrics metrics;
 
     // internal stats
     private long numPuts = 0;
@@ -55,14 +55,10 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(long maxCacheSizeBytes) {
-        this(null, maxCacheSizeBytes, null);
-    }
-
-    public ThreadCache(final String name, long maxCacheSizeBytes, final ThreadCacheMetrics metrics) {
+    public ThreadCache(final String name, long maxCacheSizeBytes, final StreamsMetrics metrics) {
         this.name = name;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.metrics = metrics != null ? metrics : new NullThreadCacheMetrics();
+        this.metrics = metrics;
     }
 
     public long puts() {
@@ -152,7 +148,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final byte[] from, final byte[] to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(cacheKey(from), cacheKey(to)), cache);
     }
@@ -160,7 +156,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
@@ -323,18 +319,6 @@ public class ThreadCache {
 
         public RecordContext recordContext() {
             return recordContext;
-        }
-    }
-
-    public static class NullThreadCacheMetrics implements ThreadCacheMetrics {
-        @Override
-        public Sensor addCacheSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordCacheSensor(Sensor sensor, double value) {
-            return;
         }
     }
 

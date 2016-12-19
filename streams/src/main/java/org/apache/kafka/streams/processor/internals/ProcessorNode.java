@@ -40,6 +40,23 @@ public class ProcessorNode<K, V> {
     protected NodeMetrics nodeMetrics;
     private Time time;
 
+    private K key;
+    private V value;
+    private Runnable processDelegate = new Runnable() {
+        @Override
+        public void run() {
+            processor.process(key, value);
+        }
+    };
+
+    private long timestamp;
+    private Runnable punctuateDelegate = new Runnable() {
+        @Override
+        public void run() {
+            processor().punctuate(timestamp);
+        }
+    };
+
     public final Set<String> stateStores;
 
     public ProcessorNode(String name) {
@@ -76,7 +93,9 @@ public class ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         long startNs = time.nanoseconds();
         try {
-            processor.init(context);
+            if (processor != null) {
+                processor.init(context);
+            }
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
@@ -87,7 +106,9 @@ public class ProcessorNode<K, V> {
     public void close() {
         long startNs = time.nanoseconds();
         try {
-            processor.close();
+            if (processor != null) {
+                processor.close();
+            }
             nodeMetrics.metrics.recordLatency(nodeMetrics.nodeDestructionSensor, startNs, time.nanoseconds());
             nodeMetrics.removeAllSensors();
         } catch (Exception e) {
@@ -95,37 +116,30 @@ public class ProcessorNode<K, V> {
         }
     }
 
-    public void process(final K key, final V value) {
+    private void measureLatency(final Runnable action, final Sensor sensor) {
         long startNs = -1;
-        // expensive operation. Only perform if we are recording this metric
-        if (nodeMetrics.nodeProcessTimeSensor.maybeRecord()) {
+        if (sensor.maybeRecord()) {
             startNs = time.nanoseconds();
         }
-
-        processor.process(key, value);
-
-        // record latency
+        action.run();
         if (startNs != -1) {
-            nodeMetrics.metrics.recordLatency(nodeMetrics.nodeProcessTimeSensor, startNs, time.nanoseconds());
+            nodeMetrics.metrics.recordLatency(sensor, startNs, time.nanoseconds());
         }
+    }
+
+    public void process(final K key, final V value) {
+        this.key = key;
+        this.value = value;
+
+        measureLatency(processDelegate, nodeMetrics.nodeProcessTimeSensor);
 
         // record throughput
         nodeMetrics.nodeThroughputSensor.record();
     }
 
     public void punctuate(long timestamp) {
-        long startNs = -1;
-
-        // expensive operation. Only perform if we are recording this metric
-        if (nodeMetrics.nodePunctuateTimeSensor.maybeRecord()) {
-            startNs = time.nanoseconds();
-        }
-
-        processor().punctuate(timestamp);
-
-        if (startNs != -1) {
-            nodeMetrics.metrics.recordLatency(nodeMetrics.nodePunctuateTimeSensor, startNs, time.nanoseconds());
-        }
+        this.timestamp = timestamp;
+        measureLatency(punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
     }
 
     /**

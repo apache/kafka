@@ -79,7 +79,14 @@ class LogSegment(val log: FileRecords,
   /* Return the size in bytes of this log segment */
   def size: Long = log.sizeInBytes()
 
-  /**
+   /**
+     * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
+     */
+   def canConvertToRelativeOffset(offset: Long): Boolean = {
+     (offset - baseOffset) <= Integer.MAX_VALUE
+   }
+
+   /**
    * Append the given messages starting with the given offset. Add
    * an entry to the index if needed.
    *
@@ -91,7 +98,7 @@ class LogSegment(val log: FileRecords,
    * @param records The log entries to append.
    */
   @nonthreadsafe
-  def append(firstOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords) {
+  def append(firstOffset: Long, largestOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords) {
     if (records.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at shallow offset %d"
           .format(records.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
@@ -99,9 +106,9 @@ class LogSegment(val log: FileRecords,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
       // append the messages
+      require(canConvertToRelativeOffset(largestOffset), "largest offset in message set can not be safely converted to relative offset.")
       val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file()} at offset $firstOffset")
-
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampSoFar = largestTimestamp
@@ -212,10 +219,9 @@ class LogSegment(val log: FileRecords,
     timeIndex.resize(timeIndex.maxIndexSize)
     var validBytes = 0
     var lastIndexEntry = 0
-    val iter = log.shallowIterator(maxMessageSize)
     maxTimestampSoFar = Record.NO_TIMESTAMP
     try {
-      for (entry <- iter.asScala) {
+      for (entry <- log.shallowEntries(maxMessageSize).asScala) {
         val record = entry.record
         record.ensureValid()
 
@@ -306,7 +312,7 @@ class LogSegment(val log: FileRecords,
     if (ms == null) {
       baseOffset
     } else {
-      ms.records.shallowIterator.asScala.toSeq.lastOption match {
+      ms.records.shallowEntries.asScala.toSeq.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }
@@ -367,9 +373,9 @@ class LogSegment(val log: FileRecords,
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
     if (rollingBasedTimestamp.isEmpty) {
-      val iter = log.shallowIterator
+      val iter = log.shallowEntries.iterator()
       if (iter.hasNext)
-        rollingBasedTimestamp = Some(iter.next.record.timestamp)
+        rollingBasedTimestamp = Some(iter.next().record.timestamp)
     }
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t

@@ -386,7 +386,7 @@ class Log(@volatile var dir: File,
           // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
           // format conversion)
           if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
-            for (logEntry <- validRecords.shallowIterator.asScala) {
+            for (logEntry <- validRecords.shallowEntries.asScala) {
               if (logEntry.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
@@ -401,7 +401,7 @@ class Log(@volatile var dir: File,
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException("Out of order offsets found in " + records.deepIterator.asScala.map(_.offset))
+            throw new IllegalArgumentException("Out of order offsets found in " + records.deepEntries.asScala.map(_.offset))
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -411,11 +411,17 @@ class Log(@volatile var dir: File,
         }
 
         // maybe roll the log if this segment is full
-        val segment = maybeRoll(messagesSize = validRecords.sizeInBytes, maxTimestampInMessages = appendInfo.maxTimestamp)
+        val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
+          maxTimestampInMessages = appendInfo.maxTimestamp,
+          maxOffsetInMessages = appendInfo.lastOffset)
+
 
         // now append to the log
-        segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
-          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp, records = validRecords)
+        segment.append(firstOffset = appendInfo.firstOffset,
+          largestOffset = appendInfo.lastOffset,
+          largestTimestamp = appendInfo.maxTimestamp,
+          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
+          records = validRecords)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -453,12 +459,13 @@ class Log(@volatile var dir: File,
   private def analyzeAndValidateRecords(records: MemoryRecords): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset, lastOffset = -1L
+    var firstOffset = -1L
+    var lastOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     var maxTimestamp = Record.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    for (entry <- records.shallowIterator.asScala) {
+    for (entry <- records.shallowEntries.asScala) {
       // update the first offset if on the first message
       if(firstOffset < 0)
         firstOffset = entry.offset
@@ -739,18 +746,28 @@ class Log(@volatile var dir: File,
    * </ol>
    * @return The currently active segment after (perhaps) rolling to a new segment
    */
-  private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long): LogSegment = {
+  private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long): LogSegment = {
     val segment = activeSegment
     val now = time.milliseconds
     val reachedRollMs = segment.timeWaitedForRoll(now, maxTimestampInMessages) > config.segmentMs - segment.rollJitterMs
     if (segment.size > config.segmentSize - messagesSize ||
         (segment.size > 0 && reachedRollMs) ||
-        segment.index.isFull || segment.timeIndex.isFull) {
+        segment.index.isFull || segment.timeIndex.isFull || !segment.canConvertToRelativeOffset(maxOffsetInMessages)) {
       debug(s"Rolling new log segment in $name (log_size = ${segment.size}/${config.segmentSize}}, " +
           s"index_size = ${segment.index.entries}/${segment.index.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
-      roll()
+      /*
+        maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
+        Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
+        first offset in the set. Determining the true first offset in the set requires decompression, which the follower
+        is trying to avoid during log append. Prior behavior assigned new baseOffset = logEndOffset from old segment.
+        This was problematic in the case that two consecutive messages differed in offset by
+        Integer.MAX_VALUE.toLong + 2 or more.  In this case, the prior behavior would roll a new log segment whose
+        base offset was too low to contain the next message.  This edge case is possible when a replica is recovering a
+        highly compacted topic from scratch.
+       */
+      roll(maxOffsetInMessages - Integer.MAX_VALUE)
     } else {
       segment
     }
@@ -762,10 +779,10 @@ class Log(@volatile var dir: File,
    *
    * @return The newly rolled segment
    */
-  def roll(): LogSegment = {
+  def roll(expectedNextOffset: Long = 0): LogSegment = {
     val start = time.nanoseconds
     lock synchronized {
-      val newOffset = logEndOffset
+      val newOffset = Math.max(expectedNextOffset, logEndOffset)
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)

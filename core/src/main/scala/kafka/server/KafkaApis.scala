@@ -1133,7 +1133,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
     val responseBody = if (Protocol.apiVersionSupported(ApiKeys.API_VERSIONS.id, request.header.apiVersion))
-      ApiVersionsResponse.apiVersionsResponse
+      ApiVersionsResponse.API_VERSIONS_RESPONSE
     else
       ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION)
     requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))

@@ -398,7 +398,7 @@ class GroupMetadataManager(val brokerId: Int,
               val fileRecords = log.read(currOffset, config.loadBufferSize, minOneMessage = true).records.asInstanceOf[FileRecords]
               fileRecords.readInto(buffer, 0)
 
-              MemoryRecords.readableRecords(buffer).deepIterator.asScala.foreach { entry =>
+              MemoryRecords.readableRecords(buffer).deepEntries.asScala.foreach { entry =>
                 val record = entry.record
 
                 require(record.hasKey, "Offset entry key should not be null")

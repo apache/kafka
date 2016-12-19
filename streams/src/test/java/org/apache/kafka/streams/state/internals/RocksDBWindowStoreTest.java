@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
@@ -67,6 +70,12 @@ public class RocksDBWindowStoreTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", intSerde, stringSerde);
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private ThreadCache cache;
+
+    @Before
+    public void setUp() {
+        cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+    }
 
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {
@@ -89,7 +98,7 @@ public class RocksDBWindowStoreTest {
         MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
         final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         long currentTime = 0;
@@ -140,7 +149,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -214,7 +223,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -303,7 +312,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -390,7 +399,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -446,7 +455,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, true, false);
             assertTrue(store instanceof CachingWindowStore);
@@ -474,7 +483,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
@@ -589,7 +598,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -638,7 +647,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
@@ -690,7 +699,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
@@ -793,7 +802,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             File storeDir = new File(baseDir, windowName);
 
@@ -855,7 +864,7 @@ public class RocksDBWindowStoreTest {
         MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
         final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         context.setRecordContext(createRecordContext(0));

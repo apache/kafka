@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Before;
@@ -37,7 +39,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Before
     public void setUp() throws Exception {
         store = new InMemoryKeyValueStore<>(namespace);
-        cache = new ThreadCache(10000L);
+        cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
     }
 
     @Test

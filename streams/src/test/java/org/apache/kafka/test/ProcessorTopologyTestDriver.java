@@ -180,7 +180,8 @@ public class ProcessorTopologyTestDriver {
             restoreStateConsumer,
             config,
             new MockStreamsMetrics(new Metrics()),
-            new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024),
+            new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()),
+            new ThreadCache("testCache", 1024 * 1024, new MockStreamsMetrics(new Metrics())),
             new MockTime());
     }
 

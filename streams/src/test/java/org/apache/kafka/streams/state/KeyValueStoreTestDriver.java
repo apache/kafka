@@ -191,7 +191,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
 
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    private final ThreadCache cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
+    private final ThreadCache cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final RecordCollector recordCollector;
     private File stateDir = null;

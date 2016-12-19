@@ -209,7 +209,6 @@ public class StreamThread extends Thread {
     private ThreadCache cache;
 
     private final TaskCreator taskCreator = new TaskCreator();
-    private final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -888,18 +887,7 @@ public class StreamThread extends Thread {
                 newStandbyTasks.put(taskId, partitions);
             }
 
-            if (task != null) {
-                standbyTasks.put(taskId, task);
-                for (TopicPartition partition : partitions) {
-                    standbyTasksByPartition.put(partition, task);
-                }
-                // collect checked pointed offsets to position the restore consumer
-                // this include all partitions from which we restore states
-                for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
-                    standbyTasksByPartition.put(partition, task);
-                }
-                checkpointedOffsets.putAll(task.checkpointedOffsets());
-            }
+            updateStandByTaskMaps(checkpointedOffsets, taskId, partitions, task);
         }
 
         // destroy any remaining suspended tasks
@@ -907,7 +895,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
-        standbyTaskCreator.retryWithBackoff(newStandbyTasks);
+        new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks);
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
@@ -919,6 +907,21 @@ public class StreamThread extends Thread {
             } else {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
+        }
+    }
+
+    private void updateStandByTaskMaps(final Map<TopicPartition, Long> checkpointedOffsets, final TaskId taskId, final Set<TopicPartition> partitions, final StandbyTask task) {
+        if (task != null) {
+            standbyTasks.put(taskId, task);
+            for (TopicPartition partition : partitions) {
+                standbyTasksByPartition.put(partition, task);
+            }
+            // collect checked pointed offsets to position the restore consumer
+            // this include all partitions from which we restore states
+            for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
+                standbyTasksByPartition.put(partition, task);
+            }
+            checkpointedOffsets.putAll(task.checkpointedOffsets());
         }
     }
 
@@ -1094,11 +1097,11 @@ public class StreamThread extends Thread {
             }
         }
 
-        abstract void createTask(final TaskId id, final Collection<TopicPartition> partitions);
+        abstract void createTask(final TaskId id, final Set<TopicPartition> partitions);
     }
 
     class TaskCreator extends AbstractTaskCreator {
-        void createTask(final TaskId taskId, final Collection<TopicPartition> partitions) {
+        void createTask(final TaskId taskId, final Set<TopicPartition> partitions) {
             log.debug("{} creating new task {}", logPrefix, taskId);
             final StreamTask task = createStreamTask(taskId, partitions);
 
@@ -1111,20 +1114,16 @@ public class StreamThread extends Thread {
     }
 
     class StandbyTaskCreator extends AbstractTaskCreator {
-        void createTask(final TaskId taskId, final Collection<TopicPartition> partitions) {
+        private final Map<TopicPartition, Long> checkpointedOffsets;
+
+        StandbyTaskCreator(final Map<TopicPartition, Long> checkpointedOffsets) {
+            this.checkpointedOffsets = checkpointedOffsets;
+        }
+
+        void createTask(final TaskId taskId, final Set<TopicPartition> partitions) {
             log.debug("{} creating new standby task {}", logPrefix, taskId);
             final StandbyTask task = createStandbyTask(taskId, partitions);
-
-            standbyTasks.put(taskId, task);
-
-            for (TopicPartition partition : partitions) {
-                standbyTasksByPartition.put(partition, task);
-            }
-            // collect checked pointed offsets to position the restore consumer
-            // this include all partitions from which we restore states
-            for (TopicPartition partition : task.checkpointedOffsets().keySet()) {
-                standbyTasksByPartition.put(partition, task);
-            }
+            updateStandByTaskMaps(checkpointedOffsets, taskId, partitions, task);
         }
     }
 

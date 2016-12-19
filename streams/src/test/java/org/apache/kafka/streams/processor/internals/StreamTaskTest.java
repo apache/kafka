@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -335,13 +336,16 @@ public class StreamTaskTest {
         final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
         final Map<String, SourceNode> sourceNodes
                 = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, new ThreadCache(0), new MockTime());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
+            topology, consumer, producer, restoreStateConsumer, config,
+            streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime());
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -389,7 +393,10 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, new ThreadCache(0), new MockTime());
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
+            topology, consumer, producer, restoreStateConsumer, config,
+            streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime());
 
         try {
             streamTask.punctuate(punctuator, 1);

@@ -24,17 +24,15 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.state.internals.ThreadCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
+public class StreamsMetricsImpl implements StreamsMetrics {
     private static final Logger log = LoggerFactory.getLogger(StreamsMetricsImpl.class);
 
     final Metrics metrics;
@@ -88,7 +86,8 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
     }
 
-    public Metrics metrics() {
+    @Override
+    public Metrics registry() {
         return metrics;
     }
 
@@ -97,10 +96,6 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         sensor.record(endNs - startNs);
     }
 
-    @Override
-    public void recordCacheSensor(Sensor sensor, double count) {
-        sensor.record(count);
-    }
 
     @Override
     public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
@@ -179,30 +174,6 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         return sensor;
     }
 
-    @Override
-    public Sensor addCacheSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel,  String... tags) {
-        Map<String, String> tagMap = tagMap(tags);
-
-        // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
-        addCacheMetrics(scopeName, parent, "all", operationName, tagMap);
-
-        // add additional parents
-        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
-        addCacheMetrics(scopeName, sensor, entityName, operationName, tagMap);
-        return sensor;
-
-    }
-
-    private void addCacheMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", groupNameFromScope(scopeName),
-            "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", groupNameFromScope(scopeName),
-            "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", groupNameFromScope(scopeName),
-            "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
-    }
-
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
             "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
@@ -217,9 +188,6 @@ public class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
     }
 
     private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-        if (name.toString().contains("all-process-avg-latency")) {
-            log.warn("Trying to add metric twice " + name);
-        }
         if (!metrics.metrics().containsKey(name)) {
             sensor.add(name, stat);
         } else {

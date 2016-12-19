@@ -61,7 +61,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -687,9 +686,7 @@ public class Fetcher<K, V> {
                 }
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                Iterator<LogEntry> deepIterator = partition.records.deepIterator();
-                while (deepIterator.hasNext()) {
-                    LogEntry logEntry = deepIterator.next();
+                for (LogEntry logEntry : partition.records.deepEntries()) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
