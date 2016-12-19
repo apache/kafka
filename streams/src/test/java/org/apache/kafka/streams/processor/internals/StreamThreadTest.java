@@ -298,8 +298,8 @@ public class StreamThreadTest {
     }
 
     final static String TOPIC = "topic";
-    final Set<TopicPartition> assignmentThread1 = Collections.singleton(new TopicPartition(TOPIC, 0));
-    final Set<TopicPartition> assignmentThread2 = Collections.singleton(new TopicPartition(TOPIC, 1));
+    final Set<TopicPartition> task0Assignment = Collections.singleton(new TopicPartition(TOPIC, 0));
+    final Set<TopicPartition> task1Assignment = Collections.singleton(new TopicPartition(TOPIC, 1));
 
     @Test
     public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
@@ -318,16 +318,23 @@ public class StreamThreadTest {
 
         final StreamThread thread1 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 1, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
         final StreamThread thread2 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 2, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
-        thread1.partitionAssignor(new MockStreamsPartitionAssignor());
-        thread2.partitionAssignor(new MockStreamsPartitionAssignor());
+
+        final Map<TaskId, Set<TopicPartition>> task0 = Collections.singletonMap(new TaskId(0, 0), task0Assignment);
+        final Map<TaskId, Set<TopicPartition>> task1 = Collections.singletonMap(new TaskId(0, 1), task1Assignment);
+
+        final Map<TaskId, Set<TopicPartition>> thread1Assignment = new HashMap<>(task0);
+        final Map<TaskId, Set<TopicPartition>> thread2Assignment = new HashMap<>(task1);
+
+        thread1.partitionAssignor(new MockStreamsPartitionAssignor(thread1Assignment));
+        thread2.partitionAssignor(new MockStreamsPartitionAssignor(thread2Assignment));
 
         // revoke (to get threads in correct state)
         thread1.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
         thread2.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
 
         // assign
-        thread1.rebalanceListener.onPartitionsAssigned(assignmentThread1);
-        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+        thread1.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread2.rebalanceListener.onPartitionsAssigned(task1Assignment);
 
         final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
         for (TaskId tid : thread1.tasks().keySet()) {
@@ -339,19 +346,26 @@ public class StreamThreadTest {
         }
 
         // revoke (task will be suspended)
-        thread1.rebalanceListener.onPartitionsRevoked(assignmentThread1);
-        thread2.rebalanceListener.onPartitionsRevoked(assignmentThread2);
+        thread1.rebalanceListener.onPartitionsRevoked(task0Assignment);
+        thread2.rebalanceListener.onPartitionsRevoked(task1Assignment);
+
 
         // assign reverted
+        thread1Assignment.clear();
+        thread1Assignment.putAll(task1);
+
+        thread2Assignment.clear();
+        thread2Assignment.putAll(task0);
+
         Thread runIt = new Thread(new Runnable() {
             @Override
             public void run() {
-                thread1.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+                thread1.rebalanceListener.onPartitionsAssigned(task1Assignment);
             }
         });
         runIt.start();
 
-        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread1);
+        thread2.rebalanceListener.onPartitionsAssigned(task0Assignment);
 
         runIt.join();
 
@@ -362,12 +376,16 @@ public class StreamThreadTest {
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
+
+        private final Map<TaskId, Set<TopicPartition>> activeTaskAssignment;
+
+        public MockStreamsPartitionAssignor(final Map<TaskId, Set<TopicPartition>> activeTaskAssignment) {
+            this.activeTaskAssignment = activeTaskAssignment;
+        }
+
         @Override
         Map<TaskId, Set<TopicPartition>> activeTasks() {
-            Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-            activeTasks.put(new TaskId(0, 0), assignmentThread1);
-            activeTasks.put(new TaskId(0, 1), assignmentThread2);
-            return activeTasks;
+            return activeTaskAssignment;
         }
     }
 
@@ -411,6 +429,8 @@ public class StreamThreadTest {
                 }
             };
 
+
+
             initPartitionGrouper(config, thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
@@ -431,6 +451,11 @@ public class StreamThreadTest {
             //
             // Assign t1p1 and t1p2. This should create task1 & task2
             //
+            final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+            activeTasks.put(task1, Collections.singleton(t1p1));
+            activeTasks.put(task2, Collections.singleton(t1p2));
+            thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
             prevTasks = new HashMap<>(thread.tasks());
@@ -463,6 +488,8 @@ public class StreamThreadTest {
             //
             // Revoke t1p1 and t1p2. This should remove task1 & task2
             //
+            activeTasks.clear();
+
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
             prevTasks = new HashMap<>(thread.tasks());

@@ -234,7 +234,8 @@ public class StreamThread extends Thread {
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active
-                closeNonAssignedSuspendedStandbyTasks();
+                closeNonAssignedSuspendedTasks();
+//                closeNonAssignedSuspendedStandbyTasks();
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
@@ -812,26 +813,36 @@ public class StreamThread extends Thread {
         return null;
     }
 
-    private void closeNonAssignedSuspendedStandbyTasks() {
-        final Map<TaskId, Set<TopicPartition>> newStandbyTasks = partitionAssignor.standbyTasks();
-        final Iterator<Map.Entry<TaskId, StandbyTask>> standbyTaskIterator = suspendedStandbyTasks.entrySet().iterator();
-        while (standbyTaskIterator.hasNext()) {
-            final Map.Entry<TaskId, StandbyTask> entry = standbyTaskIterator.next();
-            if (!newStandbyTasks.containsKey(entry.getKey())) {
-                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, entry.getKey());
-                final StandbyTask task = entry.getValue();
-                try {
-                    task.close();
-                    task.closeStateManager();
-                } catch (Exception e) {
-                    log.error("{} Failed to remove suspended standby task {}", logPrefix, entry.getKey(), e);
-                } finally {
-                    standbyTaskIterator.remove();
-                }
+    private void closeNonAssignedSuspendedTasks() {
+        final Set<TaskId> currentActiveTaskIds = partitionAssignor.activeTasks().keySet();
+        final Iterator<Map.Entry<TaskId, StreamTask>> activeTaskIterator = suspendedActiveTasks.entrySet().iterator();
+        while (activeTaskIterator.hasNext()) {
+            closeAndRemoveIfNotAssigned(currentActiveTaskIds, activeTaskIterator.next(), activeTaskIterator);
+        }
+
+        final Set<TaskId> currentSuspendedTaskIds = partitionAssignor.standbyTasks().keySet();
+        final Iterator<Map.Entry<TaskId, StandbyTask>> standByTaskIterator = suspendedStandbyTasks.entrySet().iterator();
+        while (standByTaskIterator.hasNext()) {
+            closeAndRemoveIfNotAssigned(currentSuspendedTaskIds, standByTaskIterator.next(), standByTaskIterator);
+        }
+    }
+    
+    private void closeAndRemoveIfNotAssigned(final Set<TaskId> assignedTasks,
+                                             final Map.Entry<TaskId, ? extends AbstractTask> suspendedTask,
+                                             final Iterator suspendedTaskIterator) {
+        if (!assignedTasks.contains(suspendedTask.getKey())) {
+            log.debug("{} Closing suspended non-assigned task {}", logPrefix, suspendedTask.getKey());
+            final AbstractTask task = suspendedTask.getValue();
+            try {
+                task.close();
+                task.closeStateManager();
+            } catch (Exception e) {
+                log.error("{} Failed to remove suspended task {}", logPrefix, suspendedTask.getKey(), e);
+            } finally {
+                suspendedTaskIterator.remove();
             }
         }
     }
-
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
@@ -870,7 +881,7 @@ public class StreamThread extends Thread {
         }
 
         // destroy any remaining suspended tasks
-        removeSuspendedTasks();
+//        removeSuspendedTasks();
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
