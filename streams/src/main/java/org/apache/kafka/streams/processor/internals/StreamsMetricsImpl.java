@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -176,9 +177,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
-            "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
+            "The average latency of " + entityName + " " + opName + " operation.", tags), new Avg());
         maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
-            "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+            "The max latency of " + entityName + " " + opName + " operation.", tags), new Max());
         addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
     }
 
@@ -192,6 +193,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             sensor.add(name, stat);
         } else {
             log.debug("Trying to add metric twice " + name);
+        }
+    }
+
+    @Override
+    public void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
+        long startNs = -1;
+        if (sensor.maybeRecord()) {
+            startNs = time.nanoseconds();
+        }
+        action.run();
+        if (startNs != -1) {
+            recordLatency(sensor, startNs, time.nanoseconds());
         }
     }
 }

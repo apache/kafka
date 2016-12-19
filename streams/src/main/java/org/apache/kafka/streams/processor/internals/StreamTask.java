@@ -65,6 +65,21 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private boolean requiresPoll = true;
     private final Time time;
     private final TaskMetrics metrics;
+    private Runnable commitDelegate = new Runnable() {
+        @Override
+        public void run() {
+            log.debug("{} Committing its state", logPrefix);
+            // 1) flush local state
+            stateMgr.flush(processorContext);
+
+            log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
+            // 2) flush produced records in the downstream and change logs of local states
+            recordCollector.flush();
+
+            // 3) commit consumed offsets if it is dirty already
+            commitOffsets();
+        }
+    };
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -260,18 +275,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Commit the current task state
      */
     public void commit() {
-        long startNs = time.nanoseconds();
-        log.debug("{} Committing its state", logPrefix);
-        // 1) flush local state
-        stateMgr.flush(processorContext);
-
-        log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
-        // 2) flush produced records in the downstream and change logs of local states
-        recordCollector.flush();
-
-        // 3) commit consumed offsets if it is dirty already
-        commitOffsets();
-        metrics.metrics.recordLatency(metrics.taskCommitTimeSensor, startNs, time.nanoseconds());
+        metrics.metrics.measureLatencyNs(time, commitDelegate, metrics.taskCommitTimeSensor);
     }
 
     /**

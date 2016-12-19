@@ -667,7 +667,6 @@ public class StreamThread extends Thread {
 
     private void maybePunctuate(StreamTask task) {
         try {
-            long now = time.milliseconds();
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())

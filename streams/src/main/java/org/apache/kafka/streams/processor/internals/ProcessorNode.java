@@ -48,6 +48,23 @@ public class ProcessorNode<K, V> {
             processor.process(key, value);
         }
     };
+    private ProcessorContext context;
+    private Runnable initDelegate = new Runnable() {
+        @Override
+        public void run() {
+            if (processor != null) {
+                processor.init(context);
+            }
+        }
+    };
+    private Runnable closeDelegate = new Runnable() {
+        @Override
+        public void run() {
+            if (processor != null) {
+                processor.close();
+            }
+        }
+    };
 
     private long timestamp;
     private Runnable punctuateDelegate = new Runnable() {
@@ -91,47 +108,30 @@ public class ProcessorNode<K, V> {
 
 
     public void init(ProcessorContext context) {
-        long startNs = time.nanoseconds();
+        this.context = context;
         try {
-            if (processor != null) {
-                processor.init(context);
-            }
+            nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
+            nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
-        this.nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
-        this.nodeMetrics.metrics.recordLatency(nodeMetrics.nodeCreationSensor, startNs, time.nanoseconds());
     }
 
     public void close() {
-        long startNs = time.nanoseconds();
         try {
-            if (processor != null) {
-                processor.close();
-            }
-            nodeMetrics.metrics.recordLatency(nodeMetrics.nodeDestructionSensor, startNs, time.nanoseconds());
+            nodeMetrics.metrics.measureLatencyNs(time, closeDelegate, nodeMetrics.nodeDestructionSensor);
             nodeMetrics.removeAllSensors();
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
     }
 
-    private void measureLatency(final Runnable action, final Sensor sensor) {
-        long startNs = -1;
-        if (sensor.maybeRecord()) {
-            startNs = time.nanoseconds();
-        }
-        action.run();
-        if (startNs != -1) {
-            nodeMetrics.metrics.recordLatency(sensor, startNs, time.nanoseconds());
-        }
-    }
 
     public void process(final K key, final V value) {
         this.key = key;
         this.value = value;
 
-        measureLatency(processDelegate, nodeMetrics.nodeProcessTimeSensor);
+        this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
 
         // record throughput
         nodeMetrics.nodeThroughputSensor.record();
@@ -139,7 +139,7 @@ public class ProcessorNode<K, V> {
 
     public void punctuate(long timestamp) {
         this.timestamp = timestamp;
-        measureLatency(punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
+        this.nodeMetrics.metrics.measureLatencyNs(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
     }
 
     /**

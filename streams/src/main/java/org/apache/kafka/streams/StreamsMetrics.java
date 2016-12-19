@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
@@ -75,6 +76,18 @@ public interface StreamsMetrics {
      * Same as previous constructor {@link #sensor(String, String, String, Sensor.RecordLevel, Sensor...)} sensor}, but takes a set of parents as well.
      */
     Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents);
+
+    /**
+     * Helper function. Measure the latency of an action. This is equivalent to
+     * startTs = time.nanoseconds()
+     * action.run()
+     * endTs = time.nanoseconds()
+     * sensor.record(endTs - startTs)
+     * @param time      Time object.
+     * @param action    Action to run.
+     * @param sensor    Sensor to record value.
+     */
+    void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor);
 
     /**
      * Remove a sensor with the given name.
