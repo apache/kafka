@@ -113,7 +113,8 @@ public class WorkerCoordinatorTest {
                 rebalanceListener);
 
         configState1 = new ClusterConfigState(
-                1L, Collections.singletonMap(connectorId1, 1),
+                1L,
+                Collections.singletonMap(connectorId1, 1),
                 Collections.singletonMap(connectorId1, (Map<String, String>) new HashMap<String, String>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
                 Collections.singletonMap(taskId1x0, (Map<String, String>) new HashMap<String, String>()),
@@ -134,7 +135,8 @@ public class WorkerCoordinatorTest {
         configState2TaskConfigs.put(taskId1x1, new HashMap<String, String>());
         configState2TaskConfigs.put(taskId2x0, new HashMap<String, String>());
         configState2 = new ClusterConfigState(
-                2L, configState2ConnectorTaskCounts,
+                2L,
+                configState2ConnectorTaskCounts,
                 configState2ConnectorConfigs,
                 configState2TargetStates,
                 configState2TaskConfigs,
@@ -158,7 +160,8 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<String, String>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<String, String>());
         configStateSingleTaskConnectors = new ClusterConfigState(
-                2L, configStateSingleTaskConnectorsConnectorTaskCounts,
+                2L,
+                configStateSingleTaskConnectorsConnectorTaskCounts,
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
                 configStateSingleTaskConnectorsTaskConfigs,
