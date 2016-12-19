@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import kafka.utils.ZkUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.{Json, Logging, ZKCheckedEphemeral}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -131,9 +130,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         amILeaderBeforeDataChange && !amILeader
       }
 
-      if (shouldResign) {
+      if (shouldResign)
         onResigningAsLeader()
-      }
     }
 
     /**
@@ -149,9 +147,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         amILeader
       }
 
-      if(shouldResign) {
+      if (shouldResign)
         onResigningAsLeader()
-      }
 
       inLock(controllerContext.controllerLock) {
         elect
