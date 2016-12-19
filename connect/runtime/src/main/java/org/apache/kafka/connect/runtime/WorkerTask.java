@@ -169,11 +169,11 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    protected void onPause() {
+    protected synchronized void onPause() {
         statusListener.onPause(id);
     }
 
-    protected void onResume() {
+    protected synchronized void onResume() {
         statusListener.onResume(id);
     }
 
