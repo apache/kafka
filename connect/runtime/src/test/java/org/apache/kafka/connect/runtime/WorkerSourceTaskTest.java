@@ -136,6 +136,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
+
         sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
@@ -144,6 +145,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 return null;
             }
         });
+
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
         statusListener.onPause(taskId);
         EasyMock.expectLastCall();
 

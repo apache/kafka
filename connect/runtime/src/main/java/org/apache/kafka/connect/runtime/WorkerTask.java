@@ -131,10 +131,7 @@ abstract class WorkerTask implements Runnable {
                 if (stopping.get())
                     return;
 
-                if (targetState == TargetState.PAUSED)
-                    statusListener.onPause(id);
-                else
-                    statusListener.onStartup(id);
+                statusListener.onStartup(id);
             }
 
             execute();
