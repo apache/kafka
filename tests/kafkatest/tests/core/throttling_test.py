@@ -15,7 +15,7 @@
 
 import time
 import math
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize,ignore
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
@@ -138,6 +138,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                 estimated_throttled_time,
                 time_taken))
 
+    @ignore
     @cluster(num_nodes=10)
     @parametrize(bounce_brokers=False)
     @parametrize(bounce_brokers=True)
