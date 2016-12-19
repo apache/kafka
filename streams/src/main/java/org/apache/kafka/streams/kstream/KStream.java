@@ -919,9 +919,6 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -993,9 +990,6 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1081,15 +1075,6 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
-     * evaluation strategy:
-     * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
-     * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
-     * computed, too.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1166,15 +1151,6 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
-     * evaluation strategy:
-     * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
-     * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
-     * computed, too.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1262,17 +1238,6 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
-     * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
-     * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
-     * computed, too.
-     * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
-     * this-to-other, or non-matching from other-to-this&mdash;which one of both will be in the result depends on
-     * non-deterministic processing order).
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1350,17 +1315,6 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the <em>order</em> of the result depends on the non-deterministic processing order of the
-     * input streams.
-     * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
-     * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not known at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
-     * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
-     * computed, too.
-     * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
-     * this-to-other, or non-matching from other-to-this&mdash;which one of both will be in the result depends on
-     * non-deterministic processing order).
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1450,11 +1404,6 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> (i.e., processing time) state of {@link KTable}. Kafka Streams tries
-     * to synchronize the stream with the table state on event time, but there is no guarantee about the computed result.
-     * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1522,11 +1471,6 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> (i.e., processing time) state of {@link KTable}. Kafka Streams tries
-     * to synchronize the stream with the table state on event time, but there is no guarantee about the computed result.
-     * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1604,11 +1548,6 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> (i.e., processing time) state of {@link KTable}. Kafka Streams tries
-     * to synchronize the stream with the table state on event time, but there is no guarantee about the computed result.
-     * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
@@ -1679,11 +1618,6 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> (i.e., processing time) state of {@link KTable}. Kafka Streams tries
-     * to synchronize the stream with the table state on event time, but there is no guarantee about the computed result.
-     * Event time synchronization of both {@link KStream} and {@link KTable} happens with a best-effort approach.
-     * <p>
      * Both input streams need to be co-partitioned on the join key.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.

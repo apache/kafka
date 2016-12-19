@@ -47,7 +47,9 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.Set;
@@ -105,6 +107,7 @@ public class KafkaStreams {
     private GlobalStreamThread globalStreamThread;
 
     private final StreamThread[] threads;
+    private final Map<Long, StreamThread.State> threadState;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
 
@@ -214,10 +217,18 @@ public class KafkaStreams {
 
     private class StreamStateListener implements StreamThread.StateListener {
         @Override
-        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+        public synchronized void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
+            threadState.put(thread.getId(), newState);
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
-                setState(KafkaStreams.State.REBALANCING);
+                setState(State.REBALANCING);
+            } else if (newState == StreamThread.State.RUNNING) {
+                for (StreamThread.State state : threadState.values()) {
+                    if (state != StreamThread.State.RUNNING) {
+                        return;
+                    }
+                }
+                setState(State.RUNNING);
             }
         }
     }
@@ -277,6 +288,7 @@ public class KafkaStreams {
         metrics = new Metrics(metricConfig, reporters, time);
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
+        threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
@@ -312,6 +324,7 @@ public class KafkaStreams {
                                           streamsMetadataState,
                                           cacheSizeBytes);
             threads[i].setStateListener(streamStateListener);
+            threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
@@ -352,7 +365,6 @@ public class KafkaStreams {
             }
 
             setState(KafkaStreams.State.RUNNING);
-
             log.info("Started Kafka Stream process");
         } else {
             throw new IllegalStateException("Cannot start again.");
