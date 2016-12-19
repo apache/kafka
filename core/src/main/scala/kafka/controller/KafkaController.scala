@@ -1148,6 +1148,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   class SessionExpirationListener() extends IZkStateListener with Logging {
     this.logIdent = "[SessionExpirationListener on " + config.brokerId + "], "
+
     @throws[Exception]
     def handleStateChanged(state: KeeperState) {
       // do nothing, since zkclient will do reconnect for us.
@@ -1168,7 +1169,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       }
     }
 
-    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+    def handleSessionEstablishmentError(error: Throwable): Unit = {
       //no-op handleSessionEstablishmentError in KafkaHealthCheck should handle this error in its handleSessionEstablishmentError
     }
   }
@@ -1331,7 +1332,7 @@ class IsrChangeNotificationListener(protected val controller: KafkaController) e
 
   protected def logName = "IsrChangeNotificationListener"
 
-  override def doHandleChildChange(parentPath: String, currentChildren: Seq[String]): Unit = {
+  def doHandleChildChange(parentPath: String, currentChildren: Seq[String]): Unit = {
     inLock(controller.controllerContext.controllerLock) {
       debug("ISR change notification listener fired")
       try {
