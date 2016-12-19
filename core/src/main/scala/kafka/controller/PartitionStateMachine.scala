@@ -408,7 +408,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     protected def logName = "TopicChangeListener"
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
@@ -451,7 +451,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
      * Invoked when a topic is being deleted
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
         var topicsToBeDeleted = children.toSet
@@ -487,7 +487,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def doHandleDataDeleted(dataPath: String) {}
   }
 
@@ -495,7 +495,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     protected def logName = "AddPartitionsListener"
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def doHandleDataChange(dataPath: String, data: AnyRef) {
       inLock(controllerContext.controllerLock) {
         try {
@@ -520,7 +520,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     }
 
     // this is not implemented for partition change
-    @throws(classOf[Exception])
+    @throws[Exception]
     def doHandleDataDeleted(parentPath: String): Unit = {}
   }
 }

@@ -1148,7 +1148,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   class SessionExpirationListener() extends IZkStateListener with Logging {
     this.logIdent = "[SessionExpirationListener on " + config.brokerId + "], "
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleStateChanged(state: KeeperState) {
       // do nothing, since zkclient will do reconnect for us.
     }
@@ -1159,7 +1159,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
      *
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
       onControllerResignation()
@@ -1242,7 +1242,7 @@ class PartitionsReassignedListener(protected val controller: KafkaController) ex
    *
    * @throws Exception On any error.
    */
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataChange(dataPath: String, data: AnyRef) {
     debug("Partitions reassigned listener fired for path %s. Record partitions to be reassigned %s"
       .format(dataPath, data))
@@ -1264,7 +1264,7 @@ class PartitionsReassignedListener(protected val controller: KafkaController) ex
     }
   }
 
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataDeleted(dataPath: String) {}
 }
 
@@ -1280,7 +1280,7 @@ class ReassignedPartitionsIsrChangeListener(protected val controller: KafkaContr
    *
    * @throws Exception On any error.
    */
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataChange(dataPath: String, data: AnyRef) {
     inLock(controllerContext.controllerLock) {
       debug("Reassigned partitions isr change listener fired for path %s with children %s".format(dataPath, data))
@@ -1317,7 +1317,7 @@ class ReassignedPartitionsIsrChangeListener(protected val controller: KafkaContr
     }
   }
 
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataDeleted(dataPath: String) {}
 
 }
@@ -1401,7 +1401,7 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
    *
    * @throws Exception On any error.
    */
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataChange(dataPath: String, data: AnyRef) {
     debug("Preferred replica election listener fired for path %s. Record partitions to undergo preferred replica election %s"
             .format(dataPath, data.toString))
@@ -1423,7 +1423,7 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
   /**
    * @throws Exception On any error.
    */
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleDataDeleted(dataPath: String) {}
 }
 

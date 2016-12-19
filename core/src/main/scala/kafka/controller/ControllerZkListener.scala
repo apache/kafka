@@ -28,14 +28,14 @@ trait ControllerZkListener extends Logging {
 }
 
 trait ControllerZkChildListener extends IZkChildListener with ControllerZkListener {
-  @throws(classOf[Exception])
+  @throws[Exception]
   final def handleChildChange(parentPath: String, currentChildren: java.util.List[String]): Unit = {
     // Due to zkclient's callback order, it's possible for the callback to be triggered after the controller has moved
     if (controller.isActive)
       doHandleChildChange(parentPath, currentChildren.asScala)
   }
 
-  @throws(classOf[Exception])
+  @throws[Exception]
   def doHandleChildChange(parentPath: String, currentChildren: Seq[String]): Unit
 }
 
