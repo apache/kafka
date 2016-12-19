@@ -407,10 +407,12 @@ class WorkerSinkTask extends WorkerTask {
         for (TopicPartition tp : consumer.assignment())
             if (!context.pausedPartitions().contains(tp))
                 consumer.resume(singleton(tp));
+        onResume();
     }
 
     private void pauseAll() {
         consumer.pause(consumer.assignment());
+        onPause();
     }
 
     private void deliverMessages() {

@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
@@ -45,7 +44,8 @@ abstract class WorkerTask implements Runnable {
     private final AtomicBoolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
     private final CountDownLatch shutdownLatch;
     private final TaskStatus.Listener statusListener;
-    private final AtomicReference<TargetState> targetState;
+
+    private volatile TargetState targetState;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -55,7 +55,7 @@ abstract class WorkerTask implements Runnable {
         this.cancelled = new AtomicBoolean(false);
         this.shutdownLatch = new CountDownLatch(1);
         this.statusListener = statusListener;
-        this.targetState = new AtomicReference<>(initialState);
+        this.targetState = initialState;
     }
 
     public ConnectorTaskId id() {
@@ -131,7 +131,7 @@ abstract class WorkerTask implements Runnable {
                 if (stopping.get())
                     return;
 
-                if (targetState.get() == TargetState.PAUSED)
+                if (targetState == TargetState.PAUSED)
                     statusListener.onPause(id);
                 else
                     statusListener.onStartup(id);
@@ -169,6 +169,14 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    protected void onPause() {
+        statusListener.onPause(id);
+    }
+
+    protected void onResume() {
+        statusListener.onResume(id);
+    }
+
     @Override
     public void run() {
         try {
@@ -185,7 +193,7 @@ abstract class WorkerTask implements Runnable {
     }
 
     public boolean shouldPause() {
-        return this.targetState.get() == TargetState.PAUSED;
+        return this.targetState == TargetState.PAUSED;
     }
 
     /**
@@ -195,7 +203,7 @@ abstract class WorkerTask implements Runnable {
      */
     protected boolean awaitUnpause() throws InterruptedException {
         synchronized (this) {
-            while (targetState.get() == TargetState.PAUSED) {
+            while (targetState == TargetState.PAUSED) {
                 if (stopping.get())
                     return false;
                 this.wait();
@@ -210,16 +218,8 @@ abstract class WorkerTask implements Runnable {
             if (stopping.get())
                 return;
 
-            TargetState oldState = this.targetState.getAndSet(state);
-            if (state != oldState) {
-                if (state == TargetState.PAUSED) {
-                    statusListener.onPause(id);
-                } else if (state == TargetState.STARTED) {
-                    statusListener.onResume(id);
-                    this.notifyAll();
-                } else
-                    throw new IllegalArgumentException("Unhandled target state " + state);
-            }
+            this.targetState = state;
+            this.notifyAll();
         }
     }
 
