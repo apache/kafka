@@ -48,7 +48,7 @@ public interface StateStoreSupplier<T extends StateStore> {
      * @return Map containing any log configs to be used when creating the changelog for the {@link StateStore}
      * If {@code loggingEnabled} returns false, this function will always return an empty map
      */
-    Map<String, String> logConfig();
+    Map<String, Object> logConfig();
 
     /**
      * @return true if the {@link StateStore} should have logging enabled

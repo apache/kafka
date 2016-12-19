@@ -37,11 +37,11 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
 
     private final boolean enableCaching;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, Object> logConfig, boolean enableCaching) {
         this(name, keySerde, valueSerde, null, logged, logConfig, enableCaching);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, Object> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
         this.enableCaching = enableCaching;
     }

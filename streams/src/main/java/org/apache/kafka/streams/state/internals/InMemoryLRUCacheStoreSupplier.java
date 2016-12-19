@@ -34,11 +34,11 @@ public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K
 
     private final int capacity;
 
-    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
+    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, Object> logConfig) {
         this(name, capacity, keySerde, valueSerde, null, logged, logConfig);
     }
 
-    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    public InMemoryLRUCacheStoreSupplier(String name, int capacity, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, Object> logConfig) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
         this.capacity = capacity;
     }

@@ -17,6 +17,11 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -26,10 +31,6 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
 
 public abstract class AbstractStream<K> {
 
@@ -75,30 +76,34 @@ public abstract class AbstractStream<K> {
     @SuppressWarnings("unchecked")
     public static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
                                                                   final Serde<T> aggValueSerde,
-                                                                  final String storeName) {
+                                                                  final String storeName,
+                                                                  final Map<String, Object> logConfig) {
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return storeFactory(keySerde, aggValueSerde, storeName).build();
+        return storeFactory(keySerde, aggValueSerde, storeName, logConfig).build();
     }
 
     @SuppressWarnings("unchecked")
     public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
                                                                                      final Serde<T> aggValSerde,
                                                                                      final Windows<W> windows,
-                                                                                     final String storeName) {
+                                                                                     final String storeName,
+                                                                                     final Map<String, Object> logConfig) {
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return storeFactory(keySerde, aggValSerde, storeName)
+        return storeFactory(keySerde, aggValSerde, storeName, logConfig)
                 .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
     }
     @SuppressWarnings("unchecked")
     public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
                                                                          final Serde<T> aggValueSerde,
-                                                                         final String storeName) {
+                                                                         final String storeName,
+                                                                         final Map<String, Object> logConfig) {
         return Stores.create(storeName)
                 .withKeys(keySerde)
                 .withValues(aggValueSerde)
                 .persistent()
-                .enableCaching();
+                .enableCaching()
+                .enableLogging(logConfig);
     }
 
 

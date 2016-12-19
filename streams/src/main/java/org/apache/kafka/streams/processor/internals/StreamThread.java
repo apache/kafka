@@ -313,6 +313,9 @@ public class StreamThread extends Thread {
         this.consumer = clientSupplier.getConsumer(config.getConsumerConfigs(this, applicationId, threadClientId));
         log.info("{} Creating restore consumer client", logPrefix);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
+        log.info("{} Setting builder topic log config", logPrefix);
+        System.out.println("Setting builder topic log config");
+        this.builder.setTopicLogConfig(config.getTopicConfigs());
 
         // initialize the task list
         // activeTasks needs to be concurrent as it can be accessed

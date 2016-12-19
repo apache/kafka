@@ -30,9 +30,9 @@ public abstract class AbstractStoreSupplier<K, V, T extends StateStore> implemen
     protected final Serde<V> valueSerde;
     protected final Time time;
     protected final boolean logged;
-    protected final Map<String, String> logConfig;
+    protected final Map<String, Object> logConfig;
 
-    public AbstractStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    public AbstractStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, Object> logConfig) {
         this.time = time;
         this.name = name;
         this.valueSerde = valueSerde;
@@ -45,7 +45,7 @@ public abstract class AbstractStoreSupplier<K, V, T extends StateStore> implemen
         return name;
     }
 
-    public Map<String, String> logConfig() {
+    public Map<String, Object> logConfig() {
         return logConfig;
     }
 

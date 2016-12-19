@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -102,6 +103,8 @@ public class TopologyBuilder {
     private Pattern topicPattern = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
+    
+    private Map<String, Object> topicLogConfig = new HashMap<>();
 
     private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
 
@@ -447,6 +450,25 @@ public class TopologyBuilder {
      */
     public synchronized final TopologyBuilder addSink(String name, String topic, StreamPartitioner partitioner, String... parentNames) {
         return addSink(name, topic, (Serializer) null, (Serializer) null, partitioner, parentNames);
+    }
+    
+    /**
+     * 
+     * @return the streams internal topic log config
+     * @see StreamsConfig#getTopicConfigs()
+     */
+    public synchronized final Map<String, Object> getTopicLogConfig() {
+        return topicLogConfig;
+    }
+
+    /**
+     * Sets the internal change log topics configuration
+     * 
+     * @param topicLogConfig
+     * @see StreamsConfig#getTopicConfigs()
+     */
+    public synchronized final void setTopicLogConfig(Map<String, Object> topicLogConfig) {
+        this.topicLogConfig = topicLogConfig;
     }
 
     /**
@@ -861,7 +883,7 @@ public class TopologyBuilder {
                             String internalTopic = decorateTopic(topic);
                             internalSourceTopics.put(internalTopic, new InternalTopicConfig(internalTopic,
                                                                                             Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                                            Collections.<String, String>emptyMap()));
+                                                                                            Collections.<String, Object>emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);

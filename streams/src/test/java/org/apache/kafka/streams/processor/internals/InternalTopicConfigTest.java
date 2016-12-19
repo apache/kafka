@@ -36,21 +36,21 @@ public class InternalTopicConfigTest {
     public void shouldHaveCompactionPropSetIfSupplied() throws Exception {
         final Properties properties = new InternalTopicConfig("name",
                                                               Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                              Collections.<String, String>emptyMap()).toProperties(0);
+                                                              Collections.<String, Object>emptyMap()).toProperties(0);
         assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
     }
 
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfNameIsNull() throws Exception {
-        new InternalTopicConfig(null, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
+        new InternalTopicConfig(null, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, Object>emptyMap());
     }
 
     @Test
     public void shouldConfigureRetentionMsWithAdditionalRetentionWhenCompactAndDelete() throws Exception {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact, InternalTopicConfig.CleanupPolicy.delete),
-                                                                        Collections.<String, String>emptyMap());
+                                                                        Collections.<String, Object>emptyMap());
         final int additionalRetentionMs = 20;
         topicConfig.setRetentionMs(10);
         final Properties properties = topicConfig.toProperties(additionalRetentionMs);
@@ -61,7 +61,7 @@ public class InternalTopicConfigTest {
     public void shouldNotConfigureRetentionMsWhenCompact() throws Exception {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                        Collections.<String, String>emptyMap());
+                                                                        Collections.<String, Object>emptyMap());
         topicConfig.setRetentionMs(10);
         final Properties properties = topicConfig.toProperties(0);
         assertNull(null, properties.getProperty(InternalTopicManager.RETENTION_MS));
@@ -71,7 +71,7 @@ public class InternalTopicConfigTest {
     public void shouldNotConfigureRetentionMsWhenDelete() throws Exception {
         final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
                                                                         Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                        Collections.<String, String>emptyMap());
+                                                                        Collections.<String, Object>emptyMap());
         topicConfig.setRetentionMs(10);
         final Properties properties = topicConfig.toProperties(0);
         assertNull(null, properties.getProperty(InternalTopicManager.RETENTION_MS));
@@ -82,24 +82,24 @@ public class InternalTopicConfigTest {
     public void shouldBeCompactedIfCleanupPolicyCompactOrCompactAndDelete() throws Exception {
         assertTrue(new InternalTopicConfig("name",
                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                           Collections.<String, String>emptyMap()).isCompacted());
+                                           Collections.<String, Object>emptyMap()).isCompacted());
         assertTrue(new InternalTopicConfig("name", Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
                                                                InternalTopicConfig.CleanupPolicy.delete),
-                                           Collections.<String, String>emptyMap()).isCompacted());
+                                           Collections.<String, Object>emptyMap()).isCompacted());
     }
 
     @Test
     public void shouldNotBeCompactedWhenCleanupPolicyIsDelete() throws Exception {
         assertFalse(new InternalTopicConfig("name",
                                             Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                            Collections.<String, String>emptyMap()).isCompacted());
+                                            Collections.<String, Object>emptyMap()).isCompacted());
     }
 
     @Test
     public void shouldUseCleanupPolicyFromConfigIfSupplied() throws Exception {
         final InternalTopicConfig config = new InternalTopicConfig("name",
                                                                    Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                   Collections.singletonMap("cleanup.policy", "compact"));
+                                                                   Collections.singletonMap("cleanup.policy", (Object) "compact"));
 
         final Properties properties = config.toProperties(0);
         assertEquals("compact", properties.getProperty("cleanup.policy"));
@@ -107,7 +107,7 @@ public class InternalTopicConfigTest {
 
     @Test
     public void shouldHavePropertiesSuppliedByUser() throws Exception {
-        final Map<String, String> configs = new HashMap<>();
+        final Map<String, Object> configs = new HashMap<>();
         configs.put("retention.ms", "1000");
         configs.put("retention.bytes", "10000");
 

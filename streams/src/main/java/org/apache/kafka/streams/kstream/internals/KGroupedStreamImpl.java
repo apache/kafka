@@ -57,7 +57,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final String storeName) {
-        return reduce(reducer, keyValueStore(keySerde, valSerde, storeName));
+        return reduce(reducer, keyValueStore(keySerde, valSerde, storeName, topology.getTopicLogConfig()));
     }
 
     @Override
@@ -77,7 +77,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows,
                                                             final String storeName) {
-        return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, storeName));
+        return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, storeName, topology.getTopicLogConfig()));
     }
 
     @SuppressWarnings("unchecked")
@@ -100,7 +100,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                       final Aggregator<K, V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String storeName) {
-        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
+        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName, topology.getTopicLogConfig()));
     }
 
     @Override
@@ -123,7 +123,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
-        return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, storeName));
+        return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, storeName, topology.getTopicLogConfig()));
     }
 
     @SuppressWarnings("unchecked")
@@ -145,7 +145,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @Override
     public KTable<K, Long> count(final String storeName) {
-        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
+        return count(keyValueStore(keySerde, Serdes.Long(), storeName, topology.getTopicLogConfig()));
     }
 
     @Override
@@ -166,7 +166,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                               final String storeName) {
-        return count(windows, windowedStore(keySerde, Serdes.Long(), windows, storeName));
+        return count(windows, windowedStore(keySerde, Serdes.Long(), windows, storeName, topology.getTopicLogConfig()));
     }
 
     @Override

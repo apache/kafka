@@ -29,12 +29,12 @@ public class InternalTopicConfig {
     public enum CleanupPolicy { compact, delete }
 
     private final String name;
-    private final Map<String, String> logConfig;
+    private final Map<String, Object> logConfig;
     private final Set<CleanupPolicy> cleanupPolicies;
 
     private Long retentionMs;
 
-    public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, String> logConfig) {
+    public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, Object> logConfig) {
         Objects.requireNonNull(name, "name can't be null");
         if (defaultCleanupPolicies.isEmpty()) {
             throw new IllegalArgumentException("Must provide at least one cleanup policy");
@@ -62,7 +62,7 @@ public class InternalTopicConfig {
      */
     public Properties toProperties(final long additionalRetentionMs) {
         final Properties result = new Properties();
-        for (Map.Entry<String, String> configEntry : logConfig.entrySet()) {
+        for (Map.Entry<String, Object> configEntry : logConfig.entrySet()) {
             result.put(configEntry.getKey(), configEntry.getValue());
         }
         if (retentionMs != null && isCompactDelete()) {

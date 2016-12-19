@@ -62,7 +62,7 @@ public class StoresTest {
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
                 .persistent()
-                .enableLogging(Collections.singletonMap("retention.ms", "1000"))
+                .enableLogging(Collections.singletonMap("retention.ms", (Object) "1000"))
                 .build();
 
         final Map<String, String> config = supplier.logConfig();
