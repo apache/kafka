@@ -45,8 +45,8 @@ public class ControlledShutdownRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
-                throw new IllegalArgumentException(String.format("Version 0 is not supported. It is only supported by " +
-                        "the Scala request class for controlled shutdown"));
+                throw new IllegalArgumentException("Version 0 is not supported. It is only supported by " +
+                        "the Scala request class for controlled shutdown");
             case 1:
                 return new ControlledShutdownResponse(Errors.forException(e).code(), Collections.<TopicPartition>emptySet());
             default:

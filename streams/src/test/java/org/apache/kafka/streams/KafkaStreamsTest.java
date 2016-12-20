@@ -271,7 +271,7 @@ public class KafkaStreamsTest {
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-            Long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
+            long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
             this.numChanges++;
             this.oldState = oldState;
             this.newState = newState;

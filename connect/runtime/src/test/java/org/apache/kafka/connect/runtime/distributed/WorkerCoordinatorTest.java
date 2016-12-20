@@ -58,11 +58,13 @@ public class WorkerCoordinatorTest {
     private static final String LEADER_URL = "leaderUrl:8083";
     private static final String MEMBER_URL = "memberUrl:8083";
 
-    private String connectorId = "connector";
+    private String connectorId1 = "connector1";
     private String connectorId2 = "connector2";
-    private ConnectorTaskId taskId0 = new ConnectorTaskId(connectorId, 0);
-    private ConnectorTaskId taskId1 = new ConnectorTaskId(connectorId, 1);
-    private ConnectorTaskId taskId2 = new ConnectorTaskId(connectorId2, 0);
+    private String connectorId3 = "connector3";
+    private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
+    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
+    private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
+    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     private String groupId = "test-group";
     private int sessionTimeoutMs = 10;
@@ -82,6 +84,7 @@ public class WorkerCoordinatorTest {
 
     private ClusterConfigState configState1;
     private ClusterConfigState configState2;
+    private ClusterConfigState configStateSingleTaskConnectors;
 
     @Before
     public void setup() {
@@ -110,30 +113,58 @@ public class WorkerCoordinatorTest {
                 rebalanceListener);
 
         configState1 = new ClusterConfigState(
-                1L, Collections.singletonMap(connectorId, 1),
-                Collections.singletonMap(connectorId, (Map<String, String>) new HashMap<String, String>()),
-                Collections.singletonMap(connectorId, TargetState.STARTED),
-                Collections.singletonMap(taskId0, (Map<String, String>) new HashMap<String, String>()),
+                1L,
+                Collections.singletonMap(connectorId1, 1),
+                Collections.singletonMap(connectorId1, (Map<String, String>) new HashMap<String, String>()),
+                Collections.singletonMap(connectorId1, TargetState.STARTED),
+                Collections.singletonMap(taskId1x0, (Map<String, String>) new HashMap<String, String>()),
                 Collections.<String>emptySet()
         );
+
         Map<String, Integer> configState2ConnectorTaskCounts = new HashMap<>();
-        configState2ConnectorTaskCounts.put(connectorId, 2);
+        configState2ConnectorTaskCounts.put(connectorId1, 2);
         configState2ConnectorTaskCounts.put(connectorId2, 1);
         Map<String, Map<String, String>> configState2ConnectorConfigs = new HashMap<>();
-        configState2ConnectorConfigs.put(connectorId, new HashMap<String, String>());
+        configState2ConnectorConfigs.put(connectorId1, new HashMap<String, String>());
         configState2ConnectorConfigs.put(connectorId2, new HashMap<String, String>());
-        Map<String, TargetState> targetStates = new HashMap<>();
-        targetStates.put(connectorId, TargetState.STARTED);
-        targetStates.put(connectorId2, TargetState.STARTED);
+        Map<String, TargetState> configState2TargetStates = new HashMap<>();
+        configState2TargetStates.put(connectorId1, TargetState.STARTED);
+        configState2TargetStates.put(connectorId2, TargetState.STARTED);
         Map<ConnectorTaskId, Map<String, String>> configState2TaskConfigs = new HashMap<>();
-        configState2TaskConfigs.put(taskId0, new HashMap<String, String>());
-        configState2TaskConfigs.put(taskId1, new HashMap<String, String>());
-        configState2TaskConfigs.put(taskId2, new HashMap<String, String>());
+        configState2TaskConfigs.put(taskId1x0, new HashMap<String, String>());
+        configState2TaskConfigs.put(taskId1x1, new HashMap<String, String>());
+        configState2TaskConfigs.put(taskId2x0, new HashMap<String, String>());
         configState2 = new ClusterConfigState(
-                2L, configState2ConnectorTaskCounts,
+                2L,
+                configState2ConnectorTaskCounts,
                 configState2ConnectorConfigs,
-                targetStates,
+                configState2TargetStates,
                 configState2TaskConfigs,
+                Collections.<String>emptySet()
+        );
+
+        Map<String, Integer> configStateSingleTaskConnectorsConnectorTaskCounts = new HashMap<>();
+        configStateSingleTaskConnectorsConnectorTaskCounts.put(connectorId1, 1);
+        configStateSingleTaskConnectorsConnectorTaskCounts.put(connectorId2, 1);
+        configStateSingleTaskConnectorsConnectorTaskCounts.put(connectorId3, 1);
+        Map<String, Map<String, String>> configStateSingleTaskConnectorsConnectorConfigs = new HashMap<>();
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId1, new HashMap<String, String>());
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId2, new HashMap<String, String>());
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId3, new HashMap<String, String>());
+        Map<String, TargetState> configStateSingleTaskConnectorsTargetStates = new HashMap<>();
+        configStateSingleTaskConnectorsTargetStates.put(connectorId1, TargetState.STARTED);
+        configStateSingleTaskConnectorsTargetStates.put(connectorId2, TargetState.STARTED);
+        configStateSingleTaskConnectorsTargetStates.put(connectorId3, TargetState.STARTED);
+        Map<ConnectorTaskId, Map<String, String>> configStateSingleTaskConnectorsTaskConfigs = new HashMap<>();
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<String, String>());
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<String, String>());
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<String, String>());
+        configStateSingleTaskConnectors = new ClusterConfigState(
+                2L,
+                configStateSingleTaskConnectorsConnectorTaskCounts,
+                configStateSingleTaskConnectorsConnectorConfigs,
+                configStateSingleTaskConnectorsTargetStates,
+                configStateSingleTaskConnectorsTaskConfigs,
                 Collections.<String>emptySet()
         );
     }
@@ -187,7 +218,7 @@ public class WorkerCoordinatorTest {
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId);
             }
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId),
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE.code()));
         coordinator.ensureActiveGroup();
 
@@ -197,7 +228,7 @@ public class WorkerCoordinatorTest {
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals("leader", rebalanceListener.assignment.leader());
-        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
@@ -225,7 +256,7 @@ public class WorkerCoordinatorTest {
                         sync.groupAssignment().isEmpty();
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
-                Collections.singletonList(taskId0), Errors.NONE.code()));
+                Collections.singletonList(taskId1x0), Errors.NONE.code()));
         coordinator.ensureActiveGroup();
 
         assertFalse(coordinator.needRejoin());
@@ -234,7 +265,7 @@ public class WorkerCoordinatorTest {
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
     }
@@ -270,7 +301,7 @@ public class WorkerCoordinatorTest {
                 Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), Errors.NONE.code()));
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE.code()));
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L,
-                Collections.<String>emptyList(), Collections.singletonList(taskId0), Errors.NONE.code()));
+                Collections.<String>emptyList(), Collections.singletonList(taskId1x0), Errors.NONE.code()));
         coordinator.ensureActiveGroup();
 
         PowerMock.verifyAll();
@@ -289,7 +320,7 @@ public class WorkerCoordinatorTest {
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
-                Collections.singletonList(taskId0), Errors.NONE.code()));
+                Collections.singletonList(taskId1x0), Errors.NONE.code()));
         coordinator.ensureActiveGroup();
 
         assertEquals(0, rebalanceListener.revokedCount);
@@ -297,22 +328,22 @@ public class WorkerCoordinatorTest {
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         // and join the group again
         coordinator.requestRejoin();
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId),
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE.code()));
         coordinator.ensureActiveGroup();
 
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(Collections.emptyList(), rebalanceListener.revokedConnectors);
-        assertEquals(Collections.singletonList(taskId0), rebalanceListener.revokedTasks);
+        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.revokedTasks);
         assertEquals(2, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
-        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
@@ -341,7 +372,7 @@ public class WorkerCoordinatorTest {
         assertEquals(false, leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId), leaderAssignment.connectors());
+        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
         assertEquals(Collections.emptyList(), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
@@ -349,7 +380,7 @@ public class WorkerCoordinatorTest {
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.emptyList(), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId0), memberAssignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
 
         PowerMock.verifyAll();
     }
@@ -377,15 +408,52 @@ public class WorkerCoordinatorTest {
         assertEquals(false, leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId), leaderAssignment.connectors());
-        assertEquals(Arrays.asList(taskId1, taskId2), leaderAssignment.tasks());
+        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
+        assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertEquals(false, memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId0), memberAssignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x1), memberAssignment.tasks());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testLeaderPerformAssignmentSingleTaskConnectors() throws Exception {
+        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
+        // output. So we test it directly here.
+
+        EasyMock.expect(configStorage.snapshot()).andReturn(configStateSingleTaskConnectors);
+
+        PowerMock.replayAll();
+
+        // Prime the current configuration state
+        coordinator.metadata();
+
+        Map<String, ByteBuffer> configs = new HashMap<>();
+        // Mark everyone as in sync with configState1
+        configs.put("leader", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)));
+        configs.put("member", ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)));
+        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+
+        // Round robin assignment when there are the same number of connectors and tasks should result in each being
+        // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
+        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
+        assertEquals(false, leaderAssignment.failed());
+        assertEquals("leader", leaderAssignment.leader());
+        assertEquals(1, leaderAssignment.offset());
+        assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
+        assertEquals(Arrays.asList(taskId2x0), leaderAssignment.tasks());
+
+        ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
+        assertEquals(false, memberAssignment.failed());
+        assertEquals("leader", memberAssignment.leader());
+        assertEquals(1, memberAssignment.offset());
+        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
+        assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
 
         PowerMock.verifyAll();
     }
