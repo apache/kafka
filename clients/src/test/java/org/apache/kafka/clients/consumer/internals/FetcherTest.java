@@ -293,9 +293,9 @@ public class FetcherTest {
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(15L, 0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(20L, 0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(30L, 0L, "key".getBytes(), "value-3".getBytes());
+        builder.appendWithOffset(15L, 0L, "key".getBytes(), "value-1".getBytes());
+        builder.appendWithOffset(20L, 0L, "key".getBytes(), "value-2".getBytes());
+        builder.appendWithOffset(30L, 0L, "key".getBytes(), "value-3".getBytes());
         MemoryRecords records = builder.build();
 
         List<ConsumerRecord<byte[], byte[]>> consumerRecords;
@@ -618,7 +618,7 @@ public class FetcherTest {
             if (i > 1) {
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
                 for (int v = 0; v < 3; v++) {
-                    builder.append((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+                    builder.appendWithOffset((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
                 }
                 this.records = builder.build();
             }
