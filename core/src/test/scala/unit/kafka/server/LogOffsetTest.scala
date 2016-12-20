@@ -115,9 +115,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   @Test
   def testEmptyLogsGetOffsets() {
     val topicPartition = "kafka-" + random.nextInt(10)
-    val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
+    val topicPartitionPath = TestUtils.tempDir().getAbsolutePath + "/" + topicPartition
     topicLogDir = new File(topicPartitionPath)
-    topicLogDir.mkdir
+    topicLogDir.mkdir()
 
     val topic = topicPartition.split("-").head
 
@@ -237,7 +237,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
     props.put("port", TestUtils.RandomPort.toString())
-    props.put("log.dir", getLogDir.getAbsolutePath)
+    props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")
     props.put("num.partitions", "20")
@@ -247,7 +247,5 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     props.put("zookeeper.connect", zkConnect.toString)
     props
   }
-
-  private def getLogDir(): File = TestUtils.tempDir()
 
 }
