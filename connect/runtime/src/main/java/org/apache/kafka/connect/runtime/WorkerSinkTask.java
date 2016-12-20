@@ -412,6 +412,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private void pauseAll() {
         consumer.pause(consumer.assignment());
+        context.requestCommit();
         onPause();
     }
 
