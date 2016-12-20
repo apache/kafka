@@ -1153,7 +1153,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 
-    if (!controller.isActive()) {
+    if (!controller.isActive) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
         (topic, Errors.NOT_CONTROLLER)
       }
@@ -1203,7 +1203,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 
-    if (!controller.isActive()) {
+    if (!controller.isActive) {
       val results = deleteTopicRequest.topics.asScala.map { topic =>
         (topic, Errors.NOT_CONTROLLER)
       }.toMap
