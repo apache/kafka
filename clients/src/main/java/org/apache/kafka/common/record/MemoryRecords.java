@@ -397,7 +397,7 @@ public class MemoryRecords extends AbstractRecords {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType,
                 firstOffset, logAppendTime);
         for (LogEntry entry : entries)
-            builder.append(entry);
+            builder.appendWithOffset(entry.offset(), entry.record());
 
         return builder;
     }

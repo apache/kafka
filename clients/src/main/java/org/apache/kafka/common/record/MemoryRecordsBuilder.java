@@ -219,7 +219,7 @@ public class MemoryRecordsBuilder {
      */
     public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
         try {
-            if (lastOffset > 0 && offset <= lastOffset)
+            if (lastOffset >= 0 && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
             int size = Record.recordSize(magic, key, value);
@@ -266,7 +266,7 @@ public class MemoryRecordsBuilder {
             return;
         }
 
-        if (lastOffset > 0 && offset <= lastOffset)
+        if (lastOffset >= 0 && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
         try {
@@ -300,15 +300,6 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append the given log entry. The entry's record must have a magic which matches the magic use to
-     * construct this builder and the offset must be greater than the last appended entry.
-     * @param entry The entry to append
-     */
-    public void append(LogEntry entry) {
-        appendWithOffset(entry.offset(), entry.record());
-    }
-
-    /**
      * Add a record with a given offset. The record must have a magic which matches the magic use to
      * construct this builder and the offset must be greater than the last appended entry.
      * @param offset The offset of the record
@@ -317,7 +308,7 @@ public class MemoryRecordsBuilder {
     public void appendWithOffset(long offset, Record record) {
         if (record.magic() != magic)
             throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
-        if (lastOffset > 0 && offset <= lastOffset)
+        if (lastOffset >= 0 && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
         appendUnchecked(offset, record);
     }

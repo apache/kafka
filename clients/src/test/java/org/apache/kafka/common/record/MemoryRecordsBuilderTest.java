@@ -203,6 +203,33 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendAtInvalidOffset() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        long logAppendTime = System.currentTimeMillis();
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
+
+        builder.appendWithOffset(0L, System.currentTimeMillis(), "a".getBytes(), null);
+
+        // offsets must increase monotonically
+        builder.appendWithOffset(0L, System.currentTimeMillis(), "b".getBytes(), null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendWithInvalidMagic() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        long logAppendTime = System.currentTimeMillis();
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
+
+        builder.append(Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), null));
+    }
+
     @Test
     public void convertUsingCreateTime() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
