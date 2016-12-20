@@ -28,6 +28,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -162,7 +163,7 @@ public class VerifiableProducer {
      * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
-    public static Properties loadProps(String filename) throws IOException {
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
         Properties props = new Properties();
         try (InputStream propStream = new FileInputStream(filename)) {
             props.load(propStream);
