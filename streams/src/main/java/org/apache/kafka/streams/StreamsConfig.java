@@ -244,8 +244,8 @@ public class StreamsConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
                                 .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
-                                        Sensor.RecordLevel.SENSOR_INFO_STR,
-                                        in(Sensor.RecordLevel.SENSOR_INFO_STR, Sensor.RecordLevel.SENSOR_DEBUG_STR),
+                                        Sensor.RecordLevel.INFO.toString(),
+                                        in(Sensor.RecordLevel.INFO.toString(), Sensor.RecordLevel.DEBUG.toString()),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
                                 .define(APPLICATION_SERVER_CONFIG,

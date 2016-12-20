@@ -42,27 +42,39 @@ public final class Sensor {
     private final long inactiveSensorExpirationTimeMs;
 
     public enum RecordLevel {
-        SENSOR_INFO, SENSOR_DEBUG;
-        public static final String SENSOR_INFO_STR = "INFO";
-        public static final String SENSOR_DEBUG_STR = "DEBUG";
+        INFO("INFO"), DEBUG("DEBUG");
+        private String value;
 
-        public static RecordLevel fromString(String recordLevel) {
-            if (recordLevel.equals(SENSOR_INFO_STR)) {
-                return SENSOR_INFO;
-            } else if (recordLevel.equals(SENSOR_DEBUG_STR)) {
-                return SENSOR_DEBUG;
-            } else throw new IllegalArgumentException("record Level " + recordLevel + " type not defined");
+        RecordLevel(String value) {
+            this.value = value;
         }
 
-        public static String toString(RecordLevel recordLevel) {
-            if (recordLevel == SENSOR_DEBUG) {
-                return SENSOR_DEBUG_STR;
-            } else if (recordLevel == SENSOR_INFO) {
-                return SENSOR_INFO_STR;
+        public String getValue() {
+            return value;
+        }
+
+        @Override
+        public String toString() {
+            return this.getValue();
+        }
+
+        public static RecordLevel fromString(String value) {
+            for (RecordLevel v : values()) {
+                if (v.getValue().equalsIgnoreCase(value)) {
+                    return v;
+                }
             }
-
-            return "ILLEGAL_LEVEL";
+            throw new IllegalArgumentException("record Level " + value + " type not defined");
         }
+
+        public boolean shouldRecord(final RecordLevel configLevel) {
+            if (configLevel.equals(DEBUG)) {
+                return true;
+            } else {
+                return configLevel.equals(this);
+            }
+        }
+
     }
 
     private final RecordLevel recordLevel;
@@ -102,7 +114,7 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        if (maybeRecord()) {
+        if (shouldRecord()) {
             record(1.0);
         }
     }
@@ -110,11 +122,8 @@ public final class Sensor {
     /**
      * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
      */
-    public boolean maybeRecord() {
-        if (this.recordLevel.ordinal() <= config.recordLevel().ordinal()) {
-            return true;
-        }
-        return false;
+    public boolean shouldRecord() {
+        return this.recordLevel.shouldRecord(config.recordLevel());
     }
     /**
      * Record a value with this sensor
@@ -123,7 +132,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        if (maybeRecord()) {
+        if (shouldRecord()) {
             record(value, time.milliseconds());
         }
     }
@@ -137,7 +146,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        if (maybeRecord()) {
+        if (shouldRecord()) {
             this.lastRecordTime = timeMs;
             synchronized (this) {
                 // increment all the stats

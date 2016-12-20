@@ -39,7 +39,7 @@ public class MetricConfig {
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();
-        this.recordLevel = Sensor.RecordLevel.SENSOR_INFO;
+        this.recordLevel = Sensor.RecordLevel.INFO;
     }
 
     public Quota quota() {

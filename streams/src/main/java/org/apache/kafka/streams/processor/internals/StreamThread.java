@@ -1063,30 +1063,30 @@ public class StreamThread extends Thread {
 
         public StreamsMetricsThreadImpl(Metrics metrics, String groupName, String prefix, Map<String, String> tags) {
             super(metrics, groupName, tags);
-            this.commitTimeSensor = metrics.sensor(prefix + ".commit-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.commitTimeSensor = metrics.sensor(prefix + ".commit-time", Sensor.RecordLevel.INFO);
             this.commitTimeSensor.add(metrics.metricName("commit-time-avg", this.groupName, "The average commit time in ms", this.tags), new Avg());
             this.commitTimeSensor.add(metrics.metricName("commit-time-max", this.groupName, "The maximum commit time in ms", this.tags), new Max());
             this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", this.groupName, "The average per-second number of commit calls", this.tags), new Rate(new Count()));
 
-            this.pollTimeSensor = metrics.sensor(prefix + ".poll-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.pollTimeSensor = metrics.sensor(prefix + ".poll-time", Sensor.RecordLevel.INFO);
             this.pollTimeSensor.add(metrics.metricName("poll-time-avg", this.groupName, "The average poll time in ms", this.tags), new Avg());
             this.pollTimeSensor.add(metrics.metricName("poll-time-max", this.groupName, "The maximum poll time in ms", this.tags), new Max());
             this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", this.groupName, "The average per-second number of record-poll calls", this.tags), new Rate(new Count()));
 
-            this.processTimeSensor = metrics.sensor(prefix + ".process-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.processTimeSensor = metrics.sensor(prefix + ".process-time", Sensor.RecordLevel.INFO);
             this.processTimeSensor.add(metrics.metricName("process-time-avg", this.groupName, "The average process time in ms", this.tags), new Avg());
             this.processTimeSensor.add(metrics.metricName("process-time-max", this.groupName, "The maximum process time in ms", this.tags), new Max());
             this.processTimeSensor.add(metrics.metricName("process-calls-rate", this.groupName, "The average per-second number of process calls", this.tags), new Rate(new Count()));
 
-            this.punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-time", Sensor.RecordLevel.SENSOR_INFO);
+            this.punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-time", Sensor.RecordLevel.INFO);
             this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
             this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
             this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
 
-            this.taskCreationSensor = metrics.sensor(prefix + ".task-creation", Sensor.RecordLevel.SENSOR_INFO);
+            this.taskCreationSensor = metrics.sensor(prefix + ".task-creation", Sensor.RecordLevel.INFO);
             this.taskCreationSensor.add(metrics.metricName("task-creation-rate", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
 
-            this.taskDestructionSensor = metrics.sensor(prefix + ".task-destruction", Sensor.RecordLevel.SENSOR_INFO);
+            this.taskDestructionSensor = metrics.sensor(prefix + ".task-destruction", Sensor.RecordLevel.INFO);
             this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", this.groupName, "The average per-second number of destructed tasks", this.tags), new Rate(new Count()));
 
             this.skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");

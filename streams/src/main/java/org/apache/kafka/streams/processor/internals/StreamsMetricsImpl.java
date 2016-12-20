@@ -159,7 +159,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     @Override
     public void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
         long startNs = -1;
-        if (sensor.maybeRecord()) {
+        if (sensor.shouldRecord()) {
             startNs = time.nanoseconds();
         }
         action.run();

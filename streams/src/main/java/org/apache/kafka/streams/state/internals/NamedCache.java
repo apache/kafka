@@ -370,7 +370,7 @@ class NamedCache {
             this.metricTags.put(tagKey, tagValue);
 
 
-            hitRatioSensor = this.metrics.sensor(scope, entityName, opName, Sensor.RecordLevel.SENSOR_DEBUG);
+            hitRatioSensor = this.metrics.sensor(scope, entityName, opName, Sensor.RecordLevel.DEBUG);
 
             hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-avg", groupName,
                 "The current count of " + entityName + " " + opName + " operation.", metricTags), new Avg());
