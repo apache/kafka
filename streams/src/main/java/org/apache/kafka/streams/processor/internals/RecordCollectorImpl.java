@@ -82,17 +82,13 @@ public class RecordCollectorImpl implements RecordCollector {
                     public void onCompletion(RecordMetadata metadata, Exception exception) {
                         if (exception == null) {
                             if (sendException != null) {
-                                log.warn("{} not updating offset for topic {} partition {} due to previous exception",
-                                         logPrefix,
-                                         metadata.topic(),
-                                         metadata.partition());
                                 return;
                             }
                             TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
                             sendException = exception;
-                            log.error("{} Error sending record to topic {}", logPrefix, topic, exception);
+                            log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
                         }
                     }
                 });
