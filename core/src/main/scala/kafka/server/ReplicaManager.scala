@@ -510,12 +510,10 @@ class ReplicaManager(val config: KafkaConfig,
                        quota: ReplicaQuota): Seq[(TopicPartition, LogReadResult)] = {
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
-      val topic = tp.topic
-      val partition = tp.partition
       val offset = fetchInfo.offset
       val partitionFetchSize = fetchInfo.maxBytes
 
-      BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
+      BrokerTopicStats.getBrokerTopicStats(tp.topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
 
       try {
@@ -576,7 +574,7 @@ class ReplicaManager(val config: KafkaConfig,
           LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY), -1L,
             partitionFetchSize, false, Some(e))
         case e: Throwable =>
-          BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
+          BrokerTopicStats.getBrokerTopicStats(tp.topic).failedFetchRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
           error(s"Error processing fetch operation on partition $tp, offset $offset", e)
           LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY), -1L,
