@@ -218,7 +218,7 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
         } finally {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap(), false);
         }
     }
 
@@ -266,7 +266,7 @@ public class ProcessorStateManagerTest {
             assertEquals(expectedKeys, persistentStore.keys);
 
         } finally {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap(), false);
         }
 
 
@@ -315,7 +315,7 @@ public class ProcessorStateManagerTest {
             assertEquals(expectedKeys, nonPersistentStore.keys);
 
         } finally {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap(), false);
         }
 
     }
@@ -383,7 +383,7 @@ public class ProcessorStateManagerTest {
             assertEquals(-1L, (long) changeLogOffsets.get(partition3));
 
         } finally {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap(), false);
         }
 
     }
@@ -406,7 +406,7 @@ public class ProcessorStateManagerTest {
             assertEquals(mockStateStore, stateMgr.getStore(nonPersistentStoreName));
 
         } finally {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap(), false);
         }
     }
 
@@ -449,7 +449,7 @@ public class ProcessorStateManagerTest {
         } finally {
             // close the state manager with the ack'ed offsets
             stateMgr.flush(new MockProcessorContext(StateSerdes.withBuiltinTypes("foo", String.class, String.class), new NoOpRecordCollector()));
-            stateMgr.close(ackedOffsets);
+            stateMgr.close(ackedOffsets, true);
         }
 
         // make sure all stores are closed, and the checkpoint file is written.
@@ -472,6 +472,33 @@ public class ProcessorStateManagerTest {
         ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
         stateMgr.register(mockStateStore, false, mockStateStore.stateRestoreCallback);
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
+    }
+
+    @Test
+    public void shouldNotWriteCheckpointsIfWriteCheckpointsIsFalse() throws Exception {
+        final TaskId taskId = new TaskId(0, 1);
+        final File checkpointFile = new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        // write an empty checkpoint file
+        final OffsetCheckpoint oldCheckpoint = new OffsetCheckpoint(checkpointFile);
+        oldCheckpoint.write(Collections.<TopicPartition, Long>emptyMap());
+
+        final MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
+
+        restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
+                new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
+        ));
+
+        // set up ack'ed offsets
+        final HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
+        ackedOffsets.put(new TopicPartition(persistentStoreTopicName, 1), 123L);
+
+        final MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+
+        restoreConsumer.reset();
+        stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+        stateMgr.close(ackedOffsets, false);
+        assertFalse(checkpointFile.exists());
     }
 
 }
