@@ -122,11 +122,16 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    private void doRun() {
+    private void doRun() throws InterruptedException {
         try {
             synchronized (this) {
                 if (stopping)
                     return;
+
+                if (targetState == TargetState.PAUSED) {
+                    onPause();
+                    if (!awaitUnpause()) return;
+                }
 
                 statusListener.onStartup(id);
             }
@@ -180,7 +185,7 @@ abstract class WorkerTask implements Runnable {
             onFailure(t);
 
             if (t instanceof Error)
-                throw t;
+                throw (Error) t;
         } finally {
             shutdownLatch.countDown();
         }
