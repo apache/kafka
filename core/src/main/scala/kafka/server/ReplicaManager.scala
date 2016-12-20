@@ -300,13 +300,8 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] =  {
-    val partitionOpt = getPartition(topic, partitionId)
-    partitionOpt match {
-      case None => None
-      case Some(partition) => partition.getReplica(replicaId)
-    }
-  }
+  def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] =
+    getPartition(topic, partitionId).flatMap(_.getReplica(replicaId))
 
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;

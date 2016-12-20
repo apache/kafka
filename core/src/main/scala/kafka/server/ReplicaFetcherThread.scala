@@ -115,9 +115,7 @@ class ReplicaFetcherThread(name: String,
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
     try {
-      val topic = topicPartition.topic
-      val partitionId = topicPartition.partition
-      val replica = replicaMgr.getReplica(topic, partitionId).get
+      val replica = replicaMgr.getReplica(topicPartition.topic, topicPartition.partition).get
       val records = partitionData.toRecords
 
       maybeWarnIfOversizedRecords(records, topicPartition)
@@ -137,9 +135,8 @@ class ReplicaFetcherThread(name: String,
       // these values will be computed upon making the leader
       replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
       if (logger.isTraceEnabled)
-        trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
-          .format(replica.brokerId, topic, partitionId, followerHighWatermark))
-      if (quota.isThrottled(new TopicPartition(topic, partitionId)))
+        trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
+      if (quota.isThrottled(topicPartition))
         quota.record(records.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
