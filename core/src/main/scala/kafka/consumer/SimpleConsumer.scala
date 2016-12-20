@@ -25,7 +25,7 @@ import kafka.api._
 import kafka.network._
 import kafka.utils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import org.apache.kafka.common.network.{NetworkReceive, Receive}
+import org.apache.kafka.common.network.{NetworkReceive}
 import org.apache.kafka.common.utils.Utils._
 
 /**

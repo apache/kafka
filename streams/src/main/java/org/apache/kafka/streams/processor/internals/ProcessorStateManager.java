@@ -171,7 +171,7 @@ public class ProcessorStateManager {
             try {
                 partitions = restoreConsumer.partitionsFor(topic);
             } catch (TimeoutException e) {
-                throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
+                throw new StreamsException(String.format("%s Could not fetch partition info for topic: %s before expiration of the configured request timeout", logPrefix, topic));
             }
             if (partitions == null) {
                 throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
@@ -209,7 +209,7 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException(String.format("%s Restore consumer should have not subscribed to any partitions beforehand", logPrefix));
+            throw new IllegalStateException(String.format("%s Restore consumer should have not subscribed to any partitions (%s) beforehand", logPrefix, restoreConsumer.subscription()));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -245,7 +245,8 @@ public class ProcessorStateManager {
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
                     // For a logging enabled changelog (no offset limit),
                     // the log end offset should not change while restoring since it is only written by this thread.
-                    throw new IllegalStateException(String.format("%s Log end offset should not change while restoring", logPrefix));
+                    throw new IllegalStateException(String.format("%s Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
+                            logPrefix, storePartition, endOffset, restoreConsumer.position(storePartition)));
                 }
             }
 
