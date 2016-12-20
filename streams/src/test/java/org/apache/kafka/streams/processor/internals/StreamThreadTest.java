@@ -55,8 +55,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
@@ -131,6 +133,8 @@ public class StreamThreadTest {
 
     private static class TestStreamTask extends StreamTask {
         public boolean committed = false;
+        private boolean closed;
+        private boolean closedStateManager;
 
         public TestStreamTask(TaskId id,
                               String applicationId,
@@ -159,6 +163,18 @@ public class StreamThreadTest {
         @Override
         protected void initializeOffsetLimits() {
             // do nothing
+        }
+
+        @Override
+        public void close() {
+            this.closed = true;
+            super.close();
+        }
+
+        @Override
+        void closeStateManager() {
+            super.closeStateManager();
+            this.closedStateManager = true;
         }
     }
 
@@ -759,9 +775,61 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t1));
-
     }
 
+    @Test
+    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("appId");
+        builder.stream(Pattern.compile("t.*")).to("out");
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final Map<Collection<TopicPartition>, TestStreamTask> createdTasks = new HashMap<>();
+
+        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                final ProcessorTopology topology = builder.build(id.topicGroupId);
+                final TestStreamTask task = new TestStreamTask(id, "appId", partitions, topology, consumer, producer, restoreConsumer, config, stateDirectory);
+                createdTasks.put(partitions, task);
+                return task;
+            }
+        };
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final TopicPartition t1 = new TopicPartition("t1", 0);
+        final Set<TopicPartition> task00Partitions = new HashSet<>();
+        task00Partitions.add(t1);
+        final TaskId taskId = new TaskId(0, 0);
+        activeTasks.put(taskId, task00Partitions);
+
+        thread.partitionAssignor(new StreamPartitionAssignor() {
+            @Override
+            Map<TaskId, Set<TopicPartition>> activeTasks() {
+                return activeTasks;
+            }
+        });
+
+        // should create task for id 0_0 with a single partition
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
+
+        final TestStreamTask firstTask = createdTasks.get(task00Partitions);
+        assertThat(firstTask.id(), is(taskId));
+
+        // update assignment for the task 0_0 so it now has 2 partitions
+        task00Partitions.add(new TopicPartition("t2", 0));
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
+
+        // should close the first task as the assignment has changed
+        assertTrue("task should have been closed as assignment has changed", firstTask.closed);
+        assertTrue("tasks state manager should have been closed as assignment has changed", firstTask.closedStateManager);
+        // should have created a new task for 00
+        assertThat(createdTasks.get(task00Partitions).id(), is(taskId));
+    }
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {
 
