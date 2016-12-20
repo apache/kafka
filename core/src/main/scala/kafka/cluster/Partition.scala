@@ -186,8 +186,12 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.controllerEpoch
-      // add replicas that are new and reset lastCatchUpTime of all replicas to exclude offline replicas from ISR
-      allReplicas.foreach(replica => getOrCreateReplica(replica).resetLastCatchUpTime())
+      // add replicas that are new and reset lastCatchUpTime of non-isr replicas
+      allReplicas.foreach(replica => {
+        val r = getOrCreateReplica(replica)
+        if (!partitionStateInfo.isr.contains(replica))
+          r.resetLastCatchUpTime()
+      })
       val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica)
@@ -273,8 +277,12 @@ class Partition(val topic: String,
   }
 
   /**
-   * Check and maybe expand the ISR of the partition. A replica is in ISR of the partition if and only if
-   * replica's LEO >= HW and replica's lag <= replicaLagTimeMaxMs.
+   * Check and maybe expand the ISR of the partition.
+   * A replica will be added to ISR if its LEO >= current hw of the partition.
+   *
+   * Technically, a replica shouldn't be in ISR if it hasn't caught up for longer than replicaLagTimeMaxMs,
+   * even if its log end offset is >= HW. However, to be consistent with how the follower determines
+   * whether a replica is in-sync, we only check HW.
    *
    * This function can be triggered when a replica's LEO has incremented
    */
@@ -284,12 +292,10 @@ class Partition(val topic: String,
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
+          val leaderHW = leaderReplica.highWatermark
           if(!inSyncReplicas.contains(replica) &&
              assignedReplicas.map(_.brokerId).contains(replicaId) &&
-             // This approximates the requirement logReadResult.fetchTimeMs - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs.
-             // We don't directly specify the above requirement in order to make maybeExpandIsr() consistent with ReplicaFetcherThread.shouldFollowerThrottle()
-             // A offset replica whose lag > ReplicaFetcherThread may still exceed hw because maybeShrinkIsr() is called periodically
-             logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.hw) {
+             replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
             val newInSyncReplicas = inSyncReplicas + replica
             info("Expanding ISR for partition [%s,%d] from %s to %s"
                          .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","),
@@ -365,9 +371,12 @@ class Partition(val topic: String,
    * 1. Partition ISR changed
    * 2. Any replica's LEO changed
    *
-   * We only increase HW if HW is smaller than LEO of all replicas whose lag <= replicaLagTimeMaxMs.
-   * This means that if a replica does not lag much behind leader and the replica's LEO is smaller than HW, HW will
-   * wait for this replica to catch up so that this replica can be added to ISR set.
+   * The HW is determined by the smallest log end offset among all replicas that are in sync or are considered caught-up.
+   * This way, if a replica is considered caught-up, but its log end offset is smaller than HW, we will wait for this
+   * replica to catch up to the HW before advancing the HW. This helps the situation when the ISR only includes the
+   * leader replica and a follower tries to catch up. If we don't wait for the follower when advancing the HW, the
+   * follower's log end offset may keep falling behind the HW (determined by the leader's log end offset) and therefore
+   * will never be added to ISR.
    *
    * Returns true if the HW was incremented, and false otherwise.
    * Note There is no need to acquire the leaderIsrUpdate lock here

@@ -38,11 +38,11 @@ class Replica(val brokerId: Int,
 
   // The log end offset value at the time the leader receives last FetchRequest from this follower.
   // This is used to determine the last catch-up time of the follower
-  @volatile var lastFetchLeaderLogEndOffset: Long = 0L
+  @volatile private var lastFetchLeaderLogEndOffset: Long = 0L
 
   // The time when the leader receives last FetchRequest from this follower
   // This is used to determine the last catch-up time of the follower
-  @volatile var lastFetchTimeMs: Long = 0L
+  @volatile private var lastFetchTimeMs: Long = 0L
 
   val topic = partition.topic
   val partitionId = partition.partitionId
@@ -59,7 +59,7 @@ class Replica(val brokerId: Int,
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request was received,
    * set the lastCaughtUpTimeMsUnderlying to the time when the current fetch request was received.
    *
-   * Else if the FetchRequest reads up to the log end offset of the the leader when the previous fetch request was received,
+   * Else if the FetchRequest reads up to the log end offset of the leader when the previous fetch request was received,
    * set the lastCaughtUpTimeMsUnderlying to the time when the previous fetch request was received.
    *
    * This is needed to enforce the semantics of ISR, i.e. a replica is in ISR if and only if it lags behind leader's LEO
