@@ -59,7 +59,7 @@ public class NetworkReceive implements Receive {
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
-                throw new EOFException();
+                return bytesRead;
             read += bytesRead;
             if (!size.hasRemaining()) {
                 size.rewind();
