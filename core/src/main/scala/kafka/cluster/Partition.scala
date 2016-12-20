@@ -186,12 +186,8 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.controllerEpoch
-      // add replicas that are new and reset lastCaughtUpTime of non-isr replicas
-      allReplicas.foreach(replica => {
-        val r = getOrCreateReplica(replica)
-        if (!partitionStateInfo.isr.contains(replica))
-          r.resetLastCaughtUpTime()
-      })
+      // add replicas that are new
+      allReplicas.foreach(replica => getOrCreateReplica(replica))
       val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica)
@@ -206,6 +202,13 @@ class Partition(val topic: String,
           true
         }
       val leaderReplica = getReplica().get
+      val curLeaderLogEndOffset = leaderReplica.logEndOffset.messageOffset
+      val curTimeMs = time.milliseconds
+      // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
+      (assignedReplicas() - leaderReplica).foreach(replica => {
+        val lastCaughtUpTimeMs = if (inSyncReplicas.contains(replica)) curTimeMs else 0L
+        replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
+      })
       // we may need to increment high watermark since ISR could be down to 1
       if (isNewLeader) {
         // construct the high watermark metadata for the new leader replica

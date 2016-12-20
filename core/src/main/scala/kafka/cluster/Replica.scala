@@ -77,10 +77,10 @@ class Replica(val brokerId: Int,
     lastFetchTimeMs = logReadResult.fetchTimeMs
   }
 
-  def resetLastCaughtUpTime() {
-    lastFetchLeaderLogEndOffset = 0L
-    lastFetchTimeMs = 0L
-    lastCaughtUpTimeMsUnderlying.set(0L)
+  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long) {
+    lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
+    lastFetchTimeMs = curTimeMs
+    lastCaughtUpTimeMsUnderlying.set(lastCaughtUpTimeMs)
   }
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
