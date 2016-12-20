@@ -42,7 +42,7 @@ public class SensorTest {
         MetricConfig infoConfig = new MetricConfig().recordLevel(Sensor.RecordLevel.INFO);
 
         Sensor infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
-        0, Sensor.RecordLevel.INFO);
+            0, Sensor.RecordLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
         infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
             0, Sensor.RecordLevel.DEBUG);
