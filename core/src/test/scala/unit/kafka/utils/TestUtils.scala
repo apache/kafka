@@ -761,16 +761,7 @@ object TestUtils extends Logging {
   }
 
   def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
-    val partitionOpt = server.replicaManager.getPartition(topic, partitionId)
-    partitionOpt match {
-      case None => false
-      case Some(partition) =>
-        val replicaOpt = partition.leaderReplicaIfLocal
-        replicaOpt match {
-          case None => false
-          case Some(_) => true
-        }
-    }
+    server.replicaManager.getPartition(new TopicPartition(topic, partitionId)).exists(_.leaderReplicaIfLocal.isDefined)
   }
 
   def createRequestByteBuffer(request: RequestOrResponse): ByteBuffer = {
@@ -814,12 +805,11 @@ object TestUtils extends Logging {
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
                              timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    val tp = new TopicPartition(topic, partition)
     TestUtils.waitUntilTrue(() =>
       servers.exists { server =>
-        server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
-      },
-      "Partition [%s,%d] leaders not made yet after %d ms".format(topic, partition, timeout),
-      waitTime = timeout
+        server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
+      }, s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout
     )
   }
 
@@ -1024,7 +1014,7 @@ object TestUtils extends Logging {
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>
-      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp.topic, tp.partition).isEmpty)),
+      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
     assertTrue("Replica logs not deleted after delete topic is complete",

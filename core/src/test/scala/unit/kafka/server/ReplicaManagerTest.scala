@@ -65,7 +65,7 @@ class ReplicaManagerTest {
     val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
-      val partition = rm.getOrCreatePartition(topic, 1)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 1))
       partition.getOrCreateReplica(1)
       rm.checkpointHighWatermarks()
     } finally {
@@ -83,7 +83,7 @@ class ReplicaManagerTest {
     val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
-      val partition = rm.getOrCreatePartition(topic, 1)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 1))
       partition.getOrCreateReplica(1)
       rm.checkpointHighWatermarks()
     } finally {
@@ -146,14 +146,14 @@ class ReplicaManagerTest {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1).asJava
 
-      val partition = rm.getOrCreatePartition(topic, 0)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
-      rm.getLeaderReplicaIfLocal(topic, 0)
+      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       // Append a message.
       rm.appendRecords(
@@ -204,7 +204,7 @@ class ReplicaManagerTest {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
       
-      val partition = rm.getOrCreatePartition(topic, 0)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
       
       // Make this replica the leader.
@@ -212,7 +212,7 @@ class ReplicaManagerTest {
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
-      rm.getLeaderReplicaIfLocal(topic, 0)
+      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {}
       

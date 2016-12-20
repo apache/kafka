@@ -101,7 +101,7 @@ class SimpleFetchTest {
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
 
     // add the partition with two replicas, both in ISR
-    val partition = replicaManager.getOrCreatePartition(topic, partitionId)
+    val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))
 
     // create the leader replica with the local log
     val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))

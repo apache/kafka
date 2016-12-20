@@ -78,7 +78,7 @@ class DelayedFetch(delayMs: Long,
         val fetchOffset = fetchStatus.startOffsetMetadata
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            val replica = replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+            val replica = replicaManager.getLeaderReplicaIfLocal(topicPartition)
             val endOffset =
               if (fetchMetadata.fetchOnlyCommitted)
                 replica.highWatermark

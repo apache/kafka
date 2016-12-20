@@ -557,11 +557,11 @@ class GroupMetadataManager(val brokerId: Int,
       }
 
       val offsetsPartition = partitionFor(groupId)
+      val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
       getMagicAndTimestamp(offsetsPartition) match {
         case Some((magicValue, timestampType, timestamp)) =>
-          val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+          val partitionOpt = replicaManager.getPartition(appendPartition)
           partitionOpt.foreach { partition =>
-            val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
             val tombstones = expiredOffsets.map { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
@@ -603,7 +603,7 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
-    val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, partitionId)
+    val partitionOpt = replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, partitionId))
 
     val hw = partitionOpt.map { partition =>
       partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)

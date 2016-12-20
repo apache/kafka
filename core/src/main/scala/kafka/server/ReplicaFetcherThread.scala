@@ -115,7 +115,7 @@ class ReplicaFetcherThread(name: String,
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
     try {
-      val replica = replicaMgr.getReplica(topicPartition.topic, topicPartition.partition).get
+      val replica = replicaMgr.getReplica(topicPartition).get
       val records = partitionData.toRecords
 
       maybeWarnIfOversizedRecords(records, topicPartition)
@@ -158,7 +158,7 @@ class ReplicaFetcherThread(name: String,
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
-    val replica = replicaMgr.getReplica(topicPartition.topic, topicPartition.partition).get
+    val replica = replicaMgr.getReplica(topicPartition).get
 
     /**
      * Unclean leader election: A follower goes down, in the meanwhile the leader keeps appending messages. The follower comes back up

@@ -585,9 +585,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         // ensure leader exists
         val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-          replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+          replicaManager.getLeaderReplicaIfLocal(topicPartition)
         else
-          replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+          replicaManager.getReplicaOrException(topicPartition)
         val offsets = {
           val allOffsets = fetchOffsets(replicaManager.logManager,
             topicPartition,
@@ -647,9 +647,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           // ensure leader exists
           val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-            replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+            replicaManager.getLeaderReplicaIfLocal(topicPartition)
           else
-            replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+            replicaManager.getReplicaOrException(topicPartition)
 
           val found = {
             if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)

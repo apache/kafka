@@ -85,7 +85,7 @@ class DelayedProduce(delayMs: Long,
       trace(s"Checking produce satisfaction for ${topicPartition}, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicPartition.topic, topicPartition.partition) match {
+        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>

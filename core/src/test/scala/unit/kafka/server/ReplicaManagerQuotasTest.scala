@@ -177,7 +177,7 @@ class ReplicaManagerQuotasTest {
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
-      val partition = replicaManager.getOrCreatePartition(p.topic, p.partition)
+      val partition = replicaManager.getOrCreatePartition(p)
       val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
       leaderReplica.highWatermark = new LogOffsetMetadata(5)
       partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
