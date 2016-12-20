@@ -17,6 +17,7 @@
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -27,6 +28,7 @@ import os
 import re
 
 TOPIC = "topic-consumer-group-command"
+
 
 class ConsumerGroupCommandTest(Test):
     """
@@ -89,6 +91,7 @@ class ConsumerGroupCommandTest(Test):
 
         self.consumer.stop()
 
+    @cluster(num_nodes=3)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     def test_list_consumer_groups(self, security_protocol='PLAINTEXT'):
         """
@@ -97,6 +100,7 @@ class ConsumerGroupCommandTest(Test):
         """
         self.setup_and_verify(security_protocol)
 
+    @cluster(num_nodes=3)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     def test_describe_consumer_group(self, security_protocol='PLAINTEXT'):
         """

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import atexit
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -22,21 +21,23 @@ from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
 
+
 class SslStores(object):
-    def __init__(self):
-        self.ca_and_truststore_dir = mkdtemp(dir="/tmp")
-        self.ca_crt_path = os.path.join(self.ca_and_truststore_dir, "test.ca.crt")
-        self.ca_jks_path = os.path.join(self.ca_and_truststore_dir, "test.ca.jks")
+    def __init__(self, local_scratch_dir):
+        self.ca_crt_path = os.path.join(local_scratch_dir, "test.ca.crt")
+        self.ca_jks_path = os.path.join(local_scratch_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
 
-        self.truststore_path = os.path.join(self.ca_and_truststore_dir, "test.truststore.jks")
+        self.truststore_path = os.path.join(local_scratch_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
-        # Register rmtree to run on exit
-        atexit.register(rmtree, self.ca_and_truststore_dir)
+
+        for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
+            if os.path.exists(file):
+                os.remove(file)
 
     def generate_ca(self):
         """
@@ -69,7 +70,7 @@ class SslStores(object):
         self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
-        node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+        node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
         rmtree(ks_dir)
 
     def hostname(self, node):
@@ -79,9 +80,10 @@ class SslStores(object):
 
     def runcmd(self, cmd):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        proc.communicate()
+        stdout, stderr = proc.communicate()
+
         if proc.returncode != 0:
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
+            raise RuntimeError("Command '%s' returned non-zero exit status %d: %s" % (cmd, proc.returncode, stdout))
 
 
 class SecurityConfig(TemplateRenderer):
@@ -99,11 +101,10 @@ class SecurityConfig(TemplateRenderer):
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
 
-    ssl_stores = SslStores()
-    ssl_stores.generate_ca()
-    ssl_stores.generate_truststore()
+    # This is initialized only when the first instance of SecurityConfig is created
+    ssl_stores = None
 
-    def __init__(self, security_protocol=None, interbroker_security_protocol=None,
+    def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, template_props=""):
         """
@@ -113,6 +114,15 @@ class SecurityConfig(TemplateRenderer):
         template properties file is used. If no protocol is specified in the
         template properties either, PLAINTEXT is used as default.
         """
+
+        self.context = context
+        if not SecurityConfig.ssl_stores:
+            # This generates keystore/trustore files in a local scratch directory which gets
+            # automatically destroyed after the test is run
+            # Creating within the scratch directory allows us to run tests in parallel without fear of collision
+            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir)
+            SecurityConfig.ssl_stores.generate_ca()
+            SecurityConfig.ssl_stores.generate_truststore()
 
         if security_protocol is None:
             security_protocol = self.get_property('security.protocol', template_props)
@@ -140,13 +150,12 @@ class SecurityConfig(TemplateRenderer):
             'sasl.kerberos.service.name' : 'kafka'
         }
 
-
     def client_config(self, template_props=""):
-        return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
+        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-        node.account.scp_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
+        node.account.copy_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
         SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
 
     def setup_sasl(self, node):
@@ -162,8 +171,8 @@ class SecurityConfig(TemplateRenderer):
                                 enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
         node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
         if self.has_sasl_kerberos:
-            node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
-            node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+            node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
+            node.account.copy_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
 
     def setup_node(self, node):
         if self.has_ssl:

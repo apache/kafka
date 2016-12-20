@@ -126,7 +126,7 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         // normal fetch
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
@@ -151,7 +151,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
@@ -194,7 +194,7 @@ public class FetcherTest {
 
         client.prepareResponse(matchesOffset(tp, 1), fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
         try {
             fetcher.fetchedRecords();
@@ -235,7 +235,7 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         // normal fetch
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(buffer, Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         try {
@@ -258,7 +258,7 @@ public class FetcherTest {
         client.prepareResponse(matchesOffset(tp, 1), fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         client.prepareResponse(matchesOffset(tp, 4), fetchResponse(this.nextRecords.buffer(), Errors.NONE.code(), 100L, 0));
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(2, records.size());
@@ -266,14 +266,14 @@ public class FetcherTest {
         assertEquals(1, records.get(0).offset());
         assertEquals(2, records.get(1).offset());
 
-        fetcher.sendFetches();
+        assertEquals(0, fetcher.sendFetches());
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(1, records.size());
         assertEquals(4L, subscriptions.position(tp).longValue());
         assertEquals(3, records.get(0).offset());
 
-        fetcher.sendFetches();
+        assertTrue(fetcher.sendFetches() > 0);
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(2, records.size());
@@ -298,7 +298,7 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         // normal fetch
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         consumerRecords = fetcher.fetchedRecords().get(tp);
@@ -316,7 +316,7 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         // resize the limit of the buffer to pretend it is only fetch-size large
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.TOPIC_AUTHORIZATION_FAILED.code(), 100L, 0));
         consumerClient.poll(0);
         try {
@@ -333,7 +333,7 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
 
         // Now the rebalance happens and fetch positions are cleared
         subscriptions.assignFromSubscribed(singleton(tp));
@@ -349,7 +349,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         subscriptions.pause(tp);
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
@@ -363,7 +363,7 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         subscriptions.pause(tp);
-        fetcher.sendFetches();
+        assertFalse(fetcher.sendFetches() > 0);
         assertTrue(client.requests().isEmpty());
     }
 
@@ -372,7 +372,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
@@ -384,7 +384,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
@@ -396,7 +396,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
@@ -411,7 +411,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
         subscriptions.seek(tp, 1);
         consumerClient.poll(0);
@@ -425,7 +425,7 @@ public class FetcherTest {
         subscriptionsNoAutoReset.assignFromUser(singleton(tp));
         subscriptionsNoAutoReset.seek(tp, 0);
 
-        fetcherNoAutoReset.sendFetches();
+        assertTrue(fetcherNoAutoReset.sendFetches() > 0);
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
         consumerClient.poll(0);
         assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp));
@@ -458,7 +458,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
-        fetcher.sendFetches();
+        assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0), true);
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
@@ -617,7 +617,7 @@ public class FetcherTest {
                 }
                 this.records.close();
             }
-            fetcher.sendFetches();
+            assertEquals(1, fetcher.sendFetches());
             client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 100 * i));
             consumerClient.poll(0);
             records = fetcher.fetchedRecords().get(tp);
