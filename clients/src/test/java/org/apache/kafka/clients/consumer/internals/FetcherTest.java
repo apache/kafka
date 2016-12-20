@@ -106,15 +106,15 @@ public class FetcherTest {
         metadata.update(cluster, time.milliseconds());
         client.setNode(node);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(1L, 0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(2L, 0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(3L, 0L, "key".getBytes(), "value-3".getBytes());
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        builder.append(0L, "key".getBytes(), "value-1".getBytes());
+        builder.append(0L, "key".getBytes(), "value-2".getBytes());
+        builder.append(0L, "key".getBytes(), "value-3".getBytes());
         records = builder.build();
 
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(4L, 0L, "key".getBytes(), "value-4".getBytes());
-        builder.append(5L, 0L, "key".getBytes(), "value-5".getBytes());
+        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
+        builder.append(0L, "key".getBytes(), "value-4".getBytes());
+        builder.append(0L, "key".getBytes(), "value-5".getBytes());
         nextRecords = builder.build();
     }
 

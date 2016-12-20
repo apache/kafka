@@ -234,6 +234,18 @@ public class MemoryRecordsBuilder {
     }
 
     /**
+     * Append a new record at the next consecutive offset. If no records have been appended yet, use the base
+     * offset of this builder.
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @return crc of the record
+     */
+    public long append(long timestamp, byte[] key, byte[] value) {
+        return append(lastOffset < 0 ? baseOffset : lastOffset + 1, timestamp, key, value);
+    }
+
+    /**
      * Add the record, converting to the desired magic value if necessary.
      * @param offset The offset of the record
      * @param record The record to add
@@ -298,6 +310,15 @@ public class MemoryRecordsBuilder {
         if (lastOffset > 0 && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
         appendUnchecked(offset, record);
+    }
+
+    /**
+     * Append the record at the next consecutive offset. If no records have been appended yet, use the base
+     * offset of this builder.
+     * @param record The record to add
+     */
+    public void append(Record record) {
+        append(lastOffset < 0 ? baseOffset : lastOffset + 1, record);
     }
 
     private long toInnerOffset(long offset) {
