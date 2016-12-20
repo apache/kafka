@@ -32,7 +32,7 @@ sealed trait QuotaType
 object QuotaFactory {
 
   object UnboundedQuota extends ReplicaQuota {
-    override def isThrottled(topicAndPartition: TopicPartition): Boolean = false
+    override def isThrottled(topicPartition: TopicPartition): Boolean = false
     override def isQuotaExceeded(): Boolean = false
   }
 

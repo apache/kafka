@@ -102,9 +102,9 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     while(log.numberOfSegments < 8)
       log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = time.milliseconds))
 
-    val topicAndPartition = new TopicPartition("log", 0)
-    val lastClean = Map(topicAndPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicAndPartition, lastClean, time.milliseconds)
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
@@ -133,9 +133,9 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     while (log.numberOfSegments < 8)
       log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t1))
 
-    val topicAndPartition = new TopicPartition("log", 0)
-    val lastClean = Map(topicAndPartition-> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicAndPartition, lastClean, time.milliseconds)
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
   }
@@ -159,9 +159,9 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     time.sleep(compactionLag + 1)
 
-    val topicAndPartition = new TopicPartition("log", 0)
-    val lastClean = Map(topicAndPartition-> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicAndPartition, lastClean, time.milliseconds)
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }

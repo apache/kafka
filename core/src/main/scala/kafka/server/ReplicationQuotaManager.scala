@@ -51,7 +51,7 @@ object ReplicationQuotaManagerConfig {
 }
 
 trait ReplicaQuota {
-  def isThrottled(topicAndPartition: TopicPartition): Boolean
+  def isThrottled(topicPartition: TopicPartition): Boolean
   def isQuotaExceeded(): Boolean
 }
 

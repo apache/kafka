@@ -86,7 +86,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
     val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
-    cleaner.awaitCleaned("log", 0, activeSegAtT0.baseOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT0.baseOffset)
 
     // check the data is the same
     val read1 = readFromLog(log)

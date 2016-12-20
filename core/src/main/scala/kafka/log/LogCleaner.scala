@@ -128,8 +128,8 @@ class LogCleaner(val config: CleanerConfig,
    *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
    *  the partition is aborted.
    */
-  def abortCleaning(topicAndPartition: TopicPartition) {
-    cleanerManager.abortCleaning(topicAndPartition)
+  def abortCleaning(topicPartition: TopicPartition) {
+    cleanerManager.abortCleaning(topicPartition)
   }
 
   /**
@@ -142,38 +142,37 @@ class LogCleaner(val config: CleanerConfig,
   /**
    * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
    */
-  def maybeTruncateCheckpoint(dataDir: File, topicAndPartition: TopicPartition, offset: Long) {
-    cleanerManager.maybeTruncateCheckpoint(dataDir, topicAndPartition, offset)
+  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
+    cleanerManager.maybeTruncateCheckpoint(dataDir, topicPartition, offset)
   }
 
   /**
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
    *  This call blocks until the cleaning of the partition is aborted and paused.
    */
-  def abortAndPauseCleaning(topicAndPartition: TopicPartition) {
-    cleanerManager.abortAndPauseCleaning(topicAndPartition)
+  def abortAndPauseCleaning(topicPartition: TopicPartition) {
+    cleanerManager.abortAndPauseCleaning(topicPartition)
   }
 
   /**
    *  Resume the cleaning of a paused partition. This call blocks until the cleaning of a partition is resumed.
    */
-  def resumeCleaning(topicAndPartition: TopicPartition) {
-    cleanerManager.resumeCleaning(topicAndPartition)
+  def resumeCleaning(topicPartition: TopicPartition) {
+    cleanerManager.resumeCleaning(topicPartition)
   }
 
   /**
    * For testing, a way to know when work has completed. This method waits until the
    * cleaner has processed up to the given offset on the specified topic/partition
    *
-   * @param topic The Topic to be cleaned
-   * @param part The partition of the topic to be cleaned
+   * @param topicPartition The topic and partition to be cleaned
    * @param offset The first dirty offset that the cleaner doesn't have to clean
    * @param maxWaitMs The maximum time in ms to wait for cleaner
    *
    * @return A boolean indicating whether the work has completed before timeout
    */
-  def awaitCleaned(topic: String, part: Int, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
-    def isCleaned = cleanerManager.allCleanerCheckpoints.get(new TopicPartition(topic, part)).fold(false)(_ >= offset)
+  def awaitCleaned(topicPartition: TopicPartition, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
+    def isCleaned = cleanerManager.allCleanerCheckpoints.get(topicPartition).fold(false)(_ >= offset)
     var remainingWaitMs = maxWaitMs
     while (!isCleaned && remainingWaitMs > 0) {
       val sleepTime = math.min(100, remainingWaitMs)
@@ -208,10 +207,10 @@ class LogCleaner(val config: CleanerConfig,
     @volatile var lastStats: CleanerStats = new CleanerStats()
     private val backOffWaitLatch = new CountDownLatch(1)
 
-    private def checkDone(topicAndPartition: TopicPartition) {
+    private def checkDone(topicPartition: TopicPartition) {
       if (!isRunning.get())
         throw new ThreadShutdownException
-      cleanerManager.checkCleaningAborted(topicAndPartition)
+      cleanerManager.checkCleaningAborted(topicPartition)
     }
 
     /**
@@ -436,7 +435,7 @@ private[log] class Cleaner(val id: Int,
    * Clean the given source log segment into the destination segment using the key=>offset mapping
    * provided
    *
-   * @param topicAndPartition The topic and partition of the log segment to clean
+   * @param topicPartition The topic and partition of the log segment to clean
    * @param source The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
@@ -444,7 +443,7 @@ private[log] class Cleaner(val id: Int,
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
    */
-  private[log] def cleanInto(topicAndPartition: TopicPartition,
+  private[log] def cleanInto(topicPartition: TopicPartition,
                              source: LogSegment,
                              dest: LogSegment,
                              map: OffsetMap,
@@ -461,7 +460,7 @@ private[log] class Cleaner(val id: Int,
 
     var position = 0
     while (position < source.log.sizeInBytes) {
-      checkDone(topicAndPartition)
+      checkDone(topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
       readBuffer.clear()
       writeBuffer.clear()
@@ -618,7 +617,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @return If the map was filled whilst loading from this segment
    */
-  private def buildOffsetMapForSegment(topicAndPartition: TopicPartition,
+  private def buildOffsetMapForSegment(topicPartition: TopicPartition,
                                        segment: LogSegment,
                                        map: OffsetMap,
                                        start: Long,
@@ -627,7 +626,7 @@ private[log] class Cleaner(val id: Int,
     var position = segment.index.lookup(start).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
-      checkDone(topicAndPartition)
+      checkDone(topicPartition)
       readBuffer.clear()
       segment.log.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)

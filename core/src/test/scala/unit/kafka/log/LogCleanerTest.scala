@@ -334,7 +334,7 @@ class LogCleanerTest extends JUnitSuite {
   def unkeyedMessageCountInLog(log: Log) =
     log.logSegments.map(s => s.log.shallowEntries.asScala.filter(!_.record.hasNullValue).count(m => !m.record.hasKey)).sum
 
-  def abortCheckDone(topicAndPartition: TopicPartition): Unit = {
+  def abortCheckDone(topicPartition: TopicPartition): Unit = {
     throw new LogCleaningAbortedException()
   }
 
@@ -773,7 +773,7 @@ class LogCleanerTest extends JUnitSuite {
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
-  def noOpCheckDone(topicAndPartition: TopicPartition) { /* do nothing */  }
+  def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
 
   def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = noOpCheckDone, maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,

@@ -276,9 +276,9 @@ class LogManagerTest {
   }
 
 
-  private def verifyCheckpointRecovery(topicAndPartitions: Seq[TopicPartition],
+  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition],
                                        logManager: LogManager) {
-    val logs = topicAndPartitions.map(this.logManager.createLog(_, logConfig))
+    val logs = topicPartitions.map(this.logManager.createLog(_, logConfig))
     logs.foreach(log => {
       for (_ <- 0 until 50)
         log.append(TestUtils.singletonRecords("test".getBytes()))
@@ -289,7 +289,7 @@ class LogManagerTest {
     logManager.checkpointRecoveryPointOffsets()
     val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
-    topicAndPartitions.zip(logs).foreach {
+    topicPartitions.zip(logs).foreach {
       case(tp, log) => {
         assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
       }

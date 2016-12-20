@@ -234,9 +234,9 @@ class GroupMetadataManager(val brokerId: Int,
     // construct the message set to append
     getMagicAndTimestamp(partitionFor(group.groupId)) match {
       case Some((magicValue, timestampType, timestamp)) =>
-        val records = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+        val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
           Record.create(magicValue, timestampType, timestamp,
-            GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
+            GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition.topic, topicPartition.partition),
             GroupMetadataManager.offsetCommitValue(offsetAndMetadata))
         }.toSeq
 
@@ -260,15 +260,15 @@ class GroupMetadataManager(val brokerId: Int,
             group synchronized {
               if (statusError == Errors.NONE) {
                 if (!group.is(Dead)) {
-                  filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-                    group.completePendingOffsetWrite(topicAndPartition, offsetAndMetadata)
+                  filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
+                    group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
                 Errors.NONE.code
               } else {
                 if (!group.is(Dead)) {
-                  filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-                    group.failPendingOffsetWrite(topicAndPartition, offsetAndMetadata)
+                  filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
+                    group.failPendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
 
@@ -298,11 +298,11 @@ class GroupMetadataManager(val brokerId: Int,
             }
 
           // compute the final error codes for the commit response
-          val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+          val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
-              (topicAndPartition, responseCode)
+              (topicPartition, responseCode)
             else
-              (topicAndPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
+              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
           }
 
           // finally trigger the callback logic passed from the API layer
@@ -316,8 +316,8 @@ class GroupMetadataManager(val brokerId: Int,
         Some(DelayedStore(entries, putCacheCallback))
 
       case None =>
-        val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-          (topicAndPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
+        val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
+          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
         }
         responseCallback(commitStatus)
         None
