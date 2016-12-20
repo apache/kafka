@@ -114,9 +114,8 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
-  private val allPartitions = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
-    new Partition(t, p, time, this)
-  })
+  private val allPartitions = new Pool[TopicPartition, Partition](valueFactory = Some(tp =>
+    new Partition(tp.topic, tp.partition, time, this)))
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
@@ -229,10 +228,10 @@ class ReplicaManager(val config: KafkaConfig,
     getPartition(topic, partitionId) match {
       case Some(_) =>
         if (deletePartition) {
-          val removedPartition = allPartitions.remove((topic, partitionId))
+          val removedPartition = allPartitions.remove(topicPartition)
           if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
-            val topicHasPartitions = allPartitions.keys.exists { case (t, _) => topic == t }
+            val topicHasPartitions = allPartitions.keys.exists(tp => topic == tp.topic)
             if (!topicHasPartitions)
               BrokerTopicStats.removeMetrics(topic)
           }
@@ -269,20 +268,16 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
-    allPartitions.getAndMaybePut((topic, partitionId))
-  }
+  def getOrCreatePartition(topic: String, partitionId: Int): Partition =
+    allPartitions.getAndMaybePut(new TopicPartition(topic, partitionId))
 
-  def getPartition(topic: String, partitionId: Int): Option[Partition] = {
-    Option(allPartitions.get((topic, partitionId)))
-  }
+  def getPartition(topic: String, partitionId: Int): Option[Partition] =
+    Option(allPartitions.get(new TopicPartition(topic, partitionId)))
 
   def getReplicaOrException(topic: String, partition: Int): Replica = {
-    val replicaOpt = getReplica(topic, partition)
-    if(replicaOpt.isDefined)
-      replicaOpt.get
-    else
+    getReplica(topic, partition).getOrElse {
       throw new ReplicaNotAvailableException("Replica %d is not available for partition [%s,%d]".format(config.brokerId, topic, partition))
+    }
   }
 
   def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {
