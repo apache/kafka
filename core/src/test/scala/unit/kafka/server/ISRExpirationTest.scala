@@ -178,7 +178,7 @@ class IsrExpirationTest {
     allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
     // set in sync replicas for this partition to all the assigned replicas
     partition.inSyncReplicas = allReplicas.toSet
-    // set lastCatchUpTime to current time
+    // set lastCaughtUpTime to current time
     for(replica <- partition.assignedReplicas() - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY),
                                   hw = 0L,

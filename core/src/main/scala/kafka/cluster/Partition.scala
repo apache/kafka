@@ -186,11 +186,11 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.controllerEpoch
-      // add replicas that are new and reset lastCatchUpTime of non-isr replicas
+      // add replicas that are new and reset lastCaughtUpTime of non-isr replicas
       allReplicas.foreach(replica => {
         val r = getOrCreateReplica(replica)
         if (!partitionStateInfo.isr.contains(replica))
-          r.resetLastCatchUpTime()
+          r.resetLastCaughtUpTime()
       })
       val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
       // remove assigned replicas that have been removed by the controller

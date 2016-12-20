@@ -49,7 +49,7 @@ class Replica(val brokerId: Int,
 
   def isLocal: Boolean = log.isDefined
 
-  // lastCatchUpTimeMs is the largest time t such that the begin offset of most recent FetchRequest from this follower >=
+  // lastCaughtUpTimeMs is the largest time t such that the begin offset of most recent FetchRequest from this follower >=
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(0L)
 
@@ -77,7 +77,7 @@ class Replica(val brokerId: Int,
     lastFetchTimeMs = logReadResult.fetchTimeMs
   }
 
-  def resetLastCatchUpTime() {
+  def resetLastCaughtUpTime() {
     lastFetchLeaderLogEndOffset = 0L
     lastFetchTimeMs = 0L
     lastCaughtUpTimeMsUnderlying.set(0L)

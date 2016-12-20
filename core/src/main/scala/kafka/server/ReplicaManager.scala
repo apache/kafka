@@ -586,7 +586,12 @@ class ReplicaManager(val config: KafkaConfig,
             FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY)
         }
 
-        LogReadResult(logReadInfo, initialHighWatermark, initialLogEndOffset, fetchTimeMs, partitionFetchSize, None)
+        LogReadResult(info = logReadInfo,
+                      hw = initialHighWatermark,
+                      leaderLogEndOffset = initialLogEndOffset,
+                      fetchTimeMs = fetchTimeMs,
+                      readSize = partitionFetchSize,
+                      error = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
