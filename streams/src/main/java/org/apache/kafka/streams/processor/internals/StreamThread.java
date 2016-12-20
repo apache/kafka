@@ -233,9 +233,8 @@ public class StreamThread extends Thread {
 
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
-                // will become active
+                // will become active or vice versa
                 closeNonAssignedSuspendedTasks();
-//                closeNonAssignedSuspendedStandbyTasks();
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
@@ -880,9 +879,6 @@ public class StreamThread extends Thread {
             }
         }
 
-        // destroy any remaining suspended tasks
-//        removeSuspendedTasks();
-
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
         taskCreator.retryWithBackoff(newTasks);
@@ -987,20 +983,6 @@ public class StreamThread extends Thread {
         standbyTasks.clear();
         standbyTasksByPartition.clear();
         standbyRecords.clear();
-    }
-
-    private void removeSuspendedTasks() {
-        log.info("{} Removing all suspended tasks [{}]", logPrefix, suspendedActiveTasks.keySet());
-        try {
-            // Close task and state manager
-            for (final AbstractTask task : suspendedActiveTasks.values()) {
-                task.close();
-                task.closeStateManager();
-            }
-            suspendedActiveTasks.clear();
-        } catch (Exception e) {
-            log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
-        }
     }
 
     private void closeAllTasks() {
