@@ -233,11 +233,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
     @Override
     public long writeTo(GatheringByteChannel destChannel, long offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
-        if (newSize < size.get())
-            throw new KafkaException(String.format("Size of FileRecords %s has been truncated during write: old size %d, new size %d", file.getAbsolutePath(), size, newSize));
+        int oldSize = sizeInBytes();
+        if (newSize < oldSize)
+            throw new KafkaException(String.format(
+                    "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
+                    file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        long count = Math.min(length, size.get());
+        int count = Math.min(length, oldSize);
         final long bytesTransferred;
         if (destChannel instanceof TransportLayer) {
             TransportLayer tl = (TransportLayer) destChannel;
