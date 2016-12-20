@@ -36,7 +36,6 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   val replicaLagMaxMessages = 10L
   val replicaFetchWaitMaxMs = 1000
   val replicaFetchMinBytes = 20
-  private val topicPartition = new TopicPartition(topic, 0)
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
@@ -46,6 +45,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
   val topic = "new-topic"
   val partitionId = 0
+  val topicPartition = new TopicPartition(topic, partitionId)
 
   var server1: KafkaServer = null
   var server2: KafkaServer = null
