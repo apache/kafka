@@ -25,36 +25,27 @@ import java.util.Map;
 
 public enum ScramMechanism {
 
-    SCRAM_SHA_224("SCRAM-SHA-224", "HmacSHA224"),
-    SCRAM_SHA_256("SCRAM-SHA-256", "HmacSHA256"),
-    SCRAM_SHA_384("SCRAM-SHA-384", "HmacSHA384"),
-    SCRAM_SHA_512("SCRAM-SHA-512", "HmacSHA512");
+    SCRAM_SHA_224("SHA-224", "HmacSHA224"),
+    SCRAM_SHA_256("SHA-256", "HmacSHA256"),
+    SCRAM_SHA_384("SHA-384", "HmacSHA384"),
+    SCRAM_SHA_512("SHA-512", "HmacSHA512");
 
     private final String mechanismName;
     private final String hashAlgorithm;
     private final String macAlgorithm;
 
-    private static final String[] ALL_MECHANISMS;
     private static final Map<String, ScramMechanism> MECHANISMS_MAP;
 
     static {
-        ScramMechanism[] values = values();
-        ALL_MECHANISMS = new String[values.length];
         Map<String, ScramMechanism> map = new HashMap<>();
-        for (int i = 0; i < ALL_MECHANISMS.length; i++) {
-            ScramMechanism mech = values[i];
-            ALL_MECHANISMS[i] = mech.mechanismName;
+        for (ScramMechanism mech : values())
             map.put(mech.mechanismName, mech);
-        }
         MECHANISMS_MAP = Collections.unmodifiableMap(map);
     }
 
-    ScramMechanism(String mechanismName, String macAlgorithm) {
-        this.mechanismName = mechanismName;
-        String scramPrefix = "SCRAM-";
-        if (!mechanismName.startsWith(scramPrefix))
-            throw new IllegalArgumentException("Invalid mechanism " + mechanismName);
-        this.hashAlgorithm = mechanismName.substring(scramPrefix.length());
+    ScramMechanism(String hashAlgorithm, String macAlgorithm) {
+        this.mechanismName = "SCRAM-" + hashAlgorithm;
+        this.hashAlgorithm = hashAlgorithm;
         this.macAlgorithm = macAlgorithm;
     }
 

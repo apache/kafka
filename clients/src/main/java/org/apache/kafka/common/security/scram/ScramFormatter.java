@@ -35,7 +35,6 @@ import org.apache.kafka.common.security.scram.ScramMessages.ServerFirstMessage;
 
 /**
  * Scram message salt and hash functions defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
- *
  */
 public class ScramFormatter {
 
@@ -101,14 +100,14 @@ public class ScramFormatter {
         return hash(clientKey);
     }
 
-    public String saslname(String username) {
+    public String saslName(String username) {
         return username.replace("=", "=3D").replace(",", "=2C");
     }
 
-    public String username(String saslname) {
-        String username = saslname.replace("=2C", ",");
+    public String username(String saslName) {
+        String username = saslName.replace("=2C", ",");
         if (username.replace("=3D", "").indexOf('=') >= 0)
-            throw new IllegalArgumentException("Invalid username: " + saslname);
+            throw new IllegalArgumentException("Invalid username: " + saslName);
         return username.replace("=3D", "=");
     }
 

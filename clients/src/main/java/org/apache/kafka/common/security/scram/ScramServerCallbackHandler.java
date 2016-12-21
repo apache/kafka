@@ -27,12 +27,13 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
 
 public class ScramServerCallbackHandler implements AuthCallbackHandler {
 
-    private final ScramCredentialCache.Cache credentialCache;
+    private final CredentialCache.Cache<ScramCredential> credentialCache;
 
-    public ScramServerCallbackHandler(ScramCredentialCache.Cache credentialCache) {
+    public ScramServerCallbackHandler(CredentialCache.Cache<ScramCredential> credentialCache) {
         this.credentialCache = credentialCache;
     }
 

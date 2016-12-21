@@ -318,7 +318,7 @@ public class SaslAuthenticatorTest {
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
-        server.scramCredentialCache().cache(ScramMechanism.SCRAM_SHA_256).remove(TestJaasConfig.USERNAME);
+        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createClientConnection(securityProtocol, node);
@@ -793,7 +793,7 @@ public class SaslAuthenticatorTest {
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
                 ScramCredential credential = formatter.generateCredential(password, 4096);
-                server.scramCredentialCache().cache(scramMechanism).put(username, credential);
+                server.credentialCache().cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
             }
         }
     }

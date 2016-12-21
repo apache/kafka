@@ -111,13 +111,12 @@ object ConfigCommand extends Config {
   private def preProcessScramCredentials(configsToBeAdded: Properties) {
     def scramCredential(mechanism: ScramMechanism, credentialStr: String): String = {
       val pattern = "(?:iterations=([0-9]*),)?password=(.*)".r
-      val (iterations, password) =
-        credentialStr match {
+      val (iterations, password) = credentialStr match {
           case pattern(iterations, password) => (if (iterations != null) iterations.toInt else DefaultScramIterations, password)
           case _ => throw new IllegalArgumentException(s"Invalid credential property $mechanism=$credentialStr")
         }
       val credential = new ScramFormatter(mechanism).generateCredential(password, iterations)
-      ScramCredentialFormatter.toString(credential)
+      ScramCredentialUtils.credentialToString(credential)
     }
     for (mechanism <- ScramMechanism.values) {
       configsToBeAdded.getProperty(mechanism.mechanismName.toLowerCase(Locale.ROOT)) match {

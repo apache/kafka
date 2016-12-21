@@ -17,7 +17,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.security.scram.ScramCredentialCache;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
@@ -59,8 +59,8 @@ public class ChannelBuilders {
      */
     public static ChannelBuilder serverChannelBuilder(SecurityProtocol securityProtocol,
             Map<String, ?> configs,
-            ScramCredentialCache scramCredentialCache) {
-        return create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true, scramCredentialCache);
+            CredentialCache credentialCache) {
+        return create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true, credentialCache);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -69,7 +69,7 @@ public class ChannelBuilders {
                                         Map<String, ?> configs,
                                         String clientSaslMechanism,
                                         boolean saslHandshakeRequestEnable,
-                                        ScramCredentialCache credentialCache) {
+                                        CredentialCache credentialCache) {
         ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {

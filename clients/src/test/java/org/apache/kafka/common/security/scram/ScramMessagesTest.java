@@ -85,13 +85,13 @@ public class ScramMessagesTest {
         str = String.format("n,,n=test=2Cuser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=2Cuser", nonce, "");
-        assertEquals("test,user", formatter.username(m.saslname()));
+        assertEquals("test,user", formatter.username(m.saslName()));
 
         // Username containing equals, encoded as =3D
         str = String.format("n,,n=test=3Duser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=3Duser", nonce, "");
-        assertEquals("test=user", formatter.username(m.saslname()));
+        assertEquals("test=user", formatter.username(m.saslName()));
 
         // Optional authorization id specified
         str = String.format("n,a=testauthzid,n=testuser,r=%s", nonce);
@@ -296,8 +296,8 @@ public class ScramMessagesTest {
         return DatatypeConverter.parseBase64Binary(base64Str);
     };
 
-    private void checkClientFirstMessage(ClientFirstMessage message, String saslname, String nonce, String authzid) {
-        assertEquals(saslname, message.saslname());
+    private void checkClientFirstMessage(ClientFirstMessage message, String saslName, String nonce, String authzid) {
+        assertEquals(saslName, message.saslName());
         assertEquals(nonce, message.nonce());
         assertEquals(authzid, message.authorizationId());
     }

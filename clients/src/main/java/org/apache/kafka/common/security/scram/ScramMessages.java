@@ -72,7 +72,7 @@ public class ScramMessages {
                 PRINTABLE,
                 EXTENSIONS));
 
-        private final String saslname;
+        private final String saslName;
         private final String nonce;
         private final String authorizationId;
         public ClientFirstMessage(byte[] messageBytes) throws SaslException {
@@ -82,16 +82,16 @@ public class ScramMessages {
                 throw new SaslException("Invalid SCRAM client first message format: " + message);
             String authzid = matcher.group("authzid");
             this.authorizationId = authzid != null ? authzid : "";
-            this.saslname = matcher.group("saslname");
+            this.saslName = matcher.group("saslname");
             this.nonce = matcher.group("nonce");
         }
-        public ClientFirstMessage(String saslname, String nonce) {
-            this.saslname = saslname;
+        public ClientFirstMessage(String saslName, String nonce) {
+            this.saslName = saslName;
             this.nonce = nonce;
             this.authorizationId = ""; // Optional authzid not specified in gs2-header
         }
-        public String saslname() {
-            return saslname;
+        public String saslName() {
+            return saslName;
         }
         public String nonce() {
             return nonce;
@@ -103,7 +103,7 @@ public class ScramMessages {
             return "n," + authorizationId + ",";
         }
         public String clientFirstMessageBare() {
-            return String.format("n=%s,r=%s", saslname, nonce);
+            return String.format("n=%s,r=%s", saslName, nonce);
         }
         String toMessage() {
             return gs2Header() + clientFirstMessageBare();

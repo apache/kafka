@@ -84,8 +84,8 @@ public class ScramSaslServer implements SaslServer {
                     this.clientFirstMessage = new ClientFirstMessage(response);
                     serverNonce = formatter.secureRandomString();
                     try {
-                        String saslname = clientFirstMessage.saslname();
-                        this.username = formatter.username(saslname);
+                        String saslName = clientFirstMessage.saslName();
+                        this.username = formatter.username(saslName);
                         NameCallback nameCallback = new NameCallback("username", username);
                         ScramCredentialCallback credentialCallback = new ScramCredentialCallback();
                         callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});

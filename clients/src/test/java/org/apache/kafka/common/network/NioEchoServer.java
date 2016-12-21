@@ -27,7 +27,8 @@ import java.util.Map;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.scram.ScramCredentialCache;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.apache.kafka.common.utils.MockTime;
 
@@ -44,7 +45,7 @@ public class NioEchoServer extends Thread {
     private final AcceptorThread acceptorThread;
     private final Selector selector;
     private volatile WritableByteChannel outputChannel;
-    private final ScramCredentialCache scramCredentialCache;
+    private final CredentialCache credentialCache;
 
     public NioEchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs, String serverHost) throws Exception {
         serverSocketChannel = ServerSocketChannel.open();
@@ -53,11 +54,10 @@ public class NioEchoServer extends Thread {
         this.port = serverSocketChannel.socket().getLocalPort();
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
+        this.credentialCache = new CredentialCache();
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
-            this.scramCredentialCache = new ScramCredentialCache(ScramMechanism.mechanismNames());
-        else
-            this.scramCredentialCache = null;
-        ChannelBuilder channelBuilder = ChannelBuilders.serverChannelBuilder(securityProtocol, configs, scramCredentialCache);
+            ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
+        ChannelBuilder channelBuilder = ChannelBuilders.serverChannelBuilder(securityProtocol, configs, credentialCache);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
         setName("echoserver");
         setDaemon(true);
@@ -68,8 +68,8 @@ public class NioEchoServer extends Thread {
         return port;
     }
 
-    public ScramCredentialCache scramCredentialCache() {
-        return scramCredentialCache;
+    public CredentialCache credentialCache() {
+        return credentialCache;
     }
 
     @Override

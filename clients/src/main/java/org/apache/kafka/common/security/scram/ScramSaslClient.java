@@ -105,8 +105,8 @@ public class ScramSaslClient implements SaslClient {
                     throw new SaslException("User name could not be obtained", e);
                 }
                 String username = nameCallback.getName();
-                String saslname = formatter.saslname(username);
-                this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslname, clientNonce);
+                String saslName = formatter.saslName(username);
+                this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce);
                 setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
                 return clientFirstMessage.toBytes();
 

@@ -18,26 +18,29 @@
 
 package org.apache.kafka.common.security.scram;
 
+import java.util.Collection;
 import java.util.Properties;
 
 import javax.xml.bind.DatatypeConverter;
 
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+
 /**
- * SCRAM Credential persistence format conversion used for the credential
- * store implemented in Kafka. Credentials are persisted as a comma-separated
+ * SCRAM Credential persistence utility functions. Implements format conversion used
+ * for the credential store implemented in Kafka. Credentials are persisted as a comma-separated
  * String of key-value pairs:
  * <pre>
  *   salt=<i>salt</i>,stored_key=<i>stored_key</i>,server_key=<i>server_key</i>,iterations=<i>iterations</i>
  * </pre>
  *
  */
-public class ScramCredentialFormatter {
+public class ScramCredentialUtils {
     private static final String SALT = "salt";
     private static final String STORED_KEY = "stored_key";
     private static final String SERVER_KEY = "server_key";
     private static final String ITERATIONS = "iterations";
 
-    public static String toString(ScramCredential credential) {
+    public static String credentialToString(ScramCredential credential) {
         return String.format("%s=%s,%s=%s,%s=%s,%s=%d",
                SALT,
                DatatypeConverter.printBase64Binary(credential.salt()),
@@ -49,7 +52,7 @@ public class ScramCredentialFormatter {
                credential.iterations());
     }
 
-    public static ScramCredential fromString(String str) {
+    public static ScramCredential credentialFromString(String str) {
         Properties props = toProps(str);
         if (props.size() != 4 || !props.containsKey(SALT) || !props.containsKey(STORED_KEY) ||
                 !props.containsKey(SERVER_KEY) || !props.containsKey(ITERATIONS)) {
@@ -72,5 +75,12 @@ public class ScramCredentialFormatter {
             props.put(token.substring(0, index), token.substring(index + 1));
         }
         return props;
+    }
+
+    public static void createCache(CredentialCache cache, Collection<String> enabledMechanisms) {
+        for (String mechanism : ScramMechanism.mechanismNames()) {
+            if (enabledMechanisms.contains(mechanism))
+                cache.createCache(mechanism, ScramCredential.class);
+        }
     }
 }

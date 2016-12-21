@@ -17,11 +17,12 @@
 
 package kafka.server
 
-import java.util.{Locale, Properties}
+import java.util.Properties
 
 import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
+import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
@@ -29,7 +30,6 @@ import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
-import org.apache.kafka.common.security.scram._
 import scala.collection.JavaConverters._
 
 /**
@@ -136,7 +136,7 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Qu
  * The callback provides the node name containing sanitized user principal, client-id if this is
  * a <user, client-id> update and the full properties set read from ZK.
  */
-class UserConfigHandler(private val quotaManagers: QuotaManagers, val scramCredentialCache: Option[ScramCredentialCache]) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
 
   def processConfigChanges(quotaEntityPath: String, config: Properties) {
     // Entity path is <user> or <user>/clients/<client>
@@ -147,19 +147,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val scramCrede
     val clientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), clientId, config)
     if (!clientId.isDefined && sanitizedUser != ConfigEntityName.Default)
-      scramCredentialCache.foreach(updateCredentials(_, QuotaId.desanitize(sanitizedUser), config))
-  }
-
-  private def updateCredentials(scramCredentialCache: ScramCredentialCache, username: String, config: Properties) {
-    for (mechanism <- ScramMechanism.values()) {
-      val credentialCache = scramCredentialCache.cache(mechanism)
-      if (credentialCache != null) {
-        config.getProperty(mechanism.mechanismName.toLowerCase(Locale.ROOT)) match {
-          case null => credentialCache.remove(username)
-          case c => credentialCache.put(username, ScramCredentialFormatter.fromString(c))
-        }
-      }
-    }
+      credentialProvider.updateCredentials(QuotaId.desanitize(sanitizedUser), config)
   }
 }
 

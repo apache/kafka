@@ -49,7 +49,7 @@ public class ScramFormatterTest {
         ClientFinalMessage clientFinal = new ClientFinalMessage(formatter.toBytes(c2));
         ServerFinalMessage serverFinal = new ServerFinalMessage(formatter.toBytes(s2));
 
-        String username = clientFirst.saslname();
+        String username = clientFirst.saslName();
         assertEquals("user", username);
         String clientNonce = clientFirst.nonce();
         assertEquals("fyko+d2lbbFgONRv9qkxdawL", clientNonce);
@@ -80,10 +80,10 @@ public class ScramFormatterTest {
         String[] usernames = {"user1", "123", "1,2", "user=A", "user==B", "user,1", "user 1", ",", "=", ",=", "=="};
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
         for (String username : usernames) {
-            String saslname = formatter.saslname(username);
-            assertEquals(-1, saslname.indexOf(','));
-            assertEquals(-1, saslname.replace("=2C", "").replace("=3D", "").indexOf('='));
-            assertEquals(username, formatter.username(saslname));
+            String saslName = formatter.saslName(username);
+            assertEquals(-1, saslName.indexOf(','));
+            assertEquals(-1, saslName.replace("=2C", "").replace("=3D", "").indexOf('='));
+            assertEquals(username, formatter.username(saslName));
         }
     }
 }

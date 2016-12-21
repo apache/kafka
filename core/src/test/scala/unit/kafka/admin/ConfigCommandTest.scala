@@ -24,13 +24,12 @@ import kafka.server.{ConfigEntityName, QuotaId}
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 
-import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialFormatter}
+import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 import scala.collection.mutable
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.security.scram.ScramMechanism
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
@@ -263,7 +262,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         for (mechanism <- mechanisms) {
           val value = configChange.getProperty(mechanism)
           assertEquals(-1, value.indexOf("password="))
-          val scramCredential = ScramCredentialFormatter.fromString(value)
+          val scramCredential = ScramCredentialUtils.credentialFromString(value)
           assertEquals(iterations, scramCredential.iterations)
           if (configChange != null)
               credentials.put(user, configChange)
