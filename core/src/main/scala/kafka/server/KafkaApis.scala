@@ -461,9 +461,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for sending a fetch response
-    def sendResponseCallback(responsePartitionData: Seq[(TopicAndPartition, FetchPartitionData)]) {
+    def sendResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
       val convertedPartitionData = {
-        // Need to down-convert message when consumer only takes magic value 0.
         responsePartitionData.map { case (tp, data) =>
 
           // We only do down-conversion when:
@@ -480,7 +479,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V0))
           } else data
 
-          new TopicPartition(tp.topic, tp.partition) -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
+          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
         }
       }
 
@@ -544,7 +543,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         quota: ReplicationQuotaManager): Int = {
     val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]()
     mergedPartitionData.foreach { case (tp, data) =>
-      if (quota.isThrottled(TopicAndPartition(tp.topic(), tp.partition())))
+      if (quota.isThrottled(tp))
         partitionData.put(tp, data)
     }
     FetchResponse.sizeOf(versionId, partitionData)
@@ -586,9 +585,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         // ensure leader exists
         val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-          replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+          replicaManager.getLeaderReplicaIfLocal(topicPartition)
         else
-          replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+          replicaManager.getReplicaOrException(topicPartition)
         val offsets = {
           val allOffsets = fetchOffsets(replicaManager.logManager,
             topicPartition,
@@ -648,9 +647,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           // ensure leader exists
           val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-            replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+            replicaManager.getLeaderReplicaIfLocal(topicPartition)
           else
-            replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+            replicaManager.getReplicaOrException(topicPartition)
 
           val found = {
             if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
@@ -690,7 +689,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
+    logManager.getLog(topicPartition) match {
       case Some(log) =>
         fetchOffsetsBefore(log, timestamp, maxNumOffsets)
       case None =>
@@ -702,7 +701,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
-    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
+    logManager.getLog(topicPartition) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)
       case None =>

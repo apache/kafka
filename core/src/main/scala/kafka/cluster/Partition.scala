@@ -33,6 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.PartitionState
 import org.apache.kafka.common.utils.Time
@@ -44,6 +45,8 @@ class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
                 replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
+  val topicPartition = new TopicPartition(topic, partitionId)
+
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
   private val zkUtils = replicaManager.zkUtils
@@ -106,12 +109,12 @@ class Partition(val topic: String,
         if (isReplicaLocal(replicaId)) {
           val config = LogConfig.fromProps(logManager.defaultConfig.originals,
                                            AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
-          val log = logManager.createLog(TopicAndPartition(topic, partitionId), config)
+          val log = logManager.createLog(topicPartition, config)
           val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
           val offsetMap = checkpoint.read
-          if (!offsetMap.contains(TopicAndPartition(topic, partitionId)))
+          if (!offsetMap.contains(topicPartition))
             info("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
-          val offset = offsetMap.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
+          val offset = offsetMap.getOrElse(topicPartition, 0L).min(log.logEndOffset)
           val localReplica = new Replica(replicaId, this, time, offset, Some(log))
           addReplicaIfNotExists(localReplica)
         } else {
@@ -122,13 +125,7 @@ class Partition(val topic: String,
     }
   }
 
-  def getReplica(replicaId: Int = localBrokerId): Option[Replica] = {
-    val replica = assignedReplicaMap.get(replicaId)
-    if (replica == null)
-      None
-    else
-      Some(replica)
-  }
+  def getReplica(replicaId: Int = localBrokerId): Option[Replica] = Option(assignedReplicaMap.get(replicaId))
 
   def leaderReplicaIfLocal(): Option[Replica] = {
     leaderReplicaIdOpt match {
@@ -159,7 +156,6 @@ class Partition(val topic: String,
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
-      val topicPartition = TopicAndPartition(topic, partitionId)
       try {
         logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
@@ -258,9 +254,7 @@ class Partition(val topic: String,
         maybeExpandIsr(replicaId)
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
-          .format(replicaId,
-                  logReadResult.info.fetchOffsetMetadata.messageOffset,
-                  TopicAndPartition(topic, partitionId)))
+          .format(replicaId, logReadResult.info.fetchOffsetMetadata.messageOffset, topicPartition))
       case None =>
         throw new NotAssignedReplicaException(("Leader %d failed to record follower %d's position %d since the replica" +
           " is not recognized to be one of the assigned replicas %s for partition %s.")
@@ -268,7 +262,7 @@ class Partition(val topic: String,
                   replicaId,
                   logReadResult.info.fetchOffsetMetadata.messageOffset,
                   assignedReplicas().map(_.brokerId).mkString(","),
-                  TopicAndPartition(topic, partitionId)))
+                  topicPartition))
     }
   }
 
@@ -435,7 +429,7 @@ class Partition(val topic: String,
 
     val laggingReplicas = candidateReplicas.filter(r => (time.milliseconds - r.lastCaughtUpTimeMs) > maxLagMs)
     if (laggingReplicas.nonEmpty)
-      debug("Lagging replicas for partition %s are %s".format(TopicAndPartition(topic, partitionId), laggingReplicas.map(_.brokerId).mkString(",")))
+      debug("Lagging replicas for partition %s are %s".format(topicPartition, laggingReplicas.map(_.brokerId).mkString(",")))
 
     laggingReplicas
   }
@@ -480,7 +474,7 @@ class Partition(val topic: String,
       newLeaderAndIsr, controllerEpoch, zkVersion)
 
     if(updateSucceeded) {
-      replicaManager.recordIsrChange(TopicAndPartition(topic, partitionId))
+      replicaManager.recordIsrChange(topicPartition)
       inSyncReplicas = newIsr
       zkVersion = newVersion
       trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newIsr.mkString(","), zkVersion))

@@ -32,10 +32,14 @@ import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 import java.util
+
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
+
 import scala.collection.{Map, immutable}
 import kafka.utils.CoreUtils._
+import org.apache.kafka.common.TopicPartition
+
 import scala.collection.JavaConverters._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -406,14 +410,15 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           assertEquals(expected.split(",").toSeq, actual.asScala)
       }
       TestUtils.retry(10000) {
-        for(part <- 0 until partitions) {
-          val log = server.logManager.getLog(TopicAndPartition(topic, part))
+        for (part <- 0 until partitions) {
+          val tp = new TopicPartition(topic, part)
+          val log = server.logManager.getLog(tp)
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
           checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
           checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
-          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(TopicAndPartition(topic, part)))
+          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(tp))
         }
       }
     }
