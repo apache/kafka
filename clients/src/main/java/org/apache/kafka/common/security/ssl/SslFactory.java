@@ -191,7 +191,7 @@ public class SslFactory implements Configurable {
     private void createTruststore(String type, String path, Password password) {
         if (path == null && password != null) {
             throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
-        } else if (path != null && password != null) {
+        } else if (path != null) {
             this.truststore = new SecurityStore(type, path, password);
         }
     }
@@ -212,7 +212,8 @@ public class SslFactory implements Configurable {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
-                ks.load(in, password.value().toCharArray());
+                char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                ks.load(in, passwordChars);
                 return ks;
             } finally {
                 if (in != null) in.close();
