@@ -43,12 +43,14 @@ import java.util.Map;
 public abstract class AbstractLogin implements Login {
     private static final Logger log = LoggerFactory.getLogger(AbstractLogin.class);
 
+    private Configuration jaasConfig;
     private String loginContextName;
     private LoginContext loginContext;
 
 
     @Override
-    public void configure(Map<String, ?> configs, String loginContextName) {
+    public void configure(Map<String, ?> configs, Configuration jaasConfig, String loginContextName) {
+        this.jaasConfig = jaasConfig;
         this.loginContextName = loginContextName;
     }
 
@@ -58,14 +60,14 @@ public abstract class AbstractLogin implements Login {
         if (jaasConfigFile == null) {
             log.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS configuration.");
         }
-        AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
+        AppConfigurationEntry[] configEntries = jaasConfig.getAppConfigurationEntry(loginContextName);
         if (configEntries == null) {
             String errorMessage = "Could not find a '" + loginContextName + "' entry in the JAAS configuration. System property '" +
                 JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " + (jaasConfigFile == null ? "not set" : jaasConfigFile);
             throw new IllegalArgumentException(errorMessage);
         }
 
-        loginContext = new LoginContext(loginContextName, new LoginCallbackHandler());
+        loginContext = new LoginContext(loginContextName, null, new LoginCallbackHandler(), jaasConfig);
         loginContext.login();
         log.info("Successfully logged in.");
         return loginContext;
@@ -74,6 +76,10 @@ public abstract class AbstractLogin implements Login {
     @Override
     public Subject subject() {
         return loginContext.getSubject();
+    }
+
+    protected Configuration jaasConfig() {
+        return jaasConfig;
     }
 
     /**
