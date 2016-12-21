@@ -12,7 +12,7 @@
  */
 package integration.kafka.api
 
-import kafka.common.{Topic, TopicAndPartition}
+import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.Log
 import kafka.message.GZIPCompressionCodec
@@ -48,7 +48,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     val logManager = servers.head.getLogManager
 
     def getGroupMetadataLogOpt: Option[Log] =
-      logManager.getLog(TopicAndPartition(Topic.GroupMetadataTopicName, 0))
+      logManager.getLog(new TopicPartition(Topic.GroupMetadataTopicName, 0))
 
     TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logSegments.exists(_.log.shallowEntries.asScala.nonEmpty)),
                             "Commit message not appended in time")
