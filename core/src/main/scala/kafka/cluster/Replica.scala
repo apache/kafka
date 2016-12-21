@@ -31,45 +31,46 @@ class Replica(val brokerId: Int,
               initialHighWatermarkValue: Long = 0L,
               val log: Option[Log] = None) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
-  @volatile private[this] var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
+  @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
-  @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+  @volatile private[this] var logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
 
-  // The log end offset value at the time the leader receives last FetchRequest from this follower.
+  // The log end offset value at the time the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
-  @volatile private var lastFetchLeaderLogEndOffset: Long = 0L
+  @volatile private[this] var lastFetchLeaderLogEndOffset = 0L
 
-  // The time when the leader receives last FetchRequest from this follower
+  // The time when the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
-  @volatile private var lastFetchTimeMs: Long = 0L
+  @volatile private[this] var lastFetchTimeMs = 0L
+
+  // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
+  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
+  @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
   val topicPartition = partition.topicPartition
 
   def isLocal: Boolean = log.isDefined
 
-  // lastCaughtUpTimeMs is the largest time t such that the begin offset of most recent FetchRequest from this follower >=
-  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
-  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(0L)
-
-  def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get
+  def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
 
   /*
-   * If the FetchRequest reads up to the log end offset of the leader when the current fetch request was received,
-   * set the lastCaughtUpTimeMsUnderlying to the time when the current fetch request was received.
+   * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
+   * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
    *
    * Else if the FetchRequest reads up to the log end offset of the leader when the previous fetch request was received,
-   * set the lastCaughtUpTimeMsUnderlying to the time when the previous fetch request was received.
+   * set the lastCaughtUpTimeMs to the time when the previous fetch request was received.
    *
    * This is needed to enforce the semantics of ISR, i.e. a replica is in ISR if and only if it lags behind leader's LEO
-   * by at most replicaLagTimeMaxMs. This semantics allows a follower to be added to the ISR even if offset of its fetch request is
-   * always smaller than leader's LEO, which can happen if there are constant small produce requests at high frequency.
+   * by at most replicaLagTimeMaxMs. These semantics allow a follower to be added to the ISR even if the offset of its
+   * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
+   * high frequency.
    */
   def updateLogReadResult(logReadResult : LogReadResult) {
     if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
-      lastCaughtUpTimeMsUnderlying.set(logReadResult.fetchTimeMs)
+      _lastCaughtUpTimeMs = logReadResult.fetchTimeMs
     else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
-      lastCaughtUpTimeMsUnderlying.set(lastFetchTimeMs)
+      _lastCaughtUpTimeMs = lastFetchTimeMs
 
     logEndOffset = logReadResult.info.fetchOffsetMetadata
     lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
@@ -79,7 +80,7 @@ class Replica(val brokerId: Int,
   def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long) {
     lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
     lastFetchTimeMs = curTimeMs
-    lastCaughtUpTimeMsUnderlying.set(lastCaughtUpTimeMs)
+    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
   }
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
