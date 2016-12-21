@@ -64,8 +64,9 @@ case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None)
  */
 case class LogReadResult(info: FetchDataInfo,
                          hw: Long,
+                         leaderLogEndOffset: Long,
+                         fetchTimeMs: Long,
                          readSize: Int,
-                         isReadFromLogEnd : Boolean,
                          error: Option[Throwable] = None) {
 
   def errorCode = error match {
@@ -74,19 +75,19 @@ case class LogReadResult(info: FetchDataInfo,
   }
 
   override def toString = {
-    "Fetch Data: [%s], HW: [%d], readSize: [%d], isReadFromLogEnd: [%b], error: [%s]"
-            .format(info, hw, readSize, isReadFromLogEnd, error)
+    "Fetch Data: [%s], HW: [%d], leaderLogEndOffset: [%d], readSize: [%d], error: [%s]"
+            .format(info, hw, leaderLogEndOffset, readSize, error)
   }
 }
 
 case class FetchPartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, records: Records)
 
 object LogReadResult {
-  val UnknownLogReadResult = LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata,
-                                                         MemoryRecords.EMPTY),
-                                           -1L,
-                                           -1,
-                                           false)
+  val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+                                           hw = -1L,
+                                           leaderLogEndOffset = -1L,
+                                           fetchTimeMs = -1L,
+                                           readSize = -1)
 }
 
 case class BecomeLeaderOrFollowerResult(responseMap: collection.Map[TopicPartition, Short], errorCode: Short) {
@@ -216,7 +217,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   def startup() {
     // start ISR expiration thread
-    scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
+    // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x (1 + 50%) before it is removed from ISR
+    scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 2500L, unit = TimeUnit.MILLISECONDS)
   }
 
@@ -539,7 +541,9 @@ class ReplicaManager(val config: KafkaConfig,
          * where data gets appended to the log immediately after the replica has consumed from it
          * This can cause a replica to always be out of sync.
          */
-        val initialLogEndOffset = localReplica.logEndOffset
+        val initialLogEndOffset = localReplica.logEndOffset.messageOffset
+        val initialHighWatermark = localReplica.highWatermark.messageOffset
+        val fetchTimeMs = time.milliseconds
         val logReadInfo = localReplica.log match {
           case Some(log) =>
             val adjustedFetchSize = math.min(partitionFetchSize, limitBytes)
@@ -561,9 +565,12 @@ class ReplicaManager(val config: KafkaConfig,
             FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY)
         }
 
-        val readToEndOfLog = initialLogEndOffset.messageOffset - logReadInfo.fetchOffsetMetadata.messageOffset <= 0
-
-        LogReadResult(logReadInfo, localReplica.highWatermark.messageOffset, partitionFetchSize, readToEndOfLog, None)
+        LogReadResult(info = logReadInfo,
+                      hw = initialHighWatermark,
+                      leaderLogEndOffset = initialLogEndOffset,
+                      fetchTimeMs = fetchTimeMs,
+                      readSize = partitionFetchSize,
+                      error = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
@@ -571,14 +578,22 @@ class ReplicaManager(val config: KafkaConfig,
                  _: NotLeaderForPartitionException |
                  _: ReplicaNotAvailableException |
                  _: OffsetOutOfRangeException) =>
-          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY), -1L,
-            partitionFetchSize, false, Some(e))
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+                        hw = -1L,
+                        leaderLogEndOffset = -1L,
+                        fetchTimeMs = -1L,
+                        readSize = partitionFetchSize,
+                        error = Some(e))
         case e: Throwable =>
           BrokerTopicStats.getBrokerTopicStats(tp.topic).failedFetchRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
           error(s"Error processing fetch operation on partition $tp, offset $offset", e)
-          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY), -1L,
-            partitionFetchSize, false, Some(e))
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+                        hw = -1L,
+                        leaderLogEndOffset = -1L,
+                        fetchTimeMs = -1L,
+                        readSize = partitionFetchSize,
+                        error = Some(e))
       }
     }
 
