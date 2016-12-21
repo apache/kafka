@@ -166,7 +166,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQuotas) extends Runnable with Logging {
 
   private val startupLatch = new CountDownLatch(1)
-  private val shutdownLatch = new CountDownLatch(1)
+  private var shutdownLatch = new CountDownLatch(0)
   private val alive = new AtomicBoolean(true)
 
   def wakeup()
@@ -190,6 +190,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    */
   protected def startupComplete() = {
     startupLatch.countDown()
+    shutdownLatch = new CountDownLatch(1)
   }
 
   /**
@@ -314,10 +315,6 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostString, serverChannel.socket.getLocalPort))
     } catch {
       case e: SocketException =>
-        for (processor <- processors) {
-          // shutdown each processor
-          processor.tryShutdown()
-        }
         throw new KafkaException("Socket server failed to bind to %s:%d: %s.".format(socketAddress.getHostString, port, e.getMessage), e)
     }
     serverChannel
@@ -585,12 +582,6 @@ private[kafka] class Processor(val id: Int,
    */
   @Override
   def wakeup = selector.wakeup()
-
-  /**
-    * Shutdown this processor thread
-    */
-  /* shutdownComplete cannot be invoked from with Acceptor */
-  private[network] def tryShutdown(): Unit = shutdownComplete()
 
 }
 
