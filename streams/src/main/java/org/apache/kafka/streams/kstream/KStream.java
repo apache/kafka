@@ -559,12 +559,11 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStore myStore = Stores.create("myTransformState")
+     * StateStoreSupplier myStore = Stores.create("myTransformState")
      *     .withKeys(...)
      *     .withValues(...)
      *     .persistent() // optional
-     *     .build()
-     *     .get();
+     *     .build();
      *
      * // register store
      * builder.addStore(myStore);
@@ -639,12 +638,11 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStore myStore = Stores.create("myValueTransformState")
+     * StateStoreSupplier myStore = Stores.create("myValueTransformState")
      *     .withKeys(...)
      *     .withValues(...)
      *     .persistent() // optional
-     *     .build()
-     *     .get();
+     *     .build();
      *
      * // register store
      * builder.addStore(myStore);
@@ -714,12 +712,11 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStore myStore = Stores.create("myProcessorState")
+     * StateStoreSupplier myStore = Stores.create("myProcessorState")
      *     .withKeys(...)
      *     .withValues(...)
      *     .persistent() // optional
-     *     .build()
-     *     .get();
+     *     .build();
      *
      * // register store
      * builder.addStore(myStore);
