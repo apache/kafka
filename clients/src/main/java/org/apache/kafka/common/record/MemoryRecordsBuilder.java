@@ -164,6 +164,8 @@ public class MemoryRecordsBuilder {
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             return new RecordsInfo(logAppendTime,  lastOffset);
+        else if (maxTimestamp == Record.NO_TIMESTAMP)
+            return new RecordsInfo(Record.NO_TIMESTAMP, lastOffset);
         else
             return new RecordsInfo(maxTimestamp, compressionType == CompressionType.NONE ? offsetOfMaxTimestamp : lastOffset);
     }
@@ -208,16 +210,16 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a new record and offset to the buffer
+     * Append a new record at the given offset.
      * @param offset The absolute offset of the record in the log buffer
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
      * @return crc of the record
      */
-    public long append(long offset, long timestamp, byte[] key, byte[] value) {
+    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
         try {
-            if (lastOffset > 0 && offset <= lastOffset)
+            if (lastOffset >= 0 && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
             int size = Record.recordSize(magic, key, value);
@@ -234,17 +236,37 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Add the record, converting to the desired magic value if necessary.
+     * Append a new record at the next consecutive offset. If no records have been appended yet, use the base
+     * offset of this builder.
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @return crc of the record
+     */
+    public long append(long timestamp, byte[] key, byte[] value) {
+        return appendWithOffset(lastOffset < 0 ? baseOffset : lastOffset + 1, timestamp, key, value);
+    }
+
+    /**
+     * Add the record at the next consecutive offset, converting to the desired magic value if necessary.
+     * @param record The record to add
+     */
+    public void convertAndAppend(Record record) {
+        convertAndAppendWithOffset(lastOffset < 0 ? baseOffset : lastOffset + 1, record);
+    }
+
+    /**
+     * Add the record at the given offset, converting to the desired magic value if necessary.
      * @param offset The offset of the record
      * @param record The record to add
      */
-    public void convertAndAppend(long offset, Record record) {
+    public void convertAndAppendWithOffset(long offset, Record record) {
         if (magic == record.magic()) {
-            append(offset, record);
+            appendWithOffset(offset, record);
             return;
         }
 
-        if (lastOffset > 0 && offset <= lastOffset)
+        if (lastOffset >= 0 && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
         try {
@@ -278,26 +300,26 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append the given log entry. The entry's record must have a magic which matches the magic use to
-     * construct this builder and the offset must be greater than the last appended entry.
-     * @param entry The entry to append
-     */
-    public void append(LogEntry entry) {
-        append(entry.offset(), entry.record());
-    }
-
-    /**
      * Add a record with a given offset. The record must have a magic which matches the magic use to
      * construct this builder and the offset must be greater than the last appended entry.
      * @param offset The offset of the record
      * @param record The record to add
      */
-    public void append(long offset, Record record) {
+    public void appendWithOffset(long offset, Record record) {
         if (record.magic() != magic)
             throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
-        if (lastOffset > 0 && offset <= lastOffset)
+        if (lastOffset >= 0 && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
         appendUnchecked(offset, record);
+    }
+
+    /**
+     * Append the record at the next consecutive offset. If no records have been appended yet, use the base
+     * offset of this builder.
+     * @param record The record to add
+     */
+    public void append(Record record) {
+        appendWithOffset(lastOffset < 0 ? baseOffset : lastOffset + 1, record);
     }
 
     private long toInnerOffset(long offset) {

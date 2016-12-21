@@ -45,7 +45,6 @@ public final class RecordBatch {
     public final ProduceRequestResult produceFuture;
     public long lastAppendTime;
     private final List<Thunk> thunks;
-    private long offsetCounter = 0L;
     private boolean retry;
     private final MemoryRecordsBuilder recordsBuilder;
 
@@ -69,7 +68,7 @@ public final class RecordBatch {
         if (!recordsBuilder.hasRoomFor(key, value)) {
             return null;
         } else {
-            long checksum = this.recordsBuilder.append(offsetCounter++, timestamp, key, value);
+            long checksum = this.recordsBuilder.append(timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
