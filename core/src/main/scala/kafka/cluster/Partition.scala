@@ -205,10 +205,10 @@ class Partition(val topic: String,
       val curLeaderLogEndOffset = leaderReplica.logEndOffset.messageOffset
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
-      (assignedReplicas() - leaderReplica).foreach(replica => {
+      (assignedReplicas() - leaderReplica).foreach{replica =>
         val lastCaughtUpTimeMs = if (inSyncReplicas.contains(replica)) curTimeMs else 0L
         replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
-      })
+      }
       // we may need to increment high watermark since ISR could be down to 1
       if (isNewLeader) {
         // construct the high watermark metadata for the new leader replica
@@ -386,9 +386,9 @@ class Partition(val topic: String,
    * since all callers of this private API acquire that lock
    */
   private def maybeIncrementLeaderHW(leaderReplica: Replica, curTime: Long = time.milliseconds): Boolean = {
-    val allLogEndOffsets = assignedReplicas.filter(replica => {
+    val allLogEndOffsets = assignedReplicas.filter{replica =>
       curTime - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
-    }).map(_.logEndOffset)
+    }.map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
     val oldHighWatermark = leaderReplica.highWatermark
     if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset || oldHighWatermark.onOlderSegment(newHighWatermark)) {
