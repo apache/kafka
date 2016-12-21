@@ -37,11 +37,11 @@ class Replica(val brokerId: Int,
   @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
 
   // The log end offset value at the time the leader receives last FetchRequest from this follower.
-  // This is used to determine the last catch-up time of the follower
+  // This is used to determine the lastCaughtUpTimeMs of the follower
   @volatile private var lastFetchLeaderLogEndOffset: Long = 0L
 
   // The time when the leader receives last FetchRequest from this follower
-  // This is used to determine the last catch-up time of the follower
+  // This is used to determine the lastCaughtUpTimeMs of the follower
   @volatile private var lastFetchTimeMs: Long = 0L
 
   val topic = partition.topic
