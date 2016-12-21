@@ -25,7 +25,7 @@ public class TestTimestampExtractor implements TimestampExtractor {
     private final long base = SmokeTestUtil.START_TIME;
 
     @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
         switch (record.topic()) {
             case "data":
                 return base + (Integer) record.value();

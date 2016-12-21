@@ -52,7 +52,7 @@ public class InternalTopicManager {
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
-    private final ZkClient zkClient;
+    final ZkClient zkClient;
     private final int replicationFactor;
     private final long windowChangeLogAdditionalRetention;
 

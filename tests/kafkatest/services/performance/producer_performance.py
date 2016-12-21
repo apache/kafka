@@ -14,9 +14,9 @@
 # limitations under the License.
 
 import os
-import subprocess
-
+import time
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import  TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.services.monitor.jmx import JmxMixin
@@ -118,7 +118,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             cmd = "jps | grep -i ProducerPerformance | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def alive(self, node):
@@ -136,6 +136,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
 
         # start ProducerPerformance process
+        start = time.time()
         producer_output = node.account.ssh_capture(cmd)
         wait_until(lambda: self.alive(node), timeout_sec=20, err_msg="ProducerPerformance failed to start")
         # block until there is at least one line of output
@@ -144,7 +145,10 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             raise Exception("No output from ProducerPerformance")
 
         self.start_jmx_tool(idx, node)
-        wait_until(lambda: not self.alive(node), timeout_sec=1200, err_msg="ProducerPerformance failed to finish")
+        wait_until(lambda: not self.alive(node), timeout_sec=1200, backoff_sec=2, err_msg="ProducerPerformance failed to finish")
+        elapsed = time.time() - start
+        self.logger.debug("ProducerPerformance process ran for %s seconds" % elapsed)
+
         self.read_jmx_output(idx, node)
 
         # parse producer output from file

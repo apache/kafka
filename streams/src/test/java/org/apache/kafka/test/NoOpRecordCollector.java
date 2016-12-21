@@ -19,9 +19,9 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 
-public class NoOpRecordCollector extends RecordCollector {
+public class NoOpRecordCollector extends RecordCollectorImpl {
     public NoOpRecordCollector() {
         super(null, "NoOpRecordCollector");
     }

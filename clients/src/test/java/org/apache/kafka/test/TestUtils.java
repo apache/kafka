@@ -21,10 +21,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.xml.bind.DatatypeConverter;
@@ -35,6 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -46,6 +43,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -176,24 +174,6 @@ public class TestUtils {
         return file;
     }
 
-    /**
-     * Create a records buffer including the offset and message size at the start, which is required if the buffer is to
-     * be sent as part of `ProduceRequest`. This is the reason why we can't use
-     * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
-     * constructor does not include either of these fields.
-     */
-    public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
-        int bufferSize = 0;
-        for (final Record record : records)
-            bufferSize += Records.LOG_OVERHEAD + record.size();
-        final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        final MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
-        for (final Record record : records)
-            memoryRecords.append(offset, record);
-        memoryRecords.close();
-        return memoryRecords.buffer();
-    }
-
     public static Properties producerConfig(final String bootstrapServers,
                                             final Class keySerializer,
                                             final Class valueSerializer,
@@ -308,5 +288,30 @@ public class TestUtils {
         } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
         }
+    }
+
+    /**
+     * Throw an exception if the two iterators are of differing lengths or contain
+     * different messages on their Nth element
+     */
+    public static <T> void checkEquals(Iterator<T> s1, Iterator<T> s2) {
+        while (s1.hasNext() && s2.hasNext())
+            assertEquals(s1.next(), s2.next());
+        assertFalse("Iterators have uneven length--first has more", s1.hasNext());
+        assertFalse("Iterators have uneven length--second has more", s2.hasNext());
+    }
+
+    /**
+     * Checks the two iterables for equality by first converting both to a list.
+     */
+    public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
+        assertEquals(toList(it1.iterator()), toList(it2.iterator()));
+    }
+
+    public static <T> List<T> toList(Iterator<? extends T> iterator) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext())
+            res.add(iterator.next());
+        return res;
     }
 }

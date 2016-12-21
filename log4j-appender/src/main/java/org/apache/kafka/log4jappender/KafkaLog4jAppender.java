@@ -254,9 +254,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (syncSend) {
             try {
                 response.get();
-            } catch (InterruptedException ex) {
-                throw new RuntimeException(ex);
-            } catch (ExecutionException ex) {
+            } catch (InterruptedException | ExecutionException ex) {
                 throw new RuntimeException(ex);
             }
         }

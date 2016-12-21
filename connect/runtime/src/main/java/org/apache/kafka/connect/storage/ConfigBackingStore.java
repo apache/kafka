@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -28,8 +27,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public interface ConfigBackingStore {
-
-    void configure(WorkerConfig config);
 
     void start();
 

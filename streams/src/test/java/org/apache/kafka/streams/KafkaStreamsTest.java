@@ -31,6 +31,8 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -59,8 +61,18 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        StateListenerStub stateListener = new StateListenerStub();
+        streams.setStateListener(stateListener);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
+        Assert.assertEquals(stateListener.numChanges, 0);
 
         streams.start();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.RUNNING);
+        Assert.assertEquals(stateListener.numChanges, 1);
+        Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
+        Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
+
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initCountDifference = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
@@ -68,6 +80,9 @@ public class KafkaStreamsTest {
         assertTrue(streams.close(15, TimeUnit.SECONDS));
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
+        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
     }
 
     @Test
@@ -100,7 +115,7 @@ public class KafkaStreamsTest {
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot restart after closing.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();
@@ -120,7 +135,7 @@ public class KafkaStreamsTest {
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("This process was already started.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();
@@ -244,6 +259,23 @@ public class KafkaStreamsTest {
             throw e;
         } finally {
             streams.close();
+        }
+    }
+
+
+    public static class StateListenerStub implements KafkaStreams.StateListener {
+        public int numChanges = 0;
+        public KafkaStreams.State oldState;
+        public KafkaStreams.State newState;
+        public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+
+        @Override
+        public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+            long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
+            this.numChanges++;
+            this.oldState = oldState;
+            this.newState = newState;
+            this.mapStates.put(newState, prevCount + 1);
         }
     }
 }

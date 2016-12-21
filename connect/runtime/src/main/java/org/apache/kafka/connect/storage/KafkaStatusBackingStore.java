@@ -378,7 +378,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (status == null)
             return;
 
-        synchronized (KafkaStatusBackingStore.this) {
+        synchronized (this) {
             log.trace("Received connector {} status update {}", connector, status);
             CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
             entry.put(status);
@@ -404,7 +404,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             return;
         }
 
-        synchronized (KafkaStatusBackingStore.this) {
+        synchronized (this) {
             log.trace("Received task {} status update {}", id, status);
             CacheEntry<TaskStatus> entry = getOrAdd(id);
             entry.put(status);

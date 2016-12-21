@@ -17,17 +17,15 @@
 
 package kafka.api
 
-import kafka.cluster.{EndPoint, Broker}
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
-import kafka.message.{Message, ByteBufferMessageSet}
-import kafka.utils.SystemTime
-
+import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.common.TopicAndPartition
-
 import java.nio.ByteBuffer
 
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.utils.Time
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -112,7 +110,7 @@ object SerializationTestUtils {
   def createTestOffsetCommitRequestV2: OffsetCommitRequest = {
     new OffsetCommitRequest(
       groupId = "group 1",
-      retentionMs = SystemTime.milliseconds,
+      retentionMs = Time.SYSTEM.milliseconds,
       requestInfo=collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata"),
       TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata)
@@ -124,8 +122,8 @@ object SerializationTestUtils {
       versionId = 1,
       groupId = "group 1",
       requestInfo = collection.immutable.Map(
-      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata", SystemTime.milliseconds),
-      TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata, SystemTime.milliseconds)
+      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata", Time.SYSTEM.milliseconds),
+      TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata, Time.SYSTEM.milliseconds)
     ))
   }
 
