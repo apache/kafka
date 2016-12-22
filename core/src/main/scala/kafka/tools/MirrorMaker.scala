@@ -20,7 +20,7 @@ package kafka.tools
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.regex.{Pattern, PatternSyntaxException}
+import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
@@ -64,7 +64,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
  */
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
-  private var producer: MirrorMakerProducer = null
+  private[tools] var producer: MirrorMakerProducer = null
   private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
   private val isShuttingdown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
@@ -308,22 +308,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     mirrorMakerThreads.foreach(_.start())
     mirrorMakerThreads.foreach(_.awaitShutdown())
-  }
-
-  // Only for testing
-  private[kafka] def createMirrorMakerProducer(brokerList: String): Unit = {
-    // create producer
-    val producerProps = new Properties()
-    // Defaults to no data loss settings.
-    maybeSetDefaultProperty(producerProps, ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    maybeSetDefaultProperty(producerProps, ProducerConfig.RETRIES_CONFIG, Int.MaxValue.toString)
-    maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
-    maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
-    maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
-    // Always set producer key and value serializer to ByteArraySerializer.
-    producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producer = new MirrorMakerProducer(producerProps)
   }
 
   private def createOldConsumers(numStreams: Int,
@@ -704,7 +688,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class MirrorMakerProducer(val producerProps: Properties) {
+  private[kafka] class MirrorMakerProducer(val producerProps: Properties) {
 
     val sync = producerProps.getProperty("producer.type", "async").equals("sync")
 
