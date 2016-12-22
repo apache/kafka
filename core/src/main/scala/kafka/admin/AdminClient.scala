@@ -154,6 +154,18 @@ class AdminClient(val time: Time,
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
+
+  def getTopicListOffset(req: ListOffsetRequest, node: Node): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val responseBody = send(node, ApiKeys.LIST_OFFSETS, req)
+    val response = responseBody.asInstanceOf[ListOffsetResponse]
+  }
+
+
+  def getMetadata(req: MetadataRequest, node: Node): MetadataResponse = {
+    val responseBody = send(node, ApiKeys.METADATA, req)
+    responseBody.asInstanceOf[MetadataResponse]
+  }
+
   def close() {
     client.close()
   }
