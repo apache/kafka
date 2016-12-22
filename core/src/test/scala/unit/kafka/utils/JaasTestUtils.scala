@@ -63,7 +63,7 @@ object JaasTestUtils {
       s"""$moduleName required
           |  debug=$debug
           |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
-          |"""
+          |""".stripMargin
     }
   }
 
@@ -115,7 +115,7 @@ object JaasTestUtils {
   }
 
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation).toString.stripMargin
+    kafkaClientModule(mechanism, keytabLocation).toString
 
   private def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.auth;
+package org.apache.kafka.common.security;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -33,7 +33,6 @@ import static org.junit.Assert.fail;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.security.JaasUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +42,7 @@ import org.junit.Test;
  * and parsing are consistent with JAAS configuration files loaded by the JRE.
  *
  */
-public class JaasConfigProviderTest {
+public class JaasUtilsTest {
 
     private File jaasConfigFile;
 
@@ -131,7 +130,7 @@ public class JaasConfigProviderTest {
 
         Map<String, Object> configs = new HashMap<>();
         configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        Configuration configuration = JaasConfigProvider.jaasConfig(LoginType.CLIENT, configs);
+        Configuration configuration = JaasUtils.jaasConfig(LoginType.CLIENT, configs);
         AppConfigurationEntry[] dynamicEntries = configuration.getAppConfigurationEntry(LoginType.CLIENT.contextName());
         assertEquals(moduleCount, dynamicEntries.length);
 
@@ -186,7 +185,7 @@ public class JaasConfigProviderTest {
         Map<String, Object> configs = new HashMap<>();
         if (jaasConfigProp != null)
             configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        Configuration configuration = JaasConfigProvider.jaasConfig(loginType, configs);
+        Configuration configuration = JaasUtils.jaasConfig(loginType, configs);
         AppConfigurationEntry[] entry = configuration.getAppConfigurationEntry(loginType.contextName());
         assertEquals(1, entry.length);
         return entry[0];

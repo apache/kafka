@@ -519,15 +519,15 @@ public class SaslAuthenticatorTest {
         createAndCheckClientConnectionFailure(securityProtocol, "1");
 
         // Check that 'user1' can connect with a Jaas config property override
-        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.getJaasConfigProperty("PLAIN", "user1", "user1-secret"));
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret"));
         createAndCheckClientConnection(securityProtocol, "2");
 
         // Check that invalid password specified as Jaas config property results in connection failure
-        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.getJaasConfigProperty("PLAIN", "user1", "user2-secret"));
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user2-secret"));
         createAndCheckClientConnectionFailure(securityProtocol, "3");
 
         // Check that another user 'user2' can also connect with a Jaas config override without any changes to static configuration
-        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.getJaasConfigProperty("PLAIN", "user2", "user2-secret"));
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
         createAndCheckClientConnection(securityProtocol, "4");
     }
 

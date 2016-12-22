@@ -41,7 +41,7 @@ public class TestJaasConfig extends Configuration {
         return config;
     }
 
-    public static Password getJaasConfigProperty(String mechanism, String username, String password) {
+    public static Password jaasConfigProperty(String mechanism, String username, String password) {
         return new Password(loginModule(mechanism) + " required username=" + username + " password=" + password + ";");
     }
 
