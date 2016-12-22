@@ -31,8 +31,8 @@ public class ByteBufferLogInputStreamTest {
     public void iteratorIgnoresIncompleteEntries() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, 15L, "a".getBytes(), "1".getBytes());
-        builder.append(1L, 20L, "b".getBytes(), "2".getBytes());
+        builder.append(15L, "a".getBytes(), "1".getBytes());
+        builder.append(20L, "b".getBytes(), "2".getBytes());
 
         ByteBuffer recordsBuffer = builder.build().buffer();
         recordsBuffer.limit(recordsBuffer.limit() - 5);
@@ -49,7 +49,7 @@ public class ByteBufferLogInputStreamTest {
     public void testSetCreateTimeV1() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, 15L, "a".getBytes(), "1".getBytes());
+        builder.append(15L, "a".getBytes(), "1".getBytes());
         Iterator<ByteBufferLogInputStream.ByteBufferLogEntry> iterator = builder.build().shallowEntries().iterator();
 
         assertTrue(iterator.hasNext());
@@ -66,7 +66,7 @@ public class ByteBufferLogInputStreamTest {
     public void testSetCreateTimeNotAllowedV0() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, 15L, "a".getBytes(), "1".getBytes());
+        builder.append(15L, "a".getBytes(), "1".getBytes());
         Iterator<ByteBufferLogInputStream.ByteBufferLogEntry> iterator = builder.build().shallowEntries().iterator();
 
         assertTrue(iterator.hasNext());
@@ -80,7 +80,7 @@ public class ByteBufferLogInputStreamTest {
     public void testSetLogAppendTimeV1() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, 15L, "a".getBytes(), "1".getBytes());
+        builder.append(15L, "a".getBytes(), "1".getBytes());
         Iterator<ByteBufferLogInputStream.ByteBufferLogEntry> iterator = builder.build().shallowEntries().iterator();
 
         assertTrue(iterator.hasNext());
@@ -97,7 +97,7 @@ public class ByteBufferLogInputStreamTest {
     public void testSetLogAppendTimeNotAllowedV0() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, 15L, "a".getBytes(), "1".getBytes());
+        builder.append(15L, "a".getBytes(), "1".getBytes());
         Iterator<ByteBufferLogInputStream.ByteBufferLogEntry> iterator = builder.build().shallowEntries().iterator();
 
         assertTrue(iterator.hasNext());

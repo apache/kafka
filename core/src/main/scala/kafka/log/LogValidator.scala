@@ -156,7 +156,7 @@ private[kafka] object LogValidator {
       val record = logEntry.record
       validateKey(record, compactedTopic)
       validateTimestamp(record, now, timestampType, messageTimestampDiffMaxMs)
-      builder.convertAndAppend(offsetCounter.getAndIncrement(), record)
+      builder.convertAndAppendWithOffset(offsetCounter.getAndIncrement(), record)
     }
 
     builder.close()

@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;
  */
 public class Percentiles extends SampledStat implements CompoundStat {
 
-    public static enum BucketSizing {
+    public enum BucketSizing {
         CONSTANT, LINEAR
     }
 

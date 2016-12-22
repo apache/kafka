@@ -88,7 +88,7 @@ class AbstractFetcherThreadTest {
   class DummyFetchRequest(val offsets: collection.Map[TopicPartition, Long]) extends FetchRequest {
     override def isEmpty: Boolean = offsets.isEmpty
 
-    override def offset(topicAndPartition: TopicPartition): Long = offsets(topicAndPartition)
+    override def offset(topicPartition: TopicPartition): Long = offsets(topicPartition)
   }
 
   class TestPartitionData(records: MemoryRecords = MemoryRecords.EMPTY) extends PartitionData {
@@ -110,11 +110,11 @@ class AbstractFetcherThreadTest {
     type REQ = DummyFetchRequest
     type PD = PartitionData
 
-    override def processPartitionData(topicAndPartition: TopicPartition,
+    override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
                                       partitionData: PartitionData): Unit = {}
 
-    override def handleOffsetOutOfRange(topicAndPartition: TopicPartition): Long = 0L
+    override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = 0L
 
     override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {}
 
@@ -160,14 +160,14 @@ class AbstractFetcherThreadTest {
       new TestPartitionData(MemoryRecords.withRecords(1L, Record.create("hello".getBytes())))
     )
 
-    override def processPartitionData(topicAndPartition: TopicPartition,
+    override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
                                       partitionData: PartitionData): Unit = {
       // Throw exception if the fetchOffset does not match the fetcherThread partition state
       if (fetchOffset != logEndOffset)
         throw new RuntimeException(
           "Offset mismatch for partition %s: fetched offset = %d, log end offset = %d."
-            .format(topicAndPartition, fetchOffset, logEndOffset))
+            .format(topicPartition, fetchOffset, logEndOffset))
 
       // Now check message's crc
       val records = partitionData.toRecords
