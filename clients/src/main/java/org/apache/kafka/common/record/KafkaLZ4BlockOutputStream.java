@@ -261,6 +261,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         if (!finished) {
             flush();
             writeEndMark();
+            flush();
             finished = true;
         }
         if (out != null) {
