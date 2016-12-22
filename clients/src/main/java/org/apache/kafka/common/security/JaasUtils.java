@@ -50,10 +50,13 @@ public class JaasUtils {
      */
     public static Configuration jaasConfig(LoginType loginType, Map<String, ?> configs) {
         Password jaasConfigArgs = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
-        if (jaasConfigArgs == null || loginType == LoginType.SERVER)
+        if (jaasConfigArgs != null) {
+            if (loginType == LoginType.SERVER)
+                throw new IllegalArgumentException("Jaas config property not supported for server");
+            else
+                return new JaasConfig(loginType, jaasConfigArgs.value());
+        } else
             return defaultJaasConfig(loginType);
-        else
-            return new JaasConfig(loginType, jaasConfigArgs.value());
     }
 
     private static Configuration defaultJaasConfig(LoginType loginType) {
