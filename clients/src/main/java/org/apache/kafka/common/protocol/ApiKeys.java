@@ -83,9 +83,9 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         for (ApiKeys key : ApiKeys.values()) {
-            b.append("<tr>\n");
+        	b.append("<tr>\n");
             b.append("<td>");
-            b.append(key.name);
+            b.append("<a href=\"protocol_api_keys.html#"+ key.name +"\">" + key.name + "</a>");
             b.append("</td>");
             b.append("<td>");
             b.append(key.id);
