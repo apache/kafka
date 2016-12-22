@@ -56,13 +56,13 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
 
   def controllerSocketServer = {
     servers.find { server =>
-      server.kafkaController.isActive()
+      server.kafkaController.isActive
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
   }
 
   def notControllerSocketServer = {
     servers.find { server =>
-      !server.kafkaController.isActive()
+      !server.kafkaController.isActive
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
   }
 

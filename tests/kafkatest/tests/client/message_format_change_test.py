@@ -14,6 +14,7 @@
 
 from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -55,7 +56,8 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
             lambda: self.producer.each_produced_at_least(self.messages_per_producer) == True,
             timeout_sec=120, backoff_sec=1,
             err_msg="Producer did not produce all messages in reasonable amount of time"))
-        
+
+    @cluster(num_nodes=10)
     @parametrize(producer_version=str(TRUNK), consumer_version=str(TRUNK))
     @parametrize(producer_version=str(LATEST_0_9), consumer_version=str(LATEST_0_9))
     def test_compatibility(self, producer_version, consumer_version):

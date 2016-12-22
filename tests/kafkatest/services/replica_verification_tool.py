@@ -36,7 +36,7 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
         self.topic = topic
         self.report_interval_ms = report_interval_ms
         self.security_protocol = security_protocol
-        self.security_config = SecurityConfig(security_protocol)
+        self.security_config = SecurityConfig(self.context, security_protocol)
         self.partition_lag = {}
         self.stop_timeout_sec = stop_timeout_sec
 
@@ -65,6 +65,7 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
         topic_partition = topic + ',' + str(partition)
         lag = self.partition_lag.get(topic_partition, -1)
         self.logger.debug("Retuning lag for {} as {}".format(topic_partition, lag))
+
         return lag
 
     def start_cmd(self, node):

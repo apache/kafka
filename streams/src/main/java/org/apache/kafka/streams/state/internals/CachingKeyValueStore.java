@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -115,6 +116,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     public void close() {
         flush();
         underlying.close();
+        cache.close(name);
     }
 
     @Override
@@ -129,8 +131,15 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized V get(final K key) {
+        validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
+    }
+
+    private void validateStoreOpen() {
+        if (!isOpen()) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
+        }
     }
 
     private V get(final byte[] rawKey) {
@@ -157,6 +166,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
+        validateStoreOpen();
         final byte[] origFrom = serdes.rawKey(from);
         final byte[] origTo = serdes.rawKey(to);
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
@@ -166,6 +176,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public KeyValueIterator<K, V> all() {
+        validateStoreOpen();
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
@@ -173,11 +184,13 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized long approximateNumEntries() {
+        validateStoreOpen();
         return underlying.approximateNumEntries();
     }
 
     @Override
     public synchronized void put(final K key, final V value) {
+        validateStoreOpen();
         put(serdes.rawKey(key), value);
     }
 
@@ -189,6 +202,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized V putIfAbsent(final K key, final V value) {
+        validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);
         if (v == null) {
@@ -206,6 +220,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized V delete(final K key) {
+        validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);
         put(rawKey, null);

@@ -17,14 +17,16 @@
 
 package kafka.consumer
 
-import kafka.api.{OffsetRequest, Request, FetchRequestBuilder, FetchResponsePartitionData}
+import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
-import kafka.server.{PartitionFetchState, AbstractFetcherThread}
+import kafka.server.{AbstractFetcherThread, PartitionFetchState}
 import kafka.common.{ErrorMapping, TopicAndPartition}
+
 import scala.collection.Map
 import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.MemoryRecords
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
@@ -81,7 +83,7 @@ class ConsumerFetcherThread(name: String,
       case OffsetRequest.LargestTimeString => OffsetRequest.LatestTime
       case _ => OffsetRequest.LatestTime
     }
-    val topicAndPartition = new TopicAndPartition(topicPartition.topic, topicPartition.partition)
+    val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
     val newOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, startTimestamp, Request.OrdinaryConsumerId)
     val pti = partitionMap(topicPartition)
     pti.resetFetchOffset(newOffset)
@@ -123,7 +125,7 @@ object ConsumerFetcherThread {
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
     def errorCode: Short = underlying.error
-    def toByteBufferMessageSet: ByteBufferMessageSet = underlying.messages.asInstanceOf[ByteBufferMessageSet]
+    def toRecords: MemoryRecords = underlying.messages.asInstanceOf[ByteBufferMessageSet].asRecords
     def highWatermark: Long = underlying.hw
     def exception: Option[Throwable] =
       if (errorCode == ErrorMapping.NoError) None else Some(ErrorMapping.exceptionFor(errorCode))

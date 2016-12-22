@@ -16,6 +16,8 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
+from ducktape.mark.resource import cluster
+
 from kafkatest.services.simple_consumer_shell import SimpleConsumerShell
 from kafkatest.services.verifiable_producer import VerifiableProducer
 
@@ -25,6 +27,7 @@ TOPIC = "topic-simple-consumer-shell"
 MAX_MESSAGES = 100
 NUM_PARTITIONS = 1
 REPLICATION_FACTOR = 1
+
 
 class SimpleConsumerShellTest(Test):
     """
@@ -61,6 +64,7 @@ class SimpleConsumerShellTest(Test):
         self.simple_consumer_shell = SimpleConsumerShell(self.test_context, 1, self.kafka, TOPIC)
         self.simple_consumer_shell.start()
 
+    @cluster(num_nodes=4)
     def test_simple_consumer_shell(self):
         """
         Tests if SimpleConsumerShell is fetching expected records
