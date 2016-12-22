@@ -16,4 +16,4 @@
  */
 package org.apache.kafka.common.network;
 
-public enum Mode { CLIENT, SERVER };
+public enum Mode { CLIENT, SERVER }
