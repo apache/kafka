@@ -476,7 +476,7 @@ public class StreamThread extends Thread {
         updateSuspendedTasks();
 
         if (firstException.get() != null) {
-            throw firstException.get();
+            throw new StreamsException(logPrefix + " failed to suspend stream tasks", firstException.get());
         }
     }
 

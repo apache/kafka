@@ -881,12 +881,7 @@ public class StreamThreadTest {
         activeTasks.put(testStreamTask.id, testStreamTask.partitions);
 
 
-        thread.partitionAssignor(new StreamPartitionAssignor() {
-            @Override
-            Map<TaskId, Set<TopicPartition>> activeTasks() {
-                return activeTasks;
-            }
-        });
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
@@ -956,7 +951,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringOnTaskCloseTopologyDuringSuspendState() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringCloseTopologyWhenSuspendingState() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
@@ -991,12 +986,7 @@ public class StreamThreadTest {
         activeTasks.put(testStreamTask.id, testStreamTask.partitions);
 
 
-        thread.partitionAssignor(new StreamPartitionAssignor() {
-            @Override
-            Map<TaskId, Set<TopicPartition>> activeTasks() {
-                return activeTasks;
-            }
-        });
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
@@ -1010,7 +1000,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringOnTaskFlushStateDuringSuspendState() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhileSuspendingState() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
@@ -1045,12 +1035,7 @@ public class StreamThreadTest {
         activeTasks.put(testStreamTask.id, testStreamTask.partitions);
 
 
-        thread.partitionAssignor(new StreamPartitionAssignor() {
-            @Override
-            Map<TaskId, Set<TopicPartition>> activeTasks() {
-                return activeTasks;
-            }
-        });
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);

@@ -342,7 +342,7 @@ public class ProcessorStateManager {
     /**
      * @throws IOException if any error happens when closing the state stores
      */
-    public void close(Map<TopicPartition, Long> ackedOffsets, final boolean writeCheckpoint) throws IOException {
+    public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
             // attempting to close the stores, just in case they
             // are not closed by a ProcessorNode yet
@@ -357,7 +357,7 @@ public class ProcessorStateManager {
                     }
                 }
 
-                if (writeCheckpoint) {
+                if (ackedOffsets != null) {
                     Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
                     for (String storeName : stores.keySet()) {
                         TopicPartition part;
