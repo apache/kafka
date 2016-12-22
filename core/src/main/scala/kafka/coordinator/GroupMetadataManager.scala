@@ -25,7 +25,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
-import kafka.common.{MessageFormatter, TopicAndPartition, _}
+import kafka.common.{MessageFormatter, _}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
@@ -234,9 +234,9 @@ class GroupMetadataManager(val brokerId: Int,
     // construct the message set to append
     getMagicAndTimestamp(partitionFor(group.groupId)) match {
       case Some((magicValue, timestampType, timestamp)) =>
-        val records = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+        val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
           Record.create(magicValue, timestampType, timestamp,
-            GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
+            GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition.topic, topicPartition.partition),
             GroupMetadataManager.offsetCommitValue(offsetAndMetadata))
         }.toSeq
 
@@ -260,15 +260,15 @@ class GroupMetadataManager(val brokerId: Int,
             group synchronized {
               if (statusError == Errors.NONE) {
                 if (!group.is(Dead)) {
-                  filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-                    group.completePendingOffsetWrite(topicAndPartition, offsetAndMetadata)
+                  filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
+                    group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
                 Errors.NONE.code
               } else {
                 if (!group.is(Dead)) {
-                  filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-                    group.failPendingOffsetWrite(topicAndPartition, offsetAndMetadata)
+                  filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
+                    group.failPendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
 
@@ -298,11 +298,11 @@ class GroupMetadataManager(val brokerId: Int,
             }
 
           // compute the final error codes for the commit response
-          val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+          val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
-              (topicAndPartition, responseCode)
+              (topicPartition, responseCode)
             else
-              (topicAndPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
+              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
           }
 
           // finally trigger the callback logic passed from the API layer
@@ -316,8 +316,8 @@ class GroupMetadataManager(val brokerId: Int,
         Some(DelayedStore(entries, putCacheCallback))
 
       case None =>
-        val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-          (topicAndPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
+        val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
+          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
         }
         responseCallback(commitStatus)
         None
@@ -366,7 +366,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def loadGroupsForPartition(offsetsPartition: Int,
                              onGroupLoaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
 
     def loadGroupsAndOffsets() {
@@ -510,7 +510,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
@@ -532,11 +532,11 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-        .format(numOffsetsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
+      if (numOffsetsRemoved > 0)
+        info(s"Removed $numOffsetsRemoved cached offsets for $topicPartition on follower transition.")
 
-      if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
-        .format(numGroupsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
+      if (numGroupsRemoved > 0)
+        info(s"Removed $numGroupsRemoved cached groups for $topicPartition on follower transition.")
     }
   }
 
@@ -557,11 +557,11 @@ class GroupMetadataManager(val brokerId: Int,
       }
 
       val offsetsPartition = partitionFor(groupId)
+      val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
       getMagicAndTimestamp(offsetsPartition) match {
         case Some((magicValue, timestampType, timestamp)) =>
-          val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+          val partitionOpt = replicaManager.getPartition(appendPartition)
           partitionOpt.foreach { partition =>
-            val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
             val tombstones = expiredOffsets.map { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
@@ -589,7 +589,7 @@ class GroupMetadataManager(val brokerId: Int,
               } catch {
                 case t: Throwable =>
                   error(s"Failed to append ${tombstones.size} tombstones to $appendPartition for expired offsets and/or metadata for group $groupId.", t)
-                // ignore and continue
+                  // ignore and continue
               }
             }
           }
@@ -603,7 +603,7 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
-    val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, partitionId)
+    val partitionOpt = replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, partitionId))
 
     val hw = partitionOpt.map { partition =>
       partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)
@@ -648,8 +648,8 @@ class GroupMetadataManager(val brokerId: Int,
    * @return  Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
    */
   private def getMagicAndTimestamp(partition: Int): Option[(Byte, TimestampType, Long)] = {
-    val groupMetadataTopicAndPartition = TopicAndPartition(Topic.GroupMetadataTopicName, partition)
-    replicaManager.getMagicAndTimestampType(groupMetadataTopicAndPartition).map { case (messageFormatVersion, timestampType) =>
+    val groupMetadataTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partition)
+    replicaManager.getMagicAndTimestampType(groupMetadataTopicPartition).map { case (messageFormatVersion, timestampType) =>
       val timestamp = if (messageFormatVersion == Record.MAGIC_VALUE_V0) Record.NO_TIMESTAMP else time.milliseconds()
       (messageFormatVersion, timestampType, timestamp)
     }

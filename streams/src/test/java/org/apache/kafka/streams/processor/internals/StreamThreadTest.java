@@ -55,8 +55,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
@@ -131,6 +133,8 @@ public class StreamThreadTest {
 
     private static class TestStreamTask extends StreamTask {
         public boolean committed = false;
+        private boolean closed;
+        private boolean closedStateManager;
 
         public TestStreamTask(TaskId id,
                               String applicationId,
@@ -159,6 +163,18 @@ public class StreamThreadTest {
         @Override
         protected void initializeOffsetLimits() {
             // do nothing
+        }
+
+        @Override
+        public void close() {
+            this.closed = true;
+            super.close();
+        }
+
+        @Override
+        void closeStateManager() {
+            super.closeStateManager();
+            this.closedStateManager = true;
         }
     }
 
@@ -298,8 +314,8 @@ public class StreamThreadTest {
     }
 
     final static String TOPIC = "topic";
-    final Set<TopicPartition> assignmentThread1 = Collections.singleton(new TopicPartition(TOPIC, 0));
-    final Set<TopicPartition> assignmentThread2 = Collections.singleton(new TopicPartition(TOPIC, 1));
+    final Set<TopicPartition> task0Assignment = Collections.singleton(new TopicPartition(TOPIC, 0));
+    final Set<TopicPartition> task1Assignment = Collections.singleton(new TopicPartition(TOPIC, 1));
 
     @Test
     public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
@@ -318,16 +334,23 @@ public class StreamThreadTest {
 
         final StreamThread thread1 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 1, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
         final StreamThread thread2 = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId + 2, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder));
-        thread1.partitionAssignor(new MockStreamsPartitionAssignor());
-        thread2.partitionAssignor(new MockStreamsPartitionAssignor());
+
+        final Map<TaskId, Set<TopicPartition>> task0 = Collections.singletonMap(new TaskId(0, 0), task0Assignment);
+        final Map<TaskId, Set<TopicPartition>> task1 = Collections.singletonMap(new TaskId(0, 1), task1Assignment);
+
+        final Map<TaskId, Set<TopicPartition>> thread1Assignment = new HashMap<>(task0);
+        final Map<TaskId, Set<TopicPartition>> thread2Assignment = new HashMap<>(task1);
+
+        thread1.partitionAssignor(new MockStreamsPartitionAssignor(thread1Assignment));
+        thread2.partitionAssignor(new MockStreamsPartitionAssignor(thread2Assignment));
 
         // revoke (to get threads in correct state)
         thread1.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
         thread2.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
 
         // assign
-        thread1.rebalanceListener.onPartitionsAssigned(assignmentThread1);
-        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+        thread1.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread2.rebalanceListener.onPartitionsAssigned(task1Assignment);
 
         final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
         for (TaskId tid : thread1.tasks().keySet()) {
@@ -339,19 +362,26 @@ public class StreamThreadTest {
         }
 
         // revoke (task will be suspended)
-        thread1.rebalanceListener.onPartitionsRevoked(assignmentThread1);
-        thread2.rebalanceListener.onPartitionsRevoked(assignmentThread2);
+        thread1.rebalanceListener.onPartitionsRevoked(task0Assignment);
+        thread2.rebalanceListener.onPartitionsRevoked(task1Assignment);
+
 
         // assign reverted
+        thread1Assignment.clear();
+        thread1Assignment.putAll(task1);
+
+        thread2Assignment.clear();
+        thread2Assignment.putAll(task0);
+
         Thread runIt = new Thread(new Runnable() {
             @Override
             public void run() {
-                thread1.rebalanceListener.onPartitionsAssigned(assignmentThread2);
+                thread1.rebalanceListener.onPartitionsAssigned(task1Assignment);
             }
         });
         runIt.start();
 
-        thread2.rebalanceListener.onPartitionsAssigned(assignmentThread1);
+        thread2.rebalanceListener.onPartitionsAssigned(task0Assignment);
 
         runIt.join();
 
@@ -362,12 +392,16 @@ public class StreamThreadTest {
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
+
+        private final Map<TaskId, Set<TopicPartition>> activeTaskAssignment;
+
+        public MockStreamsPartitionAssignor(final Map<TaskId, Set<TopicPartition>> activeTaskAssignment) {
+            this.activeTaskAssignment = activeTaskAssignment;
+        }
+
         @Override
         Map<TaskId, Set<TopicPartition>> activeTasks() {
-            Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-            activeTasks.put(new TaskId(0, 0), assignmentThread1);
-            activeTasks.put(new TaskId(0, 1), assignmentThread2);
-            return activeTasks;
+            return activeTaskAssignment;
         }
     }
 
@@ -411,6 +445,8 @@ public class StreamThreadTest {
                 }
             };
 
+
+
             initPartitionGrouper(config, thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
@@ -431,6 +467,11 @@ public class StreamThreadTest {
             //
             // Assign t1p1 and t1p2. This should create task1 & task2
             //
+            final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+            activeTasks.put(task1, Collections.singleton(t1p1));
+            activeTasks.put(task2, Collections.singleton(t1p2));
+            thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
             prevTasks = new HashMap<>(thread.tasks());
@@ -463,6 +504,8 @@ public class StreamThreadTest {
             //
             // Revoke t1p1 and t1p2. This should remove task1 & task2
             //
+            activeTasks.clear();
+
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
             prevTasks = new HashMap<>(thread.tasks());
@@ -605,7 +648,7 @@ public class StreamThreadTest {
 
         final StreamsConfig config = new StreamsConfig(configProps());
         final StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId,
-                                               clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
 
         thread.partitionAssignor(new StreamPartitionAssignor() {
             @Override
@@ -667,7 +710,125 @@ public class StreamThreadTest {
 
         assertThat(restoreConsumer.assignment(), equalTo(Utils.mkSet(new TopicPartition("stream-thread-test-count-one-changelog", 0),
                                                                      new TopicPartition("stream-thread-test-count-two-changelog", 0))));
+    }
 
+    @Test
+    public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("appId");
+        builder.stream("t1").groupByKey().count("count-one");
+        builder.stream("t2").groupByKey().count("count-two");
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder));
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+        restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
+                                         Collections.singletonList(new PartitionInfo("stream-thread-test-count-one-changelog",
+                                                                                     0,
+                                                                                     null,
+                                                                                     new Node[0],
+                                                                                     new Node[0])));
+        restoreConsumer.updatePartitions("stream-thread-test-count-two-changelog",
+                                         Collections.singletonList(new PartitionInfo("stream-thread-test-count-two-changelog",
+                                                                                     0,
+                                                                                     null,
+                                                                                     new Node[0],
+                                                                                     new Node[0])));
+
+
+        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 0), 0L);
+        offsets.put(new TopicPartition("stream-thread-test-count-two-changelog", 0), 0L);
+        restoreConsumer.updateEndOffsets(offsets);
+        restoreConsumer.updateBeginningOffsets(offsets);
+
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final TopicPartition t1 = new TopicPartition("t1", 0);
+        standbyTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final TopicPartition t2 = new TopicPartition("t2", 0);
+        activeTasks.put(new TaskId(1, 0), Utils.mkSet(t2));
+
+        thread.partitionAssignor(new StreamPartitionAssignor() {
+            @Override
+            Map<TaskId, Set<TopicPartition>> standbyTasks() {
+                return standbyTasks;
+            }
+
+            @Override
+            Map<TaskId, Set<TopicPartition>> activeTasks() {
+                return activeTasks;
+            }
+        });
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t2));
+
+        // swap the assignment around and make sure we don't get any exceptions
+        standbyTasks.clear();
+        activeTasks.clear();
+        standbyTasks.put(new TaskId(1, 0), Utils.mkSet(t2));
+        activeTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t1));
+    }
+
+    @Test
+    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("appId");
+        builder.stream(Pattern.compile("t.*")).to("out");
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final Map<Collection<TopicPartition>, TestStreamTask> createdTasks = new HashMap<>();
+
+        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                final ProcessorTopology topology = builder.build(id.topicGroupId);
+                final TestStreamTask task = new TestStreamTask(id, "appId", partitions, topology, consumer, producer, restoreConsumer, config, stateDirectory);
+                createdTasks.put(partitions, task);
+                return task;
+            }
+        };
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final TopicPartition t1 = new TopicPartition("t1", 0);
+        final Set<TopicPartition> task00Partitions = new HashSet<>();
+        task00Partitions.add(t1);
+        final TaskId taskId = new TaskId(0, 0);
+        activeTasks.put(taskId, task00Partitions);
+
+        thread.partitionAssignor(new StreamPartitionAssignor() {
+            @Override
+            Map<TaskId, Set<TopicPartition>> activeTasks() {
+                return activeTasks;
+            }
+        });
+
+        // should create task for id 0_0 with a single partition
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
+
+        final TestStreamTask firstTask = createdTasks.get(task00Partitions);
+        assertThat(firstTask.id(), is(taskId));
+
+        // update assignment for the task 0_0 so it now has 2 partitions
+        task00Partitions.add(new TopicPartition("t2", 0));
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
+
+        // should close the first task as the assignment has changed
+        assertTrue("task should have been closed as assignment has changed", firstTask.closed);
+        assertTrue("tasks state manager should have been closed as assignment has changed", firstTask.closedStateManager);
+        // should have created a new task for 00
+        assertThat(createdTasks.get(task00Partitions).id(), is(taskId));
     }
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {

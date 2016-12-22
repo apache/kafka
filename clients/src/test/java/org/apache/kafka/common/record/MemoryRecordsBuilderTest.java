@@ -55,10 +55,9 @@ public class MemoryRecordsBuilderTest {
                 TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
 
         int uncompressedSize = 0;
-        long offset = 0L;
         for (Record record : records) {
             uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
-            builder.append(offset++, record);
+            builder.append(record);
         }
 
         MemoryRecords built = builder.build();
@@ -86,10 +85,9 @@ public class MemoryRecordsBuilderTest {
                 TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
 
         int uncompressedSize = 0;
-        long offset = 0L;
         for (Record record : records) {
             uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
-            builder.append(offset++, record);
+            builder.append(record);
         }
 
         MemoryRecords built = builder.build();
@@ -110,9 +108,9 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, buffer.capacity());
-        builder.append(0L, 0L, "a".getBytes(), "1".getBytes());
-        builder.append(1L, 0L, "b".getBytes(), "2".getBytes());
-        builder.append(2L, 0L, "c".getBytes(), "3".getBytes());
+        builder.append(0L, "a".getBytes(), "1".getBytes());
+        builder.append(0L, "b".getBytes(), "2".getBytes());
+        builder.append(0L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -135,14 +133,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, buffer.capacity());
 
-        builder.convertAndAppend(0L, Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()));
-        builder.convertAndAppend(1L, Record.create(Record.MAGIC_VALUE_V0, 0L, "b".getBytes(), "2".getBytes()));
-        builder.convertAndAppend(2L, Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "b".getBytes(), "2".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
-
         assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         for (Record record : records.records()) {
@@ -159,9 +156,9 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
-        builder.append(0L, 0L, "a".getBytes(), "1".getBytes());
-        builder.append(1L, 2L, "b".getBytes(), "2".getBytes());
-        builder.append(2L, 1L, "c".getBytes(), "3".getBytes());
+        builder.append(0L, "a".getBytes(), "1".getBytes());
+        builder.append(2L, "b".getBytes(), "2".getBytes());
+        builder.append(1L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -188,11 +185,11 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
-        builder.append(0L, 0L, "a".getBytes(), "1".getBytes());
-        builder.append(1L, 1L, "b".getBytes(), "2".getBytes());
+        builder.append(0L, "a".getBytes(), "1".getBytes());
+        builder.append(1L, "b".getBytes(), "2".getBytes());
 
         assertFalse(builder.hasRoomFor("c".getBytes(), "3".getBytes()));
-        builder.append(2L, 2L, "c".getBytes(), "3".getBytes());
+        builder.append(2L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -206,6 +203,33 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendAtInvalidOffset() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        long logAppendTime = System.currentTimeMillis();
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
+
+        builder.appendWithOffset(0L, System.currentTimeMillis(), "a".getBytes(), null);
+
+        // offsets must increase monotonically
+        builder.appendWithOffset(0L, System.currentTimeMillis(), "b".getBytes(), null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendWithInvalidMagic() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        long logAppendTime = System.currentTimeMillis();
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
+
+        builder.append(Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), null));
+    }
+
     @Test
     public void convertUsingCreateTime() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -215,14 +239,14 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, buffer.capacity());
 
-        builder.convertAndAppend(0L, Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()));
-        builder.convertAndAppend(0L, Record.create(Record.MAGIC_VALUE_V0, 0L, "b".getBytes(), "2".getBytes()));
-        builder.convertAndAppend(0L, Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "b".getBytes(), "2".getBytes()));
+        builder.convertAndAppend(Record.create(Record.MAGIC_VALUE_V0, 0L, "c".getBytes(), "3".getBytes()));
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(Record.NO_TIMESTAMP, info.maxTimestamp);
-        assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
+        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
         for (Record record : records.records()) {
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());

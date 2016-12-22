@@ -60,8 +60,8 @@ public class MemoryRecordsTest {
 
         for (int i = 0; i < list.size(); i++) {
             Record r = list.get(i);
-            builder1.append(firstOffset + i, r);
-            builder2.append(firstOffset + i, i + 1, toNullableArray(r.key()), toNullableArray(r.value()));
+            builder1.append(r);
+            builder2.append(i + 1, toNullableArray(r.key()), toNullableArray(r.value()));
         }
 
         MemoryRecords recs1 = builder1.build();
@@ -85,7 +85,7 @@ public class MemoryRecordsTest {
     @Test
     public void testHasRoomForMethod() {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression, TimestampType.CREATE_TIME);
-        builder.append(0, Record.create(magic, 0L, "a".getBytes(), "1".getBytes()));
+        builder.append(Record.create(magic, 0L, "a".getBytes(), "1".getBytes()));
 
         assertTrue(builder.hasRoomFor("b".getBytes(), "2".getBytes()));
         builder.close();
@@ -95,23 +95,23 @@ public class MemoryRecordsTest {
     @Test
     public void testFilterTo() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME);
-        builder.append(0L, 10L, null, "a".getBytes());
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
-        builder.append(1L, 11L, "1".getBytes(), "b".getBytes());
-        builder.append(2L, 12L, null, "c".getBytes());
+        builder.append(11L, "1".getBytes(), "b".getBytes());
+        builder.append(12L, null, "c".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
-        builder.append(3L, 13L, null, "d".getBytes());
-        builder.append(4L, 20L, "4".getBytes(), "e".getBytes());
-        builder.append(5L, 15L, "5".getBytes(), "f".getBytes());
+        builder.append(13L, null, "d".getBytes());
+        builder.append(20L, "4".getBytes(), "e".getBytes());
+        builder.append(15L, "5".getBytes(), "f".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
-        builder.append(6L, 16L, "6".getBytes(), "g".getBytes());
+        builder.append(16L, "6".getBytes(), "g".getBytes());
         builder.close();
 
         buffer.flip();
@@ -175,18 +175,18 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime);
-        builder.append(0L, 10L, null, "a".getBytes());
+        builder.append(10L, null, "a".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 1L, logAppendTime);
-        builder.append(1L, 11L, "1".getBytes(), "b".getBytes());
-        builder.append(2L, 12L, null, "c".getBytes());
+        builder.append(11L, "1".getBytes(), "b".getBytes());
+        builder.append(12L, null, "c".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 3L, logAppendTime);
-        builder.append(3L, 13L, null, "d".getBytes());
-        builder.append(4L, 14L, "4".getBytes(), "e".getBytes());
-        builder.append(5L, 15L, "5".getBytes(), "f".getBytes());
+        builder.append(13L, null, "d".getBytes());
+        builder.append(14L, "4".getBytes(), "e".getBytes());
+        builder.append(15L, "5".getBytes(), "f".getBytes());
         builder.close();
 
         buffer.flip();

@@ -36,6 +36,7 @@ import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
+import org.apache.kafka.common.TopicPartition
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
@@ -121,9 +122,9 @@ class Log(@volatile var dir: File,
       .format(name, segments.size(), logEndOffset, time.milliseconds - startMs))
   }
 
-  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(dir)
+  val topicPartition: TopicPartition = Log.parseTopicPartitionName(dir)
 
-  private val tags = Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
+  private val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
@@ -390,7 +391,7 @@ class Log(@volatile var dir: File,
               if (logEntry.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
-                BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+                BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
                 BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
                 throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
                   .format(logEntry.sizeInBytes, config.maxMessageSize))
@@ -480,7 +481,7 @@ class Log(@volatile var dir: File,
       // Check if the message sizes are valid.
       val messageSize = entry.sizeInBytes
       if(messageSize > config.maxMessageSize) {
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
         throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
           .format(messageSize, config.maxMessageSize))
@@ -611,7 +612,7 @@ class Log(@volatile var dir: File,
         targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP)
       throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
-          s"for partition $topicAndPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
+          s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $KAFKA_0_10_0_IV0")
 
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
@@ -1120,34 +1121,31 @@ object Log {
   /**
    * Parse the topic and partition out of the directory name of a log
    */
-  def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    val dirName = dir.getName
-    if (dirName == null || dirName.isEmpty || !dirName.contains('-')) {
-      throwException(dir)
+  def parseTopicPartitionName(dir: File): TopicPartition = {
+
+    def exception(dir: File): KafkaException = {
+      new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
+        "'" + dir.getName + "' is not in the form of topic-partition\n" +
+        "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
+        "directory")
     }
+
+    val dirName = dir.getName
+    if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
+      throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix)) {
-        dirName.substring(0, dirName.indexOf('.'))
-      } else {
-        dirName
-      }
+      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.indexOf('.'))
+      else dirName
 
     val index = name.lastIndexOf('-')
-    val topic: String = name.substring(0, index)
-    val partition: String = name.substring(index + 1)
-    if (topic.length < 1 || partition.length < 1) {
-      throwException(dir)
-    }
-    TopicAndPartition(topic, partition.toInt)
+    val topic = name.substring(0, index)
+    val partition = name.substring(index + 1)
+    if (topic.length < 1 || partition.length < 1)
+      throw exception(dir)
+
+    new TopicPartition(topic, partition.toInt)
   }
 
-
-  def throwException(dir: File) {
-    throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
-      "'" + dir.getName + "' is not in the form of topic-partition\n" +
-      "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
-      "directory")
-  }
 }
 
