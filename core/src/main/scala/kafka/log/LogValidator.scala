@@ -124,13 +124,15 @@ private[kafka] object LogValidator {
         val entry = records.shallowEntries.iterator.next()
         val offset = offsetCounter.addAndGet(validatedRecords.size) - 1
         entry.setOffset(offset)
-        if (messageTimestampType == TimestampType.CREATE_TIME)
-          entry.setCreateTime(maxTimestamp)
-        else if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
-          entry.setLogAppendTime(now)
+
+        val shallowTimestamp = if (messageTimestampType == TimestampType.LOG_APPEND_TIME) now else maxTimestamp
+        if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
+          entry.setLogAppendTime(shallowTimestamp)
+        else if (messageTimestampType == TimestampType.CREATE_TIME)
+          entry.setCreateTime(shallowTimestamp)
 
         ValidationAndOffsetAssignResult(validatedRecords = records,
-          maxTimestamp = if (messageTimestampType == TimestampType.LOG_APPEND_TIME) now else maxTimestamp,
+          maxTimestamp = shallowTimestamp,
           shallowOffsetOfMaxTimestamp = offset,
           messageSizeMaybeChanged = false)
       }
