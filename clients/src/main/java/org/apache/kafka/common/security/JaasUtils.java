@@ -52,7 +52,7 @@ public class JaasUtils {
         Password jaasConfigArgs = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
         if (jaasConfigArgs != null) {
             if (loginType == LoginType.SERVER)
-                throw new IllegalArgumentException("Jaas config property not supported for server");
+                throw new IllegalArgumentException("JAAS config property not supported for server");
             else
                 return new JaasConfig(loginType, jaasConfigArgs.value());
         } else
@@ -94,7 +94,7 @@ public class JaasUtils {
     public static String jaasConfigOption(Configuration jaasConfig, String loginContextName, String key) throws IOException {
         AppConfigurationEntry[] configurationEntries = jaasConfig.getAppConfigurationEntry(loginContextName);
         if (configurationEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in this configuration.";
+            String errorMessage = "Could not find a '" + loginContextName + "' entry in this JAAS configuration.";
             throw new IOException(errorMessage);
         }
 
