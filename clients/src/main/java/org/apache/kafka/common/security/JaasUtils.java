@@ -43,10 +43,12 @@ public class JaasUtils {
 
     /**
      * Returns a JAAS Configuration object. For loginType SERVER, default Configuration
-     * is returned. For loginType CLIENT, if Jaas configuration property
+     * is returned. For loginType CLIENT, if JAAS configuration property
      * {@link SaslConfigs#SASL_JAAS_CONFIG} is specified, the configuration object
      * is created by parsing the property value. Otherwise, the default Configuration
      * is returned.
+     * @throws IllegalArgumentException if JAAS configuration property is specified
+     * for loginType SERVER
      */
     public static Configuration jaasConfig(LoginType loginType, Map<String, ?> configs) {
         Password jaasConfigArgs = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);

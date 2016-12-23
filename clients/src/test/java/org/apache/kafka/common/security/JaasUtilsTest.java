@@ -17,9 +17,12 @@
 package org.apache.kafka.common.security;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
@@ -40,7 +43,6 @@ import org.junit.Test;
 /**
  * Tests parsing of {@link SaslConfigs#SASL_JAAS_CONFIG} property and verifies that the format
  * and parsing are consistent with JAAS configuration files loaded by the JRE.
- *
  */
 public class JaasUtilsTest {
 
@@ -57,12 +59,11 @@ public class JaasUtilsTest {
     @After
     public void tearDown() {
         jaasConfigFile.delete();
-
     }
 
     @Test
     public void testConfigNoOptions() throws Exception {
-        testConfiguration("test.testConfigNoOptions", LoginModuleControlFlag.REQUIRED, new HashMap<String, Object>());
+        checkConfiguration("test.testConfigNoOptions", LoginModuleControlFlag.REQUIRED, new HashMap<String, Object>());
     }
 
     @Test
@@ -76,7 +77,7 @@ public class JaasUtilsTest {
         Map<String, Object> options = new HashMap<>();
         options.put("propName", "propValue");
         for (LoginModuleControlFlag controlFlag : controlFlags) {
-            testConfiguration("test.testControlFlag", controlFlag, options);
+            checkConfiguration("test.testControlFlag", controlFlag, options);
         }
     }
 
@@ -84,7 +85,7 @@ public class JaasUtilsTest {
     public void testSingleOption() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("propName", "propValue");
-        testConfiguration("test.testSingleOption", LoginModuleControlFlag.REQUISITE, options);
+        checkConfiguration("test.testSingleOption", LoginModuleControlFlag.REQUISITE, options);
     }
 
     @Test
@@ -92,7 +93,7 @@ public class JaasUtilsTest {
         Map<String, Object> options = new HashMap<>();
         for (int i = 0; i < 10; i++)
             options.put("propName" + i, "propValue" + i);
-        testConfiguration("test.testMultipleOptions", LoginModuleControlFlag.SUFFICIENT, options);
+        checkConfiguration("test.testMultipleOptions", LoginModuleControlFlag.SUFFICIENT, options);
     }
 
     @Test
@@ -101,7 +102,7 @@ public class JaasUtilsTest {
         options.put("propName", "prop value");
         options.put("propName2", "value1 = 1, value2 = 2");
         String config = String.format("test.testQuotedOptionValue required propName=\"%s\" propName2=\"%s\";", options.get("propName"), options.get("propName2"));
-        testConfiguration(config, "test.testQuotedOptionValue", LoginModuleControlFlag.REQUIRED, options);
+        checkConfiguration(config, "test.testQuotedOptionValue", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test
@@ -109,7 +110,7 @@ public class JaasUtilsTest {
         Map<String, Object> options = new HashMap<>();
         options.put("prop name", "propValue");
         String config = "test.testQuotedOptionName required \"prop name\"=propValue;";
-        testConfiguration(config, "test.testQuotedOptionName", LoginModuleControlFlag.REQUIRED, options);
+        checkConfiguration(config, "test.testQuotedOptionName", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test
@@ -149,27 +150,27 @@ public class JaasUtilsTest {
 
     @Test
     public void testMissingLoginModule() throws Exception {
-        testInvalidConfiguration("  required option1=value1;");
+        checkInvalidConfiguration("  required option1=value1;");
     }
 
     @Test
     public void testMissingControlFlag() throws Exception {
-        testInvalidConfiguration("test.loginModule option1=value1;");
+        checkInvalidConfiguration("test.loginModule option1=value1;");
     }
 
     @Test
     public void testMissingOptionValue() throws Exception {
-        testInvalidConfiguration("loginModule required option1;");
+        checkInvalidConfiguration("loginModule required option1;");
     }
 
     @Test
     public void testMissingSemicolon() throws Exception {
-        testInvalidConfiguration("test.testMissingSemicolon required option1=value1");
+        checkInvalidConfiguration("test.testMissingSemicolon required option1=value1");
     }
 
     @Test
     public void testNumericOptionWithoutQuotes() throws Exception {
-        testInvalidConfiguration("test.testNumericOptionWithoutQuotes required option1=3;");
+        checkInvalidConfiguration("test.testNumericOptionWithoutQuotes required option1=3;");
     }
 
     @Test
@@ -177,8 +178,7 @@ public class JaasUtilsTest {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "3");
         String config = "test.testNumericOptionWithQuotes required option1=\"3\";";
-        Configuration.setConfiguration(null);
-        testConfiguration(config, "test.testNumericOptionWithQuotes", LoginModuleControlFlag.REQUIRED, options);
+        checkConfiguration(config, "test.testNumericOptionWithQuotes", LoginModuleControlFlag.REQUIRED, options);
     }
 
     private AppConfigurationEntry configurationEntry(LoginType loginType, String jaasConfigProp) {
@@ -213,17 +213,14 @@ public class JaasUtilsTest {
     }
 
     private void writeConfiguration(LoginType loginType, String jaasConfigProp) throws IOException {
-        FileWriter writer = new FileWriter(jaasConfigFile);
-        writer.write(loginType.contextName() + " { ");
-        writer.write(jaasConfigProp);
-        writer.write("};");
-        writer.close();
+        List<String> lines = Arrays.asList(loginType.contextName() + " { ", jaasConfigProp, "};");
+        Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
     }
 
-    private void testConfiguration(String loginModule, LoginModuleControlFlag controlFlag, Map<String, Object> options) throws Exception {
+    private void checkConfiguration(String loginModule, LoginModuleControlFlag controlFlag, Map<String, Object> options) throws Exception {
         String jaasConfigProp = jaasConfigProp(loginModule, controlFlag, options);
-        testConfiguration(jaasConfigProp, loginModule, controlFlag, options);
+        checkConfiguration(jaasConfigProp, loginModule, controlFlag, options);
     }
 
     private void checkEntry(AppConfigurationEntry entry, String loginModule, LoginModuleControlFlag controlFlag, Map<String, ?> options) {
@@ -232,17 +229,17 @@ public class JaasUtilsTest {
         assertEquals(options, entry.getOptions());
     }
 
-    private void testConfiguration(String jaasConfigProp, String loginModule, LoginModuleControlFlag controlFlag, Map<String, Object> options) throws Exception {
+    private void checkConfiguration(String jaasConfigProp, String loginModule, LoginModuleControlFlag controlFlag, Map<String, Object> options) throws Exception {
         AppConfigurationEntry dynamicEntry = configurationEntry(LoginType.CLIENT, jaasConfigProp);
         checkEntry(dynamicEntry, loginModule, controlFlag, options);
         assertNull("Static configuration updated", Configuration.getConfiguration().getAppConfigurationEntry(LoginType.CLIENT.contextName()));
 
         writeConfiguration(LoginType.SERVER, jaasConfigProp);
-        AppConfigurationEntry jaasConfEntry = configurationEntry(LoginType.SERVER, null);
-        checkEntry(jaasConfEntry, loginModule, controlFlag, options);
+        AppConfigurationEntry staticEntry = configurationEntry(LoginType.SERVER, null);
+        checkEntry(staticEntry, loginModule, controlFlag, options);
     }
 
-    private void testInvalidConfiguration(String jaasConfigProp) throws IOException {
+    private void checkInvalidConfiguration(String jaasConfigProp) throws IOException {
         try {
             writeConfiguration(LoginType.SERVER, jaasConfigProp);
             AppConfigurationEntry entry = configurationEntry(LoginType.SERVER, null);

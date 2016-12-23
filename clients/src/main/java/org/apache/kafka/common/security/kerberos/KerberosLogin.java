@@ -376,7 +376,7 @@ public class KerberosLogin extends AbstractLogin {
             loginContext.logout();
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            loginContext = new LoginContext(loginContextName, subject);
+            loginContext = new LoginContext(loginContextName, subject, null, jaasConfig());
             log.info("Initiating re-login for {}", principal);
             loginContext.login();
         }

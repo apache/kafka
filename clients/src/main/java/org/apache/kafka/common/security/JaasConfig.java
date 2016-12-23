@@ -31,12 +31,25 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.LoginType;
 
+/**
+ * JAAS configuration parser that constructs a JAAS configuration object with a single
+ * login context from the the Kafka configuration option {@link SaslConfigs#SASL_JAAS_CONFIG}.
+ * <p/>
+ * JAAS configuration file format is described <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>.
+ * The format of the property value is:
+ * <pre>
+ * {@code
+ *   <loginModuleClass> <controlFlag> (<optionName>=<optionValue>)*;
+ * }
+ * </pre>
+ */
 class JaasConfig extends Configuration {
 
     private final String loginContextName;
-    private final AppConfigurationEntry[] appConfig;
+    private final List<AppConfigurationEntry> configEntries;
 
     public JaasConfig(LoginType loginType, String jaasConfigParams) {
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
@@ -47,15 +60,14 @@ class JaasConfig extends Configuration {
         tokenizer.wordChars('$', '$');
 
         try {
-            List<AppConfigurationEntry> entries = new ArrayList<>();
+            configEntries = new ArrayList<>();
             while (tokenizer.nextToken() != StreamTokenizer.TT_EOF) {
-                entries.add(parseAppConfigurationEntry(tokenizer));
+                configEntries.add(parseAppConfigurationEntry(tokenizer));
             }
-            if (entries.isEmpty())
+            if (configEntries.isEmpty())
                 throw new IllegalArgumentException("Login module not specified in JAAS config");
 
             this.loginContextName = loginType.contextName();
-            this.appConfig = entries.toArray(new AppConfigurationEntry[entries.size()]);
 
         } catch (IOException e) {
             throw new KafkaException("Unexpected exception while parsing JAAS config");
@@ -64,7 +76,10 @@ class JaasConfig extends Configuration {
 
     @Override
     public AppConfigurationEntry[] getAppConfigurationEntry(String name) {
-        return this.loginContextName.equals(name) ? this.appConfig : null;
+        if (this.loginContextName.equals(name))
+            return configEntries.toArray(new AppConfigurationEntry[0]);
+        else
+            return  null;
     }
 
     private LoginModuleControlFlag loginModuleControlFlag(String flag) {
