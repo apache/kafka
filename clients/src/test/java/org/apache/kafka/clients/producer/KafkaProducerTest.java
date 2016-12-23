@@ -65,8 +65,8 @@ public class KafkaProducerTest {
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
                     props, new ByteArraySerializer(), new ByteArraySerializer());
         } catch (KafkaException e) {
-            Assert.assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+            Assert.assertEquals(oldInitCount, MockMetricsReporter.INIT_COUNT.get());
+            Assert.assertEquals(oldCloseCount, MockMetricsReporter.CLOSE_COUNT.get());
             Assert.assertEquals("Failed to construct kafka producer", e.getMessage());
             return;
         }

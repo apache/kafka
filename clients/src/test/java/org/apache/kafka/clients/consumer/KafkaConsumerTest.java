@@ -103,7 +103,7 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
-    
+
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
 
@@ -119,8 +119,8 @@ public class KafkaConsumerTest {
         try {
             new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         } catch (KafkaException e) {
-            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+            assertEquals(oldInitCount, MockMetricsReporter.INIT_COUNT.get());
+            assertEquals(oldCloseCount, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka consumer", e.getMessage());
             return;
         }
@@ -687,7 +687,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
     }
-    
+
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
         int rebalanceTimeoutMs = 60000;
@@ -707,7 +707,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
-        
+
         consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 

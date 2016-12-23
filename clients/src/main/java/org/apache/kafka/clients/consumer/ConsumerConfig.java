@@ -12,15 +12,19 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -212,7 +216,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -416,6 +420,23 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    private List<InetSocketAddress> validatedBootstrapServersConfigValue;
+
+    public List<InetSocketAddress> getValidatedBootstrapServersConfigValue() {
+        return validatedBootstrapServersConfigValue;
+    }
+
+    public void validateValues() {
+        int requestTimeoutMs = this.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        if (requestTimeoutMs <= this.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) ||
+            requestTimeoutMs <= this.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG))
+            throw new ConfigException(
+                ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG +
+                " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
+
+        validatedBootstrapServersConfigValue = ClientUtils.parseAndValidateAddresses(this.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
 
     public static void main(String[] args) {

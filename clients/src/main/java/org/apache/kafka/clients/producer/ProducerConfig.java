@@ -12,15 +12,19 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.net.InetSocketAddress;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -342,6 +346,29 @@ public class ProducerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    private List<InetSocketAddress> validatedBootstrapServersConfigValue;
+
+    public List<InetSocketAddress> getValidatedBootstrapServersConfigValue() {
+        return validatedBootstrapServersConfigValue;
+    }
+
+    private int validatedAcksConfigValue;
+
+    public int getValidatedAcksConfigValue() {
+        return validatedAcksConfigValue;
+    }
+
+    public void validateValues() {
+        validatedBootstrapServersConfigValue = ClientUtils.parseAndValidateAddresses(this.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+
+        String acksConfigValue = this.getString(ProducerConfig.ACKS_CONFIG);
+        try {
+            validatedAcksConfigValue = acksConfigValue.trim().equalsIgnoreCase("all") ? -1 : Integer.parseInt(acksConfigValue.trim());
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Invalid configuration value for 'acks': " + acksConfigValue);
+        }
     }
 
     public static void main(String[] args) {
