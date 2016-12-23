@@ -395,7 +395,7 @@ public class MemoryRecords extends AbstractRecords {
                                                            long logAppendTime,
                                                            List<LogEntry> entries) {
         if (entries.isEmpty())
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("entries must not be empty");
 
         LogEntry firstEntry = entries.iterator().next();
         long firstOffset = firstEntry.offset();
