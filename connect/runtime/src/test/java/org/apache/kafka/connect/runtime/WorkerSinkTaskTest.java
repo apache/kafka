@@ -149,9 +149,6 @@ public class WorkerSinkTaskTest {
         consumer.pause(partitions);
         PowerMock.expectLastCall();
 
-        statusListener.onPause(taskId);
-        PowerMock.expectLastCall();
-
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -181,7 +178,7 @@ public class WorkerSinkTaskTest {
         consumer.pause(partitions);
         PowerMock.expectLastCall();
 
-        // Offset commit as requested by pause, No records returned
+        // Offset commit as requested when pausing; No records returned by consumer.poll()
         sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
         EasyMock.expectLastCall().andStubReturn(Collections.emptyMap());
         expectConsumerPoll(0);
@@ -235,12 +232,8 @@ public class WorkerSinkTaskTest {
         EasyMock.expect(consumer.assignment()).andReturn(partitions);
         consumer.pause(partitions);
         PowerMock.expectLastCall();
-        statusListener.onPause(taskId);
-        PowerMock.expectLastCall();
 
-        // Retry delivery should succeed, after taking care of offset commit requested by pause
-        sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
-        EasyMock.expectLastCall().andStubReturn(Collections.emptyMap());
+        // Retry delivery should succeed
         expectConsumerPoll(0);
         sinkTask.put(EasyMock.capture(records));
         EasyMock.expectLastCall();
@@ -249,8 +242,6 @@ public class WorkerSinkTaskTest {
         consumer.resume(singleton(TOPIC_PARTITION));
         PowerMock.expectLastCall();
         consumer.resume(singleton(TOPIC_PARTITION2));
-        PowerMock.expectLastCall();
-        statusListener.onResume(taskId);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();

@@ -181,8 +181,11 @@ class WorkerSinkTask extends WorkerTask {
 
             if (shouldPause()) {
                 pauseAll();
+                onPause();
+                context.requestCommit();
             } else if (!pausedForRedelivery) {
                 resumeAll();
+                onResume();
             }
         }
     }
@@ -407,13 +410,10 @@ class WorkerSinkTask extends WorkerTask {
         for (TopicPartition tp : consumer.assignment())
             if (!context.pausedPartitions().contains(tp))
                 consumer.resume(singleton(tp));
-        onResume();
     }
 
     private void pauseAll() {
         consumer.pause(consumer.assignment());
-        context.requestCommit();
-        onPause();
     }
 
     private void deliverMessages() {
