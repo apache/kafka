@@ -16,7 +16,10 @@
   */
 package kafka.api
 
+import java.io.File
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.config.SaslConfigs
+import kafka.utils.JaasTestUtils
 
 class SaslPlainSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -24,4 +27,13 @@ class SaslPlainSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
   override val clientPrincipal = "testuser"
   override val kafkaPrincipal = "admin"
+
+  // Use JAAS configuration properties for clients so that dynamic JAAS configuration is also tested by this set of tests
+  override protected def setJaasConfiguration(mode: SaslSetupMode, serverMechanisms: List[String], clientMechanisms: List[String],
+      serverKeytabFile: Option[File] = None, clientKeytabFile: Option[File] = None) {
+    super.setJaasConfiguration(mode, kafkaServerSaslMechanisms, List()) // create static config without client login contexts
+    val clientLoginModule = JaasTestUtils.clientLoginModule(kafkaClientSaslMechanism, None)
+    producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginModule)
+    consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginModule)
+  }
 }

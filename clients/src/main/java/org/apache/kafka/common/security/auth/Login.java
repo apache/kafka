@@ -21,6 +21,7 @@ package org.apache.kafka.common.security.auth;
 import java.util.Map;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 
@@ -32,7 +33,7 @@ public interface Login {
     /**
      * Configures this login instance.
      */
-    void configure(Map<String, ?> configs, String loginContextName);
+    void configure(Map<String, ?> configs, Configuration jaasConfig, String loginContextName);
 
     /**
      * Performs login for each login module specified for the login context of this instance.
