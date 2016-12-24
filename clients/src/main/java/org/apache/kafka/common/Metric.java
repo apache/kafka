@@ -17,18 +17,17 @@
 package org.apache.kafka.common;
 
 /**
- * A numerical metric tracked for monitoring purposes
+ * A numerical metric tracked for monitoring purposes.
  */
 public interface Metric {
 
     /**
-     * A name for this metric
+     * A name for this metric.
      */
-    public MetricName metricName();
+    MetricName metricName();
 
     /**
-     * The value of the metric
+     * The value of the metric.
      */
-    public double value();
-
+    double value();
 }
