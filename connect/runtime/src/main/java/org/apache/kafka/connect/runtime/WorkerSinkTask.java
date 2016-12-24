@@ -181,8 +181,11 @@ class WorkerSinkTask extends WorkerTask {
 
             if (shouldPause()) {
                 pauseAll();
+                onPause();
+                context.requestCommit();
             } else if (!pausedForRedelivery) {
                 resumeAll();
+                onResume();
             }
         }
     }
