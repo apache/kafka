@@ -63,7 +63,7 @@ object JaasTestUtils {
       s"""$moduleName required
           |  debug=$debug
           |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
-          |"""
+          |""".stripMargin
     }
   }
 
@@ -114,6 +114,9 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
 
+  def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
+    kafkaClientModule(mechanism, keytabLocation).toString
+
   private def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
     new JaasSection(ZkClientContextName, Seq(JaasModule(ZkModule, false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
@@ -140,8 +143,8 @@ object JaasTestUtils {
     new JaasSection(KafkaServerContextName, modules)
   }
 
-  private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    val modules = mechanisms.map {
+  def kafkaClientModule(mechanism: String, keytabLocation: Option[File]): JaasModule = {
+    mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
           useKeyTab = true,
@@ -158,7 +161,10 @@ object JaasTestUtils {
         ).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
-    new JaasSection(KafkaClientContextName, modules)
+  }
+
+  private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
+    new JaasSection(KafkaClientContextName, mechanisms.map(m => kafkaClientModule(m, keytabLocation)))
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =

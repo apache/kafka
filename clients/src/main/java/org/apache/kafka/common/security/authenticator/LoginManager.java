@@ -19,6 +19,7 @@
 package org.apache.kafka.common.security.authenticator;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginException;
 
 import java.io.IOException;
@@ -38,11 +39,11 @@ public class LoginManager {
     private final LoginType loginType;
     private int refCount;
 
-    private LoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs) throws IOException, LoginException {
+    private LoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs, Configuration jaasConfig) throws IOException, LoginException {
         this.loginType = loginType;
         String loginContext = loginType.contextName();
         login = hasKerberos ? new KerberosLogin() : new DefaultLogin();
-        login.configure(configs, loginContext);
+        login.configure(configs, jaasConfig, loginContext);
         login.login();
     }
 
@@ -61,11 +62,11 @@ public class LoginManager {
      *                  (i.e. consumer and producer)
      * @param configs configuration as key/value pairs
      */
-    public static final LoginManager acquireLoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs) throws IOException, LoginException {
+    public static final LoginManager acquireLoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs, Configuration jaasConfig) throws IOException, LoginException {
         synchronized (LoginManager.class) {
             LoginManager loginManager = CACHED_INSTANCES.get(loginType);
             if (loginManager == null) {
-                loginManager = new LoginManager(loginType, hasKerberos, configs);
+                loginManager = new LoginManager(loginType, hasKerberos, configs, jaasConfig);
                 CACHED_INSTANCES.put(loginType, loginManager);
             }
             return loginManager.acquire();

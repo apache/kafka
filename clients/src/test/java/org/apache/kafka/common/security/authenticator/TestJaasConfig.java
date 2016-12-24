@@ -20,6 +20,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 
@@ -38,6 +39,10 @@ public class TestJaasConfig extends Configuration {
         }
         Configuration.setConfiguration(config);
         return config;
+    }
+
+    public static Password jaasConfigProperty(String mechanism, String username, String password) {
+        return new Password(loginModule(mechanism) + " required username=" + username + " password=" + password + ";");
     }
 
     public void setPlainClientOptions(String clientUsername, String clientPassword) {
