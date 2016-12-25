@@ -575,7 +575,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   // Only for testing
-  private[kafka] class MirrorMakerNewConsumer(consumer: Consumer[Array[Byte], Array[Byte]],
+  private[tools] class MirrorMakerNewConsumer(consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
                                        whitelistOpt: Option[String])
     extends MirrorMakerBaseConsumer {
@@ -590,13 +590,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def init() {
       debug("Initiating new consumer")
       val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
-      if (whitelistOpt.isDefined) {
+      whitelistOpt.foreach { whitelist =>
         try {
-          val whitelist = Whitelist(whitelistOpt.get)
-          consumer.subscribe(Pattern.compile(whitelist.regex), consumerRebalanceListener)
+          consumer.subscribe(Pattern.compile(Whitelist(whitelist).regex), consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
-            error("Invalid expression syntax: %s".format(whitelistOpt.get))
+            error("Invalid expression syntax: %s".format(whitelist))
             throw pse
         }
       }
@@ -688,7 +687,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private[kafka] class MirrorMakerProducer(val producerProps: Properties) {
+  private[tools] class MirrorMakerProducer(val producerProps: Properties) {
 
     val sync = producerProps.getProperty("producer.type", "async").equals("sync")
 
