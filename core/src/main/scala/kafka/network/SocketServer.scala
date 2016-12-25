@@ -192,9 +192,9 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Record that the thread startup is complete
    */
   protected def startupComplete() = {
-    startupLatch.countDown()
     // Activate the shutdown latch by resetting it to count 1
     shutdownLatch = new CountDownLatch(1)
+    startupLatch.countDown()
   }
 
   /**
