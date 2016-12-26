@@ -41,11 +41,13 @@ public class KafkaLZ4Test {
     private final boolean useBrokenFlagDescriptorChecksum;
     private final boolean ignoreFlagDescriptorChecksum;
     private final byte[] payload;
+    private final boolean close;
 
-    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum, byte[] payload) {
+    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum, byte[] payload, boolean close) {
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.payload = payload;
+        this.close = close;
     }
 
     @Parameters
@@ -55,7 +57,8 @@ public class KafkaLZ4Test {
         List<Object[]> values = new ArrayList<Object[]>();
         for (boolean broken : Arrays.asList(false, true))
             for (boolean ignore : Arrays.asList(false, true))
-                values.add(new Object[] {broken, ignore, payload});
+                for (boolean close : Arrays.asList(false, true))
+                    values.add(new Object[] {broken, ignore, payload, close});
         return values;
     }
 
@@ -64,7 +67,11 @@ public class KafkaLZ4Test {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(output, this.useBrokenFlagDescriptorChecksum);
         lz4.write(this.payload, 0, this.payload.length);
-        lz4.close();
+        if (this.close) {
+            lz4.close();
+        } else {
+            lz4.flush();
+        }
         byte[] compressed = output.toByteArray();
 
         // Check magic bytes stored as little-endian
@@ -125,11 +132,13 @@ public class KafkaLZ4Test {
 
         // Check EndMark
         // it should be all 0 at 4 bytes as data block as size of 0
-        offset = compressed.length - 4;
-        assertEquals(compressed[offset++], 0);
-        assertEquals(compressed[offset++], 0);
-        assertEquals(compressed[offset++], 0);
-        assertEquals(compressed[offset++], 0);
+        if (this.close) {
+            offset = compressed.length - 4;
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+        }
 
         ByteArrayInputStream input = new ByteArrayInputStream(compressed);
         try {
