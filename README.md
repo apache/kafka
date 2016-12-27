@@ -67,7 +67,7 @@ The release file can be found inside `./core/build/distributions/`.
     ./gradlew clean
 
 ### Running a task on a particular version of Scala (either 2.10.6 or 2.11.8) ###
-*Note that if building the jars with a version other than 2.10, you need to set the `SCALA_BINARY_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.10.6, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.11) or the full version (eg 2.11.8):
 
@@ -131,7 +131,7 @@ may not be dedicated to Kafka's build.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForms=1 test`.
+The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
 
 * `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.

@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
@@ -56,14 +56,26 @@ public class KStreamTestDriver {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    public KStreamTestDriver(KStreamBuilder builder, File stateDir, final long cacheSize) {
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
+    }
+
     public KStreamTestDriver(KStreamBuilder builder,
                              File stateDir,
                              Serde<?> keySerde,
                              Serde<?> valSerde) {
+        this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
+    }
+
+    public KStreamTestDriver(KStreamBuilder builder,
+                             File stateDir,
+                             Serde<?> keySerde,
+                             Serde<?> valSerde,
+                             long cacheSize) {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
         this.stateDir = stateDir;
-        this.cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
+        this.cache = new ThreadCache(cacheSize);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
@@ -73,13 +85,14 @@ public class KStreamTestDriver {
         }
 
         for (ProcessorNode node : topology.processors()) {
-            currNode = node;
+            context.setCurrentNode(node);
             try {
                 node.init(context);
             } finally {
-                currNode = null;
+                context.setCurrentNode(null);
             }
         }
+
     }
 
     public ProcessorContext context() {
@@ -87,12 +100,15 @@ public class KStreamTestDriver {
     }
 
     public void process(String topicName, Object key, Object value) {
+        final ProcessorNode previous = currNode;
         currNode = topology.source(topicName);
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
-        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
+        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
+            currNode = previous;
             return;
+        }
         context.setRecordContext(createRecordContext(context.timestamp()));
         context.setCurrentNode(currNode);
         try {
@@ -225,8 +241,12 @@ public class KStreamTestDriver {
 
     }
 
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        currNode = currentNode;
+    }
 
-    private class MockRecordCollector extends RecordCollector {
+
+    private class MockRecordCollector extends RecordCollectorImpl {
         public MockRecordCollector() {
             super(null, "KStreamTestDriver");
         }

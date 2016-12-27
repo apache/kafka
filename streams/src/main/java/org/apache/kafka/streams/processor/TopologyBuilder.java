@@ -227,14 +227,14 @@ public class TopologyBuilder {
     public static class TopicsInfo {
         public Set<String> sinkTopics;
         public Set<String> sourceTopics;
-        public Map<String, InternalTopicConfig> interSourceTopics;
         public Map<String, InternalTopicConfig> stateChangelogTopics;
+        public Map<String, InternalTopicConfig> repartitionSourceTopics;
 
-        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Map<String, InternalTopicConfig> interSourceTopics, Map<String, InternalTopicConfig> stateChangelogTopics) {
+        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Map<String, InternalTopicConfig> repartitionSourceTopics, Map<String, InternalTopicConfig> stateChangelogTopics) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
-            this.interSourceTopics = interSourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
+            this.repartitionSourceTopics = repartitionSourceTopics;
         }
 
         @Override
@@ -258,7 +258,7 @@ public class TopologyBuilder {
             return "TopicsInfo{" +
                     "sinkTopics=" + sinkTopics +
                     ", sourceTopics=" + sourceTopics +
-                    ", interSourceTopics=" + interSourceTopics +
+                    ", repartitionSourceTopics=" + repartitionSourceTopics +
                     ", stateChangelogTopics=" + stateChangelogTopics +
                     '}';
         }
@@ -691,6 +691,13 @@ public class TopologyBuilder {
 
     private void connectStateStoreNameToSourceTopics(final String stateStoreName,
                                                      final ProcessorNodeFactory processorNodeFactory) {
+
+        // we should never update the mapping from state store names to source topics if the store name already exists
+        // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
+        // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
+        if (stateStoreNameToSourceTopics.containsKey(stateStoreName)) {
+            return;
+        }
 
         final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
         if (sourceTopics.isEmpty()) {

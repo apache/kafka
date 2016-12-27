@@ -41,7 +41,7 @@ public class AssignmentInfo {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
     /**
-     * A new field was added, partitionsByHostState. CURRENT_VERSION
+     * A new field was added, partitionsByHost. CURRENT_VERSION
      * is required so we can decode the previous version. For example, this may occur
      * during a rolling upgrade
      */
@@ -49,7 +49,7 @@ public class AssignmentInfo {
     public final int version;
     public final List<TaskId> activeTasks; // each element corresponds to a partition
     public final Map<TaskId, Set<TopicPartition>> standbyTasks;
-    public final Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
+    public final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
     public AssignmentInfo(List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
                           Map<HostInfo, Set<TopicPartition>> hostState) {
@@ -61,7 +61,7 @@ public class AssignmentInfo {
         this.version = version;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
-        this.partitionsByHostState = hostState;
+        this.partitionsByHost = hostState;
     }
 
     /**
@@ -89,8 +89,8 @@ public class AssignmentInfo {
                 Set<TopicPartition> partitions = entry.getValue();
                 writeTopicPartitions(out, partitions);
             }
-            out.writeInt(partitionsByHostState.size());
-            for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
+            out.writeInt(partitionsByHost.size());
+            for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHost
                     .entrySet()) {
                 final HostInfo hostInfo = entry.getKey();
                 out.writeUTF(hostInfo.host());
@@ -174,7 +174,7 @@ public class AssignmentInfo {
 
     @Override
     public int hashCode() {
-        return version ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHostState.hashCode();
+        return version ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHost.hashCode();
     }
 
     @Override
@@ -184,7 +184,7 @@ public class AssignmentInfo {
             return this.version == other.version &&
                     this.activeTasks.equals(other.activeTasks) &&
                     this.standbyTasks.equals(other.standbyTasks) &&
-                    this.partitionsByHostState.equals(other.partitionsByHostState);
+                    this.partitionsByHost.equals(other.partitionsByHost);
         } else {
             return false;
         }

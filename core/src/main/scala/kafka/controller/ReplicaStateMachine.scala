@@ -17,13 +17,11 @@
 package kafka.controller
 
 import collection._
-import collection.JavaConversions._
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.{TopicAndPartition, StateChangeFailedException}
-import kafka.utils.{ZkUtils, ReplicationUtils, Logging}
-import org.I0Itec.zkclient.IZkChildListener
-import org.apache.log4j.Logger
-import kafka.controller.Callbacks._
+
+import kafka.common.{StateChangeFailedException, TopicAndPartition}
+import kafka.controller.Callbacks.CallbackBuilder
+import kafka.utils.{Logging, ReplicationUtils, ZkUtils}
 import kafka.utils.CoreUtils._
 
 /**
@@ -49,7 +47,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerId = controller.config.brokerId
   private val zkUtils = controllerContext.zkUtils
   private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
-  private val brokerChangeListener = new BrokerChangeListener()
+  private val brokerChangeListener = new BrokerChangeListener(controller)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
   private val stateChangeLogger = KafkaController.stateChangeLogger
@@ -246,7 +244,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           // As an optimization, the controller removes dead replicas from the ISR
           val leaderAndIsrIsEmpty: Boolean =
             controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
-              case Some(currLeaderIsrAndControllerEpoch) =>
+              case Some(_) =>
                 controller.removeReplicaFromIsr(topic, partition, replicaId) match {
                   case Some(updatedLeaderIsrAndControllerEpoch) =>
                     // send the shrunk ISR state change request to all the remaining alive replicas of the partition.
@@ -300,7 +298,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   }
 
   def replicasInDeletionStates(topic: String): Set[PartitionAndReplica] = {
-    val deletionStates = Set(ReplicaDeletionStarted, ReplicaDeletionSuccessful, ReplicaDeletionIneligible)
+    val deletionStates = Set[ReplicaState](ReplicaDeletionStarted, ReplicaDeletionSuccessful, ReplicaDeletionIneligible)
     replicaState.filter(r => r._1.topic.equals(topic) && deletionStates.contains(r._2)).keySet
   }
 
@@ -348,9 +346,11 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   /**
    * This is the zookeeper listener that triggers all the state transitions for a replica
    */
-  class BrokerChangeListener() extends IZkChildListener with Logging {
-    this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
-    def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
+  class BrokerChangeListener(protected val controller: KafkaController) extends ControllerZkChildListener {
+
+    protected def logName = "BrokerChangeListener"
+
+    def doHandleChildChange(parentPath: String, currentBrokerList: Seq[String]) {
       info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {

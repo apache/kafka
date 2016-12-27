@@ -102,13 +102,14 @@ public class RecordQueue {
                                                                          rawRecord.checksum(),
                                                                          rawRecord.serializedKeySize(),
                                                                          rawRecord.serializedValueSize(), key, value);
-            long timestamp = timestampExtractor.extract(record);
+            long timestamp = timestampExtractor.extract(record, timeTracker.get());
 
             log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
-            // validate that timestamp must be non-negative
-            if (timestamp < 0)
-                throw new StreamsException("Extracted timestamp value is negative, which is not allowed.");
+            // drop message if TS is invalid, i.e., negative
+            if (timestamp < 0) {
+                continue;
+            }
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
 
@@ -175,5 +176,12 @@ public class RecordQueue {
      */
     public long timestamp() {
         return partitionTime;
+    }
+
+    /**
+     * Clear the fifo queue of its elements
+     */
+    public void clear() {
+        fifoQueue.clear();
     }
 }

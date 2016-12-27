@@ -17,45 +17,37 @@
 
 package kafka.server
 
+import java.io.{File, IOException}
 import java.net.SocketTimeoutException
 import java.util
-
-import kafka.admin._
-import kafka.api.KAFKA_0_9_0
-import kafka.log.LogConfig
-import kafka.log.CleanerConfig
-import kafka.log.LogManager
 import java.util.concurrent._
-import atomic.{AtomicBoolean, AtomicInteger}
-import java.io.{File, IOException}
-import java.nio.charset.StandardCharsets
-import java.util.UUID
-import javax.xml.bind.DatatypeConverter
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import kafka.security.auth.Authorizer
-import kafka.utils._
-import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{ClusterResource, Node}
-import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
-import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse, RequestSend}
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.AppInfoParser
-
-import scala.collection.{Map, mutable}
-import scala.collection.JavaConverters._
-import org.I0Itec.zkclient.ZkClient
-import kafka.controller.{ControllerStats, KafkaController}
+import com.yammer.metrics.core.Gauge
+import kafka.admin.AdminUtils
+import kafka.api.KAFKA_0_9_0
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
-import kafka.network.{BlockingChannel, SocketServer}
-import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
-import com.yammer.metrics.core.Gauge
+import kafka.controller.{ControllerStats, KafkaController}
 import kafka.coordinator.GroupCoordinator
+import kafka.log.{CleanerConfig, LogConfig, LogManager}
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
+import kafka.network.{BlockingChannel, SocketServer}
+import kafka.security.auth.Authorizer
+import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.internals.ClusterResourceListeners
-import collection.JavaConverters._
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
+import org.apache.kafka.common.network._
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.{ClusterResource, Node}
+
+import scala.collection.JavaConverters._
+import scala.collection.{Map, mutable}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -94,7 +86,7 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
+class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -105,10 +97,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   private val reporters: java.util.List[MetricsReporter] = config.metricReporterClasses
   reporters.add(new JmxReporter(jmxPrefix))
 
-  // This exists because the Metrics package from clients has its own Time implementation.
-  // SocketServer/Quotas (which uses client libraries) have to use the client Time objects without having to convert all of Kafka to use them
-  // Eventually, we want to merge the Time objects in core and clients
-  private implicit val kafkaMetricsTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
   var metrics: Metrics = null
 
   private val metricConfig: MetricConfig = new MetricConfig()
@@ -188,7 +176,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime, true)
+        metrics = new Metrics(metricConfig, reporters, time, true)
         quotaManagers = QuotaFactory.instantiate(config, metrics, time)
 
         brokerState.newState(Starting)
@@ -215,22 +203,23 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         metadataCache = new MetadataCache(config.brokerId)
 
-        socketServer = new SocketServer(config, metrics, kafkaMetricsTime)
+        socketServer = new SocketServer(config, metrics, time)
         socketServer.startup()
 
         /* start replica manager */
-        replicaManager = new ReplicaManager(config, metrics, time, kafkaMetricsTime, zkUtils, kafkaScheduler, logManager,
+        replicaManager = new ReplicaManager(config, metrics, time, zkUtils, kafkaScheduler, logManager,
           isShuttingDown, quotaManagers.follower)
         replicaManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkUtils, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkUtils, brokerState, time, metrics, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkUtils)
 
         /* start group coordinator */
-        groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, kafkaMetricsTime)
+        // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
+        groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, Time.SYSTEM)
         groupCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -242,9 +231,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* start processing requests */
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,
-          kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers, clusterId)
+          kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+          clusterId, time)
 
-        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
+        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, time,
+          config.numIoThreads)
 
         Mx4jLoader.maybeLoad()
 
@@ -316,8 +307,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
       val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
-                                              config.zkSessionTimeoutMs,
-                                              config.zkConnectionTimeoutMs,
+                                              sessionTimeout = config.zkSessionTimeoutMs,
+                                              connectionTimeout = config.zkConnectionTimeoutMs,
                                               secureAclsEnabled)
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
@@ -325,8 +316,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     val zkUtils = ZkUtils(config.zkConnect,
-                          config.zkSessionTimeoutMs,
-                          config.zkConnectionTimeoutMs,
+                          sessionTimeout = config.zkSessionTimeoutMs,
+                          connectionTimeout = config.zkConnectionTimeoutMs,
                           secureAclsEnabled)
     zkUtils.setupCommonPaths()
     zkUtils
@@ -371,7 +362,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
           metrics,
-          kafkaMetricsTime,
+          time,
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
@@ -386,7 +377,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
-          kafkaMetricsTime)
+          time)
       }
 
       var shutdownSucceeded: Boolean = false
@@ -428,17 +419,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           if (prevController != null) {
             try {
 
-              if (!networkClient.blockingReady(node(prevController), socketTimeoutMs))
+              if (!networkClient.blockingReady(node(prevController), socketTimeoutMs)(time))
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
               // send the controlled shutdown request
               val requestHeader = networkClient.nextRequestHeader(ApiKeys.CONTROLLED_SHUTDOWN_KEY)
-              val send = new RequestSend(node(prevController).idString, requestHeader,
-                new ControlledShutdownRequest(config.brokerId).toStruct)
-              val request = new ClientRequest(kafkaMetricsTime.milliseconds(), true, send, null)
-              val clientResponse = networkClient.blockingSendAndReceive(request)
+              val controlledShutdownRequest = new ControlledShutdownRequest(config.brokerId)
+              val request = new ClientRequest(node(prevController).idString, time.milliseconds(), true,
+                requestHeader, controlledShutdownRequest, null)
+              val clientResponse = networkClient.blockingSendAndReceive(request, controlledShutdownRequest)(time)
 
-              val shutdownResponse = new ControlledShutdownResponse(clientResponse.responseBody)
+              val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
               if (shutdownResponse.errorCode == Errors.NONE.code && shutdownResponse.partitionsRemaining.isEmpty) {
                 shutdownSucceeded = true
                 info("Controlled shutdown succeeded")
@@ -707,7 +698,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     for(logDir <- logDirsWithoutMetaProps) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(new BrokerMetadata(brokerId))
+      checkpoint.write(BrokerMetadata(brokerId))
     }
   }
 

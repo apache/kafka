@@ -41,7 +41,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -62,7 +61,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -145,9 +143,11 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
+     * @return number of fetches sent
      */
-    public void sendFetches() {
-        for (Map.Entry<Node, FetchRequest> fetchEntry : createFetchRequests().entrySet()) {
+    public int sendFetches() {
+        Map<Node, FetchRequest> fetchRequestMap = createFetchRequests();
+        for (Map.Entry<Node, FetchRequest> fetchEntry : fetchRequestMap.entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
@@ -155,7 +155,7 @@ public class Fetcher<K, V> {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            FetchResponse response = new FetchResponse(resp.responseBody());
+                            FetchResponse response = (FetchResponse) resp.responseBody();
                             if (!matchesRequestedPartitions(request, response)) {
                                 // obviously we expect the broker to always send us valid responses, so this check
                                 // is mainly for test cases where mock fetch responses must be manually crafted.
@@ -185,6 +185,7 @@ public class Fetcher<K, V> {
                         }
                     });
         }
+        return fetchRequestMap.size();
     }
 
     /**
@@ -256,7 +257,7 @@ public class Fetcher<K, V> {
                 throw future.exception();
 
             if (future.succeeded()) {
-                MetadataResponse response = new MetadataResponse(future.value().responseBody());
+                MetadataResponse response = (MetadataResponse) future.value().responseBody();
                 Cluster cluster = response.cluster();
 
                 Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
@@ -417,25 +418,40 @@ public class Fetcher<K, V> {
         int recordsRemaining = maxPollRecords;
 
         while (recordsRemaining > 0) {
-            if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
+            if (nextInLineRecords == null || nextInLineRecords.isDrained()) {
                 CompletedFetch completedFetch = completedFetches.poll();
                 if (completedFetch == null)
                     break;
 
                 nextInLineRecords = parseFetchedData(completedFetch);
             } else {
-                recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
+                TopicPartition partition = nextInLineRecords.partition;
+
+                List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
+                if (!records.isEmpty()) {
+                    List<ConsumerRecord<K, V>> currentRecords = drained.get(partition);
+                    if (currentRecords == null) {
+                        drained.put(partition, records);
+                    } else {
+                        // this case shouldn't usually happen because we only send one fetch at a time per partition,
+                        // but it might conceivably happen in some rare cases (such as partition leader changes).
+                        // we have to copy to a new list because the old one may be immutable
+                        List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
+                        newRecords.addAll(currentRecords);
+                        newRecords.addAll(records);
+                        drained.put(partition, newRecords);
+                    }
+                    recordsRemaining -= records.size();
+                }
             }
         }
 
         return drained;
     }
 
-    private int append(Map<TopicPartition, List<ConsumerRecord<K, V>>> drained,
-                       PartitionRecords<K, V> partitionRecords,
-                       int maxRecords) {
-        if (partitionRecords.isEmpty())
-            return 0;
+    private List<ConsumerRecord<K, V>> drainRecords(PartitionRecords<K, V> partitionRecords, int maxRecords) {
+        if (partitionRecords.isDrained())
+            return Collections.emptyList();
 
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
@@ -448,22 +464,14 @@ public class Fetcher<K, V> {
                 log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
             } else if (partitionRecords.fetchOffset == position) {
                 // we are ensured to have at least one record since we already checked for emptiness
-                List<ConsumerRecord<K, V>> partRecords = partitionRecords.take(maxRecords);
+                List<ConsumerRecord<K, V>> partRecords = partitionRecords.drainRecords(maxRecords);
                 long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
 
                 log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                         "position to {}", position, partitionRecords.partition, nextOffset);
 
-                List<ConsumerRecord<K, V>> records = drained.get(partitionRecords.partition);
-                if (records == null) {
-                    records = partRecords;
-                    drained.put(partitionRecords.partition, records);
-                } else {
-                    records.addAll(partRecords);
-                }
-
                 subscriptions.position(partitionRecords.partition, nextOffset);
-                return partRecords.size();
+                return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
@@ -472,8 +480,8 @@ public class Fetcher<K, V> {
             }
         }
 
-        partitionRecords.discard();
-        return 0;
+        partitionRecords.drain();
+        return Collections.emptyList();
     }
 
     /**
@@ -549,7 +557,7 @@ public class Fetcher<K, V> {
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
-                        ListOffsetResponse lor = new ListOffsetResponse(response.responseBody());
+                        ListOffsetResponse lor = (ListOffsetResponse) response.responseBody();
                         log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                         handleListOffsetResponse(timestampsToSearch, lor, future);
                     }
@@ -600,11 +608,15 @@ public class Fetcher<K, V> {
     }
 
     private List<TopicPartition> fetchablePartitions() {
+        Set<TopicPartition> exclude = new HashSet<>();
         List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isEmpty())
-            fetchable.remove(nextInLineRecords.partition);
-        for (CompletedFetch completedFetch : completedFetches)
-            fetchable.remove(completedFetch.partition);
+        if (nextInLineRecords != null && !nextInLineRecords.isDrained()) {
+            exclude.add(nextInLineRecords.partition);
+        }
+        for (CompletedFetch completedFetch : completedFetches) {
+            exclude.add(completedFetch.partition);
+        }
+        fetchable.removeAll(exclude);
         return fetchable;
     }
 
@@ -673,19 +685,16 @@ public class Fetcher<K, V> {
                     return null;
                 }
 
-                ByteBuffer buffer = partition.recordSet;
-                MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                for (LogEntry logEntry : records) {
+                for (LogEntry logEntry : partition.records.deepEntries()) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.size();
+                        bytes += logEntry.sizeInBytes();
                     }
                 }
 
                 recordsCount = parsed.size();
-                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
 
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
@@ -771,6 +780,7 @@ public class Fetcher<K, V> {
         private long fetchOffset;
         private TopicPartition partition;
         private List<ConsumerRecord<K, V>> records;
+        private int position = 0;
 
         public PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
             this.fetchOffset = fetchOffset;
@@ -778,33 +788,26 @@ public class Fetcher<K, V> {
             this.records = records;
         }
 
-        private boolean isEmpty() {
-            return records == null || records.isEmpty();
+        private boolean isDrained() {
+            return records == null || position >= records.size();
         }
 
-        private void discard() {
+        private void drain() {
             this.records = null;
         }
 
-        private List<ConsumerRecord<K, V>> take(int n) {
-            if (records == null)
-                return new ArrayList<>();
+        private List<ConsumerRecord<K, V>> drainRecords(int n) {
+            if (isDrained())
+                return Collections.emptyList();
 
-            if (n >= records.size()) {
-                List<ConsumerRecord<K, V>> res = this.records;
-                this.records = null;
-                return res;
-            }
+            // using a sublist avoids a potentially expensive list copy (depending on the size of the records
+            // and the maximum we can return from poll). The cost is that we cannot mutate the returned sublist.
+            int limit = Math.min(records.size(), position + n);
+            List<ConsumerRecord<K, V>> res = Collections.unmodifiableList(records.subList(position, limit));
 
-            List<ConsumerRecord<K, V>> res = new ArrayList<>(n);
-            Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
-            for (int i = 0; i < n; i++) {
-                res.add(iterator.next());
-                iterator.remove();
-            }
-
-            if (iterator.hasNext())
-                this.fetchOffset = iterator.next().offset();
+            position = limit;
+            if (position < records.size())
+                fetchOffset = records.get(position).offset();
 
             return res;
         }
@@ -836,11 +839,11 @@ public class Fetcher<K, V> {
         private final FetchManagerMetrics sensors;
         private final Set<TopicPartition> unrecordedPartitions;
 
-        private int totalBytes;
-        private int totalRecords;
+        private final FetchMetrics fetchMetrics = new FetchMetrics();
+        private final Map<String, FetchMetrics> topicFetchMetrics = new HashMap<>();
 
-        public FetchResponseMetricAggregator(FetchManagerMetrics sensors,
-                                             Set<TopicPartition> partitions) {
+        private FetchResponseMetricAggregator(FetchManagerMetrics sensors,
+                                              Set<TopicPartition> partitions) {
             this.sensors = sensors;
             this.unrecordedPartitions = partitions;
         }
@@ -850,14 +853,38 @@ public class Fetcher<K, V> {
          * and number of records parsed. After all partitions have reported, we write the metric.
          */
         public void record(TopicPartition partition, int bytes, int records) {
-            unrecordedPartitions.remove(partition);
-            totalBytes += bytes;
-            totalRecords += records;
+            this.unrecordedPartitions.remove(partition);
+            this.fetchMetrics.increment(bytes, records);
 
-            if (unrecordedPartitions.isEmpty()) {
+            // collect and aggregate per-topic metrics
+            String topic = partition.topic();
+            FetchMetrics topicFetchMetric = this.topicFetchMetrics.get(topic);
+            if (topicFetchMetric == null) {
+                topicFetchMetric = new FetchMetrics();
+                this.topicFetchMetrics.put(topic, topicFetchMetric);
+            }
+            topicFetchMetric.increment(bytes, records);
+
+            if (this.unrecordedPartitions.isEmpty()) {
                 // once all expected partitions from the fetch have reported in, record the metrics
-                sensors.bytesFetched.record(totalBytes);
-                sensors.recordsFetched.record(totalRecords);
+                this.sensors.bytesFetched.record(topicFetchMetric.fetchBytes);
+                this.sensors.recordsFetched.record(topicFetchMetric.fetchRecords);
+
+                // also record per-topic metrics
+                for (Map.Entry<String, FetchMetrics> entry: this.topicFetchMetrics.entrySet()) {
+                    FetchMetrics metric = entry.getValue();
+                    this.sensors.recordTopicFetchMetrics(entry.getKey(), metric.fetchBytes, metric.fetchRecords);
+                }
+            }
+        }
+
+        private static class FetchMetrics {
+            private int fetchBytes;
+            private int fetchRecords;
+
+            protected void increment(int bytes, int records) {
+                this.fetchBytes += bytes;
+                this.fetchRecords += records;
             }
         }
     }

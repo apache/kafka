@@ -13,6 +13,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -43,6 +44,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import kafka.utils.MockTime;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
@@ -56,6 +59,7 @@ public class KStreamAggregationDedupIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    private final MockTime mockTime = CLUSTER.time;
     private static volatile int testNo = 0;
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
@@ -205,6 +209,44 @@ public class KStreamAggregationDedupIntegrationTest {
         ));
     }
 
+    @Test
+    public void shouldGroupByKey() throws Exception {
+        final long timestamp = mockTime.milliseconds();
+        produceMessages(timestamp);
+        produceMessages(timestamp);
+
+        stream.groupByKey(Serdes.Integer(), Serdes.String())
+            .count(TimeWindows.of(500L), "count-windows")
+            .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
+                @Override
+                public String apply(final Windowed<Integer> windowedKey, final Long value) {
+                    return windowedKey.key() + "@" + windowedKey.window().start();
+                }
+            }).to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        startStreams();
+
+        final List<KeyValue<String, Long>> results = receiveMessages(
+            new StringDeserializer(),
+            new LongDeserializer()
+            , 5);
+        Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
+            @Override
+            public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
+                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
+            }
+        });
+
+        final long window = timestamp / 500 * 500;
+        assertThat(results, is(Arrays.asList(
+            KeyValue.pair("1@" + window, 2L),
+            KeyValue.pair("2@" + window, 2L),
+            KeyValue.pair("3@" + window, 2L),
+            KeyValue.pair("4@" + window, 2L),
+            KeyValue.pair("5@" + window, 2L)
+        )));
+
+    }
 
 
     private void produceMessages(long timestamp)
@@ -260,5 +302,7 @@ public class KStreamAggregationDedupIntegrationTest {
             numMessages, 60 * 1000);
 
     }
+
+
 
 }

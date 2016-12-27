@@ -140,7 +140,7 @@ public class ConsumerConfig extends AbstractConfig {
             "will return. If the first message in the first non-empty partition of the fetch is larger than this limit, the " +
             "message will still be returned to ensure that the consumer can make progress. The maximum message size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size";
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */

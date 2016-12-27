@@ -280,7 +280,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       try {
         consumer.poll(50)
       } catch {
-        case e: WakeupException => // ignore for shutdown
+        case _: WakeupException => // ignore for shutdown
       }
     }
   }

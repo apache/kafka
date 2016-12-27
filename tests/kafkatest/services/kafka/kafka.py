@@ -18,11 +18,11 @@ import json
 import os.path
 import re
 import signal
-import subprocess
 import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -68,7 +68,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[]):
         """
         :type context
         :type zk: ZookeeperService
@@ -87,6 +87,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
+        self.server_prop_overides = server_prop_overides
+        self.log_level = "DEBUG"
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -119,8 +121,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol,
-                              zk_sasl = self.zk.zk_sasl,
+        return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+                              zk_sasl=self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
 
     def open_port(self, protocol):
@@ -171,6 +173,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cfg[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
         cfg[config_property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
 
+        for prop in self.server_prop_overides:
+            cfg[prop[0]] = prop[1]
+
         self.set_protocol_and_port(node)
 
         # TODO - clean up duplicate configuration logic
@@ -203,7 +208,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
-            monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+            monitor.wait_until("Kafka Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -216,7 +221,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def signal_node(self, node, sig=signal.SIGTERM):
@@ -291,6 +296,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
+
+    def list_topics(self, topic, node=None):
+        if node is None:
+            node = self.nodes[0]
+        cmd = "%s --zookeeper %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting())
+        for line in node.account.ssh_capture(cmd):
+            if not line.startswith("SLF4J"):
+                yield line.rstrip()
 
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
@@ -457,7 +471,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
-    def list_consumer_groups(self, node=None, new_consumer=False, command_config=None):
+    def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -484,7 +498,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def describe_consumer_group(self, group, node=None, new_consumer=False, command_config=None):
+    def describe_consumer_group(self, group, node=None, new_consumer=True, command_config=None):
         """ Describe a consumer group.
         """
         if node is None:
@@ -505,12 +519,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
 
-    def bootstrap_servers(self, protocol='PLAINTEXT'):
+    def bootstrap_servers(self, protocol='PLAINTEXT', validate=True):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
         This is the format expected by many config files.
@@ -518,7 +532,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         port_mapping = self.port_mappings[protocol]
         self.logger.info("Bootstrap client port is: " + str(port_mapping.number))
 
-        if not port_mapping.open:
+        if validate and not port_mapping.open:
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
 
         return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])

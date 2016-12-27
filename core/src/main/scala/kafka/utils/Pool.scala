@@ -17,13 +17,13 @@
 
 package kafka.utils
 
-import java.util.ArrayList
 import java.util.concurrent._
+
 import collection.mutable
-import collection.JavaConversions
+import collection.JavaConverters._
 import kafka.common.KafkaException
 
-class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
+class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
   private val createLock = new Object
@@ -72,16 +72,10 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
 
   def remove(key: K, value: V): Boolean = pool.remove(key, value)
 
-  def keys: mutable.Set[K] = {
-    import JavaConversions._
-    pool.keySet()
-  }
-  
-  def values: Iterable[V] = {
-    import JavaConversions._
-    new ArrayList[V](pool.values())
-  }
-  
+  def keys: mutable.Set[K] = pool.keySet().asScala
+
+  def values: Iterable[V] = pool.values().asScala
+
   def clear() { pool.clear() }
   
   override def size = pool.size

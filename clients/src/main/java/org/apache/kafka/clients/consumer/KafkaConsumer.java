@@ -38,15 +38,17 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -63,6 +65,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -213,8 +216,8 @@ import java.util.regex.Pattern;
  * <h4>Manual Offset Control</h4>
  *
  * Instead of relying on the consumer to periodically commit consumed offsets, users can also control when records
- * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the
- * are coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
+ * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the messages
+ * is coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
 
  * <p>
  * <pre>
@@ -453,6 +456,12 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * <p>
+ * Note that while it is possible to use thread interrupts instead of {@link #wakeup()} to abort a blocking operation
+ * (in which case, {@link InterruptException} will be raised), we discourage their use since they may cause a clean
+ * shutdown of the consumer to be aborted. Interrupts are mainly supported for those cases where using {@link #wakeup()}
+ * is impossible, e.g. when a consumer thread is managed by code that is unaware of the Kafka client.
+ *
+ * <p>
  * We have intentionally avoided implementing a particular threading model for processing. This leaves several
  * options for implementing multi-threaded processing of records.
  *
@@ -499,6 +508,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
+    private static final List<ApiKeys> CONSUMER_APIS = Arrays.asList(
+            ApiKeys.METADATA,
+            ApiKeys.FETCH,
+            ApiKeys.GROUP_COORDINATOR,
+            ApiKeys.HEARTBEAT,
+            ApiKeys.JOIN_GROUP,
+            ApiKeys.LEAVE_GROUP,
+            ApiKeys.LIST_OFFSETS,
+            ApiKeys.OFFSET_COMMIT,
+            ApiKeys.OFFSET_FETCH,
+            ApiKeys.SYNC_GROUP);
+    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(CONSUMER_APIS);
 
     private final String clientId;
     private final ConsumerCoordinator coordinator;
@@ -597,7 +618,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int fetchMaxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             if (this.requestTimeoutMs <= sessionTimeOutMs || this.requestTimeoutMs <= fetchMaxWaitMs)
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG + " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
-            this.time = new SystemTime();
+            this.time = Time.SYSTEM;
 
             String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
@@ -650,7 +671,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    time,
+                    EXPECTED_API_VERSIONS);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -826,9 +849,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to either seek to particular offsets, you should prefer
+     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
-     * to be reset. You should also prefer to provide your own listener if you are doing your own offset
+     * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
      *
      * @param topics The list of topics to subscribe to
@@ -892,10 +915,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Manually assign a list of partition to this consumer. This interface does not allow for incremental assignment
+     * Manually assign a list of partitions to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      *
-     * If the given list of topic partition is empty, it is treated the same as {@link #unsubscribe()}.
+     * If the given list of topic partitions is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
      * Manual topic assignment through this method does not use the consumer's group management
@@ -954,6 +977,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             partitions is undefined or out of range and no offset reset policy has been configured
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
@@ -984,8 +1009,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    fetcher.sendFetches();
-                    client.pollNoWakeup();
+                    if (fetcher.sendFetches() > 0) {
+                        client.pollNoWakeup();
+                    }
 
                     if (this.interceptors == null)
                         return new ConsumerRecords<>(records);
@@ -1060,6 +1086,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
@@ -1092,6 +1120,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
@@ -1228,6 +1258,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1259,6 +1291,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The last committed offset and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1301,6 +1335,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The list of partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
      *             expiration of the configured request timeout
@@ -1329,6 +1365,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The map of topics and its partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
      *             expiration of the configured request timeout
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1461,6 +1499,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
      * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
+     * 
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
+     * before or while this function is called
      */
     @Override
     public void close() {
@@ -1475,6 +1516,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Wakeup the consumer. This method is thread-safe and is useful in particular to abort a long poll.
      * The thread which is blocking in an operation will throw {@link org.apache.kafka.common.errors.WakeupException}.
+     * If no thread is blocking in a method which can throw {@link org.apache.kafka.common.errors.WakeupException}, the next call to such a method will raise it instead.
      */
     @Override
     public void wakeup() {
@@ -1503,8 +1545,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
         log.debug("The Kafka consumer has closed.");
-        if (firstException.get() != null && !swallowException) {
-            throw new KafkaException("Failed to close kafka consumer", firstException.get());
+        Throwable exception = firstException.get();
+        if (exception != null && !swallowException) {
+            if (exception instanceof InterruptException) {
+                throw (InterruptException) exception;
+            }
+            throw new KafkaException("Failed to close kafka consumer", exception);
         }
     }
 

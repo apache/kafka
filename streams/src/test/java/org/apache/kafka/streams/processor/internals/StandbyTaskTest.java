@@ -24,11 +24,14 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -303,6 +306,34 @@ public class StandbyTaskTest {
 
     }
 
+    @Test
+    public void shouldNotThrowUnsupportedOperationExceptionWhenInitializingStateStores() throws Exception {
+        final String changelogName = "test-application-my-store-changelog";
+        final List<TopicPartition> partitions = Utils.mkList(new TopicPartition(changelogName, 0));
+        consumer.assign(partitions);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+        committedOffsets.put(new TopicPartition(changelogName, 0), new OffsetAndMetadata(0L));
+        consumer.commitSync(committedOffsets);
+
+        restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
+                new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.stream("topic").groupByKey().count("my-store");
+        final ProcessorTopology topology = builder.build(0);
+        StreamsConfig config = createConfig(baseDir);
+        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config, new StreamsMetrics() {
+            @Override
+            public Sensor addLatencySensor(final String scopeName, final String entityName, final String operationName, final String... tags) {
+                return null;
+            }
+
+            @Override
+            public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
+
+            }
+        }, stateDirectory);
+
+    }
     private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);
     }

@@ -92,7 +92,6 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
     }
@@ -169,16 +168,22 @@ public class KStreamKTableJoinIntegrationTest {
             new KeyValue<>("fang", "asia")
         );
 
-        final List<KeyValue<String, Long>> expectedClicksPerRegion = Arrays.asList(
-            new KeyValue<>("europe", 13L),
-            new KeyValue<>("americas", 4L),
-            new KeyValue<>("asia", 25L),
-            new KeyValue<>("americas", 23L),
-            new KeyValue<>("europe", 69L),
-            new KeyValue<>("americas", 101L),
-            new KeyValue<>("europe", 109L),
-            new KeyValue<>("asia", 124L)
-        );
+        final List<KeyValue<String, Long>> expectedClicksPerRegion = (cacheSizeBytes == 0) ?
+            Arrays.asList(
+                new KeyValue<>("europe", 13L),
+                new KeyValue<>("americas", 4L),
+                new KeyValue<>("asia", 25L),
+                new KeyValue<>("americas", 23L),
+                new KeyValue<>("europe", 69L),
+                new KeyValue<>("americas", 101L),
+                new KeyValue<>("europe", 109L),
+                new KeyValue<>("asia", 124L)
+            ) :
+            Arrays.asList(
+                new KeyValue<>("americas", 101L),
+                new KeyValue<>("europe", 109L),
+                new KeyValue<>("asia", 124L)
+            );
 
         //
         // Step 1: Configure and start the processor topology.

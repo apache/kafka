@@ -48,7 +48,7 @@ class MessageTest extends JUnitSuite {
     val magicValues = Array(Message.MagicValue_V0, Message.MagicValue_V1)
     for(k <- keys; v <- vals; codec <- codecs; t <- timestamps; mv <- magicValues) {
       val timestamp = ensureValid(mv, t)
-      messages += new MessageTestVal(k, v, codec, timestamp, mv, new Message(v, k, timestamp, codec, mv))
+      messages += MessageTestVal(k, v, codec, timestamp, mv, new Message(v, k, timestamp, codec, mv))
     }
 
     def ensureValid(magicValue: Byte, timestamp: Long): Long =
@@ -96,46 +96,12 @@ class MessageTest extends JUnitSuite {
 
   @Test
   def testEquality() {
-    for(v <- messages) {
+    for (v <- messages) {
       assertFalse("Should not equal null", v.message.equals(null))
       assertFalse("Should not equal a random string", v.message.equals("asdf"))
       assertTrue("Should equal itself", v.message.equals(v.message))
       val copy = new Message(bytes = v.payload, key = v.key, v.timestamp, codec = v.codec, v.magicValue)
       assertTrue("Should equal another message with the same content.", v.message.equals(copy))
-    }
-  }
-
-  @Test
-  def testMessageFormatConversion() {
-
-    def convertAndVerify(v: MessageTestVal, fromMessageFormat: Byte, toMessageFormat: Byte) {
-      assertEquals("Message should be the same when convert to the same version.",
-        v.message.toFormatVersion(fromMessageFormat), v.message)
-      val convertedMessage = v.message.toFormatVersion(toMessageFormat)
-      assertEquals("Size difference is not expected value", convertedMessage.size - v.message.size,
-        Message.headerSizeDiff(fromMessageFormat, toMessageFormat))
-      assertTrue("Message should still be valid", convertedMessage.isValid)
-      assertEquals("Timestamp should be NoTimestamp", convertedMessage.timestamp, Message.NoTimestamp)
-      assertEquals(s"Magic value should be $toMessageFormat now", convertedMessage.magic, toMessageFormat)
-      if (convertedMessage.hasKey)
-        assertEquals("Message key should not change", convertedMessage.key, ByteBuffer.wrap(v.key))
-      else
-        assertNull(convertedMessage.key)
-      if(v.payload == null) {
-        assertTrue(convertedMessage.isNull)
-        assertEquals("Payload should be null", null, convertedMessage.payload)
-      } else {
-        assertEquals("Message payload should not change", convertedMessage.payload, ByteBuffer.wrap(v.payload))
-      }
-      assertEquals("Compression codec should not change", convertedMessage.compressionCodec, v.codec)
-    }
-
-    for (v <- messages) {
-      if (v.magicValue == Message.MagicValue_V0) {
-        convertAndVerify(v, Message.MagicValue_V0, Message.MagicValue_V1)
-      } else if (v.magicValue == Message.MagicValue_V1) {
-        convertAndVerify(v, Message.MagicValue_V1, Message.MagicValue_V0)
-      }
     }
   }
 

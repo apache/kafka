@@ -39,7 +39,7 @@ object ZkFourLetterWords {
       outStream.write("stat".getBytes)
       outStream.flush()
     } catch {
-      case e: SocketTimeoutException => throw new IOException("Exception while sending 4lw")
+      case e: SocketTimeoutException => throw new IOException("Exception while sending 4lw", e)
     } finally {
       sock.close
     }

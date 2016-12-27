@@ -40,7 +40,8 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Set the window maintain duration in milliseconds of system time.
+     * Set the window maintain duration in milliseconds of streams time.
+     * This retention time is a guaranteed <i>lower bound</i> for how long a window will be maintained.
      *
      * @return  itself
      */
@@ -63,9 +64,9 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Return the window maintain duration in milliseconds of system time.
+     * Return the window maintain duration in milliseconds of streams time.
      *
-     * @return the window maintain duration in milliseconds of system time
+     * @return the window maintain duration in milliseconds of streams time
      */
     public long maintainMs() {
         return this.maintainDurationMs;

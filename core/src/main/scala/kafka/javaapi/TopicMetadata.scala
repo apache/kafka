@@ -17,20 +17,14 @@
 package kafka.javaapi
 
 import kafka.cluster.BrokerEndPoint
-import scala.collection.JavaConversions
+import scala.collection.JavaConverters._
 
 private[javaapi] object MetadataListImplicits {
   implicit def toJavaTopicMetadataList(topicMetadataSeq: Seq[kafka.api.TopicMetadata]):
-  java.util.List[kafka.javaapi.TopicMetadata] = {
-    import JavaConversions._
-    topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_))
-  }
+  java.util.List[kafka.javaapi.TopicMetadata] = topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_)).asJava
 
   implicit def toPartitionMetadataList(partitionMetadataSeq: Seq[kafka.api.PartitionMetadata]):
-  java.util.List[kafka.javaapi.PartitionMetadata] = {
-    import JavaConversions._
-    partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_))
-  }
+  java.util.List[kafka.javaapi.PartitionMetadata] = partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_)).asJava
 }
 
 class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
@@ -57,15 +51,9 @@ class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
     underlying.leader
   }
 
-  def replicas: java.util.List[BrokerEndPoint] = {
-    import JavaConversions._
-    underlying.replicas
-  }
+  def replicas: java.util.List[BrokerEndPoint] = underlying.replicas.asJava
 
-  def isr: java.util.List[BrokerEndPoint] = {
-    import JavaConversions._
-    underlying.isr
-  }
+  def isr: java.util.List[BrokerEndPoint] = underlying.isr.asJava
 
   def errorCode: Short = underlying.errorCode
 

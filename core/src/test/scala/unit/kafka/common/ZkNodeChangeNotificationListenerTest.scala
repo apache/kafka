@@ -51,7 +51,7 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => invocationCount == 1 && notification == notificationMessage1, "failed to send/process notification message in the timeout period.")
 
     /*There is no easy way to test that purging. Even if we mock kafka time with MockTime, the purging compares kafka time with the time stored in zookeeper stat and the
-    embeded zookeeper server does not provide a way to mock time. so to test purging we will have to use SystemTime.sleep(changeExpirationMs + 1) issue a write and check
+    embeded zookeeper server does not provide a way to mock time. so to test purging we will have to use Time.SYSTEM.sleep(changeExpirationMs + 1) issue a write and check
     Assert.assertEquals(1, ZkUtils.getChildren(zkClient, seqNodeRoot).size) however even after that the assertion can fail as the second node it self can be deleted
     depending on how threads get scheduled.*/
 

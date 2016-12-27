@@ -22,8 +22,8 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
-
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id);
+    public static final ApiVersionsRequest API_VERSIONS_REQUEST = new ApiVersionsRequest();
 
     public ApiVersionsRequest() {
         super(new Struct(CURRENT_SCHEMA));
@@ -34,7 +34,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
                 short errorCode = Errors.forException(e).code();

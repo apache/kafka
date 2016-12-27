@@ -43,7 +43,6 @@ class KafkaHealthcheck(brokerId: Int,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion) extends Logging {
 
-  private val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
@@ -93,12 +92,12 @@ class KafkaHealthcheck(brokerId: Int,
       }
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     override def handleStateChanged(state: KeeperState) {
       stateToMeterMap.get(state).foreach(_.mark())
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     override def handleNewSession() {
       info("re-registering broker info in ZK for broker " + brokerId)
       register()

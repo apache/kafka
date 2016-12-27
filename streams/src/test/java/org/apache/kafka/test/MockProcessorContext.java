@@ -21,13 +21,13 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -51,6 +51,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     long timestamp = -1L;
     private RecordContext recordContext;
+    private ProcessorNode currentNode;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
         this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
@@ -248,7 +249,13 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public void setCurrentNode(final ProcessorNode currentNode) {
+        this.currentNode  = currentNode;
+        driver.setCurrentNode(currentNode);
+    }
 
+    @Override
+    public ProcessorNode currentNode() {
+        return currentNode;
     }
 
 }

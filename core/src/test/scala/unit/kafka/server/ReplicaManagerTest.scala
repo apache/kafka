@@ -17,21 +17,19 @@
 
 package kafka.server
 
-
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
-import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{MemoryRecords, Record, Records}
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
@@ -43,8 +41,7 @@ import scala.collection.Map
 class ReplicaManagerTest {
 
   val topic = "test-topic"
-  val time = new MockTime()
-  val jTime = new JMockTime
+  val time = new MockTime
   val metrics = new Metrics
   var zkClient : ZkClient = _
   var zkUtils : ZkUtils = _
@@ -65,10 +62,10 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
-      val partition = rm.getOrCreatePartition(topic, 1)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 1))
       partition.getOrCreateReplica(1)
       rm.checkpointHighWatermarks()
     } finally {
@@ -83,10 +80,10 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
-      val partition = rm.getOrCreatePartition(topic, 1)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 1))
       partition.getOrCreateReplica(1)
       rm.checkpointHighWatermarks()
     } finally {
@@ -100,17 +97,17 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
       }
-      rm.appendMessages(
+      rm.appendRecords(
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
-        messagesPerPartition = Map(new TopicPartition("test1", 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
+        entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(Record.create("first message".getBytes))),
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -125,7 +122,7 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
 
     try {
@@ -136,7 +133,7 @@ class ReplicaManagerTest {
       }
 
       var fetchCallbackFired = false
-      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchResponsePartitionData)]) = {
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
         assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.map(_._2).head.error)
         fetchCallbackFired = true
       }
@@ -146,24 +143,24 @@ class ReplicaManagerTest {
       EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
       EasyMock.replay(metadataCache)
 
-      val brokerList : java.util.List[Integer] = Seq[Integer](0, 1).asJava
-      val brokerSet : java.util.Set[Integer] = Set[Integer](0, 1).asJava
+      val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
+      val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1).asJava
 
-      val partition = rm.getOrCreatePartition(topic, 0)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
-      rm.getLeaderReplicaIfLocal(topic, 0)
+      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       // Append a message.
-      rm.appendMessages(
+      rm.appendRecords(
         timeout = 1000,
         requiredAcks = -1,
         internalTopicsAllowed = false,
-        messagesPerPartition = Map(new TopicPartition(topic, 0) -> new ByteBufferMessageSet(new Message("first message".getBytes))),
+        entriesPerPartition = Map(new TopicPartition(topic, 0) -> MemoryRecords.withRecords(Record.create("first message".getBytes()))),
         responseCallback = produceCallback)
 
       // Fetch some messages
@@ -173,7 +170,7 @@ class ReplicaManagerTest {
         fetchMinBytes = 100000,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 100000)),
         responseCallback = fetchCallback)
 
       // Make this replica the follower
@@ -196,7 +193,7 @@ class ReplicaManagerTest {
     props.put("broker.id", Int.box(0))
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
       val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1), new Broker(1, "host2", 2))
@@ -207,7 +204,7 @@ class ReplicaManagerTest {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
       
-      val partition = rm.getOrCreatePartition(topic, 0)
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
       
       // Make this replica the leader.
@@ -215,25 +212,25 @@ class ReplicaManagerTest {
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava)
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, metadataCache, (_, _) => {})
-      rm.getLeaderReplicaIfLocal(topic, 0)
+      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {}
       
       // Append a couple of messages.
       for(i <- 1 to 2)
-        rm.appendMessages(
+        rm.appendRecords(
           timeout = 1000,
           requiredAcks = -1,
           internalTopicsAllowed = false,
-          messagesPerPartition = Map(new TopicPartition(topic, 0) -> new ByteBufferMessageSet(new Message("message %d".format(i).getBytes))),
+          entriesPerPartition = Map(new TopicPartition(topic, 0) -> MemoryRecords.withRecords(Record.create("message %d".format(i).getBytes))),
           responseCallback = produceCallback)
       
       var fetchCallbackFired = false
       var fetchError = 0
-      var fetchedMessages: MessageSet = null
-      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchResponsePartitionData)]) = {
+      var fetchedRecords: Records = null
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
         fetchError = responseStatus.map(_._2).head.error
-        fetchedMessages = responseStatus.map(_._2).head.messages
+        fetchedRecords = responseStatus.map(_._2).head.records
         fetchCallbackFired = true
       }
       
@@ -244,13 +241,13 @@ class ReplicaManagerTest {
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 100000)),
         responseCallback = fetchCallback)
         
       
       assertTrue(fetchCallbackFired)
       assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
-      assertTrue("Should return some data", fetchedMessages.iterator.hasNext)
+      assertTrue("Should return some data", fetchedRecords.shallowEntries.iterator.hasNext)
       fetchCallbackFired = false
       
       // Fetch a message above the high watermark as a consumer
@@ -260,12 +257,12 @@ class ReplicaManagerTest {
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 100000)),
         responseCallback = fetchCallback)
           
         assertTrue(fetchCallbackFired)
         assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
-        assertEquals("Should return empty response", MessageSet.Empty, fetchedMessages)
+        assertEquals("Should return empty response", MemoryRecords.EMPTY, fetchedRecords)
     } finally {
       rm.shutdown(checkpointHW = false)
     }
