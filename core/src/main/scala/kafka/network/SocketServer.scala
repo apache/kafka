@@ -166,7 +166,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQuotas) extends Runnable with Logging {
 
   private val startupLatch = new CountDownLatch(1)
-  private val shutdownLatch = new CountDownLatch(1)
+  // Since countdown method is invoked only in run(), a thread in NEW state has no chance to
+  // count down its shutdown latch. Hence, initialize the shutdown latch count to zero here
+  // in case a non-zero count stalls the thread teardown which therefore stops Kafka server from exit.
+  @volatile private var shutdownLatch = new CountDownLatch(0)
   private val alive = new AtomicBoolean(true)
 
   def wakeup()
@@ -189,6 +192,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Record that the thread startup is complete
    */
   protected def startupComplete() = {
+    // Activate the shutdown latch by resetting it to count 1
+    shutdownLatch = new CountDownLatch(1)
     startupLatch.countDown()
   }
 

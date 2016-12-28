@@ -17,9 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.ZkUtils
-import kafka.utils.CoreUtils
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -41,6 +39,33 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     server.shutdown()
     CoreUtils.delete(server.config.logDirs)
+  }
+
+  @Test
+  def testConflictBrokerStartupWithSamePort {
+    // Create and start first broker
+    val brokerId1 = 0
+    val zkChroot = "/kafka-chroot-for-unittest"
+    val props = TestUtils.createBrokerConfig(brokerId1, zkConnect)
+    val zooKeeperConnect = props.get("zookeeper.connect")
+    props.put("zookeeper.connect", zooKeeperConnect + zkChroot)
+    val server1 = TestUtils.createServer(KafkaConfig.fromProps(props))
+    val port = server1.zkUtils.getBrokerInfo(brokerId1).get.endPoints.values.head.port
+
+    // Create a second server with same port
+    val brokerId2 = 1
+    val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
+    props2.put("zookeeper.connect", zooKeeperConnect + zkChroot)
+    try {
+      TestUtils.createServer(KafkaConfig.fromProps(props2))
+      fail("Starting a broker with a same port should fail")
+    } catch {
+      case _: RuntimeException =>
+      // this is expected
+    } finally {
+      server1.shutdown()
+      CoreUtils.delete(server1.config.logDirs)
+    }
   }
 
   @Test
