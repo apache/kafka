@@ -57,6 +57,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -77,6 +79,8 @@ import static org.hamcrest.core.IsEqual.equalTo;
 
 @RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
+
     private static final int NUM_BROKERS = 1;
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
@@ -93,6 +97,7 @@ public class QueryableStateIntegrationTest {
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
     private static final int NUM_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
+    private static final int MAX_WAIT_MS = Integer.getInteger("kafka.test.max.wait.ms", 60000);
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -281,16 +286,16 @@ public class QueryableStateIntegrationTest {
                         final ReadOnlyKeyValueStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
                         return store != null && store.get(key) != null;
                     } catch (final IllegalStateException e) {
-                        // Kafka Streams instance may have closed but rebalance hasn't happened
+                        log.debug("Kafka Streams instance may have closed but re-balance hasn't happened", e);
                         return false;
                     } catch (final InvalidStateStoreException e) {
-                        // there must have been at least one rebalance state
+                        log.debug("There must have been at least one rebalance state", e);
                         assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
                         return false;
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, MAX_WAIT_MS, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -313,16 +318,16 @@ public class QueryableStateIntegrationTest {
                         final ReadOnlyWindowStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
                         return store != null && store.fetch(key, from, to) != null;
                     } catch (final IllegalStateException e) {
-                        // Kafka Streams instance may have closed but rebalance hasn't happened
+                        log.debug("Kafka Streams instance may have closed but re-balance hasn't happened", e);
                         return false;
                     } catch (InvalidStateStoreException e) {
-                        // there must have been at least one rebalance state
+                        log.debug("There must have been at least one rebalance state", e);
                         assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
                         return false;
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, MAX_WAIT_MS, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -474,7 +479,6 @@ public class QueryableStateIntegrationTest {
             myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
-
     }
 
     @Test
@@ -498,7 +502,6 @@ public class QueryableStateIntegrationTest {
                         new Properties()),
                 mockTime);
 
-        final int maxWaitMs = 30000;
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -509,7 +512,7 @@ public class QueryableStateIntegrationTest {
                     return false;
                 }
             }
-        }, maxWaitMs, "waiting for store " + storeName);
+        }, MAX_WAIT_MS, "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, Long> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
 
@@ -518,7 +521,7 @@ public class QueryableStateIntegrationTest {
             public boolean conditionMet() {
                 return new Long(8).equals(store.get("hello"));
             }
-        }, maxWaitMs, "wait for count to be 8");
+        }, MAX_WAIT_MS, "wait for count to be 8");
 
         // close stream
         kafkaStreams.close();
@@ -538,8 +541,7 @@ public class QueryableStateIntegrationTest {
                     return false;
                 }
             }
-        }, maxWaitMs, "waiting for store " + storeName);
-
+        }, MAX_WAIT_MS, "waiting for store " + storeName);
     }
 
     private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
@@ -582,7 +584,7 @@ public class QueryableStateIntegrationTest {
         final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
-        final long timeout = System.currentTimeMillis() + 30000;
+        final long timeout = System.currentTimeMillis() + MAX_WAIT_MS;
         while ((windowState.size() < keys.length ||
             countState.size() < keys.length) &&
             System.currentTimeMillis() < timeout) {
@@ -670,7 +672,7 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            60 * 1000);
+            MAX_WAIT_MS);
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
@@ -694,7 +696,6 @@ public class QueryableStateIntegrationTest {
         }
         return Collections.emptyMap();
     }
-
 
     /**
      * A class that periodically produces records in a separate thread
@@ -745,6 +746,4 @@ public class QueryableStateIntegrationTest {
             }
         }
     }
-
-
 }
