@@ -53,19 +53,19 @@ public interface Schema {
         /**
          *  16-bit signed integer
          *
-         *  Note that if you have an unsigned 8-bit data source, {@link Type#INT32} will be required to safely capture all valid values
+         *  Note that if you have an unsigned 16-bit data source, {@link Type#INT32} will be required to safely capture all valid values
          */
         INT16,
         /**
          *  32-bit signed integer
          *
-         *  Note that if you have an unsigned 8-bit data source, {@link Type#INT64} will be required to safely capture all valid values
+         *  Note that if you have an unsigned 32-bit data source, {@link Type#INT64} will be required to safely capture all valid values
          */
         INT32,
         /**
          *  64-bit signed integer
          *
-         *  Note that if you have an unsigned 8-bit data source, the {@link Decimal} logical type (encoded as {@link Type#BYTES})
+         *  Note that if you have an unsigned 64-bit data source, the {@link Decimal} logical type (encoded as {@link Type#BYTES})
          *  will be required to safely capture all valid values
          */
         INT64,
