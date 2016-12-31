@@ -10,7 +10,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
@@ -35,9 +34,6 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     MirrorMaker.producer.send(new ProducerRecord(topic, msg.getBytes()))
     MirrorMaker.producer.close()
 
-    servers foreach { server =>
-      println(server.zkUtils.getAllTopics().mkString(","))
-    }
     // Create a MirrorMaker consumer
     val consumerProps = new Properties()
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
@@ -49,17 +45,14 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val mirrorMakerConsumer = new MirrorMakerNewConsumer(consumer, None, whitelist)
     mirrorMakerConsumer.init()
     try {
-      val maxTryCount = 3 // it might need to call multiple poll calls to retrieve the message
-      for (_ <- 0 until maxTryCount) {
+      TestUtils.waitUntilTrue(() => {
         try {
           val data = mirrorMakerConsumer.receive()
-          assertTrue(s"MirrorMaker consumer should get the correct topic: $topic", data.topic == topic)
-          assertTrue("MirrorMaker consumer should read the correct message.", new String(data.value) == msg)
-          return
+          data.topic == topic && new String(data.value) == msg
         } catch {
-         case _: ConsumerTimeoutException => // swallow it
+          case _: ConsumerTimeoutException => false
         }
-      }
+      }, "MirrorMaker consumer should be able to subscribe the correct topic and read the correct message.")
     } finally {
       consumer.close()
     }
