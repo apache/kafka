@@ -146,7 +146,10 @@ class WorkerSourceTask extends WorkerTask {
 
             while (!isStopping()) {
                 if (shouldPause()) {
-                    awaitUnpause();
+                    onPause();
+                    if (awaitUnpause()) {
+                        onResume();
+                    }
                     continue;
                 }
 

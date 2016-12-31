@@ -324,11 +324,22 @@ object LogConfig {
   }
 
   /**
+    * Check that the property values are valid relative to each other
+    */
+  def validateValues(props: Properties) {
+    val segmentBytes = if (props.getProperty(SegmentBytesProp) == null) Defaults.SegmentSize else props.getProperty(SegmentBytesProp).toLong
+    val retentionBytes = if (props.getProperty(RetentionBytesProp) == null) Defaults.RetentionSize else props.getProperty(RetentionBytesProp).toLong
+    if (segmentBytes > retentionBytes && retentionBytes != -1)
+      throw new InvalidConfigurationException(s"segment.bytes ${segmentBytes} is not less than or equal to retention.bytes ${retentionBytes}")
+  }
+
+  /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */
   def validate(props: Properties) {
     validateNames(props)
     configDef.parse(props)
+    validateValues(props)
   }
 
 }

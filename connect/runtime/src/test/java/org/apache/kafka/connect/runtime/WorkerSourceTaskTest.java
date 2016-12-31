@@ -130,33 +130,23 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     @Test
     public void testStartPaused() throws Exception {
-        final CountDownLatch startupLatch = new CountDownLatch(1);
+        final CountDownLatch pauseLatch = new CountDownLatch(1);
 
         createWorkerTask(TargetState.PAUSED);
 
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
+        statusListener.onPause(taskId);
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
-                startupLatch.countDown();
+                pauseLatch.countDown();
                 return null;
             }
         });
-        statusListener.onPause(taskId);
-        EasyMock.expectLastCall();
-
-        // we shouldn't get any calls to poll()
-
-        sourceTask.stop();
-        EasyMock.expectLastCall();
-        expectOffsetFlush(true);
-
-        statusListener.onShutdown(taskId);
-        EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -164,7 +154,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask.initialize(TASK_CONFIG);
         Future<?> taskFuture = executor.submit(workerTask);
 
-        assertTrue(startupLatch.await(5, TimeUnit.SECONDS));
+        assertTrue(pauseLatch.await(5, TimeUnit.SECONDS));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
 
