@@ -57,11 +57,15 @@ public class MemoryRecords extends AbstractRecords {
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
         if (position > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("position should not be larger than Integer.MAX_VALUE: " + position);
+            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
+        if (position + length > buffer.limit())
+            throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
+                    + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
+
         int pos = (int) position;
         ByteBuffer dup = buffer.duplicate();
         dup.position(pos);
-        dup.limit(Math.min(pos + length, buffer.limit()));
+        dup.limit(pos + length);
         return channel.write(dup);
     }
 
@@ -100,11 +104,11 @@ public class MemoryRecords extends AbstractRecords {
     /**
      * Filter the records into the provided ByteBuffer.
      * @param filter The filter function
-     * @param buffer The byte buffer to write the filtered records to
+     * @param destinationBuffer The byte buffer to write the filtered records to
      * @return A FilterResult with a summary of the output (for metrics)
      */
-    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer buffer) {
-        return filterTo(shallowEntries(), filter, buffer);
+    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer destinationBuffer) {
+        return filterTo(shallowEntries(), filter, destinationBuffer);
     }
 
     private static FilterResult filterTo(Iterable<ByteBufferLogEntry> fromShallowEntries, LogEntryFilter filter,

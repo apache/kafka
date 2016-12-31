@@ -31,9 +31,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
-import org.apache.kafka.common.utils.Crc32
 import org.apache.kafka.common.utils.Utils
-
 
 /**
  * General helper functions!

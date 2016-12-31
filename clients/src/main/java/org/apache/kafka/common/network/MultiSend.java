@@ -35,17 +35,19 @@ public class MultiSend implements Send {
 
     private final String dest;
     private final Iterator<Send> sendsIterator;
+    private final long size;
 
     private long totalWritten = 0;
     private Send current;
-    private long size = 0;
 
     public MultiSend(String dest, List<Send> sends) {
         this.dest = dest;
         this.sendsIterator = sends.iterator();
         nextSendOrDone();
+        long size = 0;
         for (Send send : sends)
-            this.size += send.size();
+            size += send.size();
+        this.size = size;
     }
 
     @Override
@@ -80,7 +82,7 @@ public class MultiSend implements Send {
 
         totalWritten += totalWrittenPerCall;
 
-        if (totalWritten != size)
+        if (completed() && totalWritten != size)
             log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
 
         if (log.isTraceEnabled())
