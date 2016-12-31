@@ -143,6 +143,8 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> Overloaded constructors were added to <code>kafka.api.FetchRequest</code> and <code>kafka.javaapi.FetchRequest</code> to allow the caller to specify the
          order of the partitions (since order is significant in v3). The previously existing constructors were deprecated and the partitions are shuffled before
          the request is sent to avoid starvation issues. </li>
+    <li> Regular expression is allowed when using the new Java consumer in MirrorMaker. User who employs the new consumer can specify a valid Java-style regular
+         expression for the --whitelist option.</li>
 </ul>
 
 <h5><a id="upgrade_1010_new_protocols" href="#upgrade_1010_new_protocols">New Protocol Versions</a></h5>
