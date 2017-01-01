@@ -104,7 +104,7 @@ public class DefaultPartitionerTest {
         List<PartitionInfo> allPartitions = new ArrayList<PartitionInfo>();
 
         final int topicCount = 37;
-        for(int i = 0; i < topicCount; ++i) {
+        for (int i = 0; i < topicCount; ++i) {
             final String topici = "topic" + i;
             allPartitions.add(new PartitionInfo(topici, 0, node0, nodes, nodes));
             allPartitions.add(new PartitionInfo(topici, 1, node1, nodes, nodes));
@@ -117,11 +117,11 @@ public class DefaultPartitionerTest {
         final CountDownLatch latch = new CountDownLatch(threadCount);
         long start = System.currentTimeMillis();
         final int loopCount = 10000;
-        for(int i = 0; i < threadCount; ++i) {
+        for (int i = 0; i < threadCount; ++i) {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for(int j = 0; j < loopCount; ++j) {
+                    for (int j = 0; j < loopCount; ++j) {
                         String theTopic = "topic" + j % topicCount;
                         partitioner.partition(theTopic, null, null, null, null, testCluster);
                     }
@@ -132,7 +132,7 @@ public class DefaultPartitionerTest {
 
         latch.await();
 
-        double avg = (System.currentTimeMillis() - start)/ (double)(threadCount * loopCount);
+        double avg = (System.currentTimeMillis() - start) / (double) (threadCount * loopCount);
         System.out.println("avg partition time(ms)=" + String.format("%5f", avg));
     }
 }
