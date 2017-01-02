@@ -55,7 +55,7 @@ public class DefaultPartitioner implements Partitioner {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
         if (keyBytes == null) {
-            int nextValue = getNextValue(topic);
+            int nextValue = nextValue(topic);
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
                 int part = Utils.toPositive(nextValue) % availablePartitions.size();
@@ -70,7 +70,7 @@ public class DefaultPartitioner implements Partitioner {
         }
     }
 
-    private int getNextValue(String topic) {
+    private int nextValue(String topic) {
         AtomicInteger counter = topicCounterMap.get(topic);
         if (null == counter) {
             counter = new AtomicInteger(new Random().nextInt());
