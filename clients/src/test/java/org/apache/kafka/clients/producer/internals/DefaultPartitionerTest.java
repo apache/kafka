@@ -113,18 +113,22 @@ public class DefaultPartitionerTest {
         final Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
                 Collections.<String>emptySet(), Collections.<String>emptySet());
 
-        int threadCount = 100;
+        int threadCount = 10;
+        final List<Long> partitionTimeList = Collections.synchronizedList(new ArrayList<Long>(threadCount));
+
         final CountDownLatch latch = new CountDownLatch(threadCount);
-        long start = System.currentTimeMillis();
-        final int loopCount = 10000;
+
+        final int loopCount = 1000000;
         for (int i = 0; i < threadCount; ++i) {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
+                    long start = System.currentTimeMillis();
                     for (int j = 0; j < loopCount; ++j) {
                         String theTopic = "topic" + j % topicCount;
                         partitioner.partition(theTopic, null, null, null, null, testCluster);
                     }
+                    partitionTimeList.add(System.currentTimeMillis() - start);
                     latch.countDown();
                 }
             }).start();
@@ -132,7 +136,12 @@ public class DefaultPartitionerTest {
 
         latch.await();
 
-        double avg = (System.currentTimeMillis() - start) / (double) (threadCount * loopCount);
+        double sum = 0.0;
+        for (int i = 0; i < partitionTimeList.size(); ++i) {
+            sum += partitionTimeList.get(i);
+        }
+
+        double avg = sum / (double) (loopCount);
         System.out.println("avg partition time(ms)=" + String.format("%5f", avg));
     }
 }
