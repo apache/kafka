@@ -85,25 +85,10 @@ public class FetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for Version 0
-     * @param responseData fetched data grouped by topic-partition
-     */
-    public FetchResponse(Map<TopicPartition, PartitionData> responseData) {
-        this(0, new LinkedHashMap<>(responseData), DEFAULT_THROTTLE_TIME);
-    }
-
-    /**
-     * Constructor for Version 1 and 2
-     * @param responseData fetched data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
-     */
-    public FetchResponse(Map<TopicPartition, PartitionData> responseData, int throttleTime) {
-        // the schema for versions 1 and 2 is the same, so we pick 2 here
-        this(2, new LinkedHashMap<>(responseData), throttleTime);
-    }
-
-    /**
-     * Constructor for Version 3
+     * Constructor for version 3.
+     *
+     * The entries in `responseData` should be in the same order as the entries in `FetchRequest.fetchData`.
+     *
      * @param responseData fetched data grouped by topic-partition
      * @param throttleTime Time in milliseconds the response was throttled
      */
@@ -111,6 +96,15 @@ public class FetchResponse extends AbstractResponse {
         this(3, responseData, throttleTime);
     }
 
+    /**
+     * Constructor for all versions.
+     *
+     * From version 3, the entries in `responseData` should be in the same order as the entries in
+     * `FetchRequest.fetchData`.
+     *
+     * @param responseData fetched data grouped by topic-partition
+     * @param throttleTime Time in milliseconds the response was throttled
+     */
     public FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
         super(writeStruct(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)), version, responseData,
                 throttleTime));

@@ -70,6 +70,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -1320,7 +1321,7 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        Map<TopicPartition, PartitionData> tpResponses = new HashMap<>();
+        LinkedHashMap<TopicPartition, PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
