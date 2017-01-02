@@ -47,7 +47,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer1: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   protected val topic = "topic"
@@ -56,12 +56,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    consumer1 = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), securityProtocol = SecurityProtocol.PLAINTEXT)
+    consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), securityProtocol = SecurityProtocol.PLAINTEXT)
   }
 
   @After
   override def tearDown() {
-    consumer1.close()
+    consumer.close()
     // Ensure that all producers are closed since unclosed producers impact other tests when Kafka server ports are reused
     producers.foreach(_.close())
 
@@ -77,6 +77,16 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   protected def registerProducer(producer: KafkaProducer[Array[Byte], Array[Byte]]): KafkaProducer[Array[Byte], Array[Byte]] = {
     producers += producer
     producer
+  }
+
+  protected def pollAllExpectedRecord(numRecords: Int) = {
+    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+    TestUtils.waitUntilTrue(() => {
+      for( record <- consumer.poll(50).asScala)
+        records.add(record)
+      records.size == numRecords
+    }, "Failed to receive all expected records from the consumer")
+    records
   }
 
   /**
@@ -272,20 +282,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(partition, recordMetadata.partition)
       }
 
-      consumer1.subscribe(List(topic))
+      consumer.subscribe(List(topic))
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-      val maxIters = numRecords * 50
-      var iters = 0
-      while (records.size < numRecords) {
-        for (record <- consumer1.poll(50)) {
-          records.add(record)
-        }
-        if (iters > maxIters)
-          throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-        iters += 1
-      }
+      val records = pollAllExpectedRecord(numRecords)
       assertEquals("Should have fetched " + numRecords + " messages", numRecords, records.size)
 
       for (i <- 0 until numRecords) {
@@ -389,7 +389,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // create topic
     TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
 
-    consumer1.subscribe(List(topic))
+    consumer.subscribe(List(topic))
 
     // create record
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
@@ -410,7 +410,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         }
       }
       val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-      for (record <- consumer1.poll(50)) {
+      for (record <- consumer.poll(50)) {
         records.add(record)
       }
       assertEquals("Fetch response should have no message returned.", 0, records.size())
@@ -425,7 +425,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // create topic
     TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
-    consumer1.assign(List(new TopicPartition(topic, 0)))
+    consumer.assign(List(new TopicPartition(topic, 0)))
 
     // create record
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
@@ -455,22 +455,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         producer.flush()
         assertTrue("All request are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-        val maxIters = 50
-        var iters = 0
-        consumer1.seek(new TopicPartition(topic, 0),0)
-        while (records.size < ((i + 1) * numRecords)) {
-          for (record <- consumer1.poll(50)) {
-            records.add(record)
-          }
-          if (iters > maxIters)
-            throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-          iters += 1
-        }
-
-        val expectedNumRecords = (i + 1) * numRecords
-        assertEquals("Fetch response to partition 0 should have %d messages.".format(expectedNumRecords),
-          expectedNumRecords, records.size())
+        val records = pollAllExpectedRecord(numRecords)
+        assertEquals("Fetch response to partition 0 should have %d messages.".format(numRecords),
+          numRecords, records.size())
       } finally {
         producer.close()
       }
