@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.producer.Partitioner;
@@ -36,7 +37,7 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class DefaultPartitioner implements Partitioner {
 
-    private final Map<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
 
     public void configure(Map<String, ?> configs) {}
 
@@ -73,7 +74,10 @@ public class DefaultPartitioner implements Partitioner {
         AtomicInteger counter = topicCounterMap.get(topic);
         if (null == counter) {
             counter = new AtomicInteger(new Random().nextInt());
-            topicCounterMap.put(topic, counter);
+            AtomicInteger currentCounter = topicCounterMap.putIfAbsent(topic, counter);
+            if (currentCounter != null) {
+                counter = currentCounter;
+            }
         }
         return counter.getAndIncrement();
     }
