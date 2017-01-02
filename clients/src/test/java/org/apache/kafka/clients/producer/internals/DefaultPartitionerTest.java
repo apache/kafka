@@ -141,7 +141,7 @@ public class DefaultPartitionerTest {
             sum += partitionTimeList.get(i);
         }
 
-        double avg = sum / (double) (loopCount);
+        double avg = sum / (double) loopCount;
         System.out.println("avg partition time(ms)=" + String.format("%5f", avg));
     }
 }
