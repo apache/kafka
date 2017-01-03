@@ -17,11 +17,10 @@
 
 package kafka.api
 
-import java.util.{ArrayList, Properties}
+import java.util.{Properties}
 import java.util.concurrent.TimeUnit
 
 import collection.JavaConverters._
-import collection.JavaConversions._
 import kafka.admin.AdminUtils
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
@@ -35,7 +34,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{ArrayBuffer, Buffer}
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
@@ -79,13 +78,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     producer
   }
 
-  protected def pollAllExpectedRecord(numRecords: Int) = {
-    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+  private def pollUntilNumRecords(numRecords: Int) : ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
-      for( record <- consumer.poll(50).asScala)
-        records.add(record)
+      records ++= consumer.poll(50).asScala
       records.size == numRecords
-    }, "Failed to receive all expected records from the consumer")
+    }, s"Consumed ${records.size} records before timeout, but expected $numRecords records.")
     records
   }
 
@@ -282,17 +280,17 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(partition, recordMetadata.partition)
       }
 
-      consumer.subscribe(List(topic))
+      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val records = pollAllExpectedRecord(numRecords)
-      assertEquals("Should have fetched " + numRecords + " messages", numRecords, records.size)
+      val records = pollUntilNumRecords(numRecords)
 
-      for (i <- 0 until numRecords) {
-        assertEquals(topic, records(i).topic())
-        assertEquals(partition, records(i).partition)
-        assertEquals(i.toLong, records(i).offset)
+      records.zipWithIndex.foreach { case (record, i) =>
+        assertEquals(topic, record.topic)
+        assertEquals(partition, record.partition)
+        assertEquals(i.toLong, record.offset)
       }
+
     } finally {
       producer.close()
     }
@@ -388,11 +386,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromCallerThread() {
     // create topic
     TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
+    val partition = 0
 
-    consumer.subscribe(List(topic))
+    consumer.assign(List(new TopicPartition(topic, partition)).asJava)
 
     // create record
-    val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+    val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes)
 
     // Test closing from caller thread.
     for (_ <- 0 until 50) {
@@ -409,11 +408,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
         }
       }
-      val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-      for (record <- consumer.poll(50)) {
-        records.add(record)
-      }
-      assertEquals("Fetch response should have no message returned.", 0, records.size())
+      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(50).count)
     }
   }
 
@@ -424,11 +419,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromSenderThread() {
     // create topic
     TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+    val partition = 0
 
-    consumer.assign(List(new TopicPartition(topic, 0)))
+    consumer.assign(List(new TopicPartition(topic, partition)).asJava)
 
     // create record
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes)
 
     // Test closing from sender thread.
     class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]], sendRecords: Boolean) extends Callback {
@@ -455,9 +451,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         producer.flush()
         assertTrue("All request are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        val records = pollAllExpectedRecord(numRecords)
-        assertEquals("Fetch response to partition 0 should have %d messages.".format(numRecords),
-          numRecords, records.size())
+        pollUntilNumRecords(numRecords)
+
       } finally {
         producer.close()
       }
