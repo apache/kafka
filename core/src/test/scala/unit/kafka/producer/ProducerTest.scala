@@ -25,7 +25,7 @@ import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
-import kafka.message.Message
+import kafka.message.{Message, MessageAndOffset}
 import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
@@ -306,11 +306,16 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     // do a simple test to make sure plumbing is okay
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-      // cross check if brokers got the messages
-      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
-      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      producer.send(new KeyedMessage(topic, "test", "test"))
+      // cross check if the broker received the messages
+      // we need the loop because the broker won't return the message until it has been replicated and the producer is
+      // using acks=1
+      var messageSet1: Iterator[MessageAndOffset] = null
+      TestUtils.waitUntilTrue(() => {
+        val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+        messageSet1 = response1.messageSet(topic, 0).iterator
+        messageSet1.hasNext
+      }, "Message set should have 1 message")
       assertEquals(ByteBuffer.wrap("test".getBytes), messageSet1.next.message.payload)
 
       // stop IO threads and request handling, but leave networking operational
@@ -320,8 +325,9 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val t1 = Time.SYSTEM.milliseconds
       try {
         // this message should be assigned to partition 0 whose leader is on broker 0, but
-        // broker 0 will not response within timeoutMs millis.
-        producer.send(new KeyedMessage[String, String](topic, "test", "test"))
+        // broker 0 will not respond within timeoutMs millis.
+        producer.send(new KeyedMessage(topic, "test", "test"))
+        fail("Exception should have been thrown")
       } catch {
         case _: FailedToSendMessageException => /* success */
       }
