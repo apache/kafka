@@ -20,6 +20,7 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import kafka.common.Config
+import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, QuotaId}
 import kafka.utils.{CommandLineUtils, ZkUtils}
@@ -83,14 +84,13 @@ object ConfigCommand extends Config {
     // compile the final set of configs
     val configs = utils.fetchEntityConfig(zkUtils, entityType, entityName)
 
+    // fail the command if any of the configs to be deleted does not exist
+    val invalidConfigs = configsToBeDeleted.filterNot(configs.containsKey(_))
+    if (invalidConfigs.nonEmpty)
+      throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+
     configs.putAll(configsToBeAdded)
-    configsToBeDeleted.foreach { config =>
-      // log an error if the config to be deleted does not exist
-      if (!configs.containsKey(config))
-        System.err.println(s"Deleting config '$config' from entity '$entityName' of type '$entityType' failed, because the specified config does not exist.")
-      else
-        configs.remove(config)
-    }
+    configsToBeDeleted.foreach(configs.remove(_))
 
     entityType match {
       case ConfigType.Topic => utils.changeTopicConfig(zkUtils, entityName, configs)
