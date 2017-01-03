@@ -607,7 +607,6 @@ public class FetcherTest {
      */
     @Test
     public void testQuotaMetrics() throws Exception {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
@@ -618,7 +617,7 @@ public class FetcherTest {
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
             for (int v = 0; v < 3; v++)
                 builder.appendWithOffset((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
-            records = fetchRecords(builder.build(), Errors.NONE.code(), 100L, 100 * i).get(tp);
+            List<ConsumerRecord<byte[], byte[]>> records = fetchRecords(builder.build(), Errors.NONE.code(), 100L, 100 * i).get(tp);
             assertEquals(3, records.size());
         }
 
