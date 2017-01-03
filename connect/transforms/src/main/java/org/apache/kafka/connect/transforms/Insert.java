@@ -184,7 +184,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         }
         if (offsetField != null) {
             if (!(record instanceof SinkRecord)) {
-                throw new DataException("Offset insertion is only supported for sink conectors, received record of type: " + record.getClass());
+                throw new DataException("Offset insertion is only supported for sink conectors, record is of type: " + record.getClass());
             }
             value.put(offsetField.name, ((SinkRecord) record).kafkaOffset());
         }
