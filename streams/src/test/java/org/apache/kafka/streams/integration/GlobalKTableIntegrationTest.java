@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -44,7 +45,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
 
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -55,11 +56,30 @@ public class GlobalKTableIntegrationTest {
 
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
+    private final KeyValueMapper<String, Long, Long> keyMapper = new KeyValueMapper<String, Long, Long>() {
+        @Override
+        public Long apply(final String key, final Long value) {
+            return value;
+        }
+    };
+    private final ValueJoiner<Long, String, String> joiner = new ValueJoiner<Long, String, String>() {
+        @Override
+        public String apply(final Long value1, final String value2) {
+            return value1 + "+" + value2;
+        }
+    };
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String globalOne;
     private String inputStream;
+    private String inputTable;
+    private final String globalStore = "globalStore";
+    private GlobalKTable<Long, String> globalTable;
+    private KStream<String, Long> stream;
+    private KTable<String, Long> table;
+    final Map<String, String> results = new HashMap<>();
+    private ForeachAction<String, String> foreachAction;
 
     @Before
     public void before() {
@@ -75,6 +95,15 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        globalTable = builder.globalTable(Serdes.Long(), Serdes.String(), globalOne, globalStore);
+        stream = builder.stream(Serdes.String(), Serdes.Long(), inputStream);
+        table = builder.table(Serdes.String(), Serdes.Long(), inputTable, "table");
+        foreachAction = new ForeachAction<String, String>() {
+            @Override
+            public void apply(final String key, final String value) {
+                results.put(key, value);
+            }
+        };
     }
 
     @After
@@ -87,67 +116,42 @@ public class GlobalKTableIntegrationTest {
 
     @Test
     public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalOne,
-                Arrays.asList(
-                        new KeyValue<>(1L, "A"),
-                        new KeyValue<>(2L, "B"),
-                        new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D"),
-                        new KeyValue<>(5L, "E")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+        final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
+        streamTableJoin.foreach(foreachAction);
+        runAndVerifyLeftJoin(inputStream);
+    }
 
-        final String globalStore = "globalStore";
-        final GlobalKTable<Long, String> globalTable = builder.globalTable(Serdes.Long(), Serdes.String(), globalOne, globalStore);
-        final KStream<String, Long> stream = builder.stream(Serdes.String(), Serdes.Long(), inputStream);
+    @Test
+    public void shouldKStreamGlobalKTableJoin() throws Exception {
+        final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
+        streamTableJoin.foreach(foreachAction);
+        runAndVerifyJoin(inputStream);
+    }
 
-        final Map<String, String> results = new TreeMap<>();
-        final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, new KeyValueMapper<String, Long, Long>() {
-            @Override
-            public Long apply(final String key, final Long value) {
-                return value;
-            }
-        }, new ValueJoiner<Long, String, String>() {
-            @Override
-            public String apply(final Long value1, final String value2) {
-                return value1 + "+" + value2;
-            }
-        });
-        streamTableJoin.foreach(new ForeachAction<String, String>() {
-            @Override
-            public void apply(final String key, final String value) {
-                results.put(key, value);
-            }
-        });
+    @Test
+    public void shouldKTableGlobalKTableLeftJoin() throws Exception {
+        final KTable<String, String> tableGlobalTableJoin = table.leftJoin(globalTable, keyMapper, joiner);
+        tableGlobalTableJoin.foreach(foreachAction);
+        runAndVerifyLeftJoin(inputTable);
+    }
 
+    @Test
+    public void shouldKTableGlobalKTableJoin() throws Exception {
+        final KTable<String, String> tableGlobalTableJoin = table.join(globalTable, keyMapper, joiner);
+        tableGlobalTableJoin.foreach(foreachAction);
+        runAndVerifyJoin(inputTable);
+    }
+
+    private void runAndVerifyJoin(final String topic) throws InterruptedException, ExecutionException {
+        produceInitialGlobalTableValues();
         startStreams();
-
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputStream,
-                Arrays.asList(
-                        new KeyValue<>("a", 1L),
-                        new KeyValue<>("b", 2L),
-                        new KeyValue<>("c", 3L),
-                        new KeyValue<>("d", 4L),
-                        new KeyValue<>("e", 5L)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        LongSerializer.class,
-                        new Properties()),
-                mockTime);
+        produceTopicValues(topic);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("a", "1+A");
         expected.put("b", "2+B");
         expected.put("c", "3+C");
         expected.put("d", "4+D");
-        expected.put("e", "5+E");
 
         TestUtils.waitForCondition(new TestCondition() {
             @Override
@@ -157,20 +161,7 @@ public class GlobalKTableIntegrationTest {
         }, 30000L, "waiting for initial values");
 
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalOne,
-                Arrays.asList(
-                        new KeyValue<>(1L, "F"),
-                        new KeyValue<>(2L, "G"),
-                        new KeyValue<>(3L, "H"),
-                        new KeyValue<>(4L, "I"),
-                        new KeyValue<>(5L, "J")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+        produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
 
@@ -180,20 +171,8 @@ public class GlobalKTableIntegrationTest {
                 return "J".equals(replicatedStore.get(5L));
             }
         }, 30000, "waiting for data in replicated store");
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputStream,
-                Arrays.asList(
-                        new KeyValue<>("a", 1L),
-                        new KeyValue<>("b", 2L),
-                        new KeyValue<>("c", 3L),
-                        new KeyValue<>("d", 4L),
-                        new KeyValue<>("e", 5L)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        LongSerializer.class,
-                        new Properties()),
-                mockTime);
+
+        produceTopicValues(topic);
 
         expected.put("a", "1+F");
         expected.put("b", "2+G");
@@ -209,16 +188,115 @@ public class GlobalKTableIntegrationTest {
         }, 30000L, "waiting for final values");
     }
 
+    private void runAndVerifyLeftJoin(final String topic) throws InterruptedException, ExecutionException {
+        produceInitialGlobalTableValues();
+        startStreams();
+        produceTopicValues(topic);
+
+        final Map<String, String> expected = new HashMap<>();
+        expected.put("a", "1+A");
+        expected.put("b", "2+B");
+        expected.put("c", "3+C");
+        expected.put("d", "4+D");
+        expected.put("e", "5+null");
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return results.equals(expected);
+            }
+        }, 30000L, "waiting for initial values");
+
+
+        produceGlobalTableValues();
+
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return "J".equals(replicatedStore.get(5L));
+            }
+        }, 30000, "waiting for data in replicated store");
+        produceTopicValues(topic);
+
+        expected.put("a", "1+F");
+        expected.put("b", "2+G");
+        expected.put("c", "3+H");
+        expected.put("d", "4+I");
+        expected.put("e", "5+J");
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return results.equals(expected);
+            }
+        }, 30000L, "waiting for final values");
+    }
+
+
     private void createTopics() {
         inputStream = "input-stream-" + testNo;
+        inputTable = "input-table-" + testNo;
         globalOne = "globalOne-" + testNo;
         CLUSTER.createTopic(inputStream);
+        CLUSTER.createTopic(inputTable);
         CLUSTER.createTopic(globalOne, 2, 1);
     }
 
     private void startStreams() {
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
+    }
+
+    private void produceTopicValues(final String topic) throws java.util.concurrent.ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                topic,
+                Arrays.asList(
+                        new KeyValue<>("a", 1L),
+                        new KeyValue<>("b", 2L),
+                        new KeyValue<>("c", 3L),
+                        new KeyValue<>("d", 4L),
+                        new KeyValue<>("e", 5L)),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        LongSerializer.class,
+                        new Properties()),
+                mockTime);
+    }
+
+    private void produceInitialGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                globalOne,
+                Arrays.asList(
+                        new KeyValue<>(1L, "A"),
+                        new KeyValue<>(2L, "B"),
+                        new KeyValue<>(3L, "C"),
+                        new KeyValue<>(4L, "D")),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        LongSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
+    }
+
+    private void produceGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                globalOne,
+                Arrays.asList(
+                        new KeyValue<>(1L, "F"),
+                        new KeyValue<>(2L, "G"),
+                        new KeyValue<>(3L, "H"),
+                        new KeyValue<>(4L, "I"),
+                        new KeyValue<>(5L, "J")),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        LongSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
     }
 
 
