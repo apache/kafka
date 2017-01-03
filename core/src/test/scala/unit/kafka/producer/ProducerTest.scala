@@ -77,10 +77,6 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     server2 = TestUtils.createServer(config2)
     servers = List(server1,server2)
 
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server1.boundPort().toString)
-
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
@@ -288,11 +284,11 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   def testAsyncSendCanCorrectlyFailWithTimeout() {
     val topic = "new-topic"
     // create topics in ZK
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
 
     val timeoutMs = 500
     val props = new Properties()
-    props.put("request.timeout.ms", String.valueOf(timeoutMs))
+    props.put("request.timeout.ms", timeoutMs.toString)
     props.put("request.required.acks", "1")
     props.put("message.send.max.retries", "0")
     props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
