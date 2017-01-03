@@ -51,7 +51,7 @@ object ConsumerConfig extends Config {
   val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
   val ExcludeInternalTopics = true
-  val DefaultPartitionAssignmentStrategy = "range" /* select between "range", and "roundrobin" */
+  val DefaultPartitionAssignmentStrategy = "range" /* select between "range", "roundrobin", and "fair" */
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
 
@@ -93,8 +93,9 @@ object ConsumerConfig extends Config {
     strategy match {
       case "range" =>
       case "roundrobin" =>
+      case "fair" =>
       case _ => throw new InvalidConfigException("Wrong value " + strategy + " of partition.assignment.strategy in consumer config; " +
-        "Valid values are 'range' and 'roundrobin'")
+        "Valid values are 'range', 'roundrobin', and 'fair'")
     }
   }
 }
@@ -193,7 +194,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** Whether messages from internal topics (such as offsets) should be exposed to the consumer. */
   val excludeInternalTopics = props.getBoolean("exclude.internal.topics", ExcludeInternalTopics)
 
-  /** Select a strategy for assigning partitions to consumer streams. Possible values: range, roundrobin */
+  /** Select a strategy for assigning partitions to consumer streams. Possible values: range, roundrobin, fair */
   val partitionAssignmentStrategy = props.getString("partition.assignment.strategy", DefaultPartitionAssignmentStrategy)
   
   validate(this)
