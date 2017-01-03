@@ -35,7 +35,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()
   val topic = "foo"
-  val topicFilter = new Whitelist(topic)
+  val topicFilter = Whitelist(topic)
   val group = "test.group"
   val props = new Properties
 
@@ -64,9 +64,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     EasyMock.replay(consumerMock)
 
     // action/test
-    TestUtils.waitUntilTrue(() => {
-        !consumerGroupCommand.describeGroup()._2.isDefined
-      }, "Expected no rows in describe group results.")
+    TestUtils.waitUntilTrue(() => consumerGroupCommand.describeGroup()._2.isEmpty, "Expected no rows in describe group results.")
 
     // cleanup
     consumerGroupCommand.close()
@@ -89,7 +87,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => {
         val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
-        assignments.get.filter(_.group == group).size == 1 &&
+        assignments.get.count(_.group == group) == 1 &&
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim.nonEmpty)
       }, "Expected rows and a member id column in describe group results.")
 
@@ -116,7 +114,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => {
         val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
-        assignments.get.filter(_.group == group).size == 1 &&
+        assignments.get.count(_.group == group) == 1 &&
         assignments.get.filter(_.group == group).head.consumerId.isDefined &&
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim.isEmpty) // the member should be gone
       }, "Expected no active member in describe group results.")
@@ -142,9 +140,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => {
         val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
-        assignments.get.filter(_.group == group).size == 2 &&
-        assignments.get.filter{ x => x.group == group && x.partition.isDefined}.size == 1 &&
-        assignments.get.filter{ x => x.group == group && !x.partition.isDefined}.size == 1
+        assignments.get.count(_.group == group) == 2 &&
+        assignments.get.count { x => x.group == group && x.partition.isDefined } == 1 &&
+        assignments.get.count { x => x.group == group && !x.partition.isDefined } == 1
       }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     // cleanup
