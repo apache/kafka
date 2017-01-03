@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.io.File
-import java.util.ArrayList
+import java.util.{ArrayList,Properties}
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
@@ -30,7 +30,6 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -55,7 +54,7 @@ import scala.collection.JavaConverters._
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
   * would end up with ZooKeeperTestHarness twice.
   */
-abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
+abstract class EndToEndAuthorizationTest extends IntegrationTestHarness  with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
@@ -75,9 +74,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  protected def kafkaClientSaslMechanism = "GSSAPI"
-  protected def kafkaServerSaslMechanisms = List("GSSAPI")
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
@@ -159,12 +155,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @Before
   override def setUp {
-    securityProtocol match {
-      case SecurityProtocol.SSL =>
-        startSasl(ZkSasl, null, null)
-      case _ =>
-        startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
-    }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
     servers.foreach { s =>
@@ -344,6 +334,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
   
+
   private def sendRecords(numRecords: Int, tp: TopicPartition) {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)

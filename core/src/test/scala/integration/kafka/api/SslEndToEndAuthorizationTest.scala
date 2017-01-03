@@ -19,6 +19,9 @@ package kafka.api
 
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.junit.Ignore
+import org.junit.Test
+import org.junit.Before
 
 
 class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
@@ -26,4 +29,10 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   override val clientPrincipal = "O=A client,CN=localhost"
   override val kafkaPrincipal = "O=A server,CN=localhost"
+
+  @Before
+  override def setUp {
+    startSasl(ZkSasl, null, null)
+    super.setUp
+  }
 }
