@@ -54,8 +54,9 @@ public class InsertInValueTest {
     @Test
     public void copySchemaAndInsertConfiguredFields() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("topic", "topic_field");
+        props.put("topic", "!topic_field");
         props.put("partition", "partition_field");
+        props.put("timestamp", "?timestamp_field");
 
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
         xform.init(props);
@@ -76,8 +77,11 @@ public class InsertInValueTest {
         assertEquals(Schema.STRING_SCHEMA, transformedRecord.valueSchema().field("topic_field").schema());
         assertEquals("test", ((Struct) transformedRecord.value()).getString("topic_field"));
 
-        assertEquals(Schema.INT32_SCHEMA, transformedRecord.valueSchema().field("partition_field").schema());
+        assertEquals(Schema.OPTIONAL_INT32_SCHEMA, transformedRecord.valueSchema().field("partition_field").schema());
         assertEquals(0, ((Struct) transformedRecord.value()).getInt32("partition_field").intValue());
+
+        assertEquals(Schema.OPTIONAL_INT64_SCHEMA, transformedRecord.valueSchema().field("timestamp_field").schema());
+        assertEquals(null, ((Struct) transformedRecord.value()).getInt64("timestamp_field"));
 
         // Exercise caching
         final SourceRecord transformedRecord2 = xform.apply(

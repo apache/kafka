@@ -60,13 +60,11 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
         public static InsertionSpec parse(String spec) {
             if (spec == null) return null;
-            final boolean optionalSpecified = spec.startsWith("?");
-            if (optionalSpecified) {
-                new InsertionSpec(spec.substring(1), true);
+            if (spec.startsWith("?")) {
+                return new InsertionSpec(spec.substring(1), true);
             }
-            final boolean requiredSpecified = spec.startsWith("|");
-            if (requiredSpecified) {
-                new InsertionSpec(spec.substring(1), false);
+            if (spec.startsWith("!")) {
+                return new InsertionSpec(spec.substring(1), false);
             }
             return new InsertionSpec(spec, true);
         }
