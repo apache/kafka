@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
@@ -55,7 +54,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final Map<TopicPartition, RecordQueue> partitionQueues;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final RecordCollectorImpl recordCollector;
+    private final RecordCollector recordCollector;
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
@@ -70,23 +69,23 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
-     * @param producer              the instance of {@link Producer}
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
+     * @param recordCollector       the instance of {@link RecordCollector} used to produce records
      */
     public StreamTask(TaskId id,
                       String applicationId,
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
-                      Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
-                      ThreadCache cache) {
+                      ThreadCache cache,
+                      final RecordCollector recordCollector) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -110,10 +109,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollectorImpl(producer, id().toString());
+        this.recordCollector = recordCollector;
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
+        this.processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
 
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
@@ -361,7 +360,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Closing processor topology", logPrefix);
 
         this.partitionGroup.close();
-        this.consumedOffsets.clear();
         closeTopology();
     }
 
@@ -387,5 +385,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return super.toString();
     }
 
-
+    @Override
+    public void flushState() {
+        super.flushState();
+        recordCollector.flush();
+    }
 }
