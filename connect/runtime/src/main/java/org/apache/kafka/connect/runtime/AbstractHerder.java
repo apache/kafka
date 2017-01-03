@@ -251,12 +251,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        ConfigDef connectorConfigDef;
-        if (connector instanceof SourceConnector) {
-            connectorConfigDef = SourceConnectorConfig.configDef();
-        } else {
-            connectorConfigDef = SinkConnectorConfig.configDef();
-        }
+
+        final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
+                (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
+                connectorConfig,
+                false
+        );
 
         List<ConfigValue> configValues = new ArrayList<>();
         Map<String, ConfigKey> configKeys = new HashMap<>();

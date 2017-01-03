@@ -125,7 +125,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private void createWorkerTask(TargetState initialState) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter,
-                valueConverter, producer, offsetReader, offsetWriter, config, Time.SYSTEM);
+                valueConverter, TransformationChain.NO_OP, producer, offsetReader, offsetWriter, config, Time.SYSTEM);
     }
 
     @Test

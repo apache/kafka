@@ -55,6 +55,7 @@ class WorkerSourceTask extends WorkerTask {
     private final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final TransformationChain transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
     private final OffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
@@ -80,6 +81,7 @@ class WorkerSourceTask extends WorkerTask {
                             TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
+                            TransformationChain transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
@@ -91,6 +93,7 @@ class WorkerSourceTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.transformationChain = transformationChain;
         this.producer = producer;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
@@ -181,7 +184,11 @@ class WorkerSourceTask extends WorkerTask {
      */
     private boolean sendRecords() {
         int processed = 0;
-        for (final SourceRecord record : toSend) {
+        for (SourceRecord preTransformRecord : toSend) {
+            final SourceRecord record = transformationChain.apply(preTransformRecord);
+
+            if (record == null) continue;
+
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), record.timestamp(), key, value);

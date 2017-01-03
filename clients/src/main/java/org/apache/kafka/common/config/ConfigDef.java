@@ -70,9 +70,21 @@ public class ConfigDef {
 
     public static final Object NO_DEFAULT_VALUE = new String("");
 
-    private final Map<String, ConfigKey> configKeys = new HashMap<>();
-    private final List<String> groups = new LinkedList<>();
+    private final Map<String, ConfigKey> configKeys;
+    private final List<String> groups;
     private Set<String> configsWithNoParent;
+
+    public ConfigDef() {
+        configKeys = new HashMap<>();
+        groups = new LinkedList<>();
+        configsWithNoParent = null;
+    }
+
+    public ConfigDef(ConfigDef base) {
+        configKeys = new HashMap<>(base.configKeys);
+        groups = new LinkedList<>(base.groups);
+        configsWithNoParent = base.configsWithNoParent;
+    }
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -81,6 +93,17 @@ public class ConfigDef {
      */
     public Set<String> names() {
         return Collections.unmodifiableSet(configKeys.keySet());
+    }
+
+    public ConfigDef define(ConfigKey key) {
+        if (configKeys.containsKey(key.name)) {
+            throw new ConfigException("Configuration " + key.name + " is defined twice.");
+        }
+        if (key.group != null && !groups.contains(key.group)) {
+            groups.add(key.group);
+        }
+        configKeys.put(key.name, key);
+        return this;
     }
 
     /**
@@ -101,15 +124,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        if (configKeys.containsKey(name)) {
-            throw new ConfigException("Configuration " + name + " is defined twice.");
-        }
-        if (group != null && !groups.contains(group)) {
-            groups.add(group);
-        }
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
-        return this;
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
     }
 
     /**
@@ -584,7 +599,7 @@ public class ConfigDef {
      * @param type  The expected type
      * @return The parsed object
      */
-    private Object parseType(String name, Object value, Type type) {
+    public static Object parseType(String name, Object value, Type type) {
         try {
             if (value == null) return null;
 
@@ -882,11 +897,11 @@ public class ConfigDef {
                          List<String> dependents, Recommender recommender) {
             this.name = name;
             this.type = type;
-            this.defaultValue = defaultValue;
+            this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null && this.hasDefault())
-                this.validator.ensureValid(name, defaultValue);
+            if (this.validator != null && hasDefault())
+                this.validator.ensureValid(name, this.defaultValue);
             this.documentation = documentation;
             this.dependents = dependents;
             this.group = group;
@@ -980,7 +995,7 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         String lastKeyGroupName = "";
-        for (ConfigKey def : sortedConfigsByGroup()) {
+        for (ConfigKey def : sortedConfigs()) {
             if (def.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
                     b.append(def.group).append("\n");
@@ -1034,38 +1049,11 @@ public class ConfigDef {
     }
 
     /**
-     * Get a list of configs sorted into "natural" order: listing required fields first, then
-     * ordering by importance, and finally by name.
-     */
-    protected List<ConfigKey> sortedConfigs() {
-        // sort first required fields, then by importance, then name
-        List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                // first take anything with no default value
-                if (!k1.hasDefault() && k2.hasDefault()) {
-                    return -1;
-                } else if (!k2.hasDefault() && k1.hasDefault()) {
-                    return 1;
-                }
-
-                // then sort by importance
-                int cmp = k1.importance.compareTo(k2.importance);
-                if (cmp == 0) {
-                    // then sort in alphabetical order
-                    return k1.name.compareTo(k2.name);
-                } else {
-                    return cmp;
-                }
-            }
-        });
-        return configs;
-    }
-
-    /**
      * Get a list of configs sorted taking the 'group' and 'orderInGroup' into account.
+     *
+     * If grouping is not specified, the result will reflect "natural" order: listing required fields first, then ordering by importance, and finally by name.
      */
-    protected List<ConfigKey> sortedConfigsByGroup() {
+    public List<ConfigKey> sortedConfigs() {
         final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
         int ord = 0;
         for (String group: groups) {
@@ -1083,7 +1071,18 @@ public class ConfigDef {
                     cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
                 }
                 if (cmp == 0) {
-                    cmp = k1.name.compareTo(k2.name);
+                    // first take anything with no default value
+                    if (!k1.hasDefault() && k2.hasDefault()) {
+                        cmp = -1;
+                    } else if (!k2.hasDefault() && k1.hasDefault()) {
+                        cmp = 1;
+                    }
+                }
+                if (cmp == 0) {
+                    cmp = k1.importance.compareTo(k2.importance);
+                }
+                if (cmp == 0) {
+                    return k1.name.compareTo(k2.name);
                 }
                 return cmp;
             }

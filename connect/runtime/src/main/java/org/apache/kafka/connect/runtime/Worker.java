@@ -325,7 +325,9 @@ public class Worker {
             else
                 valueConverter = defaultValueConverter;
 
-            workerTask = buildWorkerTask(id, task, statusListener, initialState, keyConverter, valueConverter);
+            final TransformationChain transformationChain = new TransformationChain(connConfig.transformations());
+
+            workerTask = buildWorkerTask(id, task, statusListener, initialState, keyConverter, valueConverter, transformationChain);
             workerTask.initialize(taskConfig);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
@@ -349,7 +351,8 @@ public class Worker {
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
                                        Converter keyConverter,
-                                       Converter valueConverter) {
+                                       Converter valueConverter,
+                                       TransformationChain transformationChain) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
@@ -358,10 +361,10 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, producer, offsetReader, offsetWriter, config, time);
+                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
-                    valueConverter, time);
+                    valueConverter, transformationChain, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
