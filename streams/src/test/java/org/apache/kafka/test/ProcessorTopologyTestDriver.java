@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -172,14 +173,13 @@ public class ProcessorTopologyTestDriver {
         consumer.assign(offsetsByTopicPartition.keySet());
 
         task = new StreamTask(id,
-            applicationId,
-            partitionsByTopic.values(),
-            topology,
-            consumer,
-            producer,
-            restoreStateConsumer,
-            config,
-            new StreamsMetrics() {
+                              applicationId,
+                              partitionsByTopic.values(),
+                              topology,
+                              consumer,
+                              restoreStateConsumer,
+                              config,
+                              new StreamsMetrics() {
                 @Override
                 public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
                     return null;
@@ -189,7 +189,7 @@ public class ProcessorTopologyTestDriver {
                 public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
                 }
-            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024));
+            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024), new RecordCollectorImpl(producer, "id"));
     }
 
     /**

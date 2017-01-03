@@ -102,7 +102,9 @@ public class IntegrationTestUtils {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));
             }
         }
+
         consumer.close();
+
         return consumedValues;
     }
 
