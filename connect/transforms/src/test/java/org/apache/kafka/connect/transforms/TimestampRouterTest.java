@@ -37,7 +37,7 @@ public class TimestampRouterTest {
                 null, null,
                 1483425001864L
         );
-        assertEquals("test-20170102", xform.apply(record).topic());
+        assertEquals("test-20170103", xform.apply(record).topic());
     }
 
 }

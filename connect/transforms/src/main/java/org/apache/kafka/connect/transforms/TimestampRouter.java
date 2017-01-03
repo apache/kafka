@@ -25,6 +25,7 @@ import org.apache.kafka.connect.errors.DataException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
+import java.util.TimeZone;
 
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
 
@@ -53,7 +54,9 @@ public class TimestampRouter<R extends ConnectRecord<R>> implements Transformati
         timestampFormat = new ThreadLocal<SimpleDateFormat>() {
             @Override
             protected SimpleDateFormat initialValue() {
-                return new SimpleDateFormat(timestampFormatStr);
+                final SimpleDateFormat fmt = new SimpleDateFormat(timestampFormatStr);
+                fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+                return fmt;
             }
         };
     }
