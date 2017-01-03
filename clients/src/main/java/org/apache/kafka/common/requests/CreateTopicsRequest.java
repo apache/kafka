@@ -35,6 +35,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final String REQUESTS_KEY_NAME = "create_topic_requests";
 
     private static final String TIMEOUT_KEY_NAME = "timeout";
+    private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String NUM_PARTITIONS_KEY_NAME = "num_partitions";
     private static final String REPLICATION_FACTOR_KEY_NAME = "replication_factor";
@@ -96,17 +97,23 @@ public class CreateTopicsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
         private final Map<String, TopicDetails> topics;
-        private final Integer timeout;
+        private final int timeout;
+        private final boolean validateOnly; // introduced in V1
 
-        public Builder(Map<String, TopicDetails> topics, Integer timeout) {
+        public Builder(Map<String, TopicDetails> topics, int timeout) {
+            this(topics, timeout, false);
+        }
+
+        public Builder(Map<String, TopicDetails> topics, int timeout, boolean validateOnly) {
             super(ApiKeys.CREATE_TOPICS);
             this.topics = topics;
             this.timeout = timeout;
+            this.validateOnly = validateOnly;
         }
 
         @Override
         public CreateTopicsRequest build() {
-            return new CreateTopicsRequest(topics, timeout, version());
+            return new CreateTopicsRequest(topics, timeout, validateOnly, version());
         }
 
         @Override
@@ -115,6 +122,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             bld.append("(type=CreateTopicsRequest").
                 append(", topics=").append(Utils.mkString(topics)).
                 append(", timeout=").append(timeout).
+                append(", validateOnly=").append(validateOnly).
                 append(")");
             return bld.toString();
         }
@@ -122,6 +130,7 @@ public class CreateTopicsRequest extends AbstractRequest {
 
     private final Map<String, TopicDetails> topics;
     private final Integer timeout;
+    private final boolean validateOnly; // introduced in V1
 
     // Set to handle special case where 2 requests for the same topic exist on the wire.
     // This allows the broker to return an error code for these topics.
@@ -130,7 +139,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     public static final int NO_NUM_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
 
-    private CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout, short version) {
+    private CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout, boolean validateOnly, short version) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.CREATE_TOPICS.id, version)), version);
 
         List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
@@ -167,9 +176,12 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
         struct.set(REQUESTS_KEY_NAME, createTopicRequestStructs.toArray());
         struct.set(TIMEOUT_KEY_NAME, timeout);
+        if (version >= 1)
+            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
 
         this.topics = topics;
         this.timeout = timeout;
+        this.validateOnly = validateOnly;
         this.duplicateTopics = Collections.emptySet();
     }
 
@@ -225,20 +237,28 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        if (struct.hasField(VALIDATE_ONLY_KEY_NAME))
+            this.validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
+        else
+            this.validateOnly = false;
         this.duplicateTopics = duplicateTopics;
     }
 
     @Override
     public AbstractResponse getErrorResponse(Throwable e) {
-        Map<String, Errors> topicErrors = new HashMap<>();
+        Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
-            topicErrors.put(topic, Errors.forException(e));
+            Errors error = Errors.forException(e);
+            // Avoid populating the error message if it's a generic one
+            String message = error.message().equals(e.getMessage()) ? null : e.getMessage();
+            topicErrors.put(topic, new CreateTopicsResponse.Error(error, message));
         }
 
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new CreateTopicsResponse(topicErrors);
+            case 1:
+                return new CreateTopicsResponse(topicErrors, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id)));
@@ -249,8 +269,12 @@ public class CreateTopicsRequest extends AbstractRequest {
         return this.topics;
     }
 
-    public Integer timeout() {
+    public int timeout() {
         return this.timeout;
+    }
+
+    public boolean validateOnly() {
+        return validateOnly;
     }
 
     public Set<String> duplicateTopics() {

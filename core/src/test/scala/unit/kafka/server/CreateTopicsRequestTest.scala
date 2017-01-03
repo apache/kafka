@@ -56,7 +56,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   private def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
     val response = sendCreateTopicRequest(request)
 
-    val error = response.errors.values.asScala.find(_ != Errors.NONE)
+    val error = response.errors.values.asScala.find(_.error != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { case (topic, details) =>

@@ -1146,20 +1146,20 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
     val createTopicsRequest = request.body.asInstanceOf[CreateTopicsRequest]
 
-    def sendResponseCallback(results: Map[String, Errors]): Unit = {
-      val responseBody = new CreateTopicsResponse(results.asJava)
+    def sendResponseCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+      val responseBody = new CreateTopicsResponse(results.asJava, request.header.apiVersion)
       trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 
     if (!controller.isActive) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, Errors.NOT_CONTROLLER)
+        (topic, new CreateTopicsResponse.Error(Errors.NOT_CONTROLLER, null))
       }
       sendResponseCallback(results)
     } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, Errors.CLUSTER_AUTHORIZATION_FAILED)
+        (topic, new CreateTopicsResponse.Error(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
       }
       sendResponseCallback(results)
     } else {
@@ -1168,15 +1168,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // Special handling to add duplicate topics to the response
-      def sendResponseWithDuplicatesCallback(results: Map[String, Errors]): Unit = {
-        if (duplicateTopics.nonEmpty)
-          warn(s"Create topics request from client ${request.header.clientId} contains multiple entries for the following topics: ${duplicateTopics.keySet.mkString(",")}")
-        val completeResults = results ++ duplicateTopics.keySet.map((_, Errors.INVALID_REQUEST)).toMap
+      def sendResponseWithDuplicatesCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+
+        val duplicatedTopicsResults =
+          if (duplicateTopics.nonEmpty) {
+            val errorMessage = s"Create topics request from client ${request.header.clientId} contains multiple entries " +
+              s"for the following topics: ${duplicateTopics.keySet.mkString(",")}"
+            // We can send the error message in the response for version 1, so we don't have to log it any more
+            if (request.header.apiVersion == 0)
+              warn(errorMessage)
+            duplicateTopics.keySet.map((_, new CreateTopicsResponse.Error(Errors.INVALID_REQUEST, errorMessage))).toMap
+          } else Map.empty
+
+        val completeResults = results ++ duplicatedTopicsResults
         sendResponseCallback(completeResults)
       }
 
       adminManager.createTopics(
-        createTopicsRequest.timeout.toInt,
+        createTopicsRequest.timeout,
+        createTopicsRequest.validateOnly,
         validTopics,
         sendResponseWithDuplicatesCallback
       )
