@@ -657,9 +657,8 @@ public class FetcherTest {
     }
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(MemoryRecords records, short error, long hw, int throttleTime) {
-        this.records = records;
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(fetchResponse(this.records, error, hw, throttleTime));
+        client.prepareResponse(fetchResponse(records, error, hw, throttleTime));
         consumerClient.poll(0);
         return fetcher.fetchedRecords();
     }
