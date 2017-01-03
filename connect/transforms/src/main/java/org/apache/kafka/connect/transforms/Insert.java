@@ -86,6 +86,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     private InsertionSpec timestampField;
     private boolean applicable;
 
+    // Expect this functionality to be refactored out as more transformations that operate on Schema's are added.
     private final ThreadLocal<SchemaUpdateCacheEntry> schemaUpdateCache = new ThreadLocal<>();
 
     @Override
