@@ -40,14 +40,11 @@ import org.apache.kafka.streams.KafkaStreams;
  * <pre>
  *     final GlobalKTable globalOne = builder.globalTable("g1", "g1-store");
  *     final GlobalKTable globalTwo = builder.globalTable("g2", "g2-store");
- *     final KeyValueMapper keyMapper = ...;
- *     final ValueJoiner joiner = ...;
- *     globalTwo.join(globalOne, keyMapper, joiner, "view-g1-joined-g2");
  *     ...
  *     final KafkaStreams streams = ...;
  *     streams.start()
  *     ...
- *     ReadOnlyKeyValueStore view = streams.store("view-g1-joined-g2", QueryableStoreTypes.keyValueStore());
+ *     ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
  *     view.get(key);
  *</pre>
  *
@@ -59,57 +56,4 @@ import org.apache.kafka.streams.KafkaStreams;
  */
 @InterfaceStability.Unstable
 public interface GlobalKTable<K, V> {
-
-    /**
-     * Join elements of this {@link GlobalKTable} with another {@link GlobalKTable} using inner join.
-     * <p>
-     * The {@link KeyValueMapper} is used to map the (key,value) from this {@link GlobalKTable} to the
-     * key of the other {@link GlobalKTable}.
-     *
-     * The {@link GlobalKTable}s produced as the result of a join are just a view, i.e., it is not materialized in
-     * to a physical state store, on top of the joined tables with the join being resolved on demand.
-     *
-     * @param otherTable            instance of {@link GlobalKTable} to join with
-     * @param keyMapper             instance of {@link KeyValueMapper} used to map from the (key, value) of this
-     *                              {@link GlobalKTable} to the key of the other {@link GlobalKTable}
-     * @param joiner                the instance of {@link ValueJoiner}
-     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
-     *                              that can be used to query the values of the resulting {@link GlobalKTable}
-     * @param <K1>                  key type of the other {@link GlobalKTable}
-     * @param <V1>                  value type of the other {@link GlobalKTable}
-     * @param <R>                   value type of the resulting {@link GlobalKTable}
-     * @return a {@link GlobalKTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
-     *         one for each matched record-pair
-     */
-    <K1, V1, R> GlobalKTable<K, R> join(final GlobalKTable<K1, V1> otherTable,
-                                        final KeyValueMapper<K, V, K1> keyMapper,
-                                        final ValueJoiner<V, V1, R> joiner,
-                                        final String queryableViewName);
-
-    /**
-     * Join elements of this {@link GlobalKTable} with another {@link GlobalKTable} using left join.
-     * <p>
-     * The {@link KeyValueMapper} is used to map the (key,value) from this {@link GlobalKTable} to the
-     * key of the other {@link GlobalKTable}.
-     *
-     * The {@link GlobalKTable}s produced as the result of a leftJoin are just a view on top of the joined tables, with
-     * the join being resolved on demand. 
-     *
-     * @param otherTable            instance of {@link GlobalKTable} to join with
-     * @param keyMapper             instance of {@link KeyValueMapper} used to map from the (key, value) of this
-     *                              {@link GlobalKTable} to the key of the other {@link GlobalKTable}
-     * @param joiner                the instance of {@link ValueJoiner}
-     * @param queryableViewName     the name of the {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
-     *                              that can be used to query the values of the resulting {@link GlobalKTable}
-     * @param <K1>                  key type of the other {@link GlobalKTable}
-     * @param <V1>                  value type of the other {@link GlobalKTable}
-     * @param <R>                   value type of the resulting {@link GlobalKTable}
-     * @return a {@link GlobalKTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
-     *         one for each matched record-pair
-     */
-    <K1, V1, R> GlobalKTable<K, R> leftJoin(final GlobalKTable<K1, V1> otherTable,
-                                            final KeyValueMapper<K, V, K1> keyMapper,
-                                            final ValueJoiner<V, V1, R> joiner,
-                                            final String queryableViewName);
-
 }

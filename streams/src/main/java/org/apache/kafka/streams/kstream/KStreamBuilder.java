@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.util.Collections;
@@ -202,7 +201,7 @@ public class KStreamBuilder extends TopologyBuilder {
                                                                     true).get();
 
         addGlobalStore(store, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
-        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeName), (ReadOnlyKeyValueStore<K, V>) store, this);
+        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeName));
     }
 
     /**

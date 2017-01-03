@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
+class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {

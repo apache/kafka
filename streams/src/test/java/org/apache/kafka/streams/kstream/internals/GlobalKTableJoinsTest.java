@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -31,7 +30,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,15 +49,12 @@ public class GlobalKTableJoinsTest {
     private final String streamTopic = "stream";
     private final String globalTopic = "global";
     private final String tableTopic = "table";
-    private final String global2Topic = "global2";
-    private GlobalKTable<String, String> global2;
 
     @Before
     public void setUp() throws Exception {
         stateDir = TestUtils.tempDirectory();
         global = builder.globalTable(Serdes.String(), Serdes.String(), globalTopic, "global-store");
         stream = builder.stream(Serdes.String(), Serdes.String(), streamTopic);
-        global2 = builder.globalTable(Serdes.String(), Serdes.String(), global2Topic, "global-store-2");
         table = builder.table(Serdes.String(), Serdes.String(), tableTopic, tableTopic);
 
         keyValueMapper = new KeyValueMapper<String, String, String>() {
@@ -128,91 +123,6 @@ public class GlobalKTableJoinsTest {
         verifyJoin(expected, tableTopic);
     }
 
-    @Test
-    public void shouldJoinWithGlobalTableAndThenStream() throws Exception {
-        final GlobalKTable<String, String> joined = global.join(global2, keyValueMapper, MockValueJoiner.STRING_JOINER, "view");
-
-        stream.join(joined, keyValueMapper, MockValueJoiner.STRING_JOINER)
-                .foreach(action);
-
-        final Map<String, String> expected = Collections.singletonMap("1", "a+A+B");
-        verifyGlobalGlobalJoin(expected, streamTopic);
-    }
-
-    @Test
-    public void shouldJoinWithGlobalTableAndThenTable() throws Exception {
-        final GlobalKTable<String, String> joined = global.join(global2, keyValueMapper, MockValueJoiner.STRING_JOINER, "view");
-
-        table.join(joined, keyValueMapper, MockValueJoiner.STRING_JOINER)
-                .foreach(action);
-
-        final Map<String, String> expected = Collections.singletonMap("1", "a+A+B");
-        verifyGlobalGlobalJoin(expected, tableTopic);
-    }
-
-    @Test
-    public void shouldLeftJoinWithGlobalTableAndThenStream() throws Exception {
-        final GlobalKTable<String, String> joined = global.leftJoin(global2, keyValueMapper, MockValueJoiner.STRING_JOINER, "view");
-        stream.join(joined, keyValueMapper, MockValueJoiner.STRING_JOINER)
-                .foreach(action);
-
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("1", "a+A+B");
-        expected.put("2", "b+B+null");
-
-        verifyGlobalGlobalLeftJoin(expected, streamTopic);
-    }
-
-    @Test
-    public void shouldLeftJoinWithGlobalTableAndThenTable() throws Exception {
-        final GlobalKTable<String, String> joined = global.leftJoin(global2, keyValueMapper, MockValueJoiner.STRING_JOINER, "view");
-        table.join(joined, keyValueMapper, MockValueJoiner.STRING_JOINER)
-                .foreach(action);
-
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("1", "a+A+B");
-        expected.put("2", "b+B+null");
-
-        verifyGlobalGlobalLeftJoin(expected, tableTopic);
-    }
-
-    @Test
-    public void shouldCreateStateStoreForGlobalTableJoin() throws Exception {
-        global.leftJoin(global2, keyValueMapper, MockValueJoiner.STRING_JOINER, "view");
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0);
-        driver.process(globalTopic, "a", "A");
-        driver.process(globalTopic, "b", "B");
-        driver.process(global2Topic, "A", "1");
-        driver.process(global2Topic, "B", "2");
-
-        final ReadOnlyKeyValueStore<String, String> view = (ReadOnlyKeyValueStore<String, String>) driver.globalStateStore("view");
-        assertEquals("A+1", view.get("a"));
-        assertEquals("B+2", view.get("b"));
-    }
-
-    private void verifyGlobalGlobalJoin(final Map<String, String> expected, final String streamTopic) {
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
-        driver.process(globalTopic,  "a", "A");
-        driver.process(global2Topic, "A", "B");
-        driver.process(streamTopic,  "1", "a");
-        driver.process(streamTopic,  "2", "b");
-        driver.flushState();
-        assertEquals(expected, results);
-    }
-
-    private void verifyGlobalGlobalLeftJoin(final Map<String, String> expected, final String streamTopic) {
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
-        driver.process(globalTopic,  "a", "A");
-        driver.process(globalTopic,  "b", "B");
-        driver.process(global2Topic, "A", "B");
-        driver.process(streamTopic,  "1", "a");
-        driver.process(streamTopic,  "2", "b");
-        driver.flushState();
-        assertEquals(expected, results);
-    }
 
     private void verifyJoin(final Map<String, String> expected, final String joinInput) {
         final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);

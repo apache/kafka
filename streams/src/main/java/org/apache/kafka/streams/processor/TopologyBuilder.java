@@ -362,22 +362,6 @@ public class TopologyBuilder {
     }
 
     /**
-     * Add a global store to the topology. This store can be accessed by any of the Processors
-     * in the topology.
-     *
-     * @param store  the instance of {@link StateStore}
-     * @return this builder instance so methods can be chained together; never null
-     */
-    public synchronized TopologyBuilder addGlobalStore(final StateStore store) {
-        Objects.requireNonNull(store, "store must not be null");
-        if (stateFactories.containsKey(store.name()) || globalStateStores.containsKey(store.name())) {
-            throw new TopologyBuilderException("StateStore " + store.name() + " is already added.");
-        }
-        globalStateStores.put(store.name(), store);
-        return this;
-    }
-
-    /**
      * Adds a global {@link StateStore} to the topology. The {@link StateStore} sources its data
      * from all partitions of the provided input topic. There will be exactly one instance of this
      * {@link StateStore} per Kafka Streams instance.
