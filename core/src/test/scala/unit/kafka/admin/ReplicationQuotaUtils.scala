@@ -48,7 +48,7 @@ object ReplicationQuotaUtils {
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
       val leader = topicConfig.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp)
       val follower = topicConfig.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp)
-      val topicConfigAvailable = (leader == throttledLeaders && follower == throttledFollowers)
+      val topicConfigAvailable = leader == throttledLeaders && follower == throttledFollowers
       brokerConfigAvailable && topicConfigAvailable
     }, "throttle limit/replicas was not set")
   }
