@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -191,6 +193,10 @@ public class KeyValueStoreTestDriver<K, V> {
 
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
+        }
+        @Override
+        public Map<MetricName, ? extends Metric> metrics() {
+            return null;
         }
     };
     private final RecordCollector recordCollector;

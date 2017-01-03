@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -1177,6 +1178,11 @@ public class StreamThread extends Thread {
         private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
             if (!metrics.metrics().containsKey(name))
                 sensor.add(name, stat);
+        }
+
+        @Override
+        public Map<MetricName, ? extends Metric> metrics() {
+            return Collections.unmodifiableMap(this.metrics.metrics());
         }
     }
 

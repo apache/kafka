@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -188,6 +190,11 @@ public class ProcessorTopologyTestDriver {
                 @Override
                 public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
+                }
+
+                @Override
+                public Map<MetricName, ? extends Metric> metrics() {
+                    return null;
                 }
             }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024));
     }

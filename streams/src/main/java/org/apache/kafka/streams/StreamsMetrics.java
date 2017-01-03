@@ -17,7 +17,11 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
+
+import java.util.Map;
 
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
@@ -39,4 +43,10 @@ public interface StreamsMetrics {
      * Record the given latency value of the sensor.
      */
     void recordLatency(Sensor sensor, long startNs, long endNs);
+
+    /**
+     * Get read-only handle on global metrics registry
+     * @return
+     */
+    Map<MetricName, ? extends Metric> metrics();
 }
