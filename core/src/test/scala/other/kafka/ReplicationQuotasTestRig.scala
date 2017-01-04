@@ -22,6 +22,7 @@ import javax.imageio.ImageIO
 
 import kafka.admin.ReassignPartitionsCommand
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
@@ -40,13 +41,14 @@ import scala.collection.{Map, Seq, mutable}
   * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
   * you wish.
   *
-  * Currently you'll need about 40GB of disk space to run these experiments (data written x2). Tune the msgSize
-  * & #partitions to adjust this.
+  * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
+  * & #partitions and throttle to adjust this.
   */
 object ReplicationQuotasTestRig {
   new File("Experiments").mkdir()
   private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
   new File(dir).mkdir()
+  val k = 1000 * 1000
 
 
   def main(args: Array[String]): Unit = {
@@ -54,11 +56,11 @@ object ReplicationQuotasTestRig {
     val journal = new Journal()
 
     val experiments = Seq(
-      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 500, msgSize = 100 * 1000),           //200MB total data written
-      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000), //5GB total data written
-      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 20 * 100, msgSize = 100 * 1000), //5GB total data written
-      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000),//10GB total data written
-      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 4 * 1000, msgSize = 100 * 1000)  //20GB total data written
+      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 10 * k, msgsPerPartition = 500, msgSize = 100 * 1000),   //1GB total data written
+      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 100 * k, msgsPerPartition = 1000, msgSize = 100 * 1000), //5GB total data written
+      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 20 * k, msgsPerPartition = 1000, msgSize = 100 * 1000), //5GB total data written
+      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 40 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),//10GB total data written
+      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 500 * k, msgsPerPartition = 4000, msgSize = 100 * 1000)  //20GB total data written
     )
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
@@ -152,7 +154,7 @@ object ReplicationQuotasTestRig {
       //Validate that offsets are correct in all brokers
       for (broker <- servers) {
         (0 until config.partitions).foreach { partitionId =>
-          val offset = broker.getLogManager.getLog(TopicAndPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
+          val offset = broker.getLogManager.getLog(new TopicPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
           if (offset >= 0 && offset != config.msgsPerPartition) {
             throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
           }
@@ -163,15 +165,11 @@ object ReplicationQuotasTestRig {
     def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
       val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
       val existing = zkUtils.getReplicaAssignmentForTopics(newAssignment.map(_._1.topic).toSeq)
-      val moves = new ReassignPartitionsCommand(zkUtils, newAssignment).replicaMoves(existing, newAssignment)
-      val allMoves = moves.get(topicName)
-      val physicalMoves = allMoves.get.split(",").size / 2
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
       println("This is the current replica assignment:\n" + actual.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-      println("moves are: " + allMoves)
       println("This is the assigment we eneded up with" + actual)
 
       //Test Stats
@@ -180,17 +178,14 @@ object ReplicationQuotasTestRig {
       println(s"throttle: ${config.throttle}")
       println(s"numMessages: ${config.msgsPerPartition}")
       println(s"msgSize: ${config.msgSize}")
-      println(s"We will write ${config.targetBytesPerBrokerMB / 1000000}MB of data per broker")
-      println(s"Worst case duration is ${config.targetBytesPerBrokerMB / config.throttle}")
-      println(s"Move count is : $physicalMoves")
+      println(s"We will write ${config.targetBytesPerBrokerMB}MB of data per broker")
+      println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
     }
 
-    private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = {
-      waitUntilTrue(() => {
-        offset == broker.getLogManager.getLog(TopicAndPartition(topic, partitionId))
-          .map(_.logEndOffset).getOrElse(0)
-      }, s"Offsets did not match for partition $partitionId on broker ${broker.config.brokerId}", 60000)
-    }
+    private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = waitUntilTrue(() => {
+      offset == broker.getLogManager.getLog(new TopicPartition(topic, partitionId))
+        .map(_.logEndOffset).getOrElse(0)
+    }, s"Offsets did not match for partition $partitionId on broker ${broker.config.brokerId}", 60000)
 
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {
