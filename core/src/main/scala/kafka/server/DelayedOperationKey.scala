@@ -36,8 +36,6 @@ case class TopicPartitionOperationKey(topic: String, partition: Int) extends Del
 
   def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
 
-  def this(topicAndPartition: TopicAndPartition) = this(topicAndPartition.topic, topicAndPartition.partition)
-
   override def keyLabel = "%s-%d".format(topic, partition)
 }
 
