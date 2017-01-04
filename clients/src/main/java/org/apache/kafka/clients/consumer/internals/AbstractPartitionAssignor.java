@@ -94,4 +94,13 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
             partitions.add(new TopicPartition(topic, i));
         return partitions;
     }
+
+    protected static Map<String, List<String>> consumersPerTopic(Map<String, List<String>> topicsPerConsumer) {
+        Map<String, List<String>> res = new HashMap<>();
+        for (Map.Entry<String, List<String>> subscriptionEntry : topicsPerConsumer.entrySet()) {
+            for (String topic : subscriptionEntry.getValue())
+                put(res, topic, subscriptionEntry.getKey());
+        }
+        return res;
+    }
 }

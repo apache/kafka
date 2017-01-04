@@ -207,6 +207,51 @@ public class RangeAssignorTest {
                 new TopicPartition(topic2, 2)), assignment.get(consumer2));
     }
 
+    @Test
+    public void testMultipleConsumersUnbalancedSubscriptions() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String topic3 = "topic3";
+        String topic4 = "topic4";
+        String topic5 = "topic5";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+        String consumer4 = "consumer4";
+        int oddTopicPartitions = 2;
+        int evenTopicPartitions = 1;
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, oddTopicPartitions);
+        partitionsPerTopic.put(topic2, evenTopicPartitions);
+        partitionsPerTopic.put(topic3, oddTopicPartitions);
+        partitionsPerTopic.put(topic4, evenTopicPartitions);
+        partitionsPerTopic.put(topic5, oddTopicPartitions);
+
+        List<String> oddTopics = Arrays.asList(topic1, topic3, topic5);
+        List<String> allTopics = Arrays.asList(topic1, topic2, topic3, topic4, topic5);
+
+        Map<String, List<String>> consumers = new HashMap<>();
+        consumers.put(consumer1, allTopics);
+        consumers.put(consumer2, oddTopics);
+        consumers.put(consumer3, oddTopics);
+        consumers.put(consumer4, allTopics);
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
+        assertAssignment(Arrays.asList(
+                new TopicPartition(topic1, 0),
+                new TopicPartition(topic2, 0),
+                new TopicPartition(topic3, 0),
+                new TopicPartition(topic4, 0),
+                new TopicPartition(topic5, 0)), assignment.get(consumer1));
+        assertAssignment(Arrays.asList(
+                new TopicPartition(topic1, 1),
+                new TopicPartition(topic3, 1),
+                new TopicPartition(topic5, 1)), assignment.get(consumer2));
+        assertTrue(assignment.get(consumer3).isEmpty());
+        assertTrue(assignment.get(consumer4).isEmpty());
+    }
+
     private void assertAssignment(List<TopicPartition> expected, List<TopicPartition> actual) {
         // order doesn't matter for assignment, so convert to a set
         assertEquals(new HashSet<>(expected), new HashSet<>(actual));

@@ -63,7 +63,7 @@ public interface PartitionAssignor {
 
 
     /**
-     * Unique name for this assignor (e.g. "range" or "roundrobin")
+     * Unique name for this assignor (e.g. "range", "roundrobin", or "fair")
      * @return non-null unique name
      */
     String name();

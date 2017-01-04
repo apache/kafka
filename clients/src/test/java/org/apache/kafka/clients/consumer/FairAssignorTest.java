@@ -24,10 +24,9 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class RoundRobinAssignorTest {
+public class FairAssignorTest {
 
-    private RoundRobinAssignor assignor = new RoundRobinAssignor();
-
+    private FairAssignor assignor = new FairAssignor();
 
     @Test
     public void testOneConsumerNoTopic() {
@@ -47,6 +46,8 @@ public class RoundRobinAssignorTest {
         String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 0);
+
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumerId, Arrays.asList(topic)));
 
@@ -101,9 +102,9 @@ public class RoundRobinAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumerId, Arrays.asList(topic1, topic2)));
         assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 0),
                 new TopicPartition(topic2, 0),
-                new TopicPartition(topic2, 1)), assignment.get(consumerId));
+                new TopicPartition(topic2, 1),
+                new TopicPartition(topic1, 0)), assignment.get(consumerId));
     }
 
     @Test
@@ -161,13 +162,13 @@ public class RoundRobinAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 0)), assignment.get(consumer1));
+                new TopicPartition(topic1, 0),
+                new TopicPartition(topic1, 2)), assignment.get(consumer1));
         assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 1),
                 new TopicPartition(topic2, 0),
                 new TopicPartition(topic2, 1)), assignment.get(consumer2));
         assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 2)), assignment.get(consumer3));
+                new TopicPartition(topic1, 1)), assignment.get(consumer3));
     }
 
     @Test
@@ -228,25 +229,16 @@ public class RoundRobinAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(Arrays.asList(
+                new TopicPartition(topic2, 0),
+                new TopicPartition(topic3, 0)), assignment.get(consumer1));
+        assertEquals(Arrays.asList(
                 new TopicPartition(topic1, 0),
-                new TopicPartition(topic3, 0),
-                new TopicPartition(topic5, 0)), assignment.get(consumer1));
+                new TopicPartition(topic3, 1)), assignment.get(consumer2));
         assertEquals(Arrays.asList(
                 new TopicPartition(topic1, 1),
-                new TopicPartition(topic3, 1),
-                new TopicPartition(topic5, 1)), assignment.get(consumer2));
-        assertTrue(assignment.get(consumer3).isEmpty());
+                new TopicPartition(topic5, 0)), assignment.get(consumer3));
         assertEquals(Arrays.asList(
-                new TopicPartition(topic2, 0),
-                new TopicPartition(topic4, 0)), assignment.get(consumer4));
+                new TopicPartition(topic4, 0),
+                new TopicPartition(topic5, 1)), assignment.get(consumer4));
     }
-
-    public static List<String> topics(String... topics) {
-        return Arrays.asList(topics);
-    }
-
-    public static TopicPartition tp(String topic, int partition) {
-        return new TopicPartition(topic, partition);
-    }
-
 }
