@@ -217,9 +217,9 @@ public class FetchResponse extends AbstractResponse {
     }
 
     private static Struct writeStruct(Struct struct,
-                                    int version,
-                                    LinkedHashMap<TopicPartition, PartitionData> responseData,
-                                    int throttleTime) {
+                                      int version,
+                                      LinkedHashMap<TopicPartition, PartitionData> responseData,
+                                      int throttleTime) {
         List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData = FetchRequest.TopicAndPartitionData.batchByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
