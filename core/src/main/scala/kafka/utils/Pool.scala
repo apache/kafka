@@ -44,24 +44,37 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
    * as lazy if its side-effects need to be avoided.
    *
    * @param key The key to lookup.
-   * @return The final value associated with the key. This may be different from
-   *         the value created by the factory if another thread successfully
-   *         put a value.
+   * @return The final value associated with the key.
    */
   def getAndMaybePut(key: K): V = {
     if (valueFactory.isEmpty)
       throw new KafkaException("Empty value factory in pool.")
-    val curr = pool.get(key)
-    if (curr == null) {
+    getAndMaybePut(key, valueFactory.get(key))
+  }
+
+  /**
+    * Gets the value associated with the given key. If there is no associated
+    * value, then create the value using the provided by `createValue` and return the
+    * value associated with the key.
+    *
+    * @param key The key to lookup.
+    * @param createValue Factory function.
+    * @return The final value associated with the key.
+    */
+  def getAndMaybePut(key: K, createValue: => V): V = {
+    val current = pool.get(key)
+    if (current == null) {
       createLock synchronized {
-        val curr = pool.get(key)
-        if (curr == null)
-          pool.put(key, valueFactory.get(key))
-        pool.get(key)
+        val current = pool.get(key)
+        if (current == null) {
+          val value = createValue
+          pool.put(key, value)
+          value
+        }
+        else current
       }
     }
-    else
-      curr
+    else current
   }
 
   def contains(id: K): Boolean = pool.containsKey(id)

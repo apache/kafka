@@ -102,11 +102,7 @@ class Partition(val topic: String,
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
-    def getOrPut(replica: Replica): Replica = {
-      val existing = addReplicaIfNotExists(replica)
-      if (existing == null) replica else existing
-    }
-    getReplica(replicaId).getOrElse {
+    assignedReplicaMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
         val config = LogConfig.fromProps(logManager.defaultConfig.originals,
                                          AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
@@ -116,23 +112,15 @@ class Partition(val topic: String,
         if (!offsetMap.contains(topicPartition))
           info(s"No checkpointed highwatermark is found for partition $topicPartition")
         val offset = math.min(offsetMap.getOrElse(topicPartition, 0L), log.logEndOffset)
-        getOrPut(new Replica(replicaId, this, time, offset, Some(log)))
-      } else getOrPut(new Replica(replicaId, this, time))
-    }
+        new Replica(replicaId, this, time, offset, Some(log))
+      } else new Replica(replicaId, this, time)
+    })
   }
 
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = Option(assignedReplicaMap.get(replicaId))
 
-  def leaderReplicaIfLocal: Option[Replica] = {
-    leaderReplicaIdOpt match {
-      case Some(leaderReplicaId) =>
-        if (leaderReplicaId == localBrokerId)
-          getReplica(localBrokerId)
-        else
-          None
-      case None => None
-    }
-  }
+  def leaderReplicaIfLocal: Option[Replica] =
+    leaderReplicaIdOpt.filter(_ == localBrokerId).flatMap(getReplica)
 
   def addReplicaIfNotExists(replica: Replica): Replica =
     assignedReplicaMap.putIfNotExists(replica.brokerId, replica)
@@ -140,7 +128,7 @@ class Partition(val topic: String,
   def assignedReplicas: Set[Replica] =
     assignedReplicaMap.values.toSet
 
-  def removeReplica(replicaId: Int) {
+  private def removeReplica(replicaId: Int) {
     assignedReplicaMap.remove(replicaId)
   }
 
