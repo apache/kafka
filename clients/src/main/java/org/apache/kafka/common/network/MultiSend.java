@@ -85,9 +85,8 @@ public class MultiSend implements Send {
         if (completed() && totalWritten != size)
             log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
 
-        if (log.isTraceEnabled())
-            log.trace("Bytes written as part of multi-send call: " + totalWrittenPerCall +
-                    ", total bytes written so far: " + totalWritten + ", expected bytes to write: " + size);
+        log.trace("Bytes written as part of multi-send call: {}, total bytes written so far: {}, expected bytes to write: {}",
+                totalWrittenPerCall, totalWritten, size);
 
         return totalWrittenPerCall;
     }
