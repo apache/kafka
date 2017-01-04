@@ -80,13 +80,10 @@ public class PartitionInfo {
     /* Extract the node ids from each item in the array and format for display */
     private String fmtNodeIds(Node[] nodes) {
         StringBuilder b = new StringBuilder("[");
-        for (int i = 0; i < nodes.length - 1; i++) {
-            b.append(Integer.toString(nodes[i].id()));
-            b.append(',');
-        }
-        if (nodes.length > 0) {
-            b.append(Integer.toString(nodes[nodes.length - 1].id()));
-            b.append(',');
+        for (int i = 0; i < nodes.length; i++) {
+            b.append(nodes[i].idString());
+            if (i < nodes.length - 1)
+                b.append(',');
         }
         b.append("]");
         return b.toString();
