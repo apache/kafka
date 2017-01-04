@@ -56,11 +56,16 @@ object ReplicationQuotasTestRig {
     val journal = new Journal()
 
     val experiments = Seq(
-      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 10 * k, msgsPerPartition = 500, msgSize = 100 * 1000),   //1GB total data written
-      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 100 * k, msgsPerPartition = 1000, msgSize = 100 * 1000), //5GB total data written
-      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 20 * k, msgsPerPartition = 1000, msgSize = 100 * 1000), //5GB total data written
-      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 40 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),//10GB total data written
-      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 500 * k, msgsPerPartition = 4000, msgSize = 100 * 1000)  //20GB total data written
+      //1GB total data written, will take 210s
+      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 1 * k, msgsPerPartition = 500, msgSize = 100 * 1000),
+      //5GB total data written, will take 110s
+      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 10 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      //5GB total data written, will take 110s
+      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 2 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      //10GB total data written, will take 110s
+      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 4 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      //10GB total data written, will take 80s
+      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 50 * k, msgsPerPartition = 4000, msgSize = 100 * 1000)
     )
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
@@ -176,7 +181,7 @@ object ReplicationQuotasTestRig {
       println(s"numBrokers: ${config.brokers}")
       println(s"numPartitions: ${config.partitions}")
       println(s"throttle: ${config.throttle}")
-      println(s"numMessages: ${config.msgsPerPartition}")
+      println(s"numMessagesPerPartition: ${config.msgsPerPartition}")
       println(s"msgSize: ${config.msgSize}")
       println(s"We will write ${config.targetBytesPerBrokerMB}MB of data per broker")
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
