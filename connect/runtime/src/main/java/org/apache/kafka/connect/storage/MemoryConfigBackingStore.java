@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -33,10 +32,6 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     private Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
-
-    @Override
-    public void configure(WorkerConfig config) {
-    }
 
     @Override
     public synchronized void start() {

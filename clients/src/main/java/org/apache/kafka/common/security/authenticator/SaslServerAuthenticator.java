@@ -78,6 +78,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private final String node;
+    private final Configuration jaasConfig;
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
     private final int maxReceiveSize;
@@ -100,10 +101,11 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
+    public SaslServerAuthenticator(String node, Configuration jaasConfig, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.node = node;
+        this.jaasConfig = jaasConfig;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
         this.maxReceiveSize = maxReceiveSize;
@@ -121,7 +123,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
-        callbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration(), kerberosNamer);
+        callbackHandler = new SaslServerCallbackHandler(jaasConfig, kerberosNamer);
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             if (subject.getPrincipals().isEmpty())
@@ -359,7 +361,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void handleApiVersionsRequest(RequestHeader requestHeader) throws IOException, UnsupportedSaslMechanismException {
-        sendKafkaResponse(requestHeader, ApiVersionsResponse.apiVersionsResponse());
+        sendKafkaResponse(requestHeader, ApiVersionsResponse.API_VERSIONS_RESPONSE);
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {

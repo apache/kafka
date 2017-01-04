@@ -19,7 +19,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -37,6 +37,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -111,7 +112,7 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime(), new StreamsMetadataState(builder)) {
+                                  Time.SYSTEM, new StreamsMetadataState(builder)) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
@@ -183,11 +184,10 @@ public class StreamThreadStateStoreProviderTest {
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         return new StreamTask(taskId, applicationId, Collections
-            .singletonList(new TopicPartition("topic", taskId.partition)), topology,
+                .singletonList(new TopicPartition("topic", taskId.partition)), topology,
                               clientSupplier.consumer,
-                              clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory, null) {
+                              streamsConfig, new TheStreamMetrics(), stateDirectory, null, new NoOpRecordCollector()) {
             @Override
             protected void initializeOffsetLimits() {
 
@@ -237,4 +237,5 @@ public class StreamThreadStateStoreProviderTest {
 
         }
     }
+
 }

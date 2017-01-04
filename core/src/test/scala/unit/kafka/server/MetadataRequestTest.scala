@@ -49,7 +49,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testControllerId() {
-    val controllerServer = servers.find(_.kafkaController.isActive()).get
+    val controllerServer = servers.find(_.kafkaController.isActive).get
     val controllerId = controllerServer.config.brokerId
     val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
 
@@ -60,7 +60,7 @@ class MetadataRequestTest extends BaseRequestTest {
     controllerServer.shutdown()
     controllerServer.startup()
 
-    val controllerServer2 = servers.find(_.kafkaController.isActive()).get
+    val controllerServer2 = servers.find(_.kafkaController.isActive).get
     val controllerId2 = controllerServer2.config.brokerId
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {

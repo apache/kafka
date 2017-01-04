@@ -25,8 +25,6 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
-import scala.collection.mutable.ListBuffer
-
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""

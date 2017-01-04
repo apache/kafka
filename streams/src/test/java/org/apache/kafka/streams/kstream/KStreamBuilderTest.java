@@ -22,10 +22,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockValueJoiner;
 import org.junit.After;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -148,6 +151,22 @@ public class KStreamBuilderTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
         new KStreamBuilder().stream(Serdes.String(), Serdes.String(), null, null);
+    }
+
+    @Test
+    public void shouldMapStateStoresToCorrectSourceTopics() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("app-id");
+
+        final KStream<String, String> playEvents = builder.stream("events");
+
+        final KTable<String, String> table = builder.table("table-topic", "table-store");
+        assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
+
+        final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
+        mapped.leftJoin(table, MockValueJoiner.STRING_JOINER).groupByKey().count("count");
+        assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
+        assertEquals(Collections.singleton("app-id-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
     }
 
 }

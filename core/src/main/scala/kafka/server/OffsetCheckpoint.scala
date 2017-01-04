@@ -26,6 +26,8 @@ import kafka.utils.Logging
 import kafka.common._
 import java.io._
 
+import org.apache.kafka.common.TopicPartition
+
 object OffsetCheckpoint {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
   private val CurrentVersion = 0
@@ -41,7 +43,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
   file.createNewFile() // in case the file doesn't exist
 
-  def write(offsets: Map[TopicAndPartition, Long]) {
+  def write(offsets: Map[TopicPartition, Long]) {
     lock synchronized {
       // write to temp file and then swap with the existing file
       val fileOutputStream = new FileOutputStream(tempPath.toFile)
@@ -75,7 +77,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
     }
   }
 
-  def read(): Map[TopicAndPartition, Long] = {
+  def read(): Map[TopicPartition, Long] = {
 
     def malformedLineException(line: String) =
       new IOException(s"Malformed line in offset checkpoint file: $line'")
@@ -94,12 +96,12 @@ class OffsetCheckpoint(val file: File) extends Logging {
             if (line == null)
               return Map.empty
             val expectedSize = line.toInt
-            val offsets = mutable.Map[TopicAndPartition, Long]()
+            val offsets = mutable.Map[TopicPartition, Long]()
             line = reader.readLine()
             while (line != null) {
               WhiteSpacesPattern.split(line) match {
                 case Array(topic, partition, offset) =>
-                  offsets += TopicAndPartition(topic, partition.toInt) -> offset.toLong
+                  offsets += new TopicPartition(topic, partition.toInt) -> offset.toLong
                   line = reader.readLine()
                 case _ => throw malformedLineException(line)
               }

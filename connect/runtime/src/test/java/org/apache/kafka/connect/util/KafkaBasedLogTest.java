@@ -31,6 +31,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
@@ -219,6 +220,43 @@ public class KafkaBasedLogTest {
     }
 
     @Test
+    public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
+        expectStart();
+        expectStop();
+
+        PowerMock.replayAll();
+
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 7L);
+        endOffsets.put(TP1, 7L);
+        consumer.updateEndOffsets(endOffsets);
+        // Better test with an advanced offset other than just 0L
+        consumer.updateBeginningOffsets(endOffsets);
+
+        consumer.schedulePollTask(new Runnable() {
+            @Override
+            public void run() {
+                // Throw an exception that will not be ignored or handled by Connect framework. In
+                // reality a misplaced call to poll blocks indefinitely and connect aborts due to
+                // time outs (for instance via ConnectRestException)
+                throw new WakeupException();
+            }
+        });
+
+        store.start();
+
+        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
+        assertEquals(7L, consumer.position(TP0));
+        assertEquals(7L, consumer.position(TP1));
+
+        store.stop();
+
+        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        assertTrue(consumer.closed());
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testSendAndReadToEnd() throws Exception {
         expectStart();
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
@@ -279,17 +317,11 @@ public class KafkaBasedLogTest {
                 // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
                 // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
                 // returning any data.
+                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
+                newEndOffsets.put(TP0, 2L);
+                newEndOffsets.put(TP1, 2L);
+                consumer.updateEndOffsets(newEndOffsets);
                 store.readToEnd(readEndFutureCallback);
-                // Needs to seek to end to find end offsets
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                        newEndOffsets.put(TP0, 2L);
-                        newEndOffsets.put(TP1, 2L);
-                        consumer.updateEndOffsets(newEndOffsets);
-                    }
-                });
 
                 // Should keep polling until it reaches current log end offset for all partitions
                 consumer.scheduleNopPollTask();

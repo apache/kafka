@@ -31,8 +31,8 @@ final class ClusterConnectionStates {
     /**
      * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
-     * @param id The connection id to check
-     * @param now The current time in MS
+     * @param id the connection id to check
+     * @param now the current time in MS
      * @return true if we can initiate a new connection
      */
     public boolean canConnect(String id, long now) {
@@ -44,9 +44,9 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true if we are disconnected from the given node and can't re-establish a connection yet
-     * @param id The connection to check
-     * @param now The current time in ms
+     * Return true if we are disconnected from the given node and can't re-establish a connection yet.
+     * @param id the connection to check
+     * @param now the current time in ms
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
@@ -60,8 +60,8 @@ final class ClusterConnectionStates {
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
-     * @param id The connection to check
-     * @param now The current time in ms
+     * @param id the connection to check
+     * @param now the current time in ms
      */
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
@@ -87,35 +87,17 @@ final class ClusterConnectionStates {
 
     /**
      * Enter the connecting state for the given connection.
-     * @param id The id of the connection
-     * @param now The current time.
+     * @param id the id of the connection
+     * @param now the current time
      */
     public void connecting(String id, long now) {
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now));
     }
 
     /**
-     * Return true iff a specific connection is connected
-     * @param id The id of the connection to check
-     */
-    public boolean isConnected(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.CONNECTED;
-    }
-
-    /**
-     * Enter the connected state for the given connection
-     * @param id The connection identifier
-     */
-    public void connected(String id) {
-        NodeConnectionState nodeState = nodeState(id);
-        nodeState.state = ConnectionState.CONNECTED;
-    }
-
-    /**
-     * Enter the disconnected state for the given node
-     * @param id The connection we have disconnected
-     * @param now The current time
+     * Enter the disconnected state for the given node.
+     * @param id the connection we have disconnected
+     * @param now the current time
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
@@ -124,28 +106,55 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Enter the checking_api_versions state for the given node.
+     * @param id the connection identifier
+     */
+    public void checkingApiVersions(String id) {
+        NodeConnectionState nodeState = nodeState(id);
+        nodeState.state = ConnectionState.CHECKING_API_VERSIONS;
+    }
+
+    /**
+     * Enter the ready state for the given node.
+     * @param id the connection identifier
+     */
+    public void ready(String id) {
+        NodeConnectionState nodeState = nodeState(id);
+        nodeState.state = ConnectionState.READY;
+    }
+
+    /**
+     * Return true if the connection is ready.
+     * @param id the connection identifier
+     */
+    public boolean isReady(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state == ConnectionState.READY;
+    }
+
+    /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
      * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
      * into account after `disconnected` is called.
      *
-     * @param id The connection to remove
+     * @param id the connection to remove
      */
     public void remove(String id) {
         nodeState.remove(id);
     }
     
     /**
-     * Get the state of a given connection
-     * @param id The id of the connection
-     * @return The state of our connection
+     * Get the state of a given connection.
+     * @param id the id of the connection
+     * @return the state of our connection
      */
     public ConnectionState connectionState(String id) {
         return nodeState(id).state;
     }
     
     /**
-     * Get the state of a given node
-     * @param id The connection to fetch the state for
+     * Get the state of a given node.
+     * @param id the connection to fetch the state for
      */
     private NodeConnectionState nodeState(String id) {
         NodeConnectionState state = this.nodeState.get(id);
@@ -155,7 +164,7 @@ final class ClusterConnectionStates {
     }
     
     /**
-     * The state of our connection to a node
+     * The state of our connection to a node.
      */
     private static class NodeConnectionState {
 

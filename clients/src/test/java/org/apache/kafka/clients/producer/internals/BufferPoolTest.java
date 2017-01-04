@@ -19,7 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -40,7 +40,6 @@ import static org.junit.Assert.assertEquals;
 
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
-    private final SystemTime systemTime = new SystemTime();
     private final Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 2000;
     private final String metricGroup = "TestMetrics";
@@ -124,7 +123,7 @@ public class BufferPoolTest {
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
         Thread thread = new Thread() {
             public void run() {
-                systemTime.sleep(delayMs);
+                Time.SYSTEM.sleep(delayMs);
                 pool.deallocate(buffer);
             }
         };
@@ -154,7 +153,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(10, 1, metrics, systemTime, metricGroup);
+        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
@@ -164,14 +163,14 @@ public class BufferPoolTest {
         // The third buffer will be de-allocated after maxBlockTimeMs since the most recent de-allocation
         delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
-        long beginTimeMs = systemTime.milliseconds();
+        long beginTimeMs = Time.SYSTEM.milliseconds();
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
         } catch (TimeoutException e) {
             // this is good
         }
-        long endTimeMs = systemTime.milliseconds();
+        long endTimeMs = Time.SYSTEM.milliseconds();
         assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
 

@@ -32,6 +32,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 public class NamedCacheTest {
 
@@ -196,5 +197,66 @@ public class NamedCacheTest {
     public void shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry() throws Exception {
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, false, 0, 0, 0, ""));
+    }
+
+    @Test
+    public void shouldBeReentrantAndNotBreakLRU() throws Exception {
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
+        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
+        cache.put(Bytes.wrap(new byte[]{0}), dirty);
+        cache.put(Bytes.wrap(new byte[]{1}), clean);
+        cache.put(Bytes.wrap(new byte[]{2}), clean);
+        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                cache.put(Bytes.wrap(new byte[]{3}), clean);
+                // evict key 1
+                cache.evict();
+                // evict key 2
+                cache.evict();
+            }
+        });
+
+        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        // Evict key 0
+        cache.evict();
+        final Bytes entryFour = Bytes.wrap(new byte[]{4});
+        cache.put(entryFour, dirty);
+
+        // check that the LRU is still correct
+        final NamedCache.LRUNode head = cache.head();
+        final NamedCache.LRUNode tail = cache.tail();
+        assertEquals(2, cache.size());
+        assertEquals(2 * head.size(), cache.sizeInBytes());
+        // dirty should be the newest
+        assertEquals(entryFour, head.key());
+        assertEquals(Bytes.wrap(new byte[] {3}), tail.key());
+        assertSame(tail, head.next());
+        assertNull(head.previous());
+        assertSame(head, tail.previous());
+        assertNull(tail.next());
+
+        // evict key 3
+        cache.evict();
+        assertSame(cache.head(), cache.tail());
+        assertEquals(entryFour, cache.head().key());
+        assertNull(cache.head().next());
+        assertNull(cache.head().previous());
+    }
+
+    @Test
+    public void shouldNotThrowIllegalArgumentAfterEvictingDirtyRecordAndThenPuttingNewRecordWithSameKey() throws Exception {
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
+        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
+        final Bytes key = Bytes.wrap(new byte[] {3});
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                cache.put(key, clean);
+            }
+        });
+        cache.put(key, dirty);
+        cache.evict();
     }
 }

@@ -39,18 +39,21 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,6 +134,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
+    /**
+     * APIs used by KafkaProducer
+     */
+    private static final List<ApiKeys> PRODUCER_APIS = Arrays.asList(
+            ApiKeys.METADATA,
+            ApiKeys.PRODUCE);
+    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(PRODUCER_APIS);
 
     private String clientId;
     private final Partitioner partitioner;
@@ -208,7 +218,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.trace("Starting the Kafka producer");
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
-            this.time = new SystemTime();
+            this.time = Time.SYSTEM;
 
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
@@ -308,7 +318,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
-                    this.requestTimeoutMs, time);
+                    this.requestTimeoutMs,
+                    time,
+                    EXPECTED_API_VERSIONS);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
@@ -317,7 +329,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
                     config.getInt(ProducerConfig.RETRIES_CONFIG),
                     this.metrics,
-                    new SystemTime(),
+                    Time.SYSTEM,
                     this.requestTimeoutMs);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);

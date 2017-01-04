@@ -474,4 +474,28 @@ public class ProcessorStateManagerTest {
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
 
+    @Test
+    public void shouldNotWriteCheckpointsIfAckeOffsetsIsNull() throws Exception {
+        final TaskId taskId = new TaskId(0, 1);
+        final File checkpointFile = new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        // write an empty checkpoint file
+        final OffsetCheckpoint oldCheckpoint = new OffsetCheckpoint(checkpointFile);
+        oldCheckpoint.write(Collections.<TopicPartition, Long>emptyMap());
+
+        final MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
+
+        restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
+                new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
+        ));
+
+
+        final MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+
+        restoreConsumer.reset();
+        stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+        stateMgr.close(null);
+        assertFalse(checkpointFile.exists());
+    }
+
 }

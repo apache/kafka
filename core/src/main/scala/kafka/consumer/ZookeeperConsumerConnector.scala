@@ -39,6 +39,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
@@ -271,7 +272,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = Time.SYSTEM.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
@@ -496,7 +497,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                  val topicCount: TopicCount,
                                  val loadBalancerListener: ZKRebalancerListener)
     extends IZkStateListener {
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleStateChanged(state: KeeperState) {
       // do nothing, since zkclient will do reconnect for us.
     }
@@ -508,7 +509,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
      * @throws Exception
      *             On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleNewSession() {
       /**
        *  When we get a SessionExpired event, we lost all ephemeral nodes and zkclient has reestablished a
@@ -544,7 +545,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleDataDeleted(dataPath : String) {
       // TODO: This need to be implemented when we support delete topic
       warn("Topic for path " + dataPath + " gets deleted, which should not happen at this time")
@@ -596,7 +597,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
     watcherExecutorThread.start()
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
       rebalanceEventTriggered()
     }
@@ -852,7 +853,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         } catch {
           case _: ZkNodeExistsException =>
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
-            info("waiting for the partition ownership to be deleted: " + partition)
+            info("waiting for the partition ownership to be deleted: " + partition + " for topic " + topic)
             false
         }
       }

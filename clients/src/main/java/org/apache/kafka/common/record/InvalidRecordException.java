@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 
-public class InvalidRecordException extends KafkaException {
+public class InvalidRecordException extends CorruptRecordException {
 
     private static final long serialVersionUID = 1;
 

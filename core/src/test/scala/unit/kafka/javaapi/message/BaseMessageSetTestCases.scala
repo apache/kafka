@@ -20,20 +20,20 @@ package kafka.javaapi.message
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
-import kafka.utils.TestUtils
-import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, CompressionCodec, Message}
+import kafka.message.{CompressionCodec, DefaultCompressionCodec, Message, NoCompressionCodec}
+import org.apache.kafka.test.TestUtils
+
 import scala.collection.JavaConverters._
 
 trait BaseMessageSetTestCases extends JUnitSuite {
   
   val messages = Array(new Message("abcd".getBytes()), new Message("efgh".getBytes()))
   def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): MessageSet
-  def toMessageIterator(messageSet: MessageSet): Iterator[Message] = messageSet.asScala.map(m => m.message).iterator
 
   @Test
   def testWrittenEqualsRead {
     val messageSet = createMessageSet(messages)
-    TestUtils.checkEquals(messages.iterator, toMessageIterator(messageSet))
+    assertEquals(messages.toSeq, messageSet.asScala.map(m => m.message))
   }
 
   @Test

@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
@@ -246,7 +246,7 @@ public class KStreamTestDriver {
     }
 
 
-    private class MockRecordCollector extends RecordCollector {
+    private class MockRecordCollector extends RecordCollectorImpl {
         public MockRecordCollector() {
             super(null, "KStreamTestDriver");
         }

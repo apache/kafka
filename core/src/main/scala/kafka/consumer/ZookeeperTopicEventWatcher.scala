@@ -59,7 +59,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
 
   class ZkTopicEventListener extends IZkChildListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleChildChange(parent: String, children: java.util.List[String]) {
       lock.synchronized {
         try {
@@ -81,10 +81,10 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
   class ZkSessionExpireListener(val topicEventListener: ZkTopicEventListener)
     extends IZkStateListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleStateChanged(state: KeeperState) { }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleNewSession() {
       lock.synchronized {
         if (zkUtils != null) {

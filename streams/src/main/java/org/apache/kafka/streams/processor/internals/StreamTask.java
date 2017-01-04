@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
@@ -70,23 +69,23 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
-     * @param producer              the instance of {@link Producer}
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
+     * @param recordCollector       the instance of {@link RecordCollector} used to produce records
      */
     public StreamTask(TaskId id,
                       String applicationId,
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
-                      Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
-                      ThreadCache cache) {
+                      ThreadCache cache,
+                      final RecordCollector recordCollector) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -110,10 +109,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer, id().toString());
+        this.recordCollector = recordCollector;
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
+        this.processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
 
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
@@ -123,22 +122,27 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * Adds records to queues
+     * Adds records to queues. If a record has an invalid (i.e., negative) timestamp, the record is skipped
+     * and not added to the queue for processing
      *
      * @param partition the partition
      * @param records  the records
+     * @returns the number of added records
      */
     @SuppressWarnings("unchecked")
-    public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        int queueSize = partitionGroup.addRawRecords(partition, records);
+    public int addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        final int oldQueueSize = partitionGroup.numBuffered();
+        final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, queueSize);
+        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (queueSize > this.maxBufferedSize) {
+        if (newQueueSize > this.maxBufferedSize) {
             consumer.pause(singleton(partition));
         }
+
+        return newQueueSize - oldQueueSize;
     }
 
     /**
@@ -356,7 +360,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Closing processor topology", logPrefix);
 
         this.partitionGroup.close();
-        this.consumedOffsets.clear();
         closeTopology();
     }
 
@@ -382,5 +385,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return super.toString();
     }
 
-
+    @Override
+    public void flushState() {
+        super.flushState();
+        recordCollector.flush();
+    }
 }
