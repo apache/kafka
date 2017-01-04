@@ -114,7 +114,7 @@ object ConsoleProducer {
   def getNewProducerProps(config: ProducerConfig): Properties = {
     val props = producerProps(config)
 
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServerList)
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
     props.put(ProducerConfig.SEND_BUFFER_CONFIG, config.socketBuffer.toString)
     props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.retryBackoffMs.toString)
@@ -143,7 +143,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])
-    val bootstrapServerListOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old producer is used): The bootstrap server list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old producer is used): The bootstrap server list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("bootstrap-server")
       .ofType(classOf[String])
@@ -259,12 +259,12 @@ object ConsoleProducer {
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
 
     val useOldProducer = options.has(useOldProducerOpt)
-    val bootstrapServerList = options.valueOf(bootstrapServerListOpt)
+    val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val brokerList = options.valueOf(brokerListOpt)
 
     if (useOldProducer) {
-      if (options.has(bootstrapServerListOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerListOpt is not valid with $useOldProducerOpt.")
+      if (options.has(bootstrapServerOpt))
+        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $useOldProducerOpt.")
       else {
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
         ToolsUtils.validatePortOrDie(parser,brokerList)
@@ -273,8 +273,8 @@ object ConsoleProducer {
         if (options.has(brokerListOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid without $useOldProducerOpt.")
       else {
-          CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerListOpt)
-          ToolsUtils.validatePortOrDie(parser,bootstrapServerList)
+          CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
+          ToolsUtils.validatePortOrDie(parser,bootstrapServer)
         }
     }
 

@@ -499,13 +499,13 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         group.addArgument("--bootstrap-server")
                 .action(store()).type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("bootstrapServerList")
+                .dest("bootstrapServer")
                 .help("Comma-separated list of bootstrap servers in the form HOST1:PORT1,HOST2:PORT2,...");
         group.addArgument("--broker-list")
                 .action(store())
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("bootstrapServerList")
+                .dest("bootstrapServer")
                 .help("DEPRECATED use --bootstrap-server instead. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -599,7 +599,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServerList"));
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));

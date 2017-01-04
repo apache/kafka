@@ -72,7 +72,7 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val bootstrapServerListOpt = parser.accepts("bootstrap-server", "REQUIRED (only when using new producer): The bootstrap server list string.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (only when using new producer): The bootstrap server list string.")
       .withRequiredArg()
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
@@ -149,19 +149,19 @@ object ProducerPerformance extends Logging {
     val options = parser.parse(args: _*)
 
     val brokerList = options.valueOf(brokerListOpt)
-    val bootstrapServerList = options.valueOf(bootstrapServerListOpt)
+    val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val useNewProducer = options.has(useNewProducerOpt)
 
     if (useNewProducer){
       if (options.has(brokerListOpt)){
         CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $useNewProducerOpt.")
       } else {
-        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerListOpt, numMessagesOpt)
-        ToolsUtils.validatePortOrDie(parser, bootstrapServerList)
+        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
+        ToolsUtils.validatePortOrDie(parser, bootstrapServer)
       }
     } else {
-      if (options.has(bootstrapServerListOpt)){
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerListOpt is not valid without $useNewProducerOpt.")
+      if (options.has(bootstrapServerOpt)){
+        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid without $useNewProducerOpt.")
       } else {
         CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
         ToolsUtils.validatePortOrDie(parser, brokerList)
@@ -228,7 +228,7 @@ object ProducerPerformance extends Logging {
       if (config.useNewProducer) {
         import org.apache.kafka.clients.producer.ProducerConfig
         props ++= config.producerProps
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServerList)
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
         props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)

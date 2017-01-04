@@ -102,13 +102,13 @@ public class VerifiableProducer {
         group.addArgument("--bootstrap-server")
                 .action(store()).type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("bootstrapServerList")
+                .dest("bootstrapServer")
                 .help("Comma-separated list of bootstrap servers in the form HOST1:PORT1,HOST2:PORT2,...");
         group.addArgument("--broker-list")
                 .action(store())
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("bootstrapServerList")
+                .dest("bootstrapServer")
                 .help("DEPRECATED use --bootstrap-server instead. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -190,7 +190,7 @@ public class VerifiableProducer {
         Integer valuePrefix = res.getInt("valuePrefix");
 
         Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServerList"));
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
