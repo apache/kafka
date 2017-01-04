@@ -27,16 +27,19 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
@@ -64,6 +67,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
@@ -145,7 +149,17 @@ public class StreamThreadTest {
                               Consumer<byte[], byte[]> restoreConsumer,
                               StreamsConfig config,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, null, stateDirectory, null);
+            super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, new StreamsMetrics() {
+                @Override
+                public Sensor addLatencySensor(final String scopeName, final String entityName, final String operationName, final String... tags) {
+                    return null;
+                }
+
+                @Override
+                public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
+
+                }
+            }, stateDirectory, null, new RecordCollectorImpl(producer, id.toString()));
         }
 
         @Override
@@ -172,8 +186,8 @@ public class StreamThreadTest {
         }
 
         @Override
-        void closeStateManager() {
-            super.closeStateManager();
+        void closeStateManager(boolean writeCheckpoint) {
+            super.closeStateManager(writeCheckpoint);
             this.closedStateManager = true;
         }
     }
@@ -830,6 +844,206 @@ public class StreamThreadTest {
         // should have created a new task for 00
         assertThat(createdTasks.get(task00Partitions).id(), is(taskId));
     }
+
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskCloseDuringShutdown() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId(applicationId);
+        builder.stream("t1").groupByKey();
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+        final TestStreamTask testStreamTask = new TestStreamTask(new TaskId(0, 0),
+                                                                 applicationId,
+                                                                 Utils.mkSet(new TopicPartition("t1", 0)),
+                                                                 builder.build(0),
+                                                                 clientSupplier.consumer,
+                                                                 clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
+                                                                 config,
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+            @Override
+            public void close() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+        final StreamsConfig config1 = new StreamsConfig(configProps());
+
+        final StreamThread thread = new StreamThread(builder, config1, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+
+
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+
+        thread.start();
+        thread.close();
+        thread.join();
+        assertFalse("task shouldn't have been committed as there was an exception during shutdown", testStreamTask.committed);
+
+
+    }
+
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskFlushDuringShutdown() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId(applicationId);
+        final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("foo", false);
+        builder.stream("t1").groupByKey().count(new MockStateStoreSupplier(stateStore));
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+        final TestStreamTask testStreamTask = new TestStreamTask(new TaskId(0, 0),
+                                                                 applicationId,
+                                                                 Utils.mkSet(new TopicPartition("t1", 0)),
+                                                                 builder.build(0),
+                                                                 clientSupplier.consumer,
+                                                                 clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
+                                                                 config,
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+            @Override
+            public void flushState() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+
+        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+
+
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+        // store should have been opened
+        assertTrue(stateStore.isOpen());
+
+        thread.start();
+        thread.close();
+        thread.join();
+        assertFalse("task shouldn't have been committed as there was an exception during shutdown", testStreamTask.committed);
+        // store should be closed even if we had an exception
+        assertFalse(stateStore.isOpen());
+    }
+
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringCloseTopologyWhenSuspendingState() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId(applicationId);
+        builder.stream("t1").groupByKey();
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+        final TestStreamTask testStreamTask = new TestStreamTask(new TaskId(0, 0),
+                                                                 applicationId,
+                                                                 Utils.mkSet(new TopicPartition("t1", 0)),
+                                                                 builder.build(0),
+                                                                 clientSupplier.consumer,
+                                                                 clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
+                                                                 config,
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+            @Override
+            public void closeTopology() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+        final StreamsConfig config1 = new StreamsConfig(configProps());
+
+        final StreamThread thread = new StreamThread(builder, config1, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+
+
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+        try {
+            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+            fail("should have thrown exception");
+        } catch (Exception e) {
+            // expected
+        }
+        assertFalse(testStreamTask.committed);
+    }
+
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhileSuspendingState() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId(applicationId);
+        builder.stream("t1").groupByKey();
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+        final TestStreamTask testStreamTask = new TestStreamTask(new TaskId(0, 0),
+                                                                 applicationId,
+                                                                 Utils.mkSet(new TopicPartition("t1", 0)),
+                                                                 builder.build(0),
+                                                                 clientSupplier.consumer,
+                                                                 clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
+                                                                 config,
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+            @Override
+            public void flushState() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+        final StreamsConfig config1 = new StreamsConfig(configProps());
+
+        final StreamThread thread = new StreamThread(builder, config1, clientSupplier, applicationId,
+                                                     clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder)) {
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+
+
+        thread.partitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+        try {
+            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+            fail("should have thrown exception");
+        } catch (Exception e) {
+            // expected
+        }
+        assertFalse(testStreamTask.committed);
+
+    }
+
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread) {
 
