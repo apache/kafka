@@ -197,6 +197,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(null, createOpts, new TestAdminUtils)
   }
 
+  @Test (expected = classOf[InvalidConfigException])
+  def shouldNotUpdateBrokerConfigIfNonExistingConfigIsDeleted(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "my-topic",
+      "--entity-type", "topics",
+      "--alter",
+      "--delete-config", "missing_config1, missing_config2"))
+    ConfigCommand.alterConfig(null, createOpts, new TestAdminUtils)
+  }
+
   @Test
   def shouldDeleteBrokerConfig(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
