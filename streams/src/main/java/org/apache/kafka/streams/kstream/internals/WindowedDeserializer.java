@@ -29,6 +29,9 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     private Deserializer<T> inner;
 
+    // Default constructor needed by Kafka
+    public WindowedDeserializer() {}
+
     public WindowedDeserializer(Deserializer<T> inner) {
         this.inner = inner;
     }
