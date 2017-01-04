@@ -24,10 +24,6 @@ import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialU
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef._
 
-import kafka.server.KafkaConfig
-
-import scala.collection.JavaConverters._
-
 class CredentialProvider(saslEnabledMechanisms: List[String]) {
 
   val credentialCache = new CredentialCache

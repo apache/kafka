@@ -159,7 +159,7 @@ object JaasTestUtils {
           KafkaPlainAdminPassword,
           debug = false,
           Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword)).toJaasModule
-      case "SCRAM-SHA-224" | "SCRAM-SHA-256" | "SCRAM-SHA-384" | "SCRAM-SHA-512" =>
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
         ScramLoginModule(
           KafkaScramAdmin,
           KafkaScramAdminPassword,
@@ -185,7 +185,7 @@ object JaasTestUtils {
           KafkaPlainUser,
           KafkaPlainPassword
         ).toJaasModule
-      case "SCRAM-SHA-224" | "SCRAM-SHA-256" | "SCRAM-SHA-384" | "SCRAM-SHA-512" =>
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
         ScramLoginModule(
           KafkaScramUser,
           KafkaScramPassword

@@ -73,7 +73,7 @@ public class ScramSaslClient implements SaslClient {
     private ScramMessages.ServerFirstMessage serverFirstMessage;
     private ScramMessages.ClientFinalMessage clientFinalMessage;
 
-    public ScramSaslClient(ScramMechanism mechanism, String authorizationId, CallbackHandler cbh) throws NoSuchAlgorithmException {
+    public ScramSaslClient(ScramMechanism mechanism, CallbackHandler cbh) throws NoSuchAlgorithmException {
         this.mechanism = mechanism;
         this.callbackHandler = cbh;
         this.formatter = new ScramFormatter(mechanism);
@@ -92,49 +92,52 @@ public class ScramSaslClient implements SaslClient {
 
     @Override
     public byte[] evaluateChallenge(byte[] challenge) throws SaslException {
-        switch (state) {
-            case SEND_CLIENT_FIRST_MESSAGE:
-                if (challenge != null && challenge.length != 0)
-                    throw new SaslException("Expected empty challenge");
-                clientNonce = formatter.secureRandomString();
-                NameCallback nameCallback = new NameCallback("Name:");
-                try {
-                    callbackHandler.handle(new Callback[]{nameCallback});
-                } catch (IOException | UnsupportedCallbackException e) {
-                    setState(State.FAILED);
-                    throw new SaslException("User name could not be obtained", e);
-                }
-                String username = nameCallback.getName();
-                String saslName = formatter.saslName(username);
-                this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce);
-                setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
-                return clientFirstMessage.toBytes();
+        try {
+            switch (state) {
+                case SEND_CLIENT_FIRST_MESSAGE:
+                    if (challenge != null && challenge.length != 0)
+                        throw new SaslException("Expected empty challenge");
+                    clientNonce = formatter.secureRandomString();
+                    NameCallback nameCallback = new NameCallback("Name:");
+                    try {
+                        callbackHandler.handle(new Callback[]{nameCallback});
+                    } catch (IOException | UnsupportedCallbackException e) {
+                        throw new SaslException("User name could not be obtained", e);
+                    }
+                    String username = nameCallback.getName();
+                    String saslName = formatter.saslName(username);
+                    this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce);
+                    setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
+                    return clientFirstMessage.toBytes();
 
-            case RECEIVE_SERVER_FIRST_MESSAGE:
-                this.serverFirstMessage = new ServerFirstMessage(challenge);
-                if (!serverFirstMessage.nonce().startsWith(clientNonce))
-                    throw new SaslException("Invalid server nonce: does not start with client nonce");
-                PasswordCallback passwordCallback = new PasswordCallback("Password:", false);
-                try {
-                    callbackHandler.handle(new Callback[]{passwordCallback});
-                } catch (IOException | UnsupportedCallbackException e) {
-                    setState(State.FAILED);
-                    throw new SaslException("User name could not be obtained", e);
-                }
-                this.clientFinalMessage = handleServerFirstMessage(passwordCallback.getPassword());
-                setState(State.RECEIVE_SERVER_FINAL_MESSAGE);
-                return clientFinalMessage.toBytes();
+                case RECEIVE_SERVER_FIRST_MESSAGE:
+                    this.serverFirstMessage = new ServerFirstMessage(challenge);
+                    if (!serverFirstMessage.nonce().startsWith(clientNonce))
+                        throw new SaslException("Invalid server nonce: does not start with client nonce");
+                    PasswordCallback passwordCallback = new PasswordCallback("Password:", false);
+                    try {
+                        callbackHandler.handle(new Callback[]{passwordCallback});
+                    } catch (IOException | UnsupportedCallbackException e) {
+                        throw new SaslException("User name could not be obtained", e);
+                    }
+                    this.clientFinalMessage = handleServerFirstMessage(passwordCallback.getPassword());
+                    setState(State.RECEIVE_SERVER_FINAL_MESSAGE);
+                    return clientFinalMessage.toBytes();
 
-            case RECEIVE_SERVER_FINAL_MESSAGE:
-                ServerFinalMessage serverFinalMessage = new ServerFinalMessage(challenge);
-                if (serverFinalMessage.error() != null)
-                    throw new SaslException("Sasl authentication using " + mechanism + " failed with error: " + serverFinalMessage.error());
-                handleServerFinalMessage(serverFinalMessage.serverSignature());
-                setState(State.COMPLETE);
-                return null;
+                case RECEIVE_SERVER_FINAL_MESSAGE:
+                    ServerFinalMessage serverFinalMessage = new ServerFinalMessage(challenge);
+                    if (serverFinalMessage.error() != null)
+                        throw new SaslException("Sasl authentication using " + mechanism + " failed with error: " + serverFinalMessage.error());
+                    handleServerFinalMessage(serverFinalMessage.serverSignature());
+                    setState(State.COMPLETE);
+                    return null;
 
-            default:
-                throw new IllegalSaslStateException("Unexpected challenge in Sasl client state " + state);
+                default:
+                    throw new IllegalSaslStateException("Unexpected challenge in Sasl client state " + state);
+            }
+        } catch (SaslException e) {
+            setState(State.FAILED);
+            throw e;
         }
     }
 
@@ -183,7 +186,6 @@ public class ScramSaslClient implements SaslClient {
             clientFinalMessage.proof(clientProof);
             return clientFinalMessage;
         } catch (InvalidKeyException e) {
-            setState(State.FAILED);
             throw new SaslException("Client final message could not be created", e);
         }
     }
@@ -195,7 +197,6 @@ public class ScramSaslClient implements SaslClient {
             if (!Arrays.equals(signature, serverSignature))
                 throw new SaslException("Invalid server signature in server final message");
         } catch (InvalidKeyException e) {
-            setState(State.FAILED);
             throw new SaslException("Sasl server signature verification failed", e);
         }
     }
@@ -221,7 +222,7 @@ public class ScramSaslClient implements SaslClient {
                         Arrays.asList(mechanisms), ScramMechanism.mechanismNames()));
 
             try {
-                return new ScramSaslClient(mechanism, authorizationId, cbh);
+                return new ScramSaslClient(mechanism, cbh);
             } catch (NoSuchAlgorithmException e) {
                 throw new SaslException("Hash algorithm not supported for mechanism " + mechanism, e);
             }

@@ -25,9 +25,7 @@ import java.util.Map;
 
 public enum ScramMechanism {
 
-    SCRAM_SHA_224("SHA-224", "HmacSHA224"),
     SCRAM_SHA_256("SHA-256", "HmacSHA256"),
-    SCRAM_SHA_384("SHA-384", "HmacSHA384"),
     SCRAM_SHA_512("SHA-512", "HmacSHA512");
 
     private final String mechanismName;

@@ -99,7 +99,6 @@ public class ScramSaslServer implements SaslServer {
                         setState(State.RECEIVE_CLIENT_FINAL_MESSAGE);
                         return serverFirstMessage.toBytes();
                     } catch (IOException | NumberFormatException | UnsupportedCallbackException e) {
-                        setState(State.FAILED);
                         throw new SaslException("Authentication failed: Credentials could not be obtained", e);
                     }
 
@@ -113,7 +112,6 @@ public class ScramSaslServer implements SaslServer {
                         setState(State.COMPLETE);
                         return serverFinalMessage.toBytes();
                     } catch (InvalidKeyException e) {
-                        setState(State.FAILED);
                         throw new SaslException("Authentication failed: Invalid client final message", e);
                     }
 

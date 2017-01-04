@@ -50,7 +50,7 @@ public class ScramMessages {
             return toMessage().getBytes(StandardCharsets.UTF_8);
         }
 
-        public String toMessage(byte[] messageBytes) {
+        protected String toMessage(byte[] messageBytes) {
             return new String(messageBytes, StandardCharsets.UTF_8);
         }
     }

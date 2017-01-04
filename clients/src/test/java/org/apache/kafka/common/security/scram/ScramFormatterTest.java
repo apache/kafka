@@ -81,7 +81,9 @@ public class ScramFormatterTest {
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
         for (String username : usernames) {
             String saslName = formatter.saslName(username);
+            // There should be no commas in saslName (comma is used as field separator in SASL messages)
             assertEquals(-1, saslName.indexOf(','));
+            // There should be no "=" in the saslName apart from those used in encoding (comma is =2C and equals is =3D)
             assertEquals(-1, saslName.replace("=2C", "").replace("=3D", "").indexOf('='));
             assertEquals(username, formatter.username(saslName));
         }
