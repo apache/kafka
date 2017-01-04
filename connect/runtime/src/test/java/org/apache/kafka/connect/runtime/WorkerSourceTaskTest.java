@@ -554,6 +554,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
         expectConvertKeyValue(false);
+        expectApplyTransformationChain(false);
 
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall();
