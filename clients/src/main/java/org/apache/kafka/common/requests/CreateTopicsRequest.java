@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -83,6 +84,17 @@ public class CreateTopicsRequest extends AbstractRequest {
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments) {
             this(replicasAssignments, Collections.<String, String>emptyMap());
         }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("{numPartitions: ").append(numPartitions).
+                append(", replicationFactor: ").append(replicationFactor).
+                append(", replicasAssignments: ").append(Utils.join(replicasAssignments, ": ", " ,")).
+                append(", configs: ").append(Utils.join(configs, ": ", " ,")).
+                append("}");
+            return bld.toString();
+        }
     }
 
     private final Map<String, TopicDetails> topics;
@@ -96,7 +108,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     public static final short NO_REPLICATION_FACTOR = -1;
 
     public CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout) {
-        super(new Struct(CURRENT_SCHEMA));
+        super(new Struct(CURRENT_SCHEMA), ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id));
 
         List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
         for (Map.Entry<String, TopicDetails> entry : topics.entrySet()) {
@@ -138,8 +150,8 @@ public class CreateTopicsRequest extends AbstractRequest {
         this.duplicateTopics = Collections.emptySet();
     }
 
-    public CreateTopicsRequest(Struct struct) {
-        super(struct);
+    public CreateTopicsRequest(Struct struct, short versionId) {
+        super(struct, versionId);
 
         Object[] requestStructs = struct.getArray(REQUESTS_KEY_NAME);
         Map<String, TopicDetails> topics = new HashMap<>();
@@ -194,12 +206,13 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
         Map<String, Errors> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
             topicErrors.put(topic, Errors.forException(e));
         }
 
+        short versionId = getVersion();
         switch (versionId) {
             case 0:
                 return new CreateTopicsResponse(topicErrors);
@@ -222,10 +235,12 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     public static CreateTopicsRequest parse(ByteBuffer buffer, int versionId) {
-        return new CreateTopicsRequest(ProtoUtils.parseRequest(ApiKeys.CREATE_TOPICS.id, versionId, buffer));
+        return new CreateTopicsRequest(
+                ProtoUtils.parseRequest(ApiKeys.CREATE_TOPICS.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static CreateTopicsRequest parse(ByteBuffer buffer) {
-        return new CreateTopicsRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id));
     }
 }

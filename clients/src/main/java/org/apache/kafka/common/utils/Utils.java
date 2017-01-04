@@ -456,6 +456,20 @@ public class Utils {
         return sb.toString();
     }
 
+    public static <K, V> String join(Map<K, V> map,
+                                     String keyValueSeparator, String elementSeperator) {
+        StringBuilder bld = new StringBuilder();
+        bld.append("{");
+        String prefix = "";
+        for (Map.Entry<K, V> entry: map.entrySet()) {
+            bld.append(prefix).append(entry.getKey()).
+                    append(keyValueSeparator).append(entry.getValue());
+            prefix = elementSeperator;
+        }
+        bld.append("}");
+        return bld.toString();
+    }
+
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read

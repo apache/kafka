@@ -13,15 +13,17 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -38,14 +40,17 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -56,11 +61,6 @@ import java.util.Set;
 public class NetworkClient implements KafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
-    private static final Metadata NO_METADATA = null;
-    private static final MetadataUpdater NO_METADATA_UPDATER = null;
-
-    /* apis used by this client. If this is null, client won't perform api version check against connecting brokers */
-    private final Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions;
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
@@ -95,22 +95,114 @@ public class NetworkClient implements KafkaClient {
 
     private final Time time;
 
-    private final Map<Integer, Collection<ApiVersionsResponse.ApiVersion>> nodeApiVersions = new HashMap<>();
+    private final Map<Integer, NodeVersionInfo> nodeApiVersions = new HashMap<>();
 
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
-    public NetworkClient(Selectable selector,
-                         Metadata metadata,
-                         String clientId,
-                         int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
-                         int socketSendBuffer,
-                         int socketReceiveBuffer,
-                         int requestTimeoutMs,
-                         Time time,
-                         Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
-        this(NO_METADATA_UPDATER, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, requiredApiVersions);
+    private final List<ClientResponse> abortedSends = new LinkedList<ClientResponse>();
+
+    private static final class NodeVersionInfo {
+        // The node index
+        private final int nodeIndex;
+
+        private final Collection<ApiVersionsResponse.ApiVersion> apiVersions;
+
+        // An array of the usable versions of each API, indexed by ApiKeys ID.
+        private final short[] usableVersions;
+
+        NodeVersionInfo(int nodeIndex, Collection<ApiVersionsResponse.ApiVersion> apiVersions) {
+            this.nodeIndex = nodeIndex;
+            this.apiVersions = apiVersions;
+            this.usableVersions = new short[ApiKeys.ID_TO_TYPE.length];
+            Arrays.fill(usableVersions, (short) -1);
+            for (ApiVersionsResponse.ApiVersion apiVersion: apiVersions) {
+                int index = apiVersion.apiKey;
+                if ((index < 0) || (index >= usableVersions.length)) {
+                    log.debug("Node " + nodeIndex + ": ignoring unknown ApiKey " + index +
+                            ": we only know API keys between 0 and " +
+                            (usableVersions.length - 1));
+                    continue;
+                }
+                if (Protocol.CURR_VERSION[index] < apiVersion.minVersion) {
+                    log.debug("Node " + nodeIndex + ": the client's version of API " + index +
+                            " is too old for this server.  Needed at least version " +
+                            apiVersion.minVersion + ".  Our maximum version is " +
+                            Protocol.CURR_VERSION[index]);
+                    usableVersions[index] = -1;
+                    continue;
+                }
+                if (Protocol.MIN_VERSIONS[index] > apiVersion.maxVersion) {
+                    log.debug("Node " + nodeIndex + ": the client's version of API " + index +
+                            " is too new for this server.  Needed at most version " +
+                            apiVersion.maxVersion + ".  Our minimum version is " +
+                            Protocol.MIN_VERSIONS[index]);
+                    usableVersions[index] = -1;
+                    continue;
+                }
+                if (Protocol.CURR_VERSION[index] < apiVersion.maxVersion) {
+                    usableVersions[index] = Protocol.CURR_VERSION[index];
+                } else {
+                    usableVersions[index] = apiVersion.maxVersion;
+                }
+                log.debug("Node " + nodeIndex + ": for API " + index + ", using version " +
+                        usableVersions[index]);
+            }
+        }
+
+        public short getUsableVersion(short apiKey) {
+            if ((apiKey < 0) || (apiKey >= usableVersions.length)) {
+                return (short) -1;
+            } else {
+                return usableVersions[apiKey];
+            }
+        }
+
+        @Override
+        public String toString() {
+            // The apiVersion collection may not be in sorted order.  We put it into
+            // a TreeMap before printing it out to ensure that we always print in
+            // ascending order.  We also handle the case where some apiKey types are
+            // unknown, which may happen when either the client or server is newer.
+            //
+            // This toString method is relatively expensive, so you probably want to avoid
+            // calling it unless debug logging is turned on.
+            TreeMap<Short, CharSequence> apiKeysStr = new TreeMap<Short, CharSequence>();
+            for (ApiVersionsResponse.ApiVersion apiVersion: this.apiVersions) {
+                StringBuilder bld = new StringBuilder();
+                int apiKey = apiVersion.apiKey;
+                if ((apiKey < 0) || (apiKey >= ApiKeys.ID_TO_TYPE.length)) {
+                    bld.append("UNKNOWN(").append(apiKey).append("): supports ");
+                } else {
+                    bld.append(ApiKeys.ID_TO_TYPE[apiKey].name).
+                            append(": supports ");
+                }
+                if (apiVersion.minVersion == apiVersion.maxVersion) {
+                    bld.append((int) apiVersion.minVersion);
+                } else {
+                    bld.append((int) apiVersion.minVersion).
+                            append(" to ").
+                            append(apiVersion.maxVersion);
+                }
+                if ((apiKey >= 0) && (apiKey < ApiKeys.ID_TO_TYPE.length)) {
+                    int usableVersion = usableVersions[apiKey];
+                    if (usableVersion < 0) {
+                        bld.append(".  Usable version: NONE");
+                    } else {
+                        bld.append(".  Usable version: ").append(usableVersion);
+                    }
+                }
+                apiKeysStr.put(apiVersion.apiKey, bld);
+            }
+            StringBuilder bld = new StringBuilder();
+            bld.append("{");
+            String prefix = "";
+            for (CharSequence seq : apiKeysStr.values()) {
+                bld.append(prefix).append(seq);
+                prefix = ", ";
+            }
+            bld.append("}");
+            return bld.toString();
+        }
     }
 
     public NetworkClient(Selectable selector,
@@ -122,22 +214,8 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time) {
-        this(NO_METADATA_UPDATER, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, null);
-    }
-
-    public NetworkClient(Selectable selector,
-                         MetadataUpdater metadataUpdater,
-                         String clientId,
-                         int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
-                         int socketSendBuffer,
-                         int socketReceiveBuffer,
-                         int requestTimeoutMs,
-                         Time time,
-                         Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
-        this(metadataUpdater, NO_METADATA, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, requiredApiVersions);
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
     }
 
     public NetworkClient(Selectable selector,
@@ -149,8 +227,8 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time) {
-        this(metadataUpdater, NO_METADATA, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, null);
+        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -162,11 +240,7 @@ public class NetworkClient implements KafkaClient {
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
-                          Time time,
-                          Collection<ApiVersionsResponse.ApiVersion> requiredApiVersions) {
-
-        this.requiredApiVersions = requiredApiVersions;
-
+                          Time time) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -278,15 +352,6 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Are we connected and able to send API versions request to the given connection?
-     *
-     * @param node The node
-     */
-    private boolean canSendApiVersionsRequest(String node) {
-        return this.requiredApiVersions != null && nodesNeedingApiVersionsFetch.contains(node);
-    }
-
-    /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      * @param request The request
      * @param now The current timestamp
@@ -296,31 +361,76 @@ public class NetworkClient implements KafkaClient {
         doSend(request, false, now);
     }
 
-    private void sendInternalMetadataRequest(MetadataRequest metadataRequest, String nodeConnectionId, long now) {
-        ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true,
-                nextRequestHeader(ApiKeys.METADATA), metadataRequest, null);
+    private void sendInternalMetadataRequest(MetadataRequest.Builder builder,
+                                             String nodeConnectionId, long now) {
+        ClientRequest clientRequest = newClientRequest(
+                nodeConnectionId, builder, now, true, null);
         doSend(clientRequest, true, now);
     }
 
-    private void doSend(ClientRequest request, boolean isInternalRequest, long now) {
-        String nodeId = request.destination();
-        if (request.header().apiKey() == ApiKeys.API_VERSIONS.id) {
-            if (!canSendApiVersionsRequest(nodeId))
-                throw new IllegalStateException("Attempt to send API Versions request to node " + nodeId + " which is not ready.");
-        } else if (!canSendRequest(nodeId))
-            throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
-
-        Send send = request.body().toSend(nodeId, request.header());
+    private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now) {
+        String nodeId = clientRequest.destination();
+        if (!isInternalRequest) {
+            // If this request came from outside the NetworkClient, validate
+            // that we can send data.  If the request is internal, we trust
+            // that that internal code has done this validation.  Validation
+            // will be slightly different for some internal requests (for
+            // example, ApiVersionsRequests can be sent prior to being in
+            // READY state.)
+            if (!canSendRequest(nodeId))
+                throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+        }
+        AbstractRequest request = null;
+        AbstractRequest.Builder builder = clientRequest.requestBuilder();
+        try {
+            NodeVersionInfo versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
+            // Note: if versionInfo is null, we have no server version information.
+            // This would be the case when sending the initial ApiVersionRequest which
+            // fetches the version information itself, for example.
+            if (versionInfo == null) {
+                if (log.isTraceEnabled()) {
+                    log.trace("No version information found when sending message of type {} to node {}",
+                            clientRequest.apiKey(), nodeId);
+                }
+            } else {
+                short version = versionInfo.getUsableVersion(clientRequest.apiKey().id);
+                if (log.isTraceEnabled()) {
+                    log.trace("When sending message of type {} to node {}, the best usable " +
+                            "version is {}", clientRequest.apiKey(), nodeId, version);
+                }
+                if (version < 0) {
+                    throw new UnsupportedVersionException("The client cannot send an " +
+                            "API request of type " + clientRequest.apiKey() + ", because the " +
+                            "server does not understand any of the versions this client supports.");
+                }
+                builder.setVersion(version);
+            }
+            // The call to build may also throw UnsupportedVersionException, if there are essential
+            // fields that cannot be represented in the chosen version.
+            request = builder.build();
+        } catch (UnsupportedVersionException e) {
+            // If the version is not supported, skip sending the request over the wire.
+            // Instead, simply add it to the local queue of aborted requests.
+            ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(),
+                    clientRequest.callback(), clientRequest.destination(), now, now,
+                    false, true, null);
+            abortedSends.add(clientResponse);
+            return;
+        }
+        RequestHeader header = clientRequest.makeHeader();
+        if (log.isTraceEnabled()) {
+            log.trace("Sending {} to node {}", request,  nodeId);
+        }
+        Send send = request.toSend(nodeId, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
-                request.header(),
-                request.createdTimeMs(),
-                request.destination(),
-                request.callback(),
-                request.expectResponse(),
+                header,
+                clientRequest.createdTimeMs(),
+                clientRequest.destination(),
+                clientRequest.callback(),
+                clientRequest.expectResponse(),
                 isInternalRequest,
                 send,
                 now);
-
         this.inFlightRequests.add(inFlightRequest);
         selector.send(inFlightRequest.send);
     }
@@ -346,10 +456,12 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
+        handleAbortedSends(responses, updatedNow);
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections(updatedNow);
+        handleInitiateApiVersionRequests(updatedNow);
         handleTimedOutRequests(responses, updatedNow);
 
         // invoke callbacks
@@ -378,29 +490,6 @@ public class NetworkClient implements KafkaClient {
     @Override
     public int inFlightRequestCount(String node) {
         return this.inFlightRequests.inFlightRequestCount(node);
-    }
-
-    /**
-     * Generate a request header for the given API key
-     *
-     * @param key The api key
-     * @return A request header with the appropriate client id and correlation id
-     */
-    @Override
-    public RequestHeader nextRequestHeader(ApiKeys key) {
-        return new RequestHeader(key.id, clientId, correlation++);
-    }
-
-    /**
-     * Generate a request header for the given API key and version
-     *
-     * @param key The api key
-     * @param version The api version
-     * @return A request header with the appropriate client id and correlation id
-     */
-    @Override
-    public RequestHeader nextRequestHeader(ApiKeys key, short version) {
-        return new RequestHeader(key.id, version, clientId, correlation++);
     }
 
     /**
@@ -502,6 +591,15 @@ public class NetworkClient implements KafkaClient {
             metadataUpdater.requestUpdate();
     }
 
+    private void handleAbortedSends(List<ClientResponse> responses, long now) {
+        for (Iterator<ClientResponse> iter = abortedSends.iterator();
+             iter.hasNext();) {
+            ClientResponse response = iter.next();
+            responses.add(response);
+            iter.remove();
+        }
+    }
+
     /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
      *
@@ -534,30 +632,30 @@ public class NetworkClient implements KafkaClient {
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
-                handleApiVersionsResponse(req, (ApiVersionsResponse) body);
+                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
         }
     }
 
-    private void handleApiVersionsResponse(InFlightRequest req, ApiVersionsResponse apiVersionsResponse) {
+    private void handleApiVersionsResponse(List<ClientResponse> responses,
+            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        for (ApiVersionsResponse.ApiVersion requiredApiVersion : requiredApiVersions) {
-            final ApiVersionsResponse.ApiVersion supportedApiVersion = apiVersionsResponse.apiVersion(requiredApiVersion.apiKey);
-            if (supportedApiVersion == null) {
-                close(node);
-                throw new KafkaException("Node " + req.destination + " does not support Api " + requiredApiVersion.apiKey + ".");
-            }
-            if (supportedApiVersion.maxVersion < requiredApiVersion.minVersion || supportedApiVersion.minVersion > requiredApiVersion.maxVersion) {
-                close(node);
-                throw new KafkaException("Node " + req.destination + " does not support required versions for Api " + requiredApiVersion.apiKey + "." +
-                        " Supported versions: " + "[" + supportedApiVersion.minVersion + ", " + supportedApiVersion.maxVersion + "]" + "," +
-                        " required versions: " + "[" + requiredApiVersion.minVersion + ", " + requiredApiVersion.maxVersion + "]" + ".");
-            }
+        if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
+            log.warn("Node " + node + " got error " + apiVersionsResponse.errorCode() +
+                    " when making an ApiVersionsRequest.  Disconnecting.");
+            this.selector.close(node);
+            processDisconnection(responses, node, now);
+            return;
         }
-        nodeApiVersions.put(Integer.parseInt(node), apiVersionsResponse.apiVersions());
+        int nodexIndex = Integer.parseInt(node);
+        NodeVersionInfo nodeVersionInfo =
+                new NodeVersionInfo(nodexIndex, apiVersionsResponse.apiVersions());
+        nodeApiVersions.put(nodexIndex, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.debug("Recorded API versions for node {}: {}", node, apiVersionsResponse.apiVersions());
+        if (log.isDebugEnabled()) {
+            log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo.toString());
+        }
     }
 
     /**
@@ -584,27 +682,20 @@ public class NetworkClient implements KafkaClient {
             log.debug("Completed connection to node {}", node);
             // Though the node is connected, we might not still be able to send requests. For instance,
             // in case of SSL connection, SSL handshake happens after connection is established.
-            if (this.requiredApiVersions == null) {
-                this.connectionStates.ready(node);
-            } else {
-                this.connectionStates.checkingApiVersions(node);
-                nodesNeedingApiVersionsFetch.add(node);
-            }
+            this.connectionStates.checkingApiVersions(node);
+            nodesNeedingApiVersionsFetch.add(node);
         }
-        maybeInitiateApiVersionsFetch(now);
     }
 
-    private void maybeInitiateApiVersionsFetch(long now) {
-        if (this.requiredApiVersions == null)
-            return;
-
+    private void handleInitiateApiVersionRequests(long now) {
         Iterator<String> iter = nodesNeedingApiVersionsFetch.iterator();
         while (iter.hasNext()) {
             String node = iter.next();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
-                ClientRequest clientRequest = new ClientRequest(node, now, true,
-                        nextRequestHeader(ApiKeys.API_VERSIONS), ApiVersionsRequest.API_VERSIONS_REQUEST, null);
+                ApiVersionsRequest.Builder apiVersionRequest = new ApiVersionsRequest.Builder();
+                ClientRequest clientRequest = newClientRequest(
+                        node, apiVersionRequest, now, true, null);
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
@@ -743,11 +834,13 @@ public class NetworkClient implements KafkaClient {
 
             if (canSendRequest(nodeConnectionId)) {
                 this.metadataFetchInProgress = true;
-                MetadataRequest metadataRequest;
+                MetadataRequest.Builder metadataRequest;
                 if (metadata.needMetadataForAllTopics())
-                    metadataRequest = MetadataRequest.allTopics();
+                    metadataRequest = MetadataRequest.Builder.allTopics();
                 else
-                    metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
+                    metadataRequest = new MetadataRequest.Builder(
+                            new ArrayList<>(metadata.topics()));
+
 
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
@@ -776,6 +869,14 @@ public class NetworkClient implements KafkaClient {
             return Long.MAX_VALUE;
         }
 
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder requestBuilder,
+                                          long createdTimeMs, boolean expectResponse,
+                                          RequestCompletionHandler callback) {
+        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId,
+                createdTimeMs, expectResponse, callback);
     }
 
     static class InFlightRequest {
@@ -807,11 +908,11 @@ public class NetworkClient implements KafkaClient {
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, response);
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, false, response);
         }
 
         public ClientResponse disconnected(long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null);
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, false, null);
         }
 
     }

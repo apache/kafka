@@ -21,7 +21,8 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * A container class for offset and timestamp.
  *
- * Both offset and timestamp are non-negative.
+ * offset must be non-negative.
+ * If timestamp is negative, this object does not contain a valid timestamp.
  */
 public final class OffsetAndTimestamp {
     private final long timestamp;

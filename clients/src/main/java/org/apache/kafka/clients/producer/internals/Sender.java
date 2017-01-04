@@ -32,13 +32,11 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -349,8 +347,8 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
 
-        ProduceRequest produceRequest = new ProduceRequest(acks, timeout, produceRecordsByPartition);
-        RequestHeader header = this.client.nextRequestHeader(ApiKeys.PRODUCE);
+        ProduceRequest.Builder requestBuilder =
+                new ProduceRequest.Builder(acks, timeout, produceRecordsByPartition);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
@@ -358,10 +356,11 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
-        ClientRequest clientRequest = new ClientRequest(nodeId, now, acks != 0, header, produceRequest, callback);
+        ClientRequest clientRequest = client.
+                newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
 
         client.send(clientRequest, now);
-        log.trace("Sent produce request to {}: {}", nodeId, produceRequest);
+        log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }
 
     /**

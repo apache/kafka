@@ -13,36 +13,89 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MetadataRequest extends AbstractRequest {
+    private static final Logger log = LoggerFactory.getLogger(MetadataRequest.class);
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
+    public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
+        private static final List<String> ALL_TOPICS = null;
+
+        // The list of topics, or null if we want to request metadata about all
+        // topics.
+        private List<String> topics;
+
+        public static Builder allTopics() {
+            return new Builder(ALL_TOPICS);
+        }
+
+        public Builder(List<String> topics) {
+            super(ApiKeys.METADATA);
+            this.topics = topics;
+        }
+
+        public List<String> getTopics() {
+            return this.topics;
+        }
+
+        public boolean isAllTopics() {
+            return this.topics == ALL_TOPICS;
+        }
+
+        @Override
+        public MetadataRequest build() {
+            short version = getVersion();
+            if (version < 1) {
+                throw new UnsupportedVersionException("MetadataRequest " +
+                        "versions older than 1 are not supported.");
+            }
+            return new MetadataRequest(this.topics, version);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("{type: MetadataRequest, ").
+                append("topics: ");
+            if (topics == null) {
+                bld.append("<ALL>");
+            } else {
+                bld.append(Utils.join(topics, ","));
+            }
+            bld.append("}");
+            return bld.toString();
+        }
+    }
+
     private static final String TOPICS_KEY_NAME = "topics";
-
-    private static final MetadataRequest ALL_TOPICS_REQUEST = new MetadataRequest((List<String>) null); // Unusual cast to work around constructor ambiguity
 
     private final List<String> topics;
 
-    public static MetadataRequest allTopics() {
-        return ALL_TOPICS_REQUEST;
+    public static MetadataRequest allTopics(short version) {
+        return new MetadataRequest.Builder(null).setVersion(version).build();
     }
 
     /**
      * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * Note: modern clients do not support sending v0 requests.
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
-    public MetadataRequest(List<String> topics) {
-        super(new Struct(CURRENT_SCHEMA));
+    public MetadataRequest(List<String> topics, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.METADATA.id, version)),
+                version);
         if (topics == null)
             struct.set(TOPICS_KEY_NAME, null);
         else
@@ -50,8 +103,8 @@ public class MetadataRequest extends AbstractRequest {
         this.topics = topics;
     }
 
-    public MetadataRequest(Struct struct) {
-        super(struct);
+    public MetadataRequest(Struct struct, short version) {
+        super(struct, version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
             topics = new ArrayList<>();
@@ -64,7 +117,7 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
         List<MetadataResponse.TopicMetadata> topicMetadatas = new ArrayList<>();
         Errors error = Errors.forException(e);
         List<MetadataResponse.PartitionMetadata> partitions = Collections.emptyList();
@@ -74,14 +127,15 @@ public class MetadataRequest extends AbstractRequest {
                 topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, partitions));
         }
 
-        switch (versionId) {
+        short versionId = getVersion();
+        switch (getVersion()) {
             case 0:
             case 1:
             case 2:
                 return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+                        getVersion(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
         }
     }
 
@@ -94,10 +148,11 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer));
+        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static MetadataRequest parse(ByteBuffer buffer) {
-        return new MetadataRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.METADATA.id));
     }
 }
