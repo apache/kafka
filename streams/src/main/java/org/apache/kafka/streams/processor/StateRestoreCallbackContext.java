@@ -18,12 +18,21 @@
 package org.apache.kafka.streams.processor;
 
 /**
- * Restoration logic for log-backed state stores upon restart,
- * it takes one record at a time from the logs to apply to the restoring state.
+ * Context for use with {@link StateRestoreCallback} provides contextual information respective to the restore process.
  */
-public interface StateRestoreCallback {
+public class StateRestoreCallbackContext {
 
-    void beginRestore(StateRestoreCallbackContext context);
-    void restore(long offset, byte[] key, byte[] value);
-    void endRestore();
+    private final long limit;
+
+    public StateRestoreCallbackContext(long limit) {
+        this.limit = limit;
+    }
+
+    /**
+     * The max offset.
+     * @return max offset
+     */
+    public long getLimit() {
+        return limit;
+    }
 }

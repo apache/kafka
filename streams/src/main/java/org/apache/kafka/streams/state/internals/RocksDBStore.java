@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreCallbackContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -166,9 +167,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         context.register(root, loggingEnabled, new StateRestoreCallback() {
 
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void beginRestore(StateRestoreCallbackContext context) {}
+
+            @Override
+            public void restore(long offset, byte[] key, byte[] value) {
                 putInternal(key, value);
             }
+
+            @Override
+            public void endRestore() {}
         });
         open = true;
     }

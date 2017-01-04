@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreCallbackContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -198,13 +199,20 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         // register and possibly restore the state from the logs
         context.register(root, loggingEnabled, new StateRestoreCallback() {
+
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void beginRestore(StateRestoreCallbackContext context) {}
+
+            @Override
+            public void restore(long offset, byte[] key, byte[] value) {
                 // if the value is null, it means that this record has already been
                 // deleted while it was captured in the changelog, hence we do not need to put any more.
                 if (value != null)
                     putInternal(key, value);
             }
+
+            @Override
+            public void endRestore() {}
         });
 
         flush();

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreCallbackContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -230,12 +231,13 @@ public class ProcessorStateManager {
 
             // restore its state from changelog records
             long limit = offsetLimit(storePartition);
+            stateRestoreCallback.beginRestore(new StateRestoreCallbackContext(limit));
             while (true) {
                 long offset = 0L;
                 for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
                     offset = record.offset();
                     if (offset >= limit) break;
-                    stateRestoreCallback.restore(record.key(), record.value());
+                    stateRestoreCallback.restore(offset, record.key(), record.value());
                 }
 
                 if (offset >= limit) {
@@ -249,6 +251,7 @@ public class ProcessorStateManager {
                             logPrefix, storePartition, endOffset, restoreConsumer.position(storePartition)));
                 }
             }
+            stateRestoreCallback.endRestore();
 
             // record the restored offset for its change log partition
             long newOffset = Math.min(limit, restoreConsumer.position(storePartition));
@@ -283,13 +286,14 @@ public class ProcessorStateManager {
         // restore states from changelog records
 
         StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
+        restoreCallback.beginRestore(new StateRestoreCallbackContext(limit));
 
         long lastOffset = -1L;
         int count = 0;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
                 try {
-                    restoreCallback.restore(record.key(), record.value());
+                    restoreCallback.restore(record.offset(), record.key(), record.value());
                 } catch (Exception e) {
                     throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
                 }
@@ -304,6 +308,7 @@ public class ProcessorStateManager {
         }
         // record the restored offset for its change log partition
         restoredOffsets.put(storePartition, lastOffset + 1);
+        restoreCallback.endRestore();
 
         return remainingRecords;
     }
