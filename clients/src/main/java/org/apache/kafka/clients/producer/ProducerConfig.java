@@ -340,6 +340,10 @@ public class ProducerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
+    ProducerConfig(Map<?, ?> props, boolean doLog) {
+        super(CONFIG, props, doLog);
+    }
+
     public static Set<String> configNames() {
         return CONFIG.names();
     }
