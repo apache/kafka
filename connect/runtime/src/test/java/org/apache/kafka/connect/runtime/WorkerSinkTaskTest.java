@@ -178,7 +178,9 @@ public class WorkerSinkTaskTest {
         consumer.pause(partitions);
         PowerMock.expectLastCall();
 
-        // No records returned
+        // Offset commit as requested when pausing; No records returned by consumer.poll()
+        sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andStubReturn(Collections.emptyMap());
         expectConsumerPoll(0);
         sinkTask.put(Collections.<SinkRecord>emptyList());
         EasyMock.expectLastCall();
@@ -351,6 +353,9 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
 
         consumer.resume(Collections.singleton(TOPIC_PARTITION2));
+        EasyMock.expectLastCall();
+
+        statusListener.onResume(taskId);
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();

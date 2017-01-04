@@ -131,7 +131,8 @@ public class RecordCollectorImpl implements RecordCollector {
      *
      * @return the map from TopicPartition to offset
      */
-    Map<TopicPartition, Long> offsets() {
+    @Override
+    public Map<TopicPartition, Long> offsets() {
         return this.offsets;
     }
 }
