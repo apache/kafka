@@ -39,7 +39,7 @@ import java.util.NoSuchElementException;
 class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
 
     private final SegmentedBytesStore bytesStore;
-    private final RocksDBSessionStore.SessionKeySchema keySchema;
+    private final SessionKeySchema keySchema;
     private Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
     private InternalProcessorContext context;
@@ -54,7 +54,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         this.bytesStore = bytesStore;
         this.keySerde = keySerde;
         this.aggSerde = aggSerde;
-        this.keySchema = new RocksDBSessionStore.SessionKeySchema();
+        this.keySchema = new SessionKeySchema();
     }
 
     public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key,

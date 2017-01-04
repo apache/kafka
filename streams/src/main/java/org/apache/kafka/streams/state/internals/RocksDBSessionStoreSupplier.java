@@ -62,7 +62,7 @@ public class RocksDBSessionStoreSupplier<K, T> implements StateStoreSupplier, Wi
         final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     new RocksDBSessionStore.SessionKeySchema());
+                                                                                     new SessionKeySchema());
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
                                                                                           : bytesStore, "rocksdb-session-store", new SystemTime());
         if (enableCaching) {

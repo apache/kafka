@@ -121,7 +121,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> sessionWindows(final long retentionPeriod) {
+                                    public PersistentKeyValueFactory<K, V> sessionWindowed(final long retentionPeriod) {
                                         this.sessionWindows = true;
                                         this.retentionPeriod = retentionPeriod;
                                         return this;
@@ -404,7 +404,7 @@ public class Stores {
          * Set the persistent store as a {@link SessionStore} for use with {@link org.apache.kafka.streams.kstream.SessionWindows}
          * @param retentionPeriod period of time in milliseconds to keep each window in this store
          */
-        PersistentKeyValueFactory<K, V> sessionWindows(final long retentionPeriod);
+        PersistentKeyValueFactory<K, V> sessionWindowed(final long retentionPeriod);
 
         /**
          * Indicates that a changelog should be created for the store. The changelog will be created

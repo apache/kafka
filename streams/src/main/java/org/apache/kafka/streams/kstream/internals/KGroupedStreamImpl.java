@@ -16,17 +16,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -206,7 +206,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                          sessionWindows,
                          aggValueSerde,
                          storeFactory(keySerde, aggValueSerde, storeName)
-                          .sessionWindows(sessionWindows.maintainMs()).build());
+                          .sessionWindowed(sessionWindows.maintainMs()).build());
 
 
     }
@@ -237,7 +237,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(storeName, "storeName can't be null");
         return count(sessionWindows,
                      storeFactory(keySerde, Serdes.Long(), storeName)
-                             .sessionWindows(sessionWindows.maintainMs()).build());
+                             .sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
     @SuppressWarnings("unchecked")
@@ -264,15 +264,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 return aggOne + aggTwo;
             }
         };
-        final KStreamSessionWindowAggregate<K, V, Long> sessionWindowAggregate
-                = new KStreamSessionWindowAggregate<>(sessionWindows,
-                                                      storeSupplier.name(),
-                                                      initializer,
-                                                      aggregator,
-                                                      sessionMerger);
 
-        return (KTable<Windowed<K>, Long>) doAggregate(
-                sessionWindowAggregate, AGGREGATE_NAME, storeSupplier);
+        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, Serdes.Long(), storeSupplier);
     }
 
 
@@ -285,7 +278,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(reducer, sessionWindows,
                       storeFactory(keySerde, valSerde, storeName)
-                              .sessionWindows(sessionWindows.maintainMs()).build());
+                              .sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
     @Override

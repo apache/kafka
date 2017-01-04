@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
@@ -152,7 +153,11 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 if (!iter.hasNext()) {
                     return null;
                 }
-                return iter.next().value;
+                final T value = iter.next().value;
+                if (iter.hasNext()) {
+                    throw new ProcessorStateException(String.format("Iterator for key [%s] on session store has more than one value", key));
+                }
+                return value;
             }
         }
     }
