@@ -458,14 +458,14 @@ class GroupCoordinator(val brokerId: Int,
   def handleFetchOffsets(groupId: String,
                          partitions: Seq[TopicPartition]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     if (!isActive.get) {
-      partitions.map { case topicPartition =>
+      partitions.map { topicPartition =>
         (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))}.toMap
     } else if (!isCoordinatorForGroup(groupId)) {
       debug("Could not fetch offsets for group %s (not group coordinator).".format(groupId))
-      partitions.map { case topicPartition =>
+      partitions.map { topicPartition =>
         (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NOT_COORDINATOR_FOR_GROUP.code))}.toMap
     } else if (isCoordinatorLoadingInProgress(groupId)) {
-      partitions.map { case topicPartition =>
+      partitions.map { topicPartition =>
         (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_LOAD_IN_PROGRESS.code))}.toMap
     } else {
       // return offsets blindly regardless the current group state since the group may be using
@@ -776,22 +776,26 @@ object GroupCoordinator {
     apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
+  private[coordinator] def offsetConfig(config: KafkaConfig) = OffsetConfig(
+    maxMetadataSize = config.offsetMetadataMaxSize,
+    loadBufferSize = config.offsetsLoadBufferSize,
+    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
+    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
+    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
+    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+    offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  )
+
   def apply(config: KafkaConfig,
             zkUtils: ZkUtils,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time): GroupCoordinator = {
-    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 

@@ -37,7 +37,7 @@ public class SinkNodeTest {
         final Serializer anySerializer = Serdes.Bytes().serializer();
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollector(null, null));
+        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null));
         context.setTime(-1);
 
         final SinkNode sink = new SinkNode<>("name", "output-topic", anySerializer, anySerializer, null);
@@ -54,7 +54,7 @@ public class SinkNodeTest {
 
         Properties config = new Properties();
         config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde, new RecordCollector(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
+        final MockProcessorContext context = new MockProcessorContext(anyStateSerde, new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
         context.setTime(0);
 
         final SinkNode sink = new SinkNode<>("name", "output-topic", anySerializer, anySerializer, null);

@@ -39,6 +39,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchResponse.PartitionData;
@@ -68,6 +70,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -87,6 +90,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import org.apache.kafka.common.errors.InterruptException;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
+
 public class KafkaConsumerTest {
     private final String topic = "test";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -97,6 +104,9 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
+    
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -677,6 +687,42 @@ public class KafkaConsumerTest {
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
+    }
+    
+    @Test
+    public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        final Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        final Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+
+        final MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        final PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
+        
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
+
+        consumer.poll(0);
+
+        // interrupt the thread and call poll
+        try {
+            Thread.currentThread().interrupt();
+            expectedException.expect(InterruptException.class);
+            consumer.poll(0);
+        } finally {
+            // clear interrupted state again since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -1275,16 +1321,15 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        Map<TopicPartition, PartitionData> tpResponses = new HashMap<>();
+        LinkedHashMap<TopicPartition, PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
-            MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
+            MemoryRecordsBuilder records = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, fetchOffset);
             for (int i = 0; i < fetchCount; i++)
-                records.append(fetchOffset + i, 0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-            records.close();
-            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE.code(), 0, records));
+                records.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
+            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE.code(), 0, records.build()));
         }
         return new FetchResponse(tpResponses, 0);
     }

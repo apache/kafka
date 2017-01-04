@@ -15,6 +15,7 @@
 
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -44,6 +45,7 @@ class TestVerifiableProducer(Test):
         self.zk.start()
         self.kafka.start()
 
+    @cluster(num_nodes=3)
     @parametrize(producer_version=str(LATEST_0_8_2))
     @parametrize(producer_version=str(LATEST_0_9))
     @parametrize(producer_version=str(TRUNK))

@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,9 +49,12 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+
+import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -493,6 +497,41 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests dynamic JAAS configuration property for SASL clients. Invalid client credentials
+     * are set in the static JVM-wide configuration instance to ensure that the dynamic
+     * property override is used during authentication.
+     */
+    @Test
+    public void testDynamicJaasConfiguration() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+        Map<String, Object> serverOptions = new HashMap<>();
+        serverOptions.put("user_user1", "user1-secret");
+        serverOptions.put("user_user2", "user2-secret");
+        TestJaasConfig staticJaasConfig = new TestJaasConfig();
+        staticJaasConfig.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), serverOptions);
+        staticJaasConfig.setPlainClientOptions("user1", "invalidpassword");
+        Configuration.setConfiguration(staticJaasConfig);
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+
+        // Check that client using static Jaas config does not connect since password is invalid
+        createAndCheckClientConnectionFailure(securityProtocol, "1");
+
+        // Check that 'user1' can connect with a Jaas config property override
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret"));
+        createAndCheckClientConnection(securityProtocol, "2");
+
+        // Check that invalid password specified as Jaas config property results in connection failure
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user2-secret"));
+        createAndCheckClientConnectionFailure(securityProtocol, "3");
+
+        // Check that another user 'user2' can also connect with a Jaas config override without any changes to static configuration
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
+        createAndCheckClientConnection(securityProtocol, "4");
+    }
+
+    /**
      * Tests that Kafka ApiVersionsRequests are handled by the SASL server authenticator
      * prior to SASL handshake flow and that subsequent authentication succeeds
      * when transport layer is PLAINTEXT/SSL. This test uses a non-SASL client that simulates
@@ -580,6 +619,13 @@ public class SaslAuthenticatorTest {
     private void createAndCheckClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createClientConnection(securityProtocol, node);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        selector.close();
+        selector = null;
+    }
+
+    private void createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node) throws Exception {
+        createClientConnection(securityProtocol, node);
+        NetworkTestUtils.waitForChannelClose(selector, node);
         selector.close();
         selector = null;
     }

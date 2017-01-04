@@ -23,15 +23,16 @@ import java.nio.ByteBuffer
 import joptsimple.OptionParser
 import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.log._
-import kafka.message._
 import kafka.serializer.Decoder
 import kafka.utils._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.record.{CompressionType, FileRecords, LogEntry, Record}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters._
 
 object DumpLogSegments {
 
@@ -69,7 +70,7 @@ object DumpLogSegments {
 
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
-    val printDataLog = (options.has(printOpt) || options.has(offsetsOpt) || options.has(valueDecoderOpt) || options.has(keyDecoderOpt))
+    val printDataLog = options.has(printOpt) || options.has(offsetsOpt) || options.has(valueDecoderOpt) || options.has(keyDecoderOpt)
     val verifyOnly = options.has(verifyOpt)
     val indexSanityOnly = options.has(indexSanityOpt)
 
@@ -132,7 +133,7 @@ object DumpLogSegments {
                         maxMessageSize: Int) {
     val startOffset = file.getName().split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
-    val messageSet = new FileMessageSet(logFile, false)
+    val fileRecords = FileRecords.open(logFile, false)
     val index = new OffsetIndex(file, baseOffset = startOffset)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
@@ -144,11 +145,11 @@ object DumpLogSegments {
 
     for(i <- 0 until index.entries) {
       val entry = index.entry(i)
-      val partialFileMessageSet: FileMessageSet = messageSet.read(entry.position, maxMessageSize)
-      val messageAndOffset = getIterator(partialFileMessageSet.head, isDeepIteration = true).next()
-      if(messageAndOffset.offset != entry.offset + index.baseOffset) {
+      val slice = fileRecords.read(entry.position, maxMessageSize)
+      val logEntry = getIterator(slice.shallowEntries.iterator.next(), isDeepIteration = true).next()
+      if (logEntry.offset != entry.offset + index.baseOffset) {
         var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-        misMatchesSeq ::=(entry.offset + index.baseOffset, messageAndOffset.offset)
+        misMatchesSeq ::=(entry.offset + index.baseOffset, logEntry.offset)
         misMatchesForIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       }
       // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
@@ -164,9 +165,9 @@ object DumpLogSegments {
                             verifyOnly: Boolean,
                             timeIndexDumpErrors: TimeIndexDumpErrors,
                             maxMessageSize: Int) {
-    val startOffset = file.getName().split("\\.")(0).toLong
+    val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
-    val messageSet = new FileMessageSet(logFile, false)
+    val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.IndexFileSuffix)
     val index = new OffsetIndex(indexFile, baseOffset = startOffset)
     val timeIndex = new TimeIndex(file, baseOffset = startOffset)
@@ -178,26 +179,26 @@ object DumpLogSegments {
       return
     }
 
-    var prevTimestamp = Message.NoTimestamp
+    var prevTimestamp = Record.NO_TIMESTAMP
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
-      val partialFileMessageSet: FileMessageSet = messageSet.read(position, Int.MaxValue)
-      val shallowIter = partialFileMessageSet.iterator
-      var maxTimestamp = Message.NoTimestamp
+      val partialFileRecords = fileRecords.read(position, Int.MaxValue)
+      val shallowEntries = partialFileRecords.shallowEntries.asScala
+      var maxTimestamp = Record.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
-      val wrapperMessageOpt = shallowIter.find(_.offset >= entry.offset + timeIndex.baseOffset)
-      wrapperMessageOpt match {
+      val maybeLogEntry = shallowEntries.find(_.offset >= entry.offset + timeIndex.baseOffset)
+      maybeLogEntry match {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
             -1.toLong)
-        case Some(wrapperMessage) if wrapperMessage.offset != entry.offset + timeIndex.baseOffset =>
+        case Some(logEntry) if logEntry.offset != entry.offset + timeIndex.baseOffset =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-            wrapperMessage.offset)
-        case Some(wrapperMessage) =>
-          val deepIter = getIterator(wrapperMessage, isDeepIteration = true)
-          for (messageAndOffset <- deepIter)
-            maxTimestamp = math.max(maxTimestamp, messageAndOffset.message.timestamp)
+            logEntry.offset)
+        case Some(shallowLogEntry) =>
+          val deepIter = getIterator(shallowLogEntry, isDeepIteration = true)
+          for (deepLogEntry <- deepIter)
+            maxTimestamp = math.max(maxTimestamp, deepLogEntry.record.timestamp)
 
           if (maxTimestamp != entry.timestamp)
             timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
@@ -216,20 +217,20 @@ object DumpLogSegments {
   }
 
   private trait MessageParser[K, V] {
-    def parse(message: Message): (Option[K], Option[V])
+    def parse(record: Record): (Option[K], Option[V])
   }
 
   private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
-    override def parse(message: Message): (Option[K], Option[V]) = {
-      if (message.isNull) {
+    override def parse(record: Record): (Option[K], Option[V]) = {
+      if (record.hasNullValue) {
         (None, None)
       } else {
-        val key = if (message.hasKey)
-          Some(keyDecoder.fromBytes(Utils.readBytes(message.key)))
+        val key = if (record.hasKey)
+          Some(keyDecoder.fromBytes(Utils.readBytes(record.key)))
         else
           None
 
-        val payload = Some(valueDecoder.fromBytes(Utils.readBytes(message.payload)))
+        val payload = Some(valueDecoder.fromBytes(Utils.readBytes(record.value)))
 
         (key, payload)
       }
@@ -249,7 +250,7 @@ object DumpLogSegments {
       val topicPartition = offsetKey.key.topicPartition
       val offset = GroupMetadataManager.readOffsetMessageValue(payload)
 
-      val keyString = s"offset::${group}:${topicPartition.topic}:${topicPartition.partition}"
+      val keyString = s"offset::$group:${topicPartition.topic}:${topicPartition.partition}"
       val valueString = if (offset.metadata.isEmpty)
         String.valueOf(offset.offset)
       else
@@ -271,27 +272,27 @@ object DumpLogSegments {
           if (userData.isEmpty)
             s"${member.memberId}=${partitionAssignment.partitions()}"
           else
-            s"${member.memberId}=${partitionAssignment.partitions()}:${userData}"
+            s"${member.memberId}=${partitionAssignment.partitions()}:$userData"
         } else {
           s"${member.memberId}=${hex(member.assignment)}"
         }
       }.mkString("{", ",", "}")
 
-      val keyString = s"metadata::${groupId}"
-      val valueString = s"${protocolType}:${group.protocol}:${group.generationId}:${assignment}"
+      val keyString = s"metadata::$groupId"
+      val valueString = s"$protocolType:${group.protocol}:${group.generationId}:$assignment"
 
       (Some(keyString), Some(valueString))
     }
 
-    override def parse(message: Message): (Option[String], Option[String]) = {
-      if (message.isNull)
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      if (record.hasNullValue)
         (None, None)
-      else if (!message.hasKey) {
+      else if (!record.hasKey) {
         throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
       } else {
-        GroupMetadataManager.readMessageKey(message.key) match {
-          case offsetKey: OffsetKey => parseOffsets(offsetKey, message.payload)
-          case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, message.payload)
+        GroupMetadataManager.readMessageKey(record.key) match {
+          case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
+          case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
           case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
         }
       }
@@ -307,70 +308,50 @@ object DumpLogSegments {
                       parser: MessageParser[_, _]) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val messageSet = new FileMessageSet(file, false)
+    val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1l
-    val shallowIterator = messageSet.iterator(maxMessageSize)
-    for(shallowMessageAndOffset <- shallowIterator) { // this only does shallow iteration
-      val itr = getIterator(shallowMessageAndOffset, isDeepIteration)
-      for (messageAndOffset <- itr) {
-        val msg = messageAndOffset.message
+    for (shallowLogEntry <- messageSet.shallowEntries(maxMessageSize).asScala) {
+      val itr = getIterator(shallowLogEntry, isDeepIteration)
+      for (deepLogEntry <- itr) {
+        val record = deepLogEntry.record()
 
         if(lastOffset == -1)
-          lastOffset = messageAndOffset.offset
+          lastOffset = deepLogEntry.offset
         // If we are iterating uncompressed messages, offsets must be consecutive
-        else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset +1) {
+        else if (record.compressionType == CompressionType.NONE && deepLogEntry.offset != lastOffset +1) {
           var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-          nonConsecutivePairsSeq ::=(lastOffset, messageAndOffset.offset)
+          nonConsecutivePairsSeq ::=(lastOffset, deepLogEntry.offset)
           nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
         }
-        lastOffset = messageAndOffset.offset
+        lastOffset = deepLogEntry.offset
 
-        print("offset: " + messageAndOffset.offset + " position: " + validBytes +
-              " " + msg.timestampType + ": " + msg.timestamp + " isvalid: " + msg.isValid +
-              " payloadsize: " + msg.payloadSize + " magic: " + msg.magic +
-              " compresscodec: " + msg.compressionCodec + " crc: " + msg.checksum)
-        if(msg.hasKey)
-          print(" keysize: " + msg.keySize)
-        if(printContents) {
-          val (key, payload) = parser.parse(msg)
-          key.map(key => print(s" key: ${key}"))
-          payload.map(payload => print(s" payload: ${payload}"))
+        print("offset: " + deepLogEntry.offset + " position: " + validBytes +
+              " " + record.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
+              " payloadsize: " + record.valueSize + " magic: " + record.magic +
+              " compresscodec: " + record.compressionType + " crc: " + record.checksum)
+        if (record.hasKey)
+          print(" keysize: " + record.keySize)
+        if (printContents) {
+          val (key, payload) = parser.parse(record)
+          key.foreach(key => print(s" key: $key"))
+          payload.foreach(payload => print(s" payload: $payload"))
         }
         println()
       }
-      validBytes += MessageSet.entrySize(shallowMessageAndOffset.message)
+
+      validBytes += shallowLogEntry.sizeInBytes
     }
     val trailingBytes = messageSet.sizeInBytes - validBytes
     if(trailingBytes > 0)
       println("Found %d invalid bytes at the end of %s".format(trailingBytes, file.getName))
   }
 
-  private def getIterator(messageAndOffset: MessageAndOffset, isDeepIteration: Boolean) = {
-    if (isDeepIteration) {
-      val message = messageAndOffset.message
-      message.compressionCodec match {
-        case NoCompressionCodec =>
-          getSingleMessageIterator(messageAndOffset)
-        case _ =>
-          ByteBufferMessageSet.deepIterator(messageAndOffset)
-      }
-    } else
-      getSingleMessageIterator(messageAndOffset)
-  }
-
-  private def getSingleMessageIterator(messageAndOffset: MessageAndOffset) = {
-    new IteratorTemplate[MessageAndOffset] {
-      var messageIterated = false
-
-      override def makeNext(): MessageAndOffset = {
-        if (!messageIterated) {
-          messageIterated = true
-          messageAndOffset
-        } else
-          allDone()
-      }
-    }
+  private def getIterator(logEntry: LogEntry, isDeepIteration: Boolean): Iterator[LogEntry] = {
+    if (isDeepIteration)
+      logEntry.iterator.asScala
+    else
+      Iterator(logEntry)
   }
 
   class TimeIndexDumpErrors {

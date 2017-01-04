@@ -28,29 +28,29 @@ class TopicFilterTest extends JUnitSuite {
   @Test
   def testWhitelists() {
 
-    val topicFilter1 = new Whitelist("white1,white2")
+    val topicFilter1 = Whitelist("white1,white2")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    val topicFilter2 = new Whitelist(".+")
+    val topicFilter2 = Whitelist(".+")
     assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
     assertFalse(topicFilter2.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = true))
     assertTrue(topicFilter2.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = false))
 
-    val topicFilter3 = new Whitelist("white_listed-topic.+")
+    val topicFilter3 = Whitelist("white_listed-topic.+")
     assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
     assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
 
-    val topicFilter4 = new Whitelist("test-(?!bad\\b)[\\w]+")
+    val topicFilter4 = Whitelist("test-(?!bad\\b)[\\w]+")
     assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
     assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))    
   }
 
   @Test
   def testBlacklists() {
-    val topicFilter1 = new Blacklist("black1")
+    val topicFilter1 = Blacklist("black1")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))

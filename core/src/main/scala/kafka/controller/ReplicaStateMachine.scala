@@ -17,13 +17,11 @@
 package kafka.controller
 
 import collection._
-import collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.controller.Callbacks.CallbackBuilder
 import kafka.utils.{Logging, ReplicationUtils, ZkUtils}
-import org.I0Itec.zkclient.IZkChildListener
 import kafka.utils.CoreUtils._
 
 /**
@@ -49,7 +47,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerId = controller.config.brokerId
   private val zkUtils = controllerContext.zkUtils
   private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
-  private val brokerChangeListener = new BrokerChangeListener()
+  private val brokerChangeListener = new BrokerChangeListener(controller)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
   private val stateChangeLogger = KafkaController.stateChangeLogger
@@ -348,15 +346,17 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   /**
    * This is the zookeeper listener that triggers all the state transitions for a replica
    */
-  class BrokerChangeListener() extends IZkChildListener with Logging {
-    this.logIdent = "[BrokerChangeListener on Controller " + controller.config.brokerId + "]: "
-    def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.asScala.sorted.mkString(",")))
+  class BrokerChangeListener(protected val controller: KafkaController) extends ControllerZkChildListener {
+
+    protected def logName = "BrokerChangeListener"
+
+    def doHandleChildChange(parentPath: String, currentBrokerList: Seq[String]) {
+      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           ControllerStats.leaderElectionTimer.time {
             try {
-              val curBrokers = currentBrokerList.asScala.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+              val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
               val curBrokerIds = curBrokers.map(_.id)
               val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
               val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds

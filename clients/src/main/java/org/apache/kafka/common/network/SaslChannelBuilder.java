@@ -18,6 +18,8 @@ import java.nio.channels.SocketChannel;
 import java.util.List;
 import java.util.Map;
 
+import javax.security.auth.login.Configuration;
+
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
@@ -39,6 +41,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final LoginType loginType;
     private final boolean handshakeRequestEnable;
 
+    private Configuration jaasConfig;
     private LoginManager loginManager;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
@@ -75,7 +78,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 if (principalToLocalRules != null)
                     kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
             }
-            this.loginManager = LoginManager.acquireLoginManager(loginType, hasKerberos, configs);
+            this.jaasConfig = JaasUtils.jaasConfig(loginType, configs);
+            this.loginManager = LoginManager.acquireLoginManager(loginType, hasKerberos, configs, jaasConfig);
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
@@ -93,7 +97,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer,
+                authenticator = new SaslServerAuthenticator(id, jaasConfig, loginManager.subject(), kerberosShortNamer,
                         socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),

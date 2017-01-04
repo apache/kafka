@@ -18,18 +18,13 @@
 package kafka.server
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.security.auth.Resource
 import kafka.utils.Json
 import kafka.utils.Logging
-import kafka.utils.SystemTime
-import kafka.utils.Time
 import kafka.utils.ZkUtils
-import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import kafka.admin.AdminUtils
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
-
+import org.apache.kafka.common.utils.Time
 
 /**
  * Represents all the entities that can be configured via ZK
@@ -87,7 +82,7 @@ object ConfigEntityName {
 class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
-                           private val time: Time = SystemTime) extends Logging {
+                           private val time: Time = Time.SYSTEM) extends Logging {
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {

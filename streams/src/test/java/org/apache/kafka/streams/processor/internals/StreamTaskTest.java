@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -88,6 +90,7 @@ public class StreamTaskTest {
             Collections.<StateStore, ProcessorNode>emptyMap());
     private File baseDir;
     private StateDirectory stateDirectory;
+    private RecordCollectorImpl recordCollector;
 
     private StreamsConfig createConfig(final File baseDir) throws Exception {
         return new StreamsConfig(new Properties() {
@@ -127,7 +130,8 @@ public class StreamTaskTest {
     @Test
     public void testProcessOrder() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
+        recordCollector = new RecordCollectorImpl(producer, "taskId");
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -174,7 +178,7 @@ public class StreamTaskTest {
     @Test
     public void testPauseResume() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
+        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -233,7 +237,7 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -312,7 +316,7 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0));
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0), recordCollector);
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -360,7 +364,7 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0));
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0), recordCollector);
 
         try {
             streamTask.punctuate(punctuator, 1);
@@ -370,6 +374,26 @@ public class StreamTaskTest {
             assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
         }
 
+    }
+
+    @Test
+    public void shouldFlushRecordCollectorOnFlushState() throws Exception {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList(),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
+        final AtomicBoolean flushed = new AtomicBoolean(false);
+        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
+            @Override
+            public void flush() {
+                flushed.set(true);
+            }
+        };
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "appId", partitions, topology, consumer, restoreStateConsumer, createConfig(baseDir), null, stateDirectory, new ThreadCache(0), recordCollector);
+        streamTask.flushState();
+        assertTrue(flushed.get());
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

@@ -60,6 +60,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
+    public final static int UNKNOWN = -1;
+    public final static int NOT_AVAILABLE = -2;
+
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
         public final TopicPartition partition;
@@ -129,7 +132,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         InternalTopicMetadata(final InternalTopicConfig config) {
             this.config = config;
-            this.numPartitions = -1;
+            this.numPartitions = UNKNOWN;
         }
     }
 
@@ -141,7 +144,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             if (result != 0) {
                 return result;
             } else {
-                return p1.partition() < p2.partition() ? -1 : (p1.partition() > p2.partition() ? 1 : 0);
+                return p1.partition() < p2.partition() ? UNKNOWN : (p1.partition() > p2.partition() ? 1 : 0);
             }
         }
     };
@@ -157,7 +160,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<TaskId, Set<TopicPartition>> activeTasks;
 
-    private InternalTopicManager internalTopicManager;
+    InternalTopicManager internalTopicManager;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -309,7 +312,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     int numPartitions = repartitionTopicMetadata.get(topicName).numPartitions;
 
                     // try set the number of partitions for this repartition topic if it is not set yet
-                    if (numPartitions == -1) {
+                    if (numPartitions == UNKNOWN) {
                         for (TopologyBuilder.TopicsInfo otherTopicsInfo : topicGroups.values()) {
                             Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
 
@@ -324,6 +327,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                         numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numPartitions;
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
+                                        if (numPartitionsCandidate == null) {
+                                            repartitionTopicMetadata.get(topicName).numPartitions = NOT_AVAILABLE;
+                                        }
                                     }
 
                                     if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
@@ -334,7 +340,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
-                        if (numPartitions == -1)
+                        if (numPartitions == UNKNOWN)
                             numPartitionsNeeded = true;
                         else
                             repartitionTopicMetadata.get(topicName).numPartitions = numPartitions;
@@ -426,16 +432,19 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             for (InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
                 // the expected number of partitions is the max value of TaskId.partition + 1
-                int numPartitions = -1;
-                for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                    if (numPartitions < task.partition + 1)
-                        numPartitions = task.partition + 1;
+                int numPartitions = UNKNOWN;
+                if (tasksByTopicGroup.get(topicGroupId) != null) {
+                    for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
+                        if (numPartitions < task.partition + 1)
+                            numPartitions = task.partition + 1;
+                    }
+                    InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
+                    topicMetadata.numPartitions = numPartitions;
+
+                    changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
+                } else {
+                    log.debug("stream-thread [{}] No tasks found for topic group {}", streamThread.getName(), topicGroupId);
                 }
-
-                InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
-                topicMetadata.numPartitions = numPartitions;
-
-                changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
             }
         }
 
@@ -469,7 +478,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final ClientState<TaskId> state = entry.getValue().state;
 
-                for (TaskId id : state.assignedTasks) {
+                for (TaskId id : state.activeTasks) {
                     topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
@@ -564,26 +573,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             assignedPartitions.add(partition);
         }
 
-        // only need to update the host partitions map if it is not leader
-        if (this.partitionsByHostState == null) {
-            this.partitionsByHostState = info.partitionsByHost;
-        }
+        this.partitionsByHostState = info.partitionsByHost;
 
-        // only need to build if it is not leader
-        if (metadataWithInternalTopics == null) {
-            final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
-            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-            for (Set<TopicPartition> value : values) {
-                for (TopicPartition topicPartition : value) {
-                    topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                            topicPartition.partition(),
-                            null,
-                            new Node[0],
-                            new Node[0]));
-                }
+        final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        for (Set<TopicPartition> value : values) {
+            for (TopicPartition topicPartition : value) {
+                topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
+                                                                           topicPartition.partition(),
+                                                                           null,
+                                                                           new Node[0],
+                                                                           new Node[0]));
             }
-            metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
         }
+        metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
     }
 
     /**
@@ -600,8 +603,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 InternalTopicConfig topic = entry.getValue().config;
                 Integer numPartitions = entry.getValue().numPartitions;
 
-                if (numPartitions < 0)
+                if (numPartitions == NOT_AVAILABLE) {
+                    continue;
+                }
+                if (numPartitions < 0) {
                     throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
+                }
 
                 internalTopicManager.makeReady(topic, numPartitions);
 
@@ -640,7 +647,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private void ensureCopartitioning(Set<String> copartitionGroup,
                                       Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
                                       Cluster metadata) {
-        int numPartitions = -1;
+        int numPartitions = UNKNOWN;
 
         for (String topic : copartitionGroup) {
             if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
@@ -649,7 +656,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 if (partitions == null)
                     throw new TopologyBuilderException(String.format("stream-thread [%s] Topic not found: %s", streamThread.getName(), topic));
 
-                if (numPartitions == -1) {
+                if (numPartitions == UNKNOWN) {
                     numPartitions = partitions;
                 } else if (numPartitions != partitions) {
                     String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
@@ -661,7 +668,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         // if all topics for this co-partition group is repartition topics,
         // then set the number of partitions to be the maximum of the number of partitions.
-        if (numPartitions == -1) {
+        if (numPartitions == UNKNOWN) {
             for (Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
                 if (copartitionGroup.contains(entry.getKey())) {
                     int partitions = entry.getValue().numPartitions;
