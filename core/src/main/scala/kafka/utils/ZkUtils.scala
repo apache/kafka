@@ -93,7 +93,7 @@ object ZkUtils {
     try {
       zk.deleteRecursive(dir)
     } catch {
-      case _: ZkException => zk.deleteRecursive(dir)
+      case _: ZkException => zk.deleteRecursive(dir) // Occasionally, child node list is not empty before deleting parent ZkNode, give a second chance to try deleting.
       case _: Throwable => // swallow
     } finally {
       zk.close()
