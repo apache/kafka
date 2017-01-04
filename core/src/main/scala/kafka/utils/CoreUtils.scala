@@ -31,9 +31,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
-import org.apache.kafka.common.utils.Crc32
 import org.apache.kafka.common.utils.Utils
-
 
 /**
  * General helper functions!
@@ -127,26 +125,6 @@ object CoreUtils extends Logging {
       if(mbs.isRegistered(objName))
         mbs.unregisterMBean(objName)
     }
-  }
-
-  /**
-   * Compute the CRC32 of the byte array
-   * @param bytes The array to compute the checksum for
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
-
-  /**
-   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
-   * @param bytes The bytes to checksum
-   * @param offset the offset at which to begin checksumming
-   * @param size the number of bytes to checksum
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new Crc32()
-    crc.update(bytes, offset, size)
-    crc.getValue()
   }
 
   /**

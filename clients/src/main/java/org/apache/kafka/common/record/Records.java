@@ -44,11 +44,11 @@ public interface Records {
     int sizeInBytes();
 
     /**
-     * Write the contents of this buffer to a channel.
+     * Attempts to write the contents of this buffer to a channel.
      * @param channel The channel to write to
      * @param position The position in the buffer to write from
      * @param length The number of bytes to write
-     * @return The number of bytes written
+     * @return The number of bytes actually written
      * @throws IOException For any IO errors
      */
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;

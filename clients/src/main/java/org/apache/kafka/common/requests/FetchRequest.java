@@ -182,7 +182,7 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
@@ -191,17 +191,7 @@ public class FetchRequest extends AbstractRequest {
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        switch (versionId) {
-            case 0:
-                return new FetchResponse(responseData);
-            case 1:
-            case 2:
-            case 3:
-                return new FetchResponse(responseData, 0);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.FETCH.id)));
-        }
+        return new FetchResponse(versionId, responseData, 0);
     }
 
     public int replicaId() {

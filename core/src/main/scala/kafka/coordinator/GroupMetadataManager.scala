@@ -606,7 +606,7 @@ class GroupMetadataManager(val brokerId: Int,
     val partitionOpt = replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, partitionId))
 
     val hw = partitionOpt.map { partition =>
-      partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)
+      partition.leaderReplicaIfLocal.map(_.highWatermark.messageOffset).getOrElse(-1L)
     }.getOrElse(-1L)
 
     hw

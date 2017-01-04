@@ -312,7 +312,7 @@ class LogSegment(val log: FileRecords,
     if (ms == null) {
       baseOffset
     } else {
-      ms.records.shallowEntries.asScala.toSeq.lastOption match {
+      ms.records.shallowEntries.asScala.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }

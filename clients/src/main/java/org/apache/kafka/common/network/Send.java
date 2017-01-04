@@ -23,12 +23,12 @@ public interface Send {
     /**
      * The numeric id for the destination of this send
      */
-    public String destination();
+    String destination();
 
     /**
      * Is this send complete?
      */
-    public boolean completed();
+    boolean completed();
 
     /**
      * Write some as-yet unwritten bytes from this send to the provided channel. It may take multiple calls for the send
@@ -37,11 +37,11 @@ public interface Send {
      * @return The number of bytes written
      * @throws IOException If the write fails
      */
-    public long writeTo(GatheringByteChannel channel) throws IOException;
+    long writeTo(GatheringByteChannel channel) throws IOException;
 
     /**
      * Size of the send
      */
-    public long size();
+    long size();
 
 }

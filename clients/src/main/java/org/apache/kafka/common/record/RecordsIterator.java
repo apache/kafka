@@ -34,18 +34,18 @@ import java.util.Iterator;
 public class RecordsIterator extends AbstractIterator<LogEntry> {
     private final boolean shallow;
     private final boolean ensureMatchingMagic;
-    private final int masRecordSize;
+    private final int maxRecordSize;
     private final ShallowRecordsIterator<?> shallowIter;
     private DeepRecordsIterator innerIter;
 
     public RecordsIterator(LogInputStream<?> logInputStream,
                            boolean shallow,
                            boolean ensureMatchingMagic,
-                           int masRecordSize) {
+                           int maxRecordSize) {
         this.shallowIter = new ShallowRecordsIterator<>(logInputStream);
         this.shallow = shallow;
         this.ensureMatchingMagic = ensureMatchingMagic;
-        this.masRecordSize = masRecordSize;
+        this.maxRecordSize = maxRecordSize;
     }
 
     /**
@@ -76,7 +76,7 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
                 // would not try to further decompress underlying messages
                 // There will be at least one element in the inner iterator, so we don't
                 // need to call hasNext() here.
-                innerIter = new DeepRecordsIterator(entry, ensureMatchingMagic, masRecordSize);
+                innerIter = new DeepRecordsIterator(entry, ensureMatchingMagic, maxRecordSize);
                 return innerIter.next();
             }
         } else {
@@ -88,7 +88,7 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         return innerIter == null || !innerIter.hasNext();
     }
 
-    private static class DataLogInputStream implements LogInputStream<LogEntry> {
+    private static final class DataLogInputStream implements LogInputStream<LogEntry> {
         private final DataInputStream stream;
         protected final int maxMessageSize;
 

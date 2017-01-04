@@ -56,8 +56,14 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
-        ByteBuffer dup = buffer.duplicate();
+        if (position > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
+        if (position + length > buffer.limit())
+            throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
+                    + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
+
         int pos = (int) position;
+        ByteBuffer dup = buffer.duplicate();
         dup.position(pos);
         dup.limit(pos + length);
         return channel.write(dup);
@@ -98,10 +104,15 @@ public class MemoryRecords extends AbstractRecords {
     /**
      * Filter the records into the provided ByteBuffer.
      * @param filter The filter function
-     * @param buffer The byte buffer to write the filtered records to
+     * @param destinationBuffer The byte buffer to write the filtered records to
      * @return A FilterResult with a summary of the output (for metrics)
      */
-    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer buffer) {
+    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer destinationBuffer) {
+        return filterTo(shallowEntries(), filter, destinationBuffer);
+    }
+
+    private static FilterResult filterTo(Iterable<ByteBufferLogEntry> fromShallowEntries, LogEntryFilter filter,
+                                       ByteBuffer destinationBuffer) {
         long maxTimestamp = Record.NO_TIMESTAMP;
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
@@ -110,7 +121,7 @@ public class MemoryRecords extends AbstractRecords {
         int messagesRetained = 0;
         int bytesRetained = 0;
 
-        for (ByteBufferLogEntry shallowEntry : shallowEntries()) {
+        for (ByteBufferLogEntry shallowEntry : fromShallowEntries) {
             bytesRead += shallowEntry.sizeInBytes();
 
             // We use the absolute offset to decide whether to retain the message or not (this is handled by the
@@ -144,7 +155,7 @@ public class MemoryRecords extends AbstractRecords {
 
             if (writeOriginalEntry) {
                 // There are no messages compacted out and no message format conversion, write the original message set back
-                shallowEntry.writeTo(buffer);
+                shallowEntry.writeTo(destinationBuffer);
                 messagesRetained += retainedEntries.size();
                 bytesRetained += shallowEntry.sizeInBytes();
 
@@ -153,11 +164,11 @@ public class MemoryRecords extends AbstractRecords {
                     shallowOffsetOfMaxTimestamp = shallowEntry.offset();
                 }
             } else if (!retainedEntries.isEmpty()) {
-                ByteBuffer slice = buffer.slice();
+                ByteBuffer slice = destinationBuffer.slice();
                 MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),
                         shallowRecord.timestamp(), retainedEntries);
                 MemoryRecords records = builder.build();
-                buffer.position(buffer.position() + slice.position());
+                destinationBuffer.position(destinationBuffer.position() + slice.position());
                 messagesRetained += retainedEntries.size();
                 bytesRetained += records.sizeInBytes();
 
@@ -388,7 +399,7 @@ public class MemoryRecords extends AbstractRecords {
                                                            long logAppendTime,
                                                            List<LogEntry> entries) {
         if (entries.isEmpty())
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("entries must not be empty");
 
         LogEntry firstEntry = entries.iterator().next();
         long firstOffset = firstEntry.offset();

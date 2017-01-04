@@ -38,11 +38,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
-    private final FileChannel channel;
     private final int start;
     private final int end;
-    private volatile File file;
-    private final AtomicInteger size;
 
     private final Iterable<FileChannelLogEntry> shallowEntries;
 
@@ -53,6 +50,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
     };
 
+    // mutable state
+    private final AtomicInteger size;
+    private final FileChannel channel;
+    private volatile File file;
+
+    /**
+     * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
+     * The constructor is visible for tests.
+     */
     public FileRecords(File file,
                        FileChannel channel,
                        int start,
@@ -65,14 +71,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.isSlice = isSlice;
         this.size = new AtomicInteger();
 
-        // set the initial size of the buffer
-        resize();
-
-        shallowEntries = shallowEntriesFrom(start);
-    }
-
-    public void resize() throws IOException {
         if (isSlice) {
+            // don't check the file size if this is just a slice view
             size.set(end - start);
         } else {
             int limit = Math.min((int) channel.size(), end);
@@ -82,6 +82,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // set the file position to the last byte in the file
             channel.position(limit);
         }
+
+        shallowEntries = shallowEntriesFrom(start);
     }
 
     @Override
@@ -137,6 +139,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             throw new IllegalArgumentException("Invalid size: " + size);
 
         final int end;
+        // handle integer overflow
         if (this.start + position + size < 0)
             end = sizeInBytes();
         else

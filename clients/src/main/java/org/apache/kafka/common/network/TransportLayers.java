@@ -1,9 +1,3 @@
-package kafka.common
-
-import kafka.cluster.{Partition, Replica}
-import kafka.utils.Json
-import org.apache.kafka.common.TopicPartition
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -21,20 +15,20 @@ import org.apache.kafka.common.TopicPartition
  * limitations under the License.
  */
 
-/**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
- */
-case class TopicAndPartition(topic: String, partition: Int) {
+package org.apache.kafka.common.network;
 
-  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
+import java.nio.channels.GatheringByteChannel;
 
-  def this(partition: Partition) = this(partition.topic, partition.partitionId)
+public final class TransportLayers {
 
-  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
+    private TransportLayers() {}
 
-  def this(replica: Replica) = this(replica.topicPartition)
-
-  def asTuple = (topic, partition)
-
-  override def toString = "[%s,%d]".format(topic, partition)
+    // This is temporary workaround as Send and Receive interfaces are used by BlockingChannel.
+    // Once BlockingChannel is removed we can make Send and Receive work with TransportLayer rather than
+    // GatheringByteChannel or ScatteringByteChannel.
+    public static boolean hasPendingWrites(GatheringByteChannel channel) {
+        if (channel instanceof TransportLayer)
+            return ((TransportLayer) channel).hasPendingWrites();
+        return false;
+    }
 }
