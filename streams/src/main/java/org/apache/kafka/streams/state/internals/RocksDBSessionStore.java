@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
+import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -55,12 +55,12 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
     @Override
     public void remove(final Windowed<K> key) {
-        bytesStore.remove(SessionKeyBinaryConverter.toBinary(key, serdes.keySerializer()));
+        bytesStore.remove(SessionKeySerde.toBinary(key, serdes.keySerializer()));
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(SessionKeyBinaryConverter.toBinary(sessionKey, serdes.keySerializer()), aggSerde.serializer().serialize(bytesStore.name(), aggregate));
+        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer()), aggSerde.serializer().serialize(bytesStore.name(), aggregate));
     }
 
     @Override
@@ -121,7 +121,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         @Override
         public Windowed<K> peekNextKey() {
             final Bytes bytes = bytesIterator.peekNextKey();
-            return SessionKeyBinaryConverter.from(bytes.get(), serdes.keyDeserializer());
+            return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer());
         }
 
         @Override
@@ -132,7 +132,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         @Override
         public KeyValue<Windowed<K>, AGG> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            return KeyValue.pair(SessionKeyBinaryConverter.from(next.key.get(), serdes.keyDeserializer()), serdes.valueFrom(next.value));
+            return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer()), serdes.valueFrom(next.value));
         }
 
         @Override

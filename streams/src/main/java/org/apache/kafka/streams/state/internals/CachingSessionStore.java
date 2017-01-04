@@ -22,7 +22,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -82,7 +81,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
 
     public void put(final Windowed<K> key, AGG value) {
         validateStoreOpen();
-        final Bytes binaryKey = SessionKeyBinaryConverter.toBinary(key, keySerde.serializer());
+        final Bytes binaryKey = SessionKeySerde.toBinary(key, keySerde.serializer());
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
         cache.put(name, binaryKey.get(), entry);
@@ -137,7 +136,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         context.setRecordContext(entry.recordContext());
         try {
             if (flushListener != null) {
-                final Windowed<K> key = SessionKeyBinaryConverter.from(binaryKey.get(), keySerde.deserializer());
+                final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), keySerde.deserializer());
                 final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = fetchPrevious(binaryKey);
                 if (!(newValue == null && oldValue == null)) {

@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
+import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.MockProcessorContext;
@@ -154,7 +154,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
-        return SessionKeyBinaryConverter.toBinary(key, Serdes.String().serializer());
+        return SessionKeySerde.toBinary(key, Serdes.String().serializer());
     }
 
     private List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Bytes, byte[]> iterator) {
@@ -162,7 +162,7 @@ public class RocksDBSegmentedBytesStoreTest {
         while (iterator.hasNext()) {
             final KeyValue<Bytes, byte[]> next = iterator.next();
             final KeyValue<Windowed<String>, Long> deserialized
-                    = KeyValue.pair(SessionKeyBinaryConverter.from(next.key.get(), Serdes.String().deserializer()), Serdes.Long().deserializer().deserialize("", next.value));
+                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()), Serdes.Long().deserializer().deserialize("", next.value));
             results.add(deserialized);
         }
         return results;

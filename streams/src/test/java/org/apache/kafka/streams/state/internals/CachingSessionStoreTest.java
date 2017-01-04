@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
+import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -108,7 +108,7 @@ public class CachingSessionStoreTest {
         assertEquals(added.size() - 1, cache.size());
         final KeyValueIterator<Bytes, byte[]> iterator = underlying.fetch(Bytes.wrap(added.get(0).key.key().getBytes()), 0, 0);
         final KeyValue<Bytes, byte[]> next = iterator.next();
-        assertEquals(added.get(0).key, SessionKeyBinaryConverter.from(next.key.get(), Serdes.String().deserializer()));
+        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()));
         assertArrayEquals(serdes.rawValue(added.get(0).value), next.value);
     }
 

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeyBinaryConverter;
+import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -31,18 +31,18 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new TimeWindow(to, Long.MAX_VALUE));
-        return SessionKeyBinaryConverter.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new TimeWindow(0, Math.max(0, from)));
-        return SessionKeyBinaryConverter.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
     }
 
     @Override
     public long segmentTimestamp(final Bytes key) {
-        return SessionKeyBinaryConverter.extractEnd(key.get());
+        return SessionKeySerde.extractEnd(key.get());
     }
 
     @Override
@@ -52,12 +52,12 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
                 if (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
-                    final Bytes keyBytes = Bytes.wrap(SessionKeyBinaryConverter.extractKeyBytes(bytes.get()));
+                    final Bytes keyBytes = Bytes.wrap(SessionKeySerde.extractKeyBytes(bytes.get()));
                     if (!keyBytes.equals(binaryKey)) {
                         return false;
                     }
-                    final long start = SessionKeyBinaryConverter.extractStart(bytes.get());
-                    final long end = SessionKeyBinaryConverter.extractEnd(bytes.get());
+                    final long start = SessionKeySerde.extractStart(bytes.get());
+                    final long end = SessionKeySerde.extractEnd(bytes.get());
                     return end >= from && start <= to;
                 }
                 return false;

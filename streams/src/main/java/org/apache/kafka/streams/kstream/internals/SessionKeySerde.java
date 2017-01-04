@@ -19,8 +19,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -29,6 +31,8 @@ import java.util.Map;
  * @param <K> sessionId type
  */
 public class SessionKeySerde<K> implements Serde<Windowed<K>> {
+    private static final int TIMESTAMP_SIZE = 8;
+    private static final String SESSIONKEY = "sessionkey";
 
     private final Serde<K> keySerde;
 
@@ -38,12 +42,10 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-
     }
 
     @Override
     public void close() {
-
     }
 
     @Override
@@ -74,7 +76,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
             if (data == null) {
                 return null;
             }
-            return SessionKeyBinaryConverter.toBinary(data, keySerializer).get();
+            return toBinary(data, keySerializer).get();
         }
 
         @Override
@@ -99,7 +101,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
             if (data == null || data.length == 0) {
                 return null;
             }
-            return SessionKeyBinaryConverter.from(data, deserializer);
+            return from(data, deserializer);
         }
 
 
@@ -107,5 +109,41 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         public void close() {
 
         }
+    }
+
+
+    public static long extractEnd(final byte [] binaryKey) {
+        return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
+    }
+
+    public static long extractStart(final byte [] binaryKey) {
+        return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
+    }
+
+    public static byte[] extractKeyBytes(final byte[] binaryKey) {
+        final byte[] bytes = new byte[binaryKey.length - 2 * TIMESTAMP_SIZE];
+        System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
+        return bytes;
+    }
+
+    public static <K> Windowed<K> from(final byte[] binaryKey, final Deserializer<K> keyDeserializer) {
+        final K key = extractKey(binaryKey, keyDeserializer);
+        final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
+        final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
+        final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
+        return new Windowed<>(key, new TimeWindow(start, end));
+    }
+
+    private static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {
+        return deserializer.deserialize(SESSIONKEY, extractKeyBytes(binaryKey));
+    }
+
+    public static <K> Bytes toBinary(final Windowed<K> sessionKey, final Serializer<K> serializer) {
+        final byte[] bytes = serializer.serialize(SESSIONKEY, sessionKey.key());
+        ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
+        buf.put(bytes);
+        buf.putLong(sessionKey.window().end());
+        buf.putLong(sessionKey.window().start());
+        return new Bytes(buf.array());
     }
 }

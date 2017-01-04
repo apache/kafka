@@ -18,9 +18,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.junit.Test;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -51,6 +53,35 @@ public class SessionKeySerdeTest {
     public void shouldDeSerializeNullToNull() throws Exception {
         final SessionKeySerde<String> serde = new SessionKeySerde<>(Serdes.String());
         assertNull(serde.deserializer().deserialize("t", null));
+    }
+
+    @Test
+    public void shouldConvertToBinaryAndBack() throws Exception {
+        final Windowed<String> key = new Windowed<>("key", new TimeWindow(10, 20));
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer());
+        assertEquals(key, result);
+    }
+
+    @Test
+    public void shouldExtractEndTimeFromBinary() throws Exception {
+        final Windowed<String> key = new Windowed<>("key", new TimeWindow(10, 100));
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        assertEquals(100, SessionKeySerde.extractEnd(serialized.get()));
+    }
+
+    @Test
+    public void shouldExtractStartTimeFromBinary() throws Exception {
+        final Windowed<String> key = new Windowed<>("key", new TimeWindow(50, 100));
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        assertEquals(50, SessionKeySerde.extractStart(serialized.get()));
+    }
+
+    @Test
+    public void shouldExtractKeyBytesFromBinary() throws Exception {
+        final Windowed<String> key = new Windowed<>("blah", new TimeWindow(50, 100));
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        assertArrayEquals("blah".getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
 
 }
