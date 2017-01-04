@@ -102,26 +102,22 @@ class Partition(val topic: String,
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
-    val replicaOpt = getReplica(replicaId)
-    replicaOpt match {
-      case Some(replica) => replica
-      case None =>
-        if (isReplicaLocal(replicaId)) {
-          val config = LogConfig.fromProps(logManager.defaultConfig.originals,
-                                           AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
-          val log = logManager.createLog(topicPartition, config)
-          val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
-          val offsetMap = checkpoint.read
-          if (!offsetMap.contains(topicPartition))
-            info("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
-          val offset = offsetMap.getOrElse(topicPartition, 0L).min(log.logEndOffset)
-          val localReplica = new Replica(replicaId, this, time, offset, Some(log))
-          addReplicaIfNotExists(localReplica)
-        } else {
-          val remoteReplica = new Replica(replicaId, this, time)
-          addReplicaIfNotExists(remoteReplica)
-        }
-        getReplica(replicaId).get
+    def getOrPut(replica: Replica): Replica = {
+      val existing = addReplicaIfNotExists(replica)
+      if (existing == null) replica else existing
+    }
+    getReplica(replicaId).getOrElse {
+      if (isReplicaLocal(replicaId)) {
+        val config = LogConfig.fromProps(logManager.defaultConfig.originals,
+                                         AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
+        val log = logManager.createLog(topicPartition, config)
+        val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
+        val offsetMap = checkpoint.read
+        if (!offsetMap.contains(topicPartition))
+          info(s"No checkpointed highwatermark is found for partition $topicPartition")
+        val offset = math.min(offsetMap.getOrElse(topicPartition, 0L), log.logEndOffset)
+        getOrPut(new Replica(replicaId, this, time, offset, Some(log)))
+      } else getOrPut(new Replica(replicaId, this, time))
     }
   }
 
@@ -138,13 +134,11 @@ class Partition(val topic: String,
     }
   }
 
-  def addReplicaIfNotExists(replica: Replica) = {
+  def addReplicaIfNotExists(replica: Replica): Replica =
     assignedReplicaMap.putIfNotExists(replica.brokerId, replica)
-  }
 
-  def assignedReplicas: Set[Replica] = {
+  def assignedReplicas: Set[Replica] =
     assignedReplicaMap.values.toSet
-  }
 
   def removeReplica(replicaId: Int) {
     assignedReplicaMap.remove(replicaId)
@@ -454,8 +448,7 @@ class Partition(val topic: String,
 
   def appendRecordsToLeader(records: MemoryRecords, requiredAcks: Int = 0) = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
-      val leaderReplicaOpt = leaderReplicaIfLocal
-      leaderReplicaOpt match {
+      leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
           val log = leaderReplica.log.get
           val minIsr = log.config.minInSyncReplicas

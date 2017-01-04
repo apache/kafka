@@ -59,10 +59,10 @@ class Replica(val brokerId: Int,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
    *
    * Else if the FetchRequest reads up to the log end offset of the leader when the previous fetch request was received,
-   * set the lastCaughtUpTimeMs to the time when the previous fetch request was received.
+   * set `lastCaughtUpTimeMs` to the time when the previous fetch request was received.
    *
    * This is needed to enforce the semantics of ISR, i.e. a replica is in ISR if and only if it lags behind leader's LEO
-   * by at most replicaLagTimeMaxMs. These semantics allow a follower to be added to the ISR even if the offset of its
+   * by at most `replicaLagTimeMaxMs`. These semantics allow a follower to be added to the ISR even if the offset of its
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
