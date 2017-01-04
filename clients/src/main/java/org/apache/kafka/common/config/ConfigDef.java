@@ -1069,20 +1069,19 @@ public class ConfigDef {
                         : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
                 if (cmp == 0) {
                     cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
-                }
-                if (cmp == 0) {
-                    // first take anything with no default value
-                    if (!k1.hasDefault() && k2.hasDefault()) {
-                        cmp = -1;
-                    } else if (!k2.hasDefault() && k1.hasDefault()) {
-                        cmp = 1;
+                    if (cmp == 0) {
+                        // first take anything with no default value
+                        if (!k1.hasDefault() && k2.hasDefault()) {
+                            cmp = -1;
+                        } else if (!k2.hasDefault() && k1.hasDefault()) {
+                            cmp = 1;
+                        } else {
+                            cmp = k1.importance.compareTo(k2.importance);
+                            if (cmp == 0) {
+                                return k1.name.compareTo(k2.name);
+                            }
+                        }
                     }
-                }
-                if (cmp == 0) {
-                    cmp = k1.importance.compareTo(k2.importance);
-                }
-                if (cmp == 0) {
-                    return k1.name.compareTo(k2.name);
                 }
                 return cmp;
             }
