@@ -15,7 +15,6 @@ package integration.kafka.api
 import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.Log
-import kafka.message.GZIPCompressionCodec
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
@@ -27,11 +26,13 @@ import org.junit.Assert._
 import scala.collection.JavaConverters._
 import java.util.Properties
 
+import org.apache.kafka.common.record.CompressionType
+
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
-  val offsetsTopicCompressionCodec = GZIPCompressionCodec
+  val offsetsTopicCompressionCodec = CompressionType.GZIP
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.codec.toString)
+  overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.id.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map {
     KafkaConfig.fromProps(_, overridingProps)
@@ -55,8 +56,8 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     val logSegments = getGroupMetadataLogOpt.get.logSegments
     val incorrectCompressionCodecs = logSegments
-      .flatMap(_.log.shallowEntries.asScala.map(_.record.compressionType.id))
-      .filter(_ != offsetsTopicCompressionCodec.codec)
+      .flatMap(_.log.shallowEntries.asScala.map(_.record.compressionType))
+      .filter(_ != offsetsTopicCompressionCodec)
     assertEquals("Incorrect compression codecs should be empty", Seq.empty, incorrectCompressionCodecs)
 
     consumer.close()

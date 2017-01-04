@@ -32,7 +32,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.easymock.EasyMock
 import org.junit.Assert._
-import scala.collection.JavaConverters._
 
 class SimpleFetchTest {
 

@@ -96,13 +96,14 @@ public class MemoryRecordsBuilder {
     private final int writeLimit;
     private final int initialCapacity;
 
-    private MemoryRecords builtRecords;
-    private long writtenUncompressed;
-    private long numRecords;
-    private float compressionRate;
-    private long maxTimestamp;
-    private long offsetOfMaxTimestamp;
+    private long writtenUncompressed = 0;
+    private long numRecords = 0;
+    private float compressionRate = 1;
+    private long maxTimestamp = Record.NO_TIMESTAMP;
+    private long offsetOfMaxTimestamp = -1;
     private long lastOffset = -1;
+
+    private MemoryRecords builtRecords;
 
     public MemoryRecordsBuilder(ByteBuffer buffer,
                                 byte magic,
@@ -117,10 +118,6 @@ public class MemoryRecordsBuilder {
         this.baseOffset = baseOffset;
         this.logAppendTime = logAppendTime;
         this.initPos = buffer.position();
-        this.numRecords = 0;
-        this.writtenUncompressed = 0;
-        this.compressionRate = 1;
-        this.maxTimestamp = Record.NO_TIMESTAMP;
         this.writeLimit = writeLimit;
         this.initialCapacity = buffer.capacity();
 

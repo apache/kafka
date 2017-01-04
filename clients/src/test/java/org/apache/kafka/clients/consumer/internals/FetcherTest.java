@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -753,7 +754,9 @@ public class FetcherTest {
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, short error, long hw, int throttleTime) {
-        return new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records)), throttleTime);
+        return new FetchResponse(
+                new LinkedHashMap<>(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records))),
+                throttleTime);
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {

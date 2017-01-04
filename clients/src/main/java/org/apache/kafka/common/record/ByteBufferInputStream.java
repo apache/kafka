@@ -23,14 +23,14 @@ import java.nio.ByteBuffer;
 /**
  * A byte buffer backed input inputStream
  */
-public class ByteBufferInputStream extends DataInputStream {
+public final class ByteBufferInputStream extends DataInputStream {
 
     public ByteBufferInputStream(ByteBuffer buffer) {
         super(new UnderlyingInputStream(buffer));
     }
 
-    private static class UnderlyingInputStream extends InputStream {
-        private ByteBuffer buffer;
+    private static final class UnderlyingInputStream extends InputStream {
+        private final ByteBuffer buffer;
 
         public UnderlyingInputStream(ByteBuffer buffer) {
             this.buffer = buffer;
