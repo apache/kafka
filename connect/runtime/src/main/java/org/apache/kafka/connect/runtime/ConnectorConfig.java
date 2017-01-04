@@ -162,18 +162,18 @@ public class ConnectorConfig extends AbstractConfig {
             final ConfigDef.Validator typeValidator = new ConfigDef.Validator() {
                 @Override
                 public void ensureValid(String name, Object value) {
-                    getConfigDefFromTransformation(transformationTypeConfig, (Class) value);
+                    TransformationConfig.getConfigDefFromTransformation(transformationTypeConfig, (Class) value);
                 }
             };
             newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
                     "Class for the '" + alias + "' transformation.", groupPrefix, orderInGroup++, Width.LONG, "Transformation type for " + alias,
-                    Collections.<String>emptyList(), new TransformationClassRecommender());
+                    Collections.<String>emptyList(), new TransformationConfig.TransformationClassRecommender());
 
             final ConfigDef transformationConfigDef;
             try {
                 final String className = props.get(transformationTypeConfig);
                 final Class<?> cls = (Class<?>) ConfigDef.parseType(transformationTypeConfig, className, Type.CLASS);
-                transformationConfigDef = getConfigDefFromTransformation(transformationTypeConfig, cls);
+                transformationConfigDef = TransformationConfig.getConfigDefFromTransformation(transformationTypeConfig, cls);
             } catch (ConfigException e) {
                 if (requireFullConfig) {
                     throw e;
@@ -187,15 +187,15 @@ public class ConnectorConfig extends AbstractConfig {
                         prefix + key.name,
                         key.type,
                         key.defaultValue,
-                        embeddedValidator(prefix, key.validator),
+                        TransformationConfig.embeddedValidator(prefix, key.validator),
                         key.importance,
                         key.documentation,
                         groupPrefix + (key.group == null ? "" : ": " + key.group),
                         orderInGroup++,
                         key.width,
                         key.displayName,
-                        embeddedDependents(prefix, key.dependents),
-                        embeddedRecommender(prefix, key.recommender)
+                        TransformationConfig.embeddedDependents(prefix, key.dependents),
+                        TransformationConfig.embeddedRecommender(prefix, key.recommender)
                 ));
             }
         }
@@ -203,94 +203,98 @@ public class ConnectorConfig extends AbstractConfig {
         return newDef;
     }
 
-    /**
-     * Return {@link ConfigDef} from {@code transformationCls}, which is expected to be a non-null {@code Class<Transformation>},
-     * by instantiating it and invoking {@link Transformation#config()}.
-     */
-    private static ConfigDef getConfigDefFromTransformation(String key, Class<?> transformationCls) {
-        if (transformationCls == null || !Transformation.class.isAssignableFrom(transformationCls)) {
-            throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
-        }
-        try {
-            return (transformationCls.asSubclass(Transformation.class).newInstance()).config();
-        } catch (Exception e) {
-            throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
-        }
-    }
+    private static final class TransformationConfig {
 
-    /**
-     * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
-     */
-    private static ConfigDef.Validator embeddedValidator(final String prefix, final ConfigDef.Validator base) {
-        if (base == null) return null;
-        return new ConfigDef.Validator() {
-            @Override
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(prefix.length()), value);
+        /**
+         * Return {@link ConfigDef} from {@code transformationCls}, which is expected to be a non-null {@code Class<Transformation>},
+         * by instantiating it and invoking {@link Transformation#config()}.
+         */
+        static ConfigDef getConfigDefFromTransformation(String key, Class<?> transformationCls) {
+            if (transformationCls == null || !Transformation.class.isAssignableFrom(transformationCls)) {
+                throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
             }
-        };
-    }
-
-    /**
-     * Updated list of dependent configs with the specified {@code prefix} added.
-     */
-    private static List<String> embeddedDependents(String prefix, List<String> dependents) {
-        if (dependents == null) return null;
-        final List<String> updatedDependents = new ArrayList<>(dependents.size());
-        for (String dependent : dependents) {
-            updatedDependents.add(prefix + dependent);
-        }
-        return updatedDependents;
-    }
-
-    /**
-     * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
-     */
-    private static ConfigDef.Recommender embeddedRecommender(final String prefix, final ConfigDef.Recommender base) {
-        if (base == null) return null;
-        return new ConfigDef.Recommender() {
-            private String unprefixed(String k) {
-                return k.substring(prefix.length());
+            try {
+                return (transformationCls.asSubclass(Transformation.class).newInstance()).config();
+            } catch (Exception e) {
+                throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
             }
+        }
 
-            private Map<String, Object> unprefixed(Map<String, Object> parsedConfig) {
-                final Map<String, Object> unprefixedParsedConfig = new HashMap<>(parsedConfig.size());
-                for (Map.Entry<String, Object> e : parsedConfig.entrySet()) {
-                    if (e.getKey().startsWith(prefix)) {
-                        unprefixedParsedConfig.put(unprefixed(e.getKey()), e.getValue());
-                    }
+        /**
+         * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
+         */
+        static ConfigDef.Validator embeddedValidator(final String prefix, final ConfigDef.Validator base) {
+            if (base == null) return null;
+            return new ConfigDef.Validator() {
+                @Override
+                public void ensureValid(String name, Object value) {
+                    base.ensureValid(name.substring(prefix.length()), value);
                 }
-                return unprefixedParsedConfig;
-            }
+            };
+        }
 
+        /**
+         * Updated list of dependent configs with the specified {@code prefix} added.
+         */
+        static List<String> embeddedDependents(String prefix, List<String> dependents) {
+            if (dependents == null) return null;
+            final List<String> updatedDependents = new ArrayList<>(dependents.size());
+            for (String dependent : dependents) {
+                updatedDependents.add(prefix + dependent);
+            }
+            return updatedDependents;
+        }
+
+        /**
+         * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
+         */
+        static ConfigDef.Recommender embeddedRecommender(final String prefix, final ConfigDef.Recommender base) {
+            if (base == null) return null;
+            return new ConfigDef.Recommender() {
+                private String unprefixed(String k) {
+                    return k.substring(prefix.length());
+                }
+
+                private Map<String, Object> unprefixed(Map<String, Object> parsedConfig) {
+                    final Map<String, Object> unprefixedParsedConfig = new HashMap<>(parsedConfig.size());
+                    for (Map.Entry<String, Object> e : parsedConfig.entrySet()) {
+                        if (e.getKey().startsWith(prefix)) {
+                            unprefixedParsedConfig.put(unprefixed(e.getKey()), e.getValue());
+                        }
+                    }
+                    return unprefixedParsedConfig;
+                }
+
+                @Override
+                public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                    return base.validValues(unprefixed(name), unprefixed(parsedConfig));
+                }
+
+                @Override
+                public boolean visible(String name, Map<String, Object> parsedConfig) {
+                    return base.visible(unprefixed(name), unprefixed(parsedConfig));
+                }
+            };
+        }
+
+        /**
+         * Recommend bundled transformations.
+         */
+        static final class TransformationClassRecommender implements ConfigDef.Recommender {
             @Override
             public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-                return base.validValues(unprefixed(name), unprefixed(parsedConfig));
+                return Arrays.<Object>asList(
+                        TimestampRouter.class,
+                        InsertInValue.class
+                );
             }
 
             @Override
             public boolean visible(String name, Map<String, Object> parsedConfig) {
-                return base.visible(unprefixed(name), unprefixed(parsedConfig));
+                return true;
             }
-        };
-    }
-
-    /**
-     * Recommend bundled transformations.
-     */
-    private static final class TransformationClassRecommender implements ConfigDef.Recommender {
-        @Override
-        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return Arrays.<Object>asList(
-                    TimestampRouter.class,
-                    InsertInValue.class
-            );
         }
 
-        @Override
-        public boolean visible(String name, Map<String, Object> parsedConfig) {
-            return true;
-        }
     }
 
 }
