@@ -33,9 +33,9 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     m.foreach(kv => pool.put(kv._1, kv._2))
   }
   
-  def put(k: K, v: V) = pool.put(k, v)
+  def put(k: K, v: V): V = pool.put(k, v)
   
-  def putIfNotExists(k: K, v: V) = pool.putIfAbsent(k, v)
+  def putIfNotExists(k: K, v: V): V = pool.putIfAbsent(k, v)
 
   /**
    * Gets the value associated with the given key. If there is no associated
@@ -48,7 +48,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
    *         the value created by the factory if another thread successfully
    *         put a value.
    */
-  def getAndMaybePut(key: K) = {
+  def getAndMaybePut(key: K): V = {
     if (valueFactory.isEmpty)
       throw new KafkaException("Empty value factory in pool.")
     val curr = pool.get(key)
@@ -64,7 +64,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
       curr
   }
 
-  def contains(id: K) = pool.containsKey(id)
+  def contains(id: K): Boolean = pool.containsKey(id)
   
   def get(key: K): V = pool.get(key)
   
@@ -78,9 +78,9 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def clear() { pool.clear() }
   
-  override def size = pool.size
+  override def size: Int = pool.size
   
-  override def iterator = new Iterator[(K,V)]() {
+  override def iterator: Iterator[(K, V)] = new Iterator[(K,V)]() {
     
     private val iter = pool.entrySet.iterator
     
