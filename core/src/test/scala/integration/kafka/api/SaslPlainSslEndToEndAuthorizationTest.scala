@@ -16,10 +16,8 @@
   */
 package kafka.api
 
-import java.io.File
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.utils.JaasTestUtils
-import kafka.utils.JaasTestUtils.PlainLoginModule
 
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -27,9 +25,4 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
   override val clientPrincipal = JaasTestUtils.KafkaPlainUser
   override val kafkaPrincipal = JaasTestUtils.KafkaPlainAdmin
-
-  override protected def clientLoginContext2 = PlainLoginModule(
-          JaasTestUtils.KafkaPlainUser2,
-          JaasTestUtils.KafkaPlainPassword2
-        ).toJaasModule.toString.stripMargin
 }

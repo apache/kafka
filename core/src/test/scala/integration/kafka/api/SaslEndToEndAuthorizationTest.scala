@@ -34,7 +34,6 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   
   protected def kafkaClientSaslMechanism : String
   protected def kafkaServerSaslMechanisms : List[String]
-  protected def clientLoginContext2 : String
 
   
   @Before
@@ -47,25 +46,28 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def setJaasConfiguration(mode: SaslSetupMode, serverMechanisms: List[String], clientMechanisms: List[String],
       serverKeytabFile: Option[File] = None, clientKeytabFile: Option[File] = None) {
     this.clientKeytabFile = clientKeytabFile
-    super.setJaasConfiguration(mode, kafkaServerSaslMechanisms, List(), serverKeytabFile, clientKeytabFile)
+    // create static config with client login context with credentials for JaasTestUtils 'client2'
+    super.setJaasConfiguration(mode, kafkaServerSaslMechanisms, clientMechanisms, serverKeytabFile, clientKeytabFile) 
+    // set dynamic properties with credentials for JaasTestUtils 'client1'
     val clientLoginContext = JaasTestUtils.clientLoginModule(kafkaClientSaslMechanism, clientKeytabFile)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
   }
 
   /**
-    * Tests with two consumers with different SASL credentials, the first one with proper ACLs succeeds, 
-    * while a second fails to consume messages.
+    * Test with two consumers, each with different valid SASL credentials.
+    * The first consumer succeeds because it is allowed by the ACL, 
+    * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Test
-  def testConsumer1AllowedConsumer2NotAllowed {
+  def testTwoConsumersWithDifferentSASLCredentials {
     setAclsAndProduce()
     val consumer1 = consumers.head
 
     val consumer2Config = new Properties
     consumer2Config.putAll(consumerConfig)
-
-    consumer2Config.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext2)
+    // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
+    consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
 
     val consumer2 = TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,

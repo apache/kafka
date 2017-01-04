@@ -17,9 +17,7 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 import kafka.utils.JaasTestUtils
-import kafka.utils.JaasTestUtils.Krb5LoginModule
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection.immutable.List
@@ -37,12 +35,4 @@ class SaslSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   // authentication or SASL authentication with SSL as the transport layer (but not both).
   serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
 
-  override protected def clientLoginContext2 = Krb5LoginModule(
-          useKeyTab = true,
-          storeKey = true,
-          keyTab = this.clientKeytabFile.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
-          principal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM",
-          debug = true,
-          serviceName = Some("kafka")
-        ).toJaasModule.toString.stripMargin
 }

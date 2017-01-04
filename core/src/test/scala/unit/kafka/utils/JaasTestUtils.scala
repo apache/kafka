@@ -107,6 +107,7 @@ object JaasTestUtils {
   val KafkaClientPrincipalUnqualifiedName = "client"
   private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
+  private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
   
   val KafkaPlainUser = "testuser"
   private val KafkaPlainPassword = "testuser-secret"
@@ -141,7 +142,7 @@ object JaasTestUtils {
   }
 
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation).toString
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword).toString
 
   private def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
@@ -174,21 +175,21 @@ object JaasTestUtils {
     new JaasSection(KafkaServerContextName, modules)
   }
 
-  def kafkaClientModule(mechanism: String, keytabLocation: Option[File]): JaasModule = {
+  private def kafkaClientModule(mechanism: String, keytabLocation: Option[File], clientPrincipal: String, plainUser: String, plainPassword: String): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
-          principal = KafkaClientPrincipal,
+          principal = clientPrincipal,
           debug = true,
           serviceName = Some("kafka")
         ).toJaasModule
       case "PLAIN" =>
         PlainLoginModule(
-          KafkaPlainUser,
-          KafkaPlainPassword
+          plainUser,
+          plainPassword
         ).toJaasModule
       case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
         ScramLoginModule(
@@ -199,8 +200,11 @@ object JaasTestUtils {
     }
   }
 
+  /*
+   * uses the credentials for client2, as the credentials for client1 are set in the client configuration
+   */
   private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanisms.map(m => kafkaClientModule(m, keytabLocation)))
+    new JaasSection(KafkaClientContextName, mechanisms.map(m => kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2)))
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =

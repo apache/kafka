@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.io.File
-import java.util.{ArrayList,Properties}
+import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
