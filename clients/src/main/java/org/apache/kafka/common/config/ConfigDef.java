@@ -83,7 +83,7 @@ public class ConfigDef {
     public ConfigDef(ConfigDef base) {
         configKeys = new HashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
-        configsWithNoParent = base.configsWithNoParent;
+        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
     }
 
     /**
