@@ -390,7 +390,7 @@ public class SaslAuthenticatorTest {
         String node = "1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS.id, Short.MAX_VALUE, "someclient", 1);
-        ApiVersionsRequest request = new ApiVersionsRequest();
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer);
@@ -486,8 +486,9 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         sendHandshakeRequestReceiveResponse(node1);
 
-        ApiVersionsRequest request = new ApiVersionsRequest();
-        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id, "someclient", 2);
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id,
+                request.getVersion(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -550,8 +551,10 @@ public class SaslAuthenticatorTest {
         // Send metadata request before Kafka SASL handshake request
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 1);
-        MetadataRequest metadataRequest1 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest1 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest1.getVersion(), "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -563,8 +566,10 @@ public class SaslAuthenticatorTest {
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         sendHandshakeRequestReceiveResponse(node2);
-        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 2);
-        MetadataRequest metadataRequest2 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest2 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest2.getVersion(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
         NetworkTestUtils.waitForChannelClose(selector, node2);
         selector.close();
@@ -756,7 +761,8 @@ public class SaslAuthenticatorTest {
     }
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
-        RequestHeader header = new RequestHeader(apiKey.id, "someclient", 1);
+        RequestHeader header =
+                new RequestHeader(apiKey.id, request.getVersion(), "someclient", 1);
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
@@ -771,7 +777,7 @@ public class SaslAuthenticatorTest {
     }
 
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
-        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest();
+        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
         assertEquals(Errors.NONE.code(), response.errorCode());
         return response;

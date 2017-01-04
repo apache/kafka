@@ -616,16 +616,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (generation == null)
             return RequestFuture.failure(new CommitFailedException());
 
-        OffsetCommitRequest req = new OffsetCommitRequest(
-                this.groupId,
-                generation.generationId,
-                generation.memberId,
-                OffsetCommitRequest.DEFAULT_RETENTION_TIME,
-                offsetData);
+        OffsetCommitRequest.Builder builder =
+                new OffsetCommitRequest.Builder(this.groupId, offsetData).
+                        setGenerationId(generation.generationId).
+                        setMemberId(generation.memberId).
+                        setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
 
         log.trace("Sending offset-commit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
-        return client.send(coordinator, ApiKeys.OFFSET_COMMIT, req)
+        return client.send(coordinator, ApiKeys.OFFSET_COMMIT, builder)
                 .compose(new OffsetCommitResponseHandler(offsets));
     }
 
@@ -719,10 +718,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Group {} fetching committed offsets for partitions: {}", groupId, partitions);
         // construct the request
-        OffsetFetchRequest request = new OffsetFetchRequest(this.groupId, new ArrayList<>(partitions));
+        OffsetFetchRequest.Builder requestBuilder =
+                new OffsetFetchRequest.Builder(this.groupId, new ArrayList<>(partitions));
 
         // send the request with a callback
-        return client.send(coordinator, ApiKeys.OFFSET_FETCH, request)
+        return client.send(coordinator, ApiKeys.OFFSET_FETCH, requestBuilder)
                 .compose(new OffsetFetchResponseHandler());
     }
 

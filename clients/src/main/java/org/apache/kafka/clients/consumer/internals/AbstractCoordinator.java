@@ -380,16 +380,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
         // send a join group request to the coordinator
         log.info("(Re-)joining group {}", groupId);
-        JoinGroupRequest request = new JoinGroupRequest(
+        JoinGroupRequest.Builder requestBuilder = new JoinGroupRequest.Builder(
                 groupId,
                 this.sessionTimeoutMs,
-                this.rebalanceTimeoutMs,
                 this.generation.memberId,
                 protocolType(),
-                metadata());
+                metadata()).setRebalanceTimeout(this.rebalanceTimeoutMs);
 
-        log.debug("Sending JoinGroup ({}) to coordinator {}", request, this.coordinator);
-        return client.send(coordinator, ApiKeys.JOIN_GROUP, request)
+        log.debug("Sending JoinGroup ({}) to coordinator {}",
+                requestBuilder, this.coordinator);
+        return client.send(coordinator, ApiKeys.JOIN_GROUP, requestBuilder)
                 .compose(new JoinGroupResponseHandler());
     }
 
@@ -450,10 +450,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private RequestFuture<ByteBuffer> onJoinFollower() {
         // send follower's sync group with an empty assignment
-        SyncGroupRequest request = new SyncGroupRequest(groupId, generation.generationId,
-                generation.memberId, Collections.<String, ByteBuffer>emptyMap());
-        log.debug("Sending follower SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator, request);
-        return sendSyncGroupRequest(request);
+        SyncGroupRequest.Builder requestBuilder =
+                new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId,
+                        Collections.<String, ByteBuffer>emptyMap());
+        log.debug("Sending follower SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator,
+                requestBuilder);
+        return sendSyncGroupRequest(requestBuilder);
     }
 
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
@@ -462,18 +464,20 @@ public abstract class AbstractCoordinator implements Closeable {
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
                     joinResponse.members());
 
-            SyncGroupRequest request = new SyncGroupRequest(groupId, generation.generationId, generation.memberId, groupAssignment);
-            log.debug("Sending leader SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator, request);
-            return sendSyncGroupRequest(request);
+            SyncGroupRequest.Builder requestBuilder =
+                    new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId, groupAssignment);
+            log.debug("Sending leader SyncGroup for group {} to coordinator {}: {}",
+                    groupId, this.coordinator, requestBuilder);
+            return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);
         }
     }
 
-    private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest request) {
+    private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest.Builder requestBuilder) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
-        return client.send(coordinator, ApiKeys.SYNC_GROUP, request)
+        return client.send(coordinator, ApiKeys.SYNC_GROUP, requestBuilder)
                 .compose(new SyncGroupResponseHandler());
     }
 
@@ -518,8 +522,9 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<Void> sendGroupCoordinatorRequest(Node node) {
         // initiate the group metadata request
         log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
-        GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
-        return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
+        GroupCoordinatorRequest.Builder requestBuilder =
+                new GroupCoordinatorRequest.Builder(this.groupId);
+        return client.send(node, ApiKeys.GROUP_COORDINATOR, requestBuilder)
                      .compose(new GroupCoordinatorResponseHandler());
     }
 
@@ -632,7 +637,8 @@ public abstract class AbstractCoordinator implements Closeable {
         if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation != Generation.NO_GENERATION) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            LeaveGroupRequest request = new LeaveGroupRequest(groupId, generation.memberId);
+            LeaveGroupRequest.Builder request =
+                    new LeaveGroupRequest.Builder(groupId, generation.memberId);
             client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
                     .compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
@@ -657,8 +663,9 @@ public abstract class AbstractCoordinator implements Closeable {
 
     // visible for testing
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
-        HeartbeatRequest req = new HeartbeatRequest(this.groupId, this.generation.generationId, this.generation.memberId);
-        return client.send(coordinator, ApiKeys.HEARTBEAT, req)
+        HeartbeatRequest.Builder requestBuilder =
+                new HeartbeatRequest.Builder(this.groupId, this.generation.generationId, this.generation.memberId);
+        return client.send(coordinator, ApiKeys.HEARTBEAT, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
     }
 

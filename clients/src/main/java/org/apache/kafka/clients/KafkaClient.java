@@ -16,8 +16,7 @@ import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.AbstractRequest;
 
 /**
  * The interface for {@link NetworkClient}
@@ -112,24 +111,21 @@ public interface KafkaClient extends Closeable {
     public int inFlightRequestCount(String nodeId);
 
     /**
-     * Generate a request header for the next request
-     * 
-     * @param key The API key of the request
-     */
-    public RequestHeader nextRequestHeader(ApiKeys key);
-
-    /**
-     * Generate a request header for the given API key
-     *
-     * @param key The api key
-     * @param version The api version
-     * @return A request header with the appropriate client id and correlation id
-     */
-    public RequestHeader nextRequestHeader(ApiKeys key, short version);
-
-    /**
      * Wake up the client if it is currently blocked waiting for I/O
      */
     public void wakeup();
 
+    /**
+     * Create a new ClientRequest.
+     *
+     * @param nodeId the node to send to
+     * @param requestBuilder the request builder to use
+     * @param createdTimeMs the time in milliseconds to use as the creation time of the request
+     * @param expectResponse true iff we expect a response
+     * @param callback the callback to invoke when we get a response
+     * @return
+     */
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder requestBuilder,
+                                   long createdTimeMs, boolean expectResponse,
+                                   RequestCompletionHandler callback);
 }

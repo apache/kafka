@@ -41,7 +41,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
-    val response = sendDeleteTopicsRequest(request, 0)
+    val response = sendDeleteTopicsRequest(request)
 
     val error = response.errors.values.asScala.find(_ != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
@@ -82,7 +82,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
-    val response = sendDeleteTopicsRequest(request, 0)
+    val response = sendDeleteTopicsRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
@@ -98,21 +98,22 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   @Test
   def testNotController() {
     val request = new DeleteTopicsRequest(Set("not-controller").asJava, 1000)
-    val response = sendDeleteTopicsRequest(request, 0, notControllerSocketServer)
+    val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2
     assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER, error)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
-    val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
+    val metadata = sendMetadataRequest(new MetadataRequest.
+        Builder(List(topic).asJava).build).topicMetadata.asScala
     TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE),
       s"The topic $topic should not exist")
   }
 
-  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, version: Short, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = send(request, ApiKeys.DELETE_TOPICS, Some(version), socketServer)
-    DeleteTopicsResponse.parse(response, version)
+  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+    val response = send(request, ApiKeys.DELETE_TOPICS, socketServer)
+    DeleteTopicsResponse.parse(response, request.getVersion)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {

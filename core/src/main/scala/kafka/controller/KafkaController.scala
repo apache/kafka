@@ -689,7 +689,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     onControllerResignation()
   }
 
-  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractResponse => Unit = null) = {
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest.Builder[_ <: AbstractRequest], callback: AbstractResponse => Unit = null) = {
     controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, apiVersion, request, callback)
   }
 

@@ -54,7 +54,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request, 0)
+    val response = sendCreateTopicRequest(request)
 
     val error = response.errors.values.asScala.find(_ != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
@@ -62,7 +62,8 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     request.topics.asScala.foreach { case (topic, details) =>
 
       def verifyMetadata(socketServer: SocketServer) = {
-        val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
+        val metadata = sendMetadataRequest(
+          new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(p => p.topic.equals(topic)).head
 
         val partitions = if (!details.replicasAssignments.isEmpty)
@@ -175,7 +176,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     val firstTopic = topics(0).asInstanceOf[Struct]
     val newTopics = firstTopic :: topics.toList
     struct.set("create_topic_requests", newTopics.toArray)
-    new CreateTopicsRequest(struct)
+    new CreateTopicsRequest(struct, request.getVersion)
   }
 
   private def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
@@ -184,11 +185,11 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     val firstTopic = topics(0).asInstanceOf[Struct]
     firstTopic.set("num_partitions", 1)
     firstTopic.set("replication_factor", 1.toShort)
-    new CreateTopicsRequest(struct)
+    new CreateTopicsRequest(struct, request.getVersion)
   }
 
   private def validateErrorCreateTopicsRequests(request: CreateTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
-    val response = sendCreateTopicRequest(request, 0)
+    val response = sendCreateTopicRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
@@ -204,7 +205,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   @Test
   def testNotController() {
     val request = new CreateTopicsRequest(Map("topic1" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000)
-    val response = sendCreateTopicRequest(request, 0, notControllerSocketServer)
+    val response = sendCreateTopicRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2
     assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER, error)
@@ -212,7 +213,8 @@ class CreateTopicsRequestTest extends BaseRequestTest {
 
   private def validateTopicExists(topic: String): Unit = {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
-    val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
+    val metadata = sendMetadataRequest(
+      new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
     assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE))
   }
 
@@ -220,9 +222,9 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     assignments.map { case (k, v) => (k:Integer, v.map { i => i:Integer }.asJava) }.asJava
   }
 
-  private def sendCreateTopicRequest(request: CreateTopicsRequest, version: Short, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = send(request, ApiKeys.CREATE_TOPICS, Some(version), socketServer)
-    CreateTopicsResponse.parse(response, version)
+  private def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
+    val response = send(request, ApiKeys.CREATE_TOPICS, socketServer)
+    CreateTopicsResponse.parse(response, request.getVersion)
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
