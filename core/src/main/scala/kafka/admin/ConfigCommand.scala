@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.util.{Locale, Properties}
+import java.util.Properties
 import joptsimple._
 import kafka.common.Config
 import kafka.common.InvalidConfigException
@@ -119,10 +119,10 @@ object ConfigCommand extends Config {
       ScramCredentialUtils.credentialToString(credential)
     }
     for (mechanism <- ScramMechanism.values) {
-      configsToBeAdded.getProperty(mechanism.mechanismName.toLowerCase(Locale.ROOT)) match {
+      configsToBeAdded.getProperty(mechanism.mechanismName) match {
         case null =>
         case value =>
-          configsToBeAdded.setProperty(mechanism.mechanismName.toLowerCase(Locale.ROOT), scramCredential(mechanism, value))
+          configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
       }
     }
   }

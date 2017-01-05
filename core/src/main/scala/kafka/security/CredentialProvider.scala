@@ -17,7 +17,7 @@
 
 package kafka.security
 
-import java.util.{List, Locale, Properties}
+import java.util.{List, Properties}
 
 import org.apache.kafka.common.security.authenticator.CredentialCache
 import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
@@ -33,7 +33,7 @@ class CredentialProvider(saslEnabledMechanisms: List[String]) {
     for (mechanism <- ScramMechanism.values()) {
       val cache = credentialCache.cache(mechanism.mechanismName, classOf[ScramCredential])
       if (cache != null) {
-        config.getProperty(mechanism.mechanismName.toLowerCase(Locale.ROOT)) match {
+        config.getProperty(mechanism.mechanismName) match {
           case null => cache.remove(username)
           case c => cache.put(username, ScramCredentialUtils.credentialFromString(c))
         }
@@ -45,7 +45,7 @@ class CredentialProvider(saslEnabledMechanisms: List[String]) {
 object CredentialProvider {
   def userCredentialConfigs: ConfigDef = {
     ScramMechanism.values.foldLeft(new ConfigDef) {
-      (c, m) => c.define(m.mechanismName.toLowerCase(Locale.ROOT), Type.STRING, null, Importance.MEDIUM, s"User credentials for SCRAM mechanism ${m.mechanismName}")
+      (c, m) => c.define(m.mechanismName, Type.STRING, null, Importance.MEDIUM, s"User credentials for SCRAM mechanism ${m.mechanismName}")
     }
   }
 }

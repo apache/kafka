@@ -269,14 +269,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         }
       }
     }
-    val optsA = createOpts("userA", "scram-sha-256=[iterations=1024,password=abc, def]")
-    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("scram-sha-256"), 1024))
-    val optsB = createOpts("userB", "scram-sha-256=[iterations=4096,password=abc, def],scram-sha-512=[password=1234=abc]")
-    ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("scram-sha-256", "scram-sha-512"), 4096))
+    val optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=1024,password=abc, def]")
+    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 1024))
+    val optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]")
+    ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("SCRAM-SHA-256", "SCRAM-SHA-512"), 4096))
 
-    val del256 = deleteOpts("userB", "scram-sha-256")
-    ConfigCommand.alterConfig(null, del256, CredentialChange("userB", Set("scram-sha-512"), 4096))
-    val del512 = deleteOpts("userB", "scram-sha-512")
+    val del256 = deleteOpts("userB", "SCRAM-SHA-256")
+    ConfigCommand.alterConfig(null, del256, CredentialChange("userB", Set("SCRAM-SHA-512"), 4096))
+    val del512 = deleteOpts("userB", "SCRAM-SHA-512")
     ConfigCommand.alterConfig(null, del512, CredentialChange("userB", Set(), 4096))
   }
 

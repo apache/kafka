@@ -16,7 +16,6 @@
   */
 package kafka.api
 
-import java.util.Locale
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramMechanism
 import kafka.utils.JaasTestUtils
@@ -38,7 +37,7 @@ class SaslScramSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     zkUtils.makeSurePersistentPathExists(ZkUtils.EntityConfigChangesPath)
 
     def configCommandArgs(username: String, password: String) : Array[String] = {
-      val credentials = kafkaServerSaslMechanisms.map(m => s"${m.toLowerCase(Locale.ROOT)}=[iterations=4096,password=$password]")
+      val credentials = kafkaServerSaslMechanisms.map(m => s"$m=[iterations=4096,password=$password]")
       Array("--zookeeper", zkConnect,
             "--alter", "--add-config", credentials.mkString(","),
             "--entity-type", "users",
