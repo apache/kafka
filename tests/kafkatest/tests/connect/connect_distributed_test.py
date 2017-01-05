@@ -238,6 +238,9 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc)
         self.source.start()
 
+        wait_until(lambda: len(self.source.messages()) > 0, timeout_sec=30,
+                   err_msg="Timeout expired waiting for source task to produce a message")
+
         self.sink = VerifiableSink(self.cc)
         self.sink.start()
 
@@ -264,7 +267,7 @@ class ConnectDistributedTest(Test):
 
         # after resuming, we should see records consumed again
         wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
-                   err_msg="Failed to consume messages after resuming source connector")
+                   err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
     def test_pause_state_persistent(self):
