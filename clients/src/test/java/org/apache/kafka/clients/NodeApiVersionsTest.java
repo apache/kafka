@@ -44,28 +44,37 @@ public class NodeApiVersionsTest {
     }
 
     @Test
-    public void testNewestVersionsToString() {
+    public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            versionList.add(new ApiVersion(apiKey.id,
-                    Protocol.MIN_VERSIONS[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
+                versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
+            } else {
+                versionList.add(new ApiVersion(apiKey.id,
+                        Protocol.MIN_VERSIONS[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+            }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
         StringBuilder bld = new StringBuilder();
         String prefix = "{";
         for (ApiKeys apiKey : ApiKeys.values()) {
-            bld.append(prefix).append(apiKey.name).append("(").
-                    append((int) apiKey.id).append("): ");
-            if (Protocol.MIN_VERSIONS[apiKey.id] ==
-                    Protocol.CURR_VERSION[apiKey.id]) {
-                bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]);
+            bld.append(prefix);
+            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
+                bld.append("ControlledShutdown(7): 0 [usable: NONE]");
             } else {
-                bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]).
-                        append(" to ").
-                        append(Protocol.CURR_VERSION[apiKey.id]);
+                bld.append(apiKey.name).append("(").
+                        append((int) apiKey.id).append("): ");
+                if (Protocol.MIN_VERSIONS[apiKey.id] ==
+                        Protocol.CURR_VERSION[apiKey.id]) {
+                    bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]);
+                } else {
+                    bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]).
+                            append(" to ").
+                            append(Protocol.CURR_VERSION[apiKey.id]);
+                }
+                bld.append(" [usable: ").append(Protocol.CURR_VERSION[apiKey.id]).
+                        append("]");
             }
-            bld.append(" [usable: ").append(Protocol.CURR_VERSION[apiKey.id]).
-                    append("]");
             prefix = ", ";
         }
         bld.append("}");
