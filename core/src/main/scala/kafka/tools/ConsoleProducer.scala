@@ -139,11 +139,11 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED (only when using old producer): The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED (use bootstrap-server instead): The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old producer is used): The bootstrap server list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The bootstrap server list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("bootstrap-server")
       .ofType(classOf[String])
@@ -262,20 +262,14 @@ object ConsoleProducer {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val brokerList = options.valueOf(brokerListOpt)
 
-    if (useOldProducer) {
-      if (options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $useOldProducerOpt.")
-      else {
-        CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
-        ToolsUtils.validatePortOrDie(parser,brokerList)
-      }
+    if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
+      CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
+    else if (options.has(brokerListOpt)) {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
+      ToolsUtils.validatePortOrDie(parser, brokerList)
     } else {
-        if (options.has(brokerListOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid without $useOldProducerOpt.")
-      else {
-          CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
-          ToolsUtils.validatePortOrDie(parser,bootstrapServer)
-        }
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     }
 
     val topic = options.valueOf(topicOpt)
