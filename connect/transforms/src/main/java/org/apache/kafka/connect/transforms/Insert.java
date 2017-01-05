@@ -39,7 +39,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
             .define("partition", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka partition.\n" + OPTIONALITY_DOC)
             .define("offset", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for Kafka offset - only applicable to sinks.\n" + OPTIONALITY_DOC)
+                    "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
             .define("timestamp", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for record timestamp.\n" + OPTIONALITY_DOC);
 

@@ -22,6 +22,11 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.util.Map;
 
+/**
+ * Single message transformation for Kafka Connect record types.
+ *
+ * Connectors can be configured with transformations to make lightweight message-at-a-time modifications.
+ */
 public interface Transformation<R extends ConnectRecord<R>> {
 
     /** Initialize with the provided configuration properties. **/

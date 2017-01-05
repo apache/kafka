@@ -27,6 +27,12 @@ import java.util.Date;
 import java.util.Map;
 import java.util.TimeZone;
 
+/**
+ * This transformation facilitates updating the record's topic field as a function of the original topic value and the record timestamp.
+ * <p/>
+ * The topic field determines what topic the records from a source connector are routed to.
+ * In the case of a sink connector, the topic field is often used to determine the equivalent entity name in the destination system (e.g. database table name).
+ */
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()

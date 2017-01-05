@@ -20,6 +20,10 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 
+/**
+ * This transformation allows inserting configured attributes of the record metadata as fields in the record key.
+ * The record key is required to be of type {@link Schema.Type#STRUCT}.
+ */
 public class InsertInKey<R extends ConnectRecord<R>> extends Insert<R> {
 
     @Override
