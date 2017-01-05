@@ -17,17 +17,26 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * The {@link Initializer} interface for creating an initial value in aggregations.
+ * {@link Initializer} is used in combination with {@link Aggregator}.
  *
- * @param <T>   aggregate value type
+ * @param <VA> aggregate value type
+ * @see Aggregator
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, org.apache.kafka.common.serialization.Serde, String)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
  */
-public interface Initializer<T> {
+@InterfaceStability.Unstable
+public interface Initializer<VA> {
 
     /**
      * Return the initial value for an aggregation.
      *
-     * @return  the initial value for an aggregation
+     * @return the initial value for an aggregation
      */
-    T apply();
+    VA apply();
 }
