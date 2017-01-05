@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public interface WindowStoreSupplier {
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+
+public interface WindowStoreSupplier<T extends StateStore> extends StateStoreSupplier<T> {
     long retentionPeriod();
 }

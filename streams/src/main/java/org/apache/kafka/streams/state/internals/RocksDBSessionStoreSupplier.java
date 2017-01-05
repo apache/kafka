@@ -18,9 +18,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Map;
 
@@ -33,24 +32,15 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBSessionStoreSupplier<K, T> implements StateStoreSupplier, WindowStoreSupplier {
+public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
     private static final int NUM_SEGMENTS = 3;
-    private final String name;
     private final long retentionPeriod;
-    private final Serde<K> keySerde;
-    private final Serde<T> valueSerde;
-    private final boolean logged;
-    private final Map<String, String> logConfig;
     private final boolean enableCaching;
 
-    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<T> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
-        this.name = name;
+    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+        super(name, keySerde, valueSerde, Time.SYSTEM, logged, logConfig);
         this.retentionPeriod = retentionPeriod;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.logged = logged;
-        this.logConfig = logConfig;
         this.enableCaching = enableCaching;
     }
 
@@ -58,28 +48,18 @@ public class RocksDBSessionStoreSupplier<K, T> implements StateStoreSupplier, Wi
         return name;
     }
 
-    public StateStore get() {
+    public SessionStore<K, V> get() {
         final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
                                                                                      new SessionKeySchema());
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
-                                                                                          : bytesStore, "rocksdb-session-store", new SystemTime());
+                                                                                          : bytesStore, "rocksdb-session-store", time);
         if (enableCaching) {
             return new CachingSessionStore<>(metered, keySerde, valueSerde);
         }
         return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
 
-    }
-
-    @Override
-    public Map<String, String> logConfig() {
-        return logConfig;
-    }
-
-    @Override
-    public boolean loggingEnabled() {
-        return logged;
     }
 
     public long retentionPeriod() {
