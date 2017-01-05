@@ -29,9 +29,6 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     private Serializer<T> inner;
 
-    // Default constructor needed by Kafka
-    public ChangedSerializer() {}
-
     public ChangedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }

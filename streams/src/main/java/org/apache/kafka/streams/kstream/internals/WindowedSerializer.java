@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
@@ -29,16 +31,19 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     private Serializer<T> inner;
 
-    // Default constructor needed by Kafka
-    public WindowedSerializer() {}
-
     public WindowedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }
 
+    // Default constructor needed by Kafka
+    public WindowedSerializer() {}
+
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        // do nothing
+        if (inner == null) {
+            inner = new ProducerConfig(configs).getConfiguredInstance(isKey ? "key.serializer" : "value.serializer", Serializer.class);
+            inner.configure(configs, isKey);
+        }
     }
 
     @Override
@@ -59,6 +64,10 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     public byte[] serializeBaseKey(String topic, Windowed<T> data) {
         return inner.serialize(topic, data.key());
+    }
+
+    public Serializer<T> getInnerSer() {
+        return inner;
     }
 
 }

@@ -22,16 +22,17 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
@@ -80,6 +81,20 @@ public class WindowedStreamPartitionerTest {
                 assertEquals(expected, actual);
             }
         }
+    }
+
+    @Test
+    public void testWindowedSerdeNoArgConstructors() {
+        WindowedSerializer<StringSerializer> windowedSerializer = new WindowedSerializer<>();
+        Map<String, String> props = new HashMap<>();
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        windowedSerializer.configure(props, true);
+        Serializer<?> inner = windowedSerializer.getInnerSer();
+        assertNotNull("Inner serializer should be not null", inner);
+        assertTrue("inner serializer should be with StringSer", inner instanceof StringSerializer);
     }
 
 }

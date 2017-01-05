@@ -336,7 +336,7 @@ public class ProducerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    ProducerConfig(Map<?, ?> props) {
+    public ProducerConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 

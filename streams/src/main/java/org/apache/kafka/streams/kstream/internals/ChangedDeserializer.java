@@ -28,9 +28,6 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
     private Deserializer<T> inner;
 
-    // Default constructor needed by Kafka
-    public ChangedDeserializer() {}
-
     public ChangedDeserializer(Deserializer<T> inner) {
         this.inner = inner;
     }
