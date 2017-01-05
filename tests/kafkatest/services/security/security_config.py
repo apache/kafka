@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import re
 import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
@@ -112,7 +113,7 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props=""):
+                 zk_sasl=False, template_props="", static_jaas_conf=True):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -143,6 +144,7 @@ class SecurityConfig(TemplateRenderer):
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.zk_sasl = zk_sasl
+        self.static_jaas_conf = static_jaas_conf
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -156,8 +158,16 @@ class SecurityConfig(TemplateRenderer):
             'sasl.kerberos.service.name' : 'kafka'
         }
 
-    def client_config(self, template_props=""):
-        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
+    def client_config(self, template_props="", static_jaas_conf=True):
+        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props, static_jaas_conf=static_jaas_conf)
+
+    def client_config_setup(self, node, template_props=""):
+        # Use static JAAS configuration files with SASL_SSL and sasl.jaas.config
+        # property with SASL_PLAINTEXT so that both code paths are tested
+        static_jaas_conf = self.has_sasl and self.has_ssl
+        security_config = self.client_config(template_props, static_jaas_conf)
+        security_config.setup_node(node)
+        return security_config
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
@@ -176,7 +186,14 @@ class SecurityConfig(TemplateRenderer):
                                 SecurityConfig=SecurityConfig,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
-        node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+        if self.static_jaas_conf:
+            node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+        else:
+            match = re.search("KafkaClient *{([^}]*)}", jaas_conf.replace("\n", " "))
+            if match:
+                self.properties['sasl.jaas.config'] = match.group(1)
+            else:
+                raise Exception("KafkaClient section not found in JAAS configuration")
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
             node.account.copy_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
@@ -251,7 +268,10 @@ class SecurityConfig(TemplateRenderer):
     @property
     def kafka_opts(self):
         if self.has_sasl:
-            return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
+            if self.static_jaas_conf:
+                return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
+            else:
+                return "\"-Djava.security.krb5.conf=%s\"" % SecurityConfig.KRB5CONF_PATH
         else:
             return ""
 
@@ -265,6 +285,8 @@ class SecurityConfig(TemplateRenderer):
         """
         if self.security_protocol == SecurityConfig.PLAINTEXT:
             return ""
+        if self.has_sasl and not self.static_jaas_conf and 'sasl.jaas.config' not in self.properties:
+            raise Exception("JAAS configuration property has not yet been initialized")
         config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
         # Extra blank lines ensure this can be appended/prepended safely
         return "\n".join(itertools.chain([""], config_lines, [""]))
