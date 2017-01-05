@@ -781,4 +781,29 @@ public class Utils {
         return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
+    /**
+     * Read data from the channel to the given byte buffer
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; must be non-negative
+     *
+     * @throws IllegalArgumentException If invalid arguments were passed
+     * @throws IOException If some other I/O error occurs
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (channel == null) {
+            throw new IllegalArgumentException("Cannot read an empty file channel.");
+        }
+        if (position < 0) {
+            throw new IllegalArgumentException("The file position cannot be negative, but we got " + position);
+        }
+        long currentPosition = position;
+        while (destinationBuffer.hasRemaining()) {
+            int bytesRead = channel.read(destinationBuffer, currentPosition);
+            if (bytesRead == -1) { // encountered end-of-stream
+                break;
+            }
+            currentPosition += bytesRead;
+        }
+    }
 }

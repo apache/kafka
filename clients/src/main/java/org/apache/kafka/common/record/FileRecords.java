@@ -115,7 +115,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @throws IOException
      */
     public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
-        channel.read(buffer, position + this.start);
+        Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
         return buffer;
     }
