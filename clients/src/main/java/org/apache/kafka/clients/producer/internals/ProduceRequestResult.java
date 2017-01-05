@@ -20,6 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 
 
 /**
@@ -32,6 +33,7 @@ public final class ProduceRequestResult {
     private final CountDownLatch latch = new CountDownLatch(1);
     private volatile TopicPartition topicPartition;
     private volatile long baseOffset = -1L;
+    private volatile long responseTimestamp = Record.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
     public ProduceRequestResult() {
@@ -41,12 +43,20 @@ public final class ProduceRequestResult {
      * Mark this request as complete and unblock any threads waiting on its completion.
      * @param topicPartition The topic and partition to which this record set was sent was sent
      * @param baseOffset The base offset assigned to the record
+     * @param responseTimestamp The timestamp returned by the broker
      * @param error The error that occurred if there was one, or null.
      */
-    public void done(TopicPartition topicPartition, long baseOffset, RuntimeException error) {
+    public void set(TopicPartition topicPartition, long baseOffset, long responseTimestamp, RuntimeException error) {
         this.topicPartition = topicPartition;
         this.baseOffset = baseOffset;
+        this.responseTimestamp = responseTimestamp;
         this.error = error;
+    }
+
+    /**
+     * Mark this request as complete and unblock any threads waiting on its completion.
+     */
+    public void done() {
         this.latch.countDown();
     }
 
@@ -72,6 +82,13 @@ public final class ProduceRequestResult {
      */
     public long baseOffset() {
         return baseOffset;
+    }
+
+    /**
+     * The timestamp returned by the broker. NO_TIMESTAMP means that CreateTime is being used.
+     */
+    public long responseTimestamp() {
+        return responseTimestamp;
     }
 
     /**

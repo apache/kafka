@@ -86,24 +86,20 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param timestamp The timestamp returned by the broker.
+     * @param responseTimestamp The timestamp returned by the broker.
      * @param exception The exception that occurred (or null if the request was successful)
      */
-    public void done(long baseOffset, long timestamp, RuntimeException exception) {
+    public void done(long baseOffset, long responseTimestamp, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition,
                   baseOffset,
                   exception);
+        produceFuture.set(topicPartition, baseOffset, responseTimestamp, exception);
         // execute callbacks
         for (Thunk thunk : thunks) {
             try {
                 if (exception == null) {
-                    // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
-                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
-                                                                 timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
-                                                                 thunk.future.checksum(),
-                                                                 thunk.future.serializedKeySize(),
-                                                                 thunk.future.serializedValueSize());
+                    RecordMetadata metadata = thunk.future.value();
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);
@@ -112,7 +108,7 @@ public final class RecordBatch {
                 log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
             }
         }
-        this.produceFuture.done(topicPartition, baseOffset, exception);
+        this.produceFuture.done();
     }
 
     /**

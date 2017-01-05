@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.record.Record;
 
 /**
  * The future result of a record send
@@ -26,16 +27,16 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     private final ProduceRequestResult result;
     private final long relativeOffset;
-    private final long timestamp;
+    private final long createTimestamp;
     private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
 
-    public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long timestamp,
+    public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
                                 long checksum, int serializedKeySize, int serializedValueSize) {
         this.result = result;
         this.relativeOffset = relativeOffset;
-        this.timestamp = timestamp;
+        this.createTimestamp = createTimestamp;
         this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
@@ -69,15 +70,22 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     
     RecordMetadata value() {
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
-                                  this.timestamp, this.checksum, this.serializedKeySize, this.serializedValueSize);
+                                  timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
     
     public long relativeOffset() {
         return this.relativeOffset;
     }
 
+    public long createTimestamp() {
+        return this.createTimestamp;
+    }
+
+    /**
+     * If the timestamp returned by server is NO_TIMESTAMP, CreateTime is being used. Otherwise LogAppendTime is being used.
+     */
     public long timestamp() {
-        return this.timestamp;
+        return result.responseTimestamp() == Record.NO_TIMESTAMP ? createTimestamp() : result.responseTimestamp();
     }
 
     public long checksum() {

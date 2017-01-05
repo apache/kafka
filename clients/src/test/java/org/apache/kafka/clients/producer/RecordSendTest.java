@@ -54,7 +54,8 @@ public class RecordSendTest {
         } catch (TimeoutException e) { /* this is good */
         }
 
-        request.done(topicPartition, baseOffset, null);
+        request.set(topicPartition, baseOffset, Record.NO_TIMESTAMP, null);
+        request.done();
         assertTrue(future.isDone());
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
@@ -86,7 +87,8 @@ public class RecordSendTest {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.done(topicPartition, baseOffset, error);
+                    request.set(topicPartition, baseOffset, Record.NO_TIMESTAMP, error);
+                    request.done();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

@@ -284,11 +284,12 @@ public class Sender implements Runnable {
      * @param batch The record batch
      * @param error The error (or null if none)
      * @param baseOffset The base offset assigned to the records if successful
-     * @param timestamp The timestamp returned by the broker for this batch
+     * @param responseTimestamp The timestamp returned by the broker for this batch
      * @param correlationId The correlation id for the request
      * @param now The current POSIX time stamp in milliseconds
      */
-    private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
+    private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long responseTimestamp,
+                               long correlationId, long now) {
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
@@ -305,7 +306,7 @@ public class Sender implements Runnable {
             else
                 exception = error.exception();
             // tell the user the result of their request
-            batch.done(baseOffset, timestamp, exception);
+            batch.done(baseOffset, responseTimestamp, exception);
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
