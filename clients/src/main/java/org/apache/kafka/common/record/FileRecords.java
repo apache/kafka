@@ -108,14 +108,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or
-     * the channel has reached end of stream
-     * @param buffer The buffer into which bytes are to be transferred
-     * @param position The file position at which the transfer is to begin; must be non-negative
-     * @return The buffer into which bytes have been transferred
-     *
-     * @throws IllegalArgumentException If position is negative
-     * @throws IOException If an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
+     * Read log entries into the given buffer until there are no bytes remaining in the buffer
+     * or the channel has reached end of stream.
+     * @param buffer The buffer to write the entries to
+     * @param position Position in the buffer to read from
+     * @return The same buffer
+     * @throws IOException
      */
     public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
         Utils.readFully(channel, buffer, position + this.start);
