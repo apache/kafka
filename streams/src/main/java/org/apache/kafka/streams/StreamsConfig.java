@@ -539,10 +539,6 @@ public class StreamsConfig extends AbstractConfig {
         return parsed;
     }
 
-    public enum AutoOffsetReset {
-        EARLIEST , LATEST
-    }
-
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtmlTable());
     }

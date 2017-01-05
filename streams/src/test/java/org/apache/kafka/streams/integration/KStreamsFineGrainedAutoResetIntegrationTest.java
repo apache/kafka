@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -105,8 +105,8 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     public void shouldOnlyReadRecordsWhereEarliestSpecified() throws  Exception {
         final KStreamBuilder builder = new KStreamBuilder();
 
-        final KStream<String, String> pattern1Stream = builder.stream(StreamsConfig.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d"));
-        final KStream<String, String> pattern2Stream = builder.stream(StreamsConfig.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]"));
+        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d"));
+        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]"));
         final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y, TOPIC_Z);
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
@@ -148,6 +148,32 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         assertThat(actualValues, equalTo(expectedReceivedValues));
 
     }
+
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldThrowExceptionOverlappingPattern() throws  Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        //NOTE this would realistically get caught when building topology, the test is for completeness
+        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]"));
+        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]"));
+        final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y, TOPIC_Z);
+
+        builder.earliestResetTopicsPattern();
+
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldThrowExceptionOverlappingTopic() throws  Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        //NOTE this would realistically get caught when building topology, the test is for completeness
+        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]"));
+        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-\\d]"));
+        final KStream<String, String> namedTopicsStream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, TOPIC_A, TOPIC_Z);
+
+        builder.latestResetTopicsPattern();
+
+    }
+
 
     @Test
     public void shouldThrowStreamsExceptionNoResetSpecified() throws Exception {
