@@ -352,7 +352,7 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore, ProcessorNode>emptyMap());
 
         final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
-            topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+            topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
 
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
@@ -404,7 +404,7 @@ public class StreamTaskTest {
 
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
-            topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+            topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
 
         try {
             streamTask.punctuate(punctuator, 1);
