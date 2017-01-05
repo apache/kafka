@@ -782,28 +782,24 @@ public class Utils {
     }
 
     /**
-     * Read data from the channel to the given byte buffer
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or
+     * the channel has reached end of stream
      * @param channel File channel containing the data to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred
      * @param position The file position at which the transfer is to begin; must be non-negative
      *
-     * @throws IllegalArgumentException If invalid arguments were passed
-     * @throws IOException If some other I/O error occurs
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
      */
     public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
-        if (channel == null) {
-            throw new IllegalArgumentException("Cannot read an empty file channel.");
-        }
         if (position < 0) {
-            throw new IllegalArgumentException("The file position cannot be negative, but we got " + position);
+            throw new IllegalArgumentException("The file channel position cannot be negative, but we got " + position);
         }
         long currentPosition = position;
-        while (destinationBuffer.hasRemaining()) {
-            int bytesRead = channel.read(destinationBuffer, currentPosition);
-            if (bytesRead == -1) { // encountered end-of-stream
-                break;
-            }
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
-        }
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
 }
