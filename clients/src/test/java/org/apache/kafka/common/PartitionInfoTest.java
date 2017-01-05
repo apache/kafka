@@ -12,9 +12,8 @@
  */
 package org.apache.kafka.common;
 
+import org.junit.Assert;
 import org.junit.Test;
-
-import static org.junit.Assert.*;
 
 public class PartitionInfoTest {
     
@@ -31,7 +30,7 @@ public class PartitionInfoTest {
         
         String expected = String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s)",
                 topic, partition, leader.idString(), "[0,1,2]", "[0,1,2]");
-        assertEquals(expected, partitionInfo.toString());
+        Assert.assertEquals(expected, partitionInfo.toString());
     }
 
 }
