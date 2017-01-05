@@ -23,8 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
@@ -41,21 +39,20 @@ abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
 
     protected final ConnectorTaskId id;
-    private final AtomicBoolean stopping;   // indicates whether the Worker has asked the task to stop
-    private final AtomicBoolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
-    private final CountDownLatch shutdownLatch;
     private final TaskStatus.Listener statusListener;
-    private final AtomicReference<TargetState> targetState;
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private volatile TargetState targetState;
+    private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
+    private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
                       TargetState initialState) {
         this.id = id;
-        this.stopping = new AtomicBoolean(false);
-        this.cancelled = new AtomicBoolean(false);
-        this.shutdownLatch = new CountDownLatch(1);
         this.statusListener = statusListener;
-        this.targetState = new AtomicReference<>(initialState);
+        this.targetState = initialState;
+        this.stopping = false;
+        this.cancelled = false;
     }
 
     public ConnectorTaskId id() {
@@ -71,7 +68,7 @@ abstract class WorkerTask implements Runnable {
 
     private void triggerStop() {
         synchronized (this) {
-            this.stopping.set(true);
+            stopping = true;
 
             // wakeup any threads that are waiting for unpause
             this.notifyAll();
@@ -91,7 +88,7 @@ abstract class WorkerTask implements Runnable {
      * updated when it eventually does shutdown.
      */
     public void cancel() {
-        this.cancelled.set(true);
+        cancelled = true;
     }
 
     /**
@@ -113,7 +110,7 @@ abstract class WorkerTask implements Runnable {
     protected abstract void close();
 
     protected boolean isStopping() {
-        return stopping.get();
+        return stopping;
     }
 
     private void doClose() {
@@ -125,16 +122,18 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
-    private void doRun() {
+    private void doRun() throws InterruptedException {
         try {
             synchronized (this) {
-                if (stopping.get())
+                if (stopping)
                     return;
 
-                if (targetState.get() == TargetState.PAUSED)
-                    statusListener.onPause(id);
-                else
-                    statusListener.onStartup(id);
+                if (targetState == TargetState.PAUSED) {
+                    onPause();
+                    if (!awaitUnpause()) return;
+                }
+
+                statusListener.onStartup(id);
             }
 
             execute();
@@ -153,7 +152,7 @@ abstract class WorkerTask implements Runnable {
 
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else
-            if (!cancelled.get())
+            if (!cancelled)
                 statusListener.onShutdown(id);
         }
     }
@@ -164,9 +163,17 @@ abstract class WorkerTask implements Runnable {
 
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else
-            if (!cancelled.get())
+            if (!cancelled)
                 statusListener.onFailure(id, t);
         }
+    }
+
+    protected synchronized void onPause() {
+        statusListener.onPause(id);
+    }
+
+    protected synchronized void onResume() {
+        statusListener.onResume(id);
     }
 
     @Override
@@ -178,14 +185,14 @@ abstract class WorkerTask implements Runnable {
             onFailure(t);
 
             if (t instanceof Error)
-                throw t;
+                throw (Error) t;
         } finally {
             shutdownLatch.countDown();
         }
     }
 
     public boolean shouldPause() {
-        return this.targetState.get() == TargetState.PAUSED;
+        return this.targetState == TargetState.PAUSED;
     }
 
     /**
@@ -195,8 +202,8 @@ abstract class WorkerTask implements Runnable {
      */
     protected boolean awaitUnpause() throws InterruptedException {
         synchronized (this) {
-            while (targetState.get() == TargetState.PAUSED) {
-                if (stopping.get())
+            while (targetState == TargetState.PAUSED) {
+                if (stopping)
                     return false;
                 this.wait();
             }
@@ -207,19 +214,11 @@ abstract class WorkerTask implements Runnable {
     public void transitionTo(TargetState state) {
         synchronized (this) {
             // ignore the state change if we are stopping
-            if (stopping.get())
+            if (stopping)
                 return;
 
-            TargetState oldState = this.targetState.getAndSet(state);
-            if (state != oldState) {
-                if (state == TargetState.PAUSED) {
-                    statusListener.onPause(id);
-                } else if (state == TargetState.STARTED) {
-                    statusListener.onResume(id);
-                    this.notifyAll();
-                } else
-                    throw new IllegalArgumentException("Unhandled target state " + state);
-            }
+            this.targetState = state;
+            this.notifyAll();
         }
     }
 

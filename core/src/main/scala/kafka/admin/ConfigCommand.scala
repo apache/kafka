@@ -20,14 +20,14 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import kafka.common.Config
+import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, QuotaId}
-import kafka.server.{DynamicConfig, ConfigType}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, QuotaId}
 import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
-import scala.collection.JavaConverters._
 import scala.collection._
+import scala.collection.JavaConverters._
 
 
 /**
@@ -83,8 +83,14 @@ object ConfigCommand extends Config {
 
     // compile the final set of configs
     val configs = utils.fetchEntityConfig(zkUtils, entityType, entityName)
+
+    // fail the command if any of the configs to be deleted does not exist
+    val invalidConfigs = configsToBeDeleted.filterNot(configs.containsKey(_))
+    if (invalidConfigs.nonEmpty)
+      throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+
     configs.putAll(configsToBeAdded)
-    configsToBeDeleted.foreach(config => configs.remove(config))
+    configsToBeDeleted.foreach(configs.remove(_))
 
     entityType match {
       case ConfigType.Topic => utils.changeTopicConfig(zkUtils, entityName, configs)
@@ -93,7 +99,7 @@ object ConfigCommand extends Config {
       case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
     }
-    println(s"Updated config for entity: $entity.")
+    println(s"Completed Updating config for entity: $entity.")
   }
 
   private def parseBroker(broker: String): Int = {

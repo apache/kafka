@@ -122,11 +122,12 @@ public abstract class AbstractTask {
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
+     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
-    void closeStateManager() {
+    void closeStateManager(final boolean writeCheckpoint) {
         log.trace("task [{}] Closing", id());
         try {
-            stateMgr.close(recordCollectorOffsets());
+            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
         } catch (IOException e) {
             throw new ProcessorStateException("Error while closing the state manager", e);
         }

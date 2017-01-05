@@ -427,7 +427,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
               val controlledShutdownRequest = new ControlledShutdownRequest(config.brokerId)
               val request = new ClientRequest(node(prevController).idString, time.milliseconds(), true,
                 requestHeader, controlledShutdownRequest, null)
-              val clientResponse = networkClient.blockingSendAndReceive(request, controlledShutdownRequest)(time)
+              val clientResponse = networkClient.blockingSendAndReceive(request)(time)
 
               val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
               if (shutdownResponse.errorCode == Errors.NONE.code && shutdownResponse.partitionsRemaining.isEmpty) {

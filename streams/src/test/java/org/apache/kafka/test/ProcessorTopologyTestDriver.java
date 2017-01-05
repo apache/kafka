@@ -39,6 +39,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -47,6 +48,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -170,19 +172,19 @@ public class ProcessorTopologyTestDriver {
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
         consumer.assign(offsetsByTopicPartition.keySet());
-
+        StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         task = new StreamTask(id,
             applicationId,
             partitionsByTopic.values(),
             topology,
             consumer,
-            producer,
             restoreStateConsumer,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            streamsMetrics,
             new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()),
-            new ThreadCache("testCache", 1024 * 1024, new MockStreamsMetrics(new Metrics())),
-            new MockTime());
+            new ThreadCache("testCache", 1024 * 1024, streamsMetrics),
+            new MockTime(),
+            new RecordCollectorImpl(producer, "id"));
     }
 
     /**

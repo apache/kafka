@@ -31,39 +31,64 @@ class Replica(val brokerId: Int,
               initialHighWatermarkValue: Long = 0L,
               val log: Option[Log] = None) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
-  @volatile private[this] var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
+  @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
-  @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+  @volatile private[this] var logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
 
-  val topic = partition.topic
-  val partitionId = partition.partitionId
+  // The log end offset value at the time the leader received the last FetchRequest from this follower
+  // This is used to determine the lastCaughtUpTimeMs of the follower
+  @volatile private[this] var lastFetchLeaderLogEndOffset = 0L
+
+  // The time when the leader received the last FetchRequest from this follower
+  // This is used to determine the lastCaughtUpTimeMs of the follower
+  @volatile private[this] var lastFetchTimeMs = 0L
+
+  // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
+  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
+  @volatile private[this] var _lastCaughtUpTimeMs = 0L
+
+  val topicPartition = partition.topicPartition
 
   def isLocal: Boolean = log.isDefined
 
-  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
+  def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
 
-  def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
-
+  /*
+   * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
+   * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
+   *
+   * Else if the FetchRequest reads up to the log end offset of the leader when the previous fetch request was received,
+   * set `lastCaughtUpTimeMs` to the time when the previous fetch request was received.
+   *
+   * This is needed to enforce the semantics of ISR, i.e. a replica is in ISR if and only if it lags behind leader's LEO
+   * by at most `replicaLagTimeMaxMs`. These semantics allow a follower to be added to the ISR even if the offset of its
+   * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
+   * high frequency.
+   */
   def updateLogReadResult(logReadResult : LogReadResult) {
-    logEndOffset = logReadResult.info.fetchOffsetMetadata
+    if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
+      _lastCaughtUpTimeMs = logReadResult.fetchTimeMs
+    else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
+      _lastCaughtUpTimeMs = lastFetchTimeMs
 
-    /* If the request read up to the log end offset snapshot when the read was initiated,
-     * set the lastCaughtUpTimeMsUnderlying to the current time.
-     * This means that the replica is fully caught up.
-     */
-    if(logReadResult.isReadFromLogEnd) {
-      lastCaughtUpTimeMsUnderlying.set(time.milliseconds)
-    }
+    logEndOffset = logReadResult.info.fetchOffsetMetadata
+    lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
+    lastFetchTimeMs = logReadResult.fetchTimeMs
+  }
+
+  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long) {
+    lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
+    lastFetchTimeMs = curTimeMs
+    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
   }
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
     if (isLocal) {
-      throw new KafkaException("Should not set log end offset on partition [%s,%d]'s local replica %d".format(topic, partitionId, brokerId))
+      throw new KafkaException(s"Should not set log end offset on partition $topicPartition's local replica $brokerId")
     } else {
       logEndOffsetMetadata = newLogEndOffset
-      trace("Setting log end offset for replica %d for partition [%s,%d] to [%s]"
-        .format(brokerId, topic, partitionId, logEndOffsetMetadata))
+      trace(s"Setting log end offset for replica $brokerId for partition $topicPartition to [$logEndOffsetMetadata]")
     }
   }
 
@@ -76,10 +101,9 @@ class Replica(val brokerId: Int,
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
       highWatermarkMetadata = newHighWatermark
-      trace("Setting high watermark for replica %d partition [%s,%d] on broker %d to [%s]"
-        .format(brokerId, topic, partitionId, brokerId, newHighWatermark))
+      trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
-      throw new KafkaException("Should not set high watermark on partition [%s,%d]'s non-local replica %d".format(topic, partitionId, brokerId))
+      throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
     }
   }
 
@@ -89,31 +113,24 @@ class Replica(val brokerId: Int,
     if (isLocal) {
       highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset)
     } else {
-      throw new KafkaException("Should not construct complete high watermark on partition [%s,%d]'s non-local replica %d".format(topic, partitionId, brokerId))
+      throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
     }
   }
 
-  override def equals(that: Any): Boolean = {
-    if(!that.isInstanceOf[Replica])
-      return false
-    val other = that.asInstanceOf[Replica]
-    if(topic.equals(other.topic) && brokerId == other.brokerId && partition.equals(other.partition))
-      return true
-    false
+  override def equals(that: Any): Boolean = that match {
+    case other: Replica => brokerId == other.brokerId && topicPartition == other.topicPartition
+    case _ => false
   }
 
-  override def hashCode(): Int = {
-    31 + topic.hashCode() + 17*brokerId + partition.hashCode()
-  }
-
+  override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId
 
   override def toString: String = {
     val replicaString = new StringBuilder
     replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + topic)
+    replicaString.append("; Topic: " + partition.topic)
     replicaString.append("; Partition: " + partition.partitionId)
     replicaString.append("; isLocal: " + isLocal)
-    if(isLocal) replicaString.append("; Highwatermark: " + highWatermark)
-    replicaString.toString()
+    if (isLocal) replicaString.append("; Highwatermark: " + highWatermark)
+    replicaString.toString
   }
 }

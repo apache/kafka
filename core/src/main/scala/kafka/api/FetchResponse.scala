@@ -18,17 +18,13 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import java.nio.channels.GatheringByteChannel
 
 import kafka.common.TopicAndPartition
 import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.api.ApiUtils._
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.{MultiSend, Send}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
-import scala.collection.JavaConverters._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -49,48 +45,6 @@ object FetchResponsePartitionData {
 
 case class FetchResponsePartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
-}
-
-// SENDS
-
-class PartitionDataSend(val partitionId: Int,
-                        val partitionData: FetchResponsePartitionData) extends Send {
-  private val emptyBuffer = ByteBuffer.allocate(0)
-  private val messageSize = partitionData.messages.sizeInBytes
-  private var messagesSentSize = 0
-  private var pending = false
-  private val buffer = ByteBuffer.allocate( 4 /** partitionId **/ + FetchResponsePartitionData.headerSize)
-  buffer.putInt(partitionId)
-  buffer.putShort(partitionData.error)
-  buffer.putLong(partitionData.hw)
-  buffer.putInt(partitionData.messages.sizeInBytes)
-  buffer.rewind()
-
-  override def completed = !buffer.hasRemaining && messagesSentSize >= messageSize && !pending
-
-  override def destination: String = ""
-
-  override def writeTo(channel: GatheringByteChannel): Long = {
-    var written = 0L
-    if (buffer.hasRemaining)
-      written += channel.write(buffer)
-    if (!buffer.hasRemaining) {
-      if (messagesSentSize < messageSize) {
-        val records = partitionData.messages.asRecords
-        val bytesSent = records.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
-        messagesSentSize += bytesSent
-        written += bytesSent
-      }
-      if (messagesSentSize >= messageSize && hasPendingWrites(channel))
-        channel.write(emptyBuffer)
-    }
-
-    pending = hasPendingWrites(channel)
-
-    written
-  }
-
-  override def size = buffer.capacity() + messageSize
 }
 
 object TopicData {
@@ -118,50 +72,6 @@ case class TopicData(topic: String, partitionData: Seq[(Int, FetchResponsePartit
 
   val headerSize = TopicData.headerSize(topic)
 }
-
-class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
-
-  private val emptyBuffer = ByteBuffer.allocate(0)
-
-  private var sent = 0L
-
-  private var pending = false
-
-  override def completed: Boolean = sent >= size && !pending
-
-  override def destination: String = dest
-
-  override def size = topicData.headerSize + sends.size()
-
-  private val buffer = ByteBuffer.allocate(topicData.headerSize)
-  writeShortString(buffer, topicData.topic)
-  buffer.putInt(topicData.partitionData.size)
-  buffer.rewind()
-
-  private val sends = new MultiSend(dest,
-    topicData.partitionData.map(d => new PartitionDataSend(d._1, d._2): Send).asJava)
-
-  override def writeTo(channel: GatheringByteChannel): Long = {
-    if (completed)
-      throw new KafkaException("This operation cannot be completed on a complete request.")
-
-    var written = 0L
-    if (buffer.hasRemaining)
-      written += channel.write(buffer)
-    if (!buffer.hasRemaining) {
-      if (!sends.completed)
-        written += sends.writeTo(channel)
-      if (sends.completed && hasPendingWrites(channel))
-        written += channel.write(emptyBuffer)
-    }
-
-    pending = hasPendingWrites(channel)
-
-    sent += written
-    written
-  }
-}
-
 
 object FetchResponse {
 
@@ -259,52 +169,4 @@ case class FetchResponse(correlationId: Int,
   def hasError = dataByTopicAndPartition.values.exists(_.error != Errors.NONE.code)
 
   def errorCode(topic: String, partition: Int) = partitionDataFor(topic, partition).error
-}
-
-
-class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) extends Send {
-
-  private val emptyBuffer = ByteBuffer.allocate(0)
-
-  private val payloadSize = fetchResponse.sizeInBytes
-
-  private var sent = 0L
-
-  private var pending = false
-
-  override def size = 4 /* for size byte */ + payloadSize
-
-  override def completed = sent >= size && !pending
-
-  override def destination = dest
-
-  // The throttleTimeSize will be 0 if the request was made from a client sending a V0 style request
-  private val buffer = ByteBuffer.allocate(4 /* for size */ + fetchResponse.headerSizeInBytes)
-  fetchResponse.writeHeaderTo(buffer)
-  buffer.rewind()
-
-  private val sends = new MultiSend(dest, fetchResponse.dataGroupedByTopic.map {
-    case (topic, data) => new TopicDataSend(dest, TopicData(topic, data)): Send
-  }.asJava)
-
-  override def writeTo(channel: GatheringByteChannel): Long = {
-    if (completed)
-      throw new KafkaException("This operation cannot be completed on a complete request.")
-
-    var written = 0L
-
-    if (buffer.hasRemaining)
-      written += channel.write(buffer)
-    if (!buffer.hasRemaining) {
-      if (!sends.completed)
-        written += sends.writeTo(channel)
-      if (sends.completed && hasPendingWrites(channel))
-        written += channel.write(emptyBuffer)
-    }
-
-    sent += written
-    pending = hasPendingWrites(channel)
-
-    written
-  }
 }
