@@ -395,7 +395,7 @@ public class Sender implements Runnable {
             MetricName m = metrics.metricName("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.");
             this.batchSizeSensor.add(m, new Avg());
             m = metrics.metricName("batch-size-max", metricGrpName, "The max number of bytes sent per partition per-request.");
-            this.batchSizeSensor.add(m, new Max());
+            this.batchSizeSensor.add(m, new Max(0.0));
 
             this.compressionRateSensor = metrics.sensor("compression-rate");
             m = metrics.metricName("compression-rate-avg", metricGrpName, "The average compression rate of record batches.");
@@ -405,19 +405,19 @@ public class Sender implements Runnable {
             m = metrics.metricName("record-queue-time-avg", metricGrpName, "The average time in ms record batches spent in the record accumulator.");
             this.queueTimeSensor.add(m, new Avg());
             m = metrics.metricName("record-queue-time-max", metricGrpName, "The maximum time in ms record batches spent in the record accumulator.");
-            this.queueTimeSensor.add(m, new Max());
+            this.queueTimeSensor.add(m, new Max(0.0));
 
             this.requestTimeSensor = metrics.sensor("request-time");
             m = metrics.metricName("request-latency-avg", metricGrpName, "The average request latency in ms");
             this.requestTimeSensor.add(m, new Avg());
             m = metrics.metricName("request-latency-max", metricGrpName, "The maximum request latency in ms");
-            this.requestTimeSensor.add(m, new Max());
+            this.requestTimeSensor.add(m, new Max(0.0));
 
             this.produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
             m = metrics.metricName("produce-throttle-time-avg", metricGrpName, "The average throttle time in ms");
             this.produceThrottleTimeSensor.add(m, new Avg());
             m = metrics.metricName("produce-throttle-time-max", metricGrpName, "The maximum throttle time in ms");
-            this.produceThrottleTimeSensor.add(m, new Max());
+            this.produceThrottleTimeSensor.add(m, new Max(0.0));
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             m = metrics.metricName("record-send-rate", metricGrpName, "The average number of records sent per second.");
@@ -435,7 +435,7 @@ public class Sender implements Runnable {
 
             this.maxRecordSizeSensor = metrics.sensor("record-size-max");
             m = metrics.metricName("record-size-max", metricGrpName, "The maximum record size");
-            this.maxRecordSizeSensor.add(m, new Max());
+            this.maxRecordSizeSensor.add(m, new Max(0.0));
             m = metrics.metricName("record-size-avg", metricGrpName, "The average record size");
             this.maxRecordSizeSensor.add(m, new Avg());
 
