@@ -21,7 +21,6 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -40,8 +39,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -50,7 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -95,115 +91,11 @@ public class NetworkClient implements KafkaClient {
 
     private final Time time;
 
-    private final Map<Integer, NodeVersionInfo> nodeApiVersions = new HashMap<>();
+    private final Map<Integer, NodeApiVersions> nodeApiVersions = new HashMap<>();
 
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
     private final List<ClientResponse> abortedSends = new LinkedList<ClientResponse>();
-
-    private static final class NodeVersionInfo {
-        // The node index
-        private final int nodeIndex;
-
-        private final Collection<ApiVersionsResponse.ApiVersion> apiVersions;
-
-        // An array of the usable versions of each API, indexed by ApiKeys ID.
-        private final short[] usableVersions;
-
-        NodeVersionInfo(int nodeIndex, Collection<ApiVersionsResponse.ApiVersion> apiVersions) {
-            this.nodeIndex = nodeIndex;
-            this.apiVersions = apiVersions;
-            this.usableVersions = new short[ApiKeys.ID_TO_TYPE.length];
-            Arrays.fill(usableVersions, (short) -1);
-            for (ApiVersionsResponse.ApiVersion apiVersion: apiVersions) {
-                int index = apiVersion.apiKey;
-                if ((index < 0) || (index >= usableVersions.length)) {
-                    log.debug("Node " + nodeIndex + ": ignoring unknown ApiKey " + index +
-                            ": we only know API keys between 0 and " +
-                            (usableVersions.length - 1));
-                    continue;
-                }
-                if (Protocol.CURR_VERSION[index] < apiVersion.minVersion) {
-                    log.debug("Node " + nodeIndex + ": the client's version of API " + index +
-                            " is too old for this server.  Needed at least version " +
-                            apiVersion.minVersion + ".  Our maximum version is " +
-                            Protocol.CURR_VERSION[index]);
-                    usableVersions[index] = -1;
-                    continue;
-                }
-                if (Protocol.MIN_VERSIONS[index] > apiVersion.maxVersion) {
-                    log.debug("Node " + nodeIndex + ": the client's version of API " + index +
-                            " is too new for this server.  Needed at most version " +
-                            apiVersion.maxVersion + ".  Our minimum version is " +
-                            Protocol.MIN_VERSIONS[index]);
-                    usableVersions[index] = -1;
-                    continue;
-                }
-                if (Protocol.CURR_VERSION[index] < apiVersion.maxVersion) {
-                    usableVersions[index] = Protocol.CURR_VERSION[index];
-                } else {
-                    usableVersions[index] = apiVersion.maxVersion;
-                }
-                log.debug("Node " + nodeIndex + ": for API " + index + ", using version " +
-                        usableVersions[index]);
-            }
-        }
-
-        public short getUsableVersion(short apiKey) {
-            if ((apiKey < 0) || (apiKey >= usableVersions.length)) {
-                return (short) -1;
-            } else {
-                return usableVersions[apiKey];
-            }
-        }
-
-        @Override
-        public String toString() {
-            // The apiVersion collection may not be in sorted order.  We put it into
-            // a TreeMap before printing it out to ensure that we always print in
-            // ascending order.  We also handle the case where some apiKey types are
-            // unknown, which may happen when either the client or server is newer.
-            //
-            // This toString method is relatively expensive, so you probably want to avoid
-            // calling it unless debug logging is turned on.
-            TreeMap<Short, CharSequence> apiKeysStr = new TreeMap<Short, CharSequence>();
-            for (ApiVersionsResponse.ApiVersion apiVersion: this.apiVersions) {
-                StringBuilder bld = new StringBuilder();
-                int apiKey = apiVersion.apiKey;
-                if ((apiKey < 0) || (apiKey >= ApiKeys.ID_TO_TYPE.length)) {
-                    bld.append("UNKNOWN(").append(apiKey).append("): supports ");
-                } else {
-                    bld.append(ApiKeys.ID_TO_TYPE[apiKey].name).
-                            append(": supports ");
-                }
-                if (apiVersion.minVersion == apiVersion.maxVersion) {
-                    bld.append((int) apiVersion.minVersion);
-                } else {
-                    bld.append((int) apiVersion.minVersion).
-                            append(" to ").
-                            append(apiVersion.maxVersion);
-                }
-                if ((apiKey >= 0) && (apiKey < ApiKeys.ID_TO_TYPE.length)) {
-                    int usableVersion = usableVersions[apiKey];
-                    if (usableVersion < 0) {
-                        bld.append(".  Usable version: NONE");
-                    } else {
-                        bld.append(".  Usable version: ").append(usableVersion);
-                    }
-                }
-                apiKeysStr.put(apiVersion.apiKey, bld);
-            }
-            StringBuilder bld = new StringBuilder();
-            bld.append("{");
-            String prefix = "";
-            for (CharSequence seq : apiKeysStr.values()) {
-                bld.append(prefix).append(seq);
-                prefix = ", ";
-            }
-            bld.append("}");
-            return bld.toString();
-        }
-    }
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -383,7 +275,7 @@ public class NetworkClient implements KafkaClient {
         AbstractRequest request = null;
         AbstractRequest.Builder builder = clientRequest.requestBuilder();
         try {
-            NodeVersionInfo versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
+            NodeApiVersions versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
             // Note: if versionInfo is null, we have no server version information.
             // This would be the case when sending the initial ApiVersionRequest which
             // fetches the version information itself, for example.
@@ -649,8 +541,7 @@ public class NetworkClient implements KafkaClient {
             return;
         }
         int nodexIndex = Integer.parseInt(node);
-        NodeVersionInfo nodeVersionInfo =
-                new NodeVersionInfo(nodexIndex, apiVersionsResponse.apiVersions());
+        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
         nodeApiVersions.put(nodexIndex, nodeVersionInfo);
         this.connectionStates.ready(node);
         if (log.isDebugEnabled()) {
