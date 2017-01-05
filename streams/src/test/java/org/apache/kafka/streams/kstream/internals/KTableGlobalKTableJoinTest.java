@@ -51,7 +51,7 @@ public class KTableGlobalKTableJoinTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldNotForwardIfKeyNotInOtherStore() throws Exception {
+    public void shouldNotForwardIfNewValueMapsToKeyNotInOtherStoreAndOldValueIsNull() throws Exception {
         final Processor<String, Change<String>> processor = join.get();
         processor.init(context);
         processor.process("A", new Change<>("1", null));
@@ -96,18 +96,7 @@ public class KTableGlobalKTableJoinTest {
     }
 
     @Test
-    public void shouldNotForwardIfDeleteAndOldKeyNotInOtherStoreAndSendOldValues() throws Exception {
-        join.enableSendingOldValues();
-        final Processor<String, Change<String>> processor = join.get();
-        processor.init(context);
-        processor.process("A", new Change<>(null, "1"));
-        final Change<String> a = (Change<String>) context.forwardedValues.get("A");
-        assertNull(a);
-    }
-
-    @Test
     public void shouldSendDeletesIfChangeHasOldValue() throws Exception {
-        global.put("1", "A");
         final Processor<String, Change<String>> processor = join.get();
         processor.init(context);
         processor.process("A", new Change<>(null, "1"));
@@ -116,8 +105,9 @@ public class KTableGlobalKTableJoinTest {
         assertThat(a.oldValue, is(nullValue()));
     }
 
+
     @Test
-    public void shouldSendDeleteIfBothNewAndOldValuesAreNullButKeyMappingReturnsKey() throws Exception {
+    public void shouldNotForwardIfBothNewAndOldValuesAreNull() throws Exception {
         final KTableGlobalKTableJoin<String, String, String, String, String> join
                 = new KTableGlobalKTableJoin<>(new ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
                                                new ValueGetterSupplier<>(global),
@@ -129,8 +119,7 @@ public class KTableGlobalKTableJoinTest {
         processor.init(context);
         processor.process("1", new Change<String>(null, null));
         final Change<String> a = (Change<String>) context.forwardedValues.get("1");
-        assertThat(a.newValue, is(nullValue()));
-        assertThat(a.oldValue, is(nullValue()));
+        assertNull(a);
     }
 
 

@@ -29,6 +29,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertNull;
 
 @SuppressWarnings("unchecked")
 public class KTableGlobalKTableLeftJoinTest {
@@ -135,7 +136,7 @@ public class KTableGlobalKTableLeftJoinTest {
     }
 
     @Test
-    public void shouldSendDeleteIfBothNewAndOldValuesAreNullButKeyMappingReturnsKey() throws Exception {
+    public void shouldNotForwardIfBothNewAndOldValuesAreNull() throws Exception {
         final KTableGlobalKTableLeftJoin<String, String, String, String, String> join
                 = new KTableGlobalKTableLeftJoin<>(new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
                                                new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(global),
@@ -147,8 +148,7 @@ public class KTableGlobalKTableLeftJoinTest {
         processor.init(context);
         processor.process("1", new Change<String>(null, null));
         final Change<String> a = (Change<String>) context.forwardedValues.get("1");
-        assertThat(a.newValue, is(nullValue()));
-        assertThat(a.oldValue, is(nullValue()));
+        assertNull(a);
     }
 
     static class ValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {

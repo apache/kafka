@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -106,7 +107,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test(expected = LockException.class)
     public void shouldThrowStreamsExceptionIfCantGetLock() throws Exception {
         final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
         try {
@@ -337,7 +338,7 @@ public class GlobalStateManagerImplTest {
             @Override
             public void close() {
                 super.close();
-                throw new RuntimeException("BOOM!");
+                throw new RuntimeException("KABOOM!");
             }
         };
         stateManager.register(store, false, null);

@@ -355,6 +355,7 @@ public class KafkaStreams {
         log.debug("Starting Kafka Stream process");
 
         if (state == KafkaStreams.State.CREATED) {
+            setState(KafkaStreams.State.RUNNING);
 
             if (globalStreamThread != null) {
                 globalStreamThread.start();
@@ -364,7 +365,6 @@ public class KafkaStreams {
                 thread.start();
             }
 
-            setState(KafkaStreams.State.RUNNING);
             log.info("Started Kafka Stream process");
         } else {
             throw new IllegalStateException("Cannot start again.");

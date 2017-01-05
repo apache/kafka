@@ -56,18 +56,16 @@ class KTableGlobalKTableLeftJoinProcessor<K1, K2, V1, V2, R> extends AbstractPro
             throw new StreamsException("Record key for KTable left-join operator should not be null.");
         }
 
+        if (change.newValue == null && change.oldValue == null) {
+            return;
+        }
+
         final V2 newOtherValue = valueGetter.get(keyValueMapper.apply(key, change.newValue));
         final V2 oldOtherValue = valueGetter.get(keyValueMapper.apply(key, change.oldValue));
 
-        if (newOtherValue != null
-                || oldOtherValue != null
-                || change.newValue != null
-                || change.oldValue != null) {
-
-            final R newValue = applyJoin(change.newValue, newOtherValue, true);
-            final R oldValue = applyJoin(change.oldValue, oldOtherValue, sendOldValues);
-            context().forward(key, new Change<>(newValue, oldValue));
-        }
+        final R newValue = applyJoin(change.newValue, newOtherValue, true);
+        final R oldValue = applyJoin(change.oldValue, oldOtherValue, sendOldValues);
+        context().forward(key, new Change<>(newValue, oldValue));
 
     }
 

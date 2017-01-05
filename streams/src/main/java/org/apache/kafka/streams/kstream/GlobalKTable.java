@@ -26,7 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
  * <p>
  * A {@link GlobalKTable} is fully replicated per {@link KafkaStreams} instance. Every partition of the underlying topic
  * is consumed by each {@link GlobalKTable}, such that the full set of data is available in every {@link KafkaStreams} instance.
- * This provides the ability to perform joins with {@link KStream}, {@link KTable}, and other {@link GlobalKTable}s
+ * This provides the ability to perform joins with {@link KStream}, and {@link KTable},
  * without having to repartition the input streams. All joins with the {@link GlobalKTable} require that a {@link KeyValueMapper}
  * is provided that can map from the (key, value) of the left hand side to the key of the right hand side {@link GlobalKTable}
  * <p>
@@ -37,7 +37,7 @@ import org.apache.kafka.streams.KafkaStreams;
  * all {@link GlobalKTable}s are backed by a {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore ReadOnlyKeyValueStore}
  * and are therefore queryable via the interactive queries API.
  * For example:
- * <pre>
+ * <pre>{@code
  *     final GlobalKTable globalOne = builder.globalTable("g1", "g1-store");
  *     final GlobalKTable globalTwo = builder.globalTable("g2", "g2-store");
  *     ...
@@ -46,7 +46,7 @@ import org.apache.kafka.streams.KafkaStreams;
  *     ...
  *     ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
  *     view.get(key);
- *</pre>
+ *}</pre>
  *
  *
  * @param <K> Type of primary keys

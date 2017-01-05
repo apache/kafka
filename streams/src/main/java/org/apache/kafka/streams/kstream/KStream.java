@@ -1514,7 +1514,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1584,7 +1584,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1661,28 +1661,25 @@ public interface KStream<K, V> {
      * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link GlobalKTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as this {@link KStream}
      * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@link KStream}.
-     *
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> state of {@link GlobalKTable}.
-     *
+     **
      * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
      *                          to the key of the {@link GlobalKTable}
      * @param valueJoiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <K1>              the key type of {@link GlobalKTable}
-     * @param <V1>              the value type of the {@link GlobalKTable}
-     * @param <R>               the value type of the resulting {@link KStream}
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
      * @return a {@link KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@link KStream} record
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
-    <K1, V1, R> KStream<K, R> leftJoin(GlobalKTable<K1, V1> globalKTable, KeyValueMapper<K, V, K1> keyValueMapper, ValueJoiner<V, V1, R> valueJoiner);
+    <GK, GV, RV> KStream<K, RV> leftJoin(GlobalKTable<GK, GV> globalKTable, KeyValueMapper<K, V, GK> keyValueMapper, ValueJoiner<V, GV, RV> valueJoiner);
 
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi join
@@ -1699,19 +1696,17 @@ public interface KStream<K, V> {
      * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@link KStream}.
      * <p>
-     * Keep in mind, that the result depends on the non-deterministic processing order of the input streams because
-     * the lookup is done on the <em>current</em> state of {@link GlobalKTable}.
-     *
+
      * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
      *                          to the key of the {@link GlobalKTable}
      * @param joiner            a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <K1>              the key type of {@link GlobalKTable}
-     * @param <V1>              the value type of the {@link GlobalKTable}
-     * @param <R>               the value type of the resulting {@link KStream}
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
      * @return a {@link KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@link KStream} record
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
-    <K1, V1, V2> KStream<K, V2> join(GlobalKTable<K1, V1> globalKTable, KeyValueMapper<K, V, K1> keyValueMapper, ValueJoiner<V, V1, V2> joiner);
+    <GK, GV, RV> KStream<K, RV> join(GlobalKTable<GK, GV> globalKTable, KeyValueMapper<K, V, GK> keyValueMapper, ValueJoiner<V, GV, RV> joiner);
 }

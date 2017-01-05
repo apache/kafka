@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -73,10 +74,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public Set<String> initialize(final InternalProcessorContext processorContext) {
         try {
             if (!stateDirectory.lockGlobalState(MAX_LOCK_ATTEMPTS)) {
-                throw new StreamsException(String.format("Failed to lock the global state directory: %s", baseDir));
+                throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
             }
         } catch (IOException e) {
-            throw new StreamsException(String.format("Failed to lock the global state directory: %s", baseDir));
+            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
         }
 
         try {

@@ -81,7 +81,7 @@ public class GlobalStreamThreadTest {
         assertTrue(globalStreamThread.stillRunning());
     }
 
-    @Test
+    @Test(timeout = 30000)
     public void shouldStopRunningWhenClosedByUser() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
