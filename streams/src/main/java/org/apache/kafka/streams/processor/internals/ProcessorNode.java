@@ -86,16 +86,18 @@ public class ProcessorNode<K, V> {
      * @return a string representation of this node, useful for debugging.
      */
     public String toString() {
-        StringBuilder sb = new StringBuilder("");
-        sb.append(name + ": ");
+        StringBuilder sb = new StringBuilder(name);
+        sb.append(":");
         if (stateStores != null && !stateStores.isEmpty()) {
-            sb.append("stateStores [");
-            for (String store : (Set<String>) stateStores) {
-                sb.append(store + ",");
+            sb.append("\n\t\t\t\t\tstates:\t\t[");
+            for (String store : stateStores) {
+                sb.append(store);
+                sb.append(", ");
             }
-            sb.setLength(sb.length() - 1);
-            sb.append("] ");
+            sb.setLength(sb.length() - 2);  // remove the last comma
+            sb.append("]");
         }
+        sb.append("\n");
         return sb.toString();
     }
 }

@@ -77,7 +77,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         }
 
         try {
-            collector.send(new ProducerRecord<K, V>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
+            collector.send(new ProducerRecord<>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
         } catch (ClassCastException e) {
             throw new StreamsException(
                     String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
@@ -101,7 +101,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      */
     public String toString() {
         StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("topic:" + topic);
+        sb.append("\t\t\t\t\ttopic:\t\t");
+        sb.append(topic);
+        sb.append("\n");
         return sb.toString();
     }
 }

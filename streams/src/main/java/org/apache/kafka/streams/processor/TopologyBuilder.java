@@ -188,7 +188,8 @@ public class TopologyBuilder {
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build() {
-            return new SourceNode(name, nodeToSourceTopics.get(name), keyDeserializer, valDeserializer);
+            String[] sourceTopics = nodeToSourceTopics.get(name);
+            return new SourceNode(name, maybeDecorateInternalSourceTopics(sourceTopics).toArray(new String[sourceTopics.length]), keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(String topic) {
