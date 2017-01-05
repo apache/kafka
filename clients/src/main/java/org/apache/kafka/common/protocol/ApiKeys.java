@@ -43,7 +43,7 @@ public enum ApiKeys {
     DELETE_TOPICS(20, "DeleteTopics");
 
     public static final ApiKeys[] ID_TO_TYPE;
-    private static final int MIN_API_KEY = 0;
+    public static final int MIN_API_KEY = 0;
     public static final int MAX_API_KEY;
 
     static {
