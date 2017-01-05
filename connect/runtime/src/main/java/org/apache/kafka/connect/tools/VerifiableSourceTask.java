@@ -122,6 +122,25 @@ public class VerifiableSourceTask extends SourceTask {
     }
 
     @Override
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", name);
+        data.put("task", id);
+        data.put("topic", this.topic);
+        data.put("time_ms", System.currentTimeMillis());
+        data.put("seqno", record.value());
+        data.put("committed", true);
+
+        String dataJson;
+        try {
+            dataJson = JSON_SERDE.writeValueAsString(data);
+        } catch (JsonProcessingException e) {
+            dataJson = "Bad data can't be written as json: " + e.getMessage();
+        }
+        System.out.println(dataJson);
+    }
+
+    @Override
     public void stop() {
         throttler.wakeup();
     }
