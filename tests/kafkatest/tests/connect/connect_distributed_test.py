@@ -238,7 +238,7 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc)
         self.source.start()
 
-        wait_until(lambda: len(self.source.messages()) > 0, timeout_sec=30,
+        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc)
