@@ -912,7 +912,7 @@ public class Fetcher<K, V> {
                 "The average number of bytes fetched per request"), new Avg());
             this.bytesFetched.add(metrics.metricName("fetch-size-max",
                 this.metricGrpName,
-                "The maximum number of bytes fetched per request"), new Max());
+                "The maximum number of bytes fetched per request"), new Max(0.0));
             this.bytesFetched.add(metrics.metricName("bytes-consumed-rate",
                 this.metricGrpName,
                 "The average number of bytes consumed per second"), new Rate());
@@ -931,7 +931,7 @@ public class Fetcher<K, V> {
                 "The average time taken for a fetch request."), new Avg());
             this.fetchLatency.add(metrics.metricName("fetch-latency-max",
                 this.metricGrpName,
-                "The max time taken for any fetch request."), new Max());
+                "The max time taken for any fetch request."), new Max(0.0));
             this.fetchLatency.add(metrics.metricName("fetch-rate",
                 this.metricGrpName,
                 "The number of fetch requests per second."), new Rate(new Count()));
@@ -939,7 +939,7 @@ public class Fetcher<K, V> {
             this.recordsFetchLag = metrics.sensor("records-lag");
             this.recordsFetchLag.add(metrics.metricName("records-lag-max",
                 this.metricGrpName,
-                "The maximum lag in terms of number of records for any partition in this window"), new Max());
+                "The maximum lag in terms of number of records for any partition in this window"), new Max(0.0));
 
             this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
             this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
@@ -948,7 +948,7 @@ public class Fetcher<K, V> {
 
             this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
                                                          this.metricGrpName,
-                                                         "The maximum throttle time in ms"), new Max());
+                                                         "The maximum throttle time in ms"), new Max(0.0));
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -966,7 +966,7 @@ public class Fetcher<K, V> {
                 bytesFetched.add(this.metrics.metricName("fetch-size-max",
                         this.metricGrpName,
                         "The maximum number of bytes fetched per request for topic " + topic,
-                        metricTags), new Max());
+                        metricTags), new Max(0.0));
                 bytesFetched.add(this.metrics.metricName("bytes-consumed-rate",
                         this.metricGrpName,
                         "The average number of bytes consumed per second for topic " + topic,

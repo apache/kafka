@@ -695,7 +695,7 @@ public class Selector implements Selectable {
             metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
             this.bytesSent.add(metricName, new Avg());
             metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
-            this.bytesSent.add(metricName, new Max());
+            this.bytesSent.add(metricName, new Max(0.0));
 
             this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
             metricName = metrics.metricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
@@ -752,7 +752,7 @@ public class Selector implements Selectable {
                     metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
                     nodeRequest.add(metricName, new Avg());
                     metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
-                    nodeRequest.add(metricName, new Max());
+                    nodeRequest.add(metricName, new Max(0.0));
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
@@ -766,7 +766,7 @@ public class Selector implements Selectable {
                     metricName = metrics.metricName("request-latency-avg", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
                     metricName = metrics.metricName("request-latency-max", metricGrpName, tags);
-                    nodeRequestTime.add(metricName, new Max());
+                    nodeRequestTime.add(metricName, new Max(0.0));
                 }
             }
         }

@@ -737,7 +737,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
             this.heartbeatLatency.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
-                "The max time taken to receive a response to a heartbeat request"), new Max());
+                "The max time taken to receive a response to a heartbeat request"), new Max(0.0));
             this.heartbeatLatency.add(metrics.metricName("heartbeat-rate",
                 this.metricGrpName,
                 "The average number of heartbeats per second"), new Rate(new Count()));

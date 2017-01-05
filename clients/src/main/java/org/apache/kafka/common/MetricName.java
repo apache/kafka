@@ -49,7 +49,7 @@ import org.apache.kafka.common.utils.Utils;
  * sensor.add(metricName, new Avg());
  *
  * metricName = metrics.metricName("message-size-max", "producer-metrics");
- * sensor.add(metricName, new Max());
+ * sensor.add(metricName, new Max(0.0));
  *
  * metricName = metrics.metricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
  * sensor.add(metricName, new Min());

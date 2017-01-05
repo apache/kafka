@@ -776,7 +776,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 "The average time taken for a commit request"), new Avg());
             this.commitLatency.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
-                "The max time taken for a commit request"), new Max());
+                "The max time taken for a commit request"), new Max(0.0));
             this.commitLatency.add(metrics.metricName("commit-rate",
                 this.metricGrpName,
                 "The number of commit calls per second"), new Rate(new Count()));
