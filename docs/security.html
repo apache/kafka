@@ -263,23 +263,53 @@
     <li><h4><a id="security_sasl_clientconfig"
         href="#security_sasl_clientconfig">SASL configuration for Kafka clients</a></h4>
         SASL authentication is only supported for the new Java Kafka producer and
-        consumer, the older API is not supported. To configure SASL authentication
-        on the clients:
+        consumer, the older API is not supported. JAAS configuration for clients may
+        be specified as a static JAAS config file or using the client configuration property
+        <code>sasl.jaas.config</code>.
+        To configure SASL authentication on the clients:
         <ol>
         <li>Select a SASL mechanism for authentication.</li>
-        <li>Add a JAAS config file for the selected mechanism as described in the examples
-            for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>
-            or <a href="#security_sasl_plain_clientconfig">PLAIN</a>. <tt>KafkaClient</tt> is the
-            section name in the JAAS file used by Kafka clients.</li>
-        <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
-            <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
         <li>Configure the following properties in producer.properties or
             consumer.properties:
             <pre>    security.protocol=SASL_PLAINTEXT (or SASL_SSL)
-        sasl.mechanism=GSSAPI (or PLAIN)</pre></li>
+    sasl.mechanism=GSSAPI (or PLAIN)</pre></li>
         <li>Follow the steps in <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>
             or <a href="#security_sasl_plain_clientconfig">PLAIN</a> to configure SASL
             for the selected mechanism.</li>
+        <li>Configure JAAS using <a href="#security_client_staticjaas">static JAAS config file</a>
+            or <a href="#security_client_dynamicjaas">client configuration property</a> as described below.</li>
+        </ol>
+        <ol>
+        <li><h5><a id="security_client_staticjaas" href="#security_client_staticjaas">JAAS configuration using static config file</a></h5>
+            To configure SASL authentication on the clients using static JAAS config file:
+            <ol>
+            <li>Add a JAAS config file for the selected mechanism as described in the examples
+                for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>
+                or <a href="#security_sasl_plain_clientconfig">PLAIN</a>. <tt>KafkaClient</tt> is the
+                section name in the JAAS file used by Kafka clients.
+            <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
+                <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+            </ol>
+        </li>
+        <li><h5><a id="security_client_dynamicjaas" href="#security_client_dynamicjaas">JAAS configuration using client configuration property</a></h5>
+            <p>Clients may specify JAAS configuration as a producer or consumer property without
+            creating a physical configuration file. This mode also enables different producers
+            and consumers within the same JVM to use different credentials by specifying
+            different properties for each client. If both static JAAS configuration system property
+            <code>java.security.auth.login.config</code> and client property <code>sasl.jaas.config</code>
+            are specified, the client property will be used.</p>
+
+            To configure SASL authentication on the clients using configuration property:
+            <ol>
+            <li>Configure the property <code>sasl.jaas.config</code> in producer.properties or
+                consumer.properties to be the JAAS login module section of the selected mechanism.
+                For example, <a href="#security_sasl_plain_clientconfig">PLAIN</a>
+                credentials may be configured as:
+                <pre>    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="alice" password="alice-secret";</pre></li>
+                See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a> or <a href="#security_sasl_plain_clientconfig">PLAIN</a>
+                for full example configurations.
+            </ol>
+        </li>
         </ol>
     </li>
     <li><h4><a id="security_sasl_kerberos" href="#security_sasl_kerberos">Authentication using SASL/Kerberos</a></h4>
@@ -359,7 +389,9 @@
                 </li>
                 <li>Pass the JAAS and optionally krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details): 
                 <pre>    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
-        -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre>
+                JAAS configuration may alternatively be specified as a property in producer.properties or consumer.properties:
+                <pre>    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="/etc/security/keytabs/kafka_client.keytab" principal="kafka-client-1@EXAMPLE.COM";</pre></li>
                 <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
                 <li>Configure the following properties in producer.properties or consumer.properties: 
                 <pre>    security.protocol=SASL_PLAINTEXT (or SASL_SSL)
@@ -416,7 +448,10 @@
                 the user for client connections. In this example, clients connect to the broker as user <i>alice</i>.
             </li>
             <li>Pass the JAAS config file location as JVM parameter to each client JVM:
-                <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+                <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre>
+                Alternatively, JAAS configuration may be specified as a property in producer.properties or consumer.properties:
+                <pre>    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="alice" password="alice-secret";</pre></li>
+            </li>
             <li>Configure the following properties in producer.properties or consumer.properties:
                 <pre>    security.protocol=SASL_SSL
         sasl.mechanism=PLAIN</pre></li>
