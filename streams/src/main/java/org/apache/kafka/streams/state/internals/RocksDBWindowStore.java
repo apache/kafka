@@ -20,7 +20,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -30,17 +29,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.List;
 import java.util.NoSuchElementException;
 
 class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
-    private static final HasNextCondition<Long> ITERATOR_HAS_NEXT = new HasNextCondition<Long>() {
-        @Override
-        public boolean hasNext(final KeyValueIterator<Long, ?> iterator) {
-            return iterator.hasNext();
-        }
-    };
     private final String name;
     private final SegmentedBytesStore bytesStore;
     private final boolean retainDuplicates;
@@ -157,32 +149,4 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    static class WindowStoreKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
-        private final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("window-store-key-schema", Serdes.Bytes(), Serdes.ByteArray());
-
-        @Override
-        public Bytes upperRange(final Bytes key, final long to) {
-            return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes));
-        }
-
-        @Override
-        public Bytes lowerRange(final Bytes key, final long from) {
-            return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes));
-        }
-
-        @Override
-        public long segmentTimestamp(final Bytes key) {
-            return WindowStoreUtils.timestampFromBinaryKey(key.get());
-        }
-
-        @Override
-        public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
-            return ITERATOR_HAS_NEXT;
-        }
-
-        @Override
-        public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
-            return segments.segments(from, to);
-        }
-    }
 }

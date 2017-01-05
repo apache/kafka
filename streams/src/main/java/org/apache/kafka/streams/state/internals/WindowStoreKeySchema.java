@@ -18,56 +18,42 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-
-class SessionKeySchema implements SegmentedBytesStore.KeySchema {
+class WindowStoreKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+    private static final HasNextCondition ITERATOR_HAS_NEXT = new HasNextCondition() {
+        @Override
+        public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
+            return iterator.hasNext();
+        }
+    };
+    private final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("window-store-key-schema", Serdes.Bytes(), Serdes.ByteArray());
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new TimeWindow(to, Long.MAX_VALUE));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes));
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new TimeWindow(0, Math.max(0, from)));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes));
     }
 
     @Override
     public long segmentTimestamp(final Bytes key) {
-        return SessionKeySerde.extractEnd(key.get());
+        return WindowStoreUtils.timestampFromBinaryKey(key.get());
     }
 
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
-        return new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                if (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final Bytes keyBytes = Bytes.wrap(SessionKeySerde.extractKeyBytes(bytes.get()));
-                    if (!keyBytes.equals(binaryKey)) {
-                        return false;
-                    }
-                    final long start = SessionKeySerde.extractStart(bytes.get());
-                    final long end = SessionKeySerde.extractEnd(bytes.get());
-                    return end >= from && start <= to;
-                }
-                return false;
-            }
-        };
+        return ITERATOR_HAS_NEXT;
     }
 
     @Override
     public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
-        return segments.segments(from, Long.MAX_VALUE);
+        return segments.segments(from, to);
     }
-
 }

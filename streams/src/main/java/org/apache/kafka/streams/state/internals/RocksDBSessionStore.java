@@ -103,7 +103,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         return findSessionsToMerge(key, 0, Long.MAX_VALUE);
     }
 
-    static class SessionStoreIterator<K, AGG> implements KeyValueIterator<Windowed<K>, AGG> {
+    private static class SessionStoreIterator<K, AGG> implements KeyValueIterator<Windowed<K>, AGG> {
 
         private final KeyValueIterator<Bytes, byte[]> bytesIterator;
         private final StateSerdes<K, AGG> serdes;

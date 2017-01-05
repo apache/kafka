@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-interface HasNextCondition<K> {
-    boolean hasNext(final KeyValueIterator<K, ?> iterator);
+interface HasNextCondition {
+    boolean hasNext(final KeyValueIterator<Bytes, ?> iterator);
 }

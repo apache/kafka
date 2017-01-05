@@ -66,7 +66,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
                                                                                                        earliestSessionEndTime).get(),
                                                                                   keySchema.upperRange(binarySessionId, latestSessionStartTime).get());
         final KeyValueIterator<Bytes, byte[]> storeIterator = bytesStore.fetch(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
-        final HasNextCondition<Bytes> hasNextCondition = keySchema.hasNextCondition(binarySessionId,
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionId,
                                                                                     earliestSessionEndTime,
                                                                                     latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
@@ -191,10 +191,10 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
 
     private static class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
         private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
-        private final HasNextCondition<Bytes> hasNextCondition;
+        private final HasNextCondition hasNextCondition;
 
         FilteredCacheIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
-                              final HasNextCondition<Bytes> hasNextCondition) {
+                              final HasNextCondition hasNextCondition) {
             this.cacheIterator = cacheIterator;
             this.hasNextCondition = hasNextCondition;
         }
