@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class MeteredSegmentedBytesStore implements SegmentedBytesStore {
+class MeteredSegmentedBytesStore implements SegmentedBytesStore {
 
     private final SegmentedBytesStore inner;
     private final String metricScope;
@@ -40,7 +40,7 @@ public class MeteredSegmentedBytesStore implements SegmentedBytesStore {
     private Sensor getTime;
     private Sensor removeTime;
 
-    public MeteredSegmentedBytesStore(final SegmentedBytesStore inner, String metricScope, Time time) {
+    MeteredSegmentedBytesStore(final SegmentedBytesStore inner, String metricScope, Time time) {
         this.inner = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
@@ -137,7 +137,7 @@ public class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         private final Sensor sensor;
         private final long startNs;
 
-        public MeteredSegmentedBytesStoreIterator(final KeyValueIterator<Bytes, byte[]> iter, Sensor sensor) {
+        MeteredSegmentedBytesStoreIterator(final KeyValueIterator<Bytes, byte[]> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();

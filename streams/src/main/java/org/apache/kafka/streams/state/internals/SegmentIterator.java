@@ -21,7 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -31,26 +30,23 @@ import java.util.NoSuchElementException;
  * @param <K>
  * @param <V>
  */
-class SegmentIterator<K, V> implements KeyValueIterator<K, V> {
+class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
-    private final StateSerdes<?, V> serdes;
     private final Iterator<Segment> segments;
-    private final KeyExtractor<K> keyExtractor;
     private final HasNextCondition hasNextCondition;
-    private final SegmentQuery segmentQuery;
+    private final Bytes from;
+    private final Bytes to;
     private KeyValueIterator<Bytes, byte[]> currentIterator;
     private KeyValueStore<Bytes, byte[]> currentSegment;
 
-    SegmentIterator(final StateSerdes<?, V> serdes,
-                    final Iterator<Segment> segments,
-                    final KeyExtractor<K> keyExtractor,
+    SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
-                    final SegmentQuery segmentQuery) {
-        this.serdes = serdes;
+                    final Bytes from,
+                    final Bytes to) {
         this.segments = segments;
-        this.keyExtractor = keyExtractor;
         this.hasNextCondition = hasNextCondition;
-        this.segmentQuery = segmentQuery;
+        this.from = from;
+        this.to = to;
     }
 
     public void close() {
@@ -61,11 +57,11 @@ class SegmentIterator<K, V> implements KeyValueIterator<K, V> {
     }
 
     @Override
-    public K peekNextKey() {
+    public Bytes peekNextKey() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
-        return keyExtractor.apply(currentIterator.peekNextKey());
+        return currentIterator.peekNextKey();
     }
 
     @SuppressWarnings("unchecked")
@@ -76,7 +72,7 @@ class SegmentIterator<K, V> implements KeyValueIterator<K, V> {
             close();
             currentSegment = segments.next();
             try {
-                currentIterator = segmentQuery.query(currentSegment);
+                currentIterator = currentSegment.range(from, to);
             } catch (InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
             }
@@ -84,24 +80,15 @@ class SegmentIterator<K, V> implements KeyValueIterator<K, V> {
         return currentIterator != null && hasNext;
     }
 
-    public KeyValue<K, V> next() {
+    public KeyValue<Bytes, byte[]> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
-        KeyValue<Bytes, byte[]> kv = currentIterator.next();
-        return new KeyValue<>(keyExtractor.apply(kv.key),
-                              serdes.valueFrom(kv.value));
+        return currentIterator.next();
     }
 
     public void remove() {
         throw new UnsupportedOperationException("remove not supported");
     }
 
-    interface KeyExtractor<K> {
-        K apply(final Bytes data);
-    }
-
-    interface SegmentQuery<K, V> {
-        KeyValueIterator<K, V> query(final KeyValueStore<Bytes, byte[]> segment);
-    }
 }

@@ -16,14 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
@@ -32,13 +29,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private final String name;
     private final Segments segments;
     private final KeySchema keySchema;
-    private final StateSerdes<Bytes, byte[]> serdes;
-    private SegmentIterator.KeyExtractor<Bytes> keyExtractor = new SegmentIterator.KeyExtractor<Bytes>() {
-        @Override
-        public Bytes apply(final Bytes data) {
-            return data;
-        }
-    };
     private ProcessorContext context;
     private volatile boolean open;
 
@@ -48,7 +38,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                final int numSegments,
                                final KeySchema keySchema) {
         this.name = name;
-        this.serdes = new StateSerdes<>(name, Serdes.Bytes(), Serdes.ByteArray());
         this.keySchema = keySchema;
         this.segments = new Segments(name, retention, numSegments);
     }
@@ -62,18 +51,10 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         final Bytes binaryFrom = keySchema.lowerRange(key, from);
         final Bytes binaryTo = keySchema.upperRange(key, to);
 
-        final SegmentIterator.SegmentQuery<Bytes, byte[]> segmentQuery = new SegmentIterator.SegmentQuery<Bytes, byte[]>() {
-            @Override
-            public KeyValueIterator<Bytes, byte[]> query(final KeyValueStore<Bytes, byte[]> segment) {
-                return segment.range(binaryFrom, binaryTo);
-            }
-        };
-
-        return new SegmentIterator<>(serdes,
-                                     searchSpace.iterator(),
-                                     keyExtractor,
-                                     keySchema.hasNextCondition(key, from, to),
-                                     segmentQuery);
+        return new SegmentIterator(
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(key, from, to),
+                binaryFrom, binaryTo);
     }
 
     @Override

@@ -104,7 +104,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
     }
 
     @SuppressWarnings("unchecked")
-    void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
         if (keySerde == null) {

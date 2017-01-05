@@ -66,7 +66,7 @@ public class RocksDBSessionStoreTest {
     }
 
     @Test
-    public void shouldPutAndFindSessionsToMerge() throws Exception {
+    public void shouldPutAndFindSessionsInRange() throws Exception {
         final String key = "a";
         final Windowed<String> a1 = new Windowed<>(key, new TimeWindow(10, 10L));
         final Windowed<String> a2 = new Windowed<>(key, new TimeWindow(500L, 1000L));

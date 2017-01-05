@@ -21,8 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -31,15 +29,22 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
 
     private final Segment segmentOne = new Segment("one", "one", 0);
     private final Segment segmentTwo = new Segment("two", "window", 1);
-    private SegmentIterator<String, String> iterator;
+    private final HasNextCondition hasNextCondition = new HasNextCondition() {
+        @Override
+        public boolean hasNext(final KeyValueIterator iterator) {
+            return iterator.hasNext();
+        }
+    };
 
     @Before
     public void before() {
@@ -51,37 +56,10 @@ public class SegmentIteratorTest {
                                                                       new ThreadCache(0));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
-
-        final StateSerdes<String, String> serdes = new StateSerdes<>("name", Serdes.String(), Serdes.String());
-
-        final SegmentIterator.KeyExtractor<String> keyExtractor = new SegmentIterator.KeyExtractor<String>() {
-            @Override
-            public String apply(final Bytes data) {
-                return new String(data.get());
-            }
-        };
-
-        final HasNextCondition hasNextCondition = new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator iterator) {
-                return iterator.hasNext();
-            }
-        };
-
-
-        final SegmentIterator.SegmentQuery segmentQuery = new SegmentIterator.SegmentQuery() {
-            @Override
-            public KeyValueIterator query(final KeyValueStore segment) {
-                return segment.all();
-            }
-        };
-
-        iterator = new SegmentIterator<>(serdes,
-                                         Arrays.asList(segmentOne,
-                                                       segmentTwo).iterator(),
-                                         keyExtractor,
-                                         hasNextCondition,
-                                         segmentQuery);
+        segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
+        segmentOne.put(Bytes.wrap("b".getBytes()), "2".getBytes());
+        segmentTwo.put(Bytes.wrap("c".getBytes()), "3".getBytes());
+        segmentTwo.put(Bytes.wrap("d".getBytes()), "4".getBytes());
 
     }
 
@@ -92,27 +70,79 @@ public class SegmentIteratorTest {
     }
 
     @Test
-    public void shouldIterateOverSegments() throws Exception {
-        segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
-        segmentOne.put(Bytes.wrap("b".getBytes()), "2".getBytes());
-        segmentTwo.put(Bytes.wrap("c".getBytes()), "3".getBytes());
-        segmentTwo.put(Bytes.wrap("d".getBytes()), "4".getBytes());
+    public void shouldIterateOverAllSegments() throws Exception {
+        final SegmentIterator iterator = new SegmentIterator(
+                Arrays.asList(segmentOne,
+                              segmentTwo).iterator(),
+                hasNextCondition,
+                Bytes.wrap("a".getBytes()),
+                Bytes.wrap("z".getBytes()));
 
         assertTrue(iterator.hasNext());
-        assertEquals("a", iterator.peekNextKey());
-        assertEquals(KeyValue.pair("a", "1"), iterator.next());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
 
         assertTrue(iterator.hasNext());
-        assertEquals("b", iterator.peekNextKey());
-        assertEquals(KeyValue.pair("b", "2"), iterator.next());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
 
         assertTrue(iterator.hasNext());
-        assertEquals("c", iterator.peekNextKey());
-        assertEquals(KeyValue.pair("c", "3"), iterator.next());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
 
         assertTrue(iterator.hasNext());
-        assertEquals("d", iterator.peekNextKey());
-        assertEquals(KeyValue.pair("d", "4"), iterator.next());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
+        final SegmentIterator iterator = new SegmentIterator(
+                Arrays.asList(segmentOne,
+                              segmentTwo).iterator(),
+                hasNextCondition,
+                Bytes.wrap("a".getBytes()),
+                Bytes.wrap("b".getBytes()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
+        final SegmentIterator iterator = new SegmentIterator(
+                Arrays.asList(segmentOne,
+                              segmentTwo).iterator(),
+                hasNextCondition,
+                Bytes.wrap("f".getBytes()),
+                Bytes.wrap("h".getBytes()));
+
+        iterator.peekNextKey();
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
+        final SegmentIterator iterator = new SegmentIterator(
+                Arrays.asList(segmentOne,
+                              segmentTwo).iterator(),
+                hasNextCondition,
+                Bytes.wrap("f".getBytes()),
+                Bytes.wrap("h".getBytes()));
+
+        iterator.next();
+    }
+
+    private KeyValue<String, String> toStringKeyValue(final KeyValue<Bytes, byte[]> binaryKv) {
+        return KeyValue.pair(new String(binaryKv.key.get()), new String(binaryKv.value));
     }
 
 }
