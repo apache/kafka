@@ -57,7 +57,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         logHeaderBuffer.rewind();
-        Utils.readFullyFrom(channel, logHeaderBuffer, position);
+        Utils.readFully(channel, logHeaderBuffer, position);
         if (logHeaderBuffer.hasRemaining())
             return null;
 
@@ -118,7 +118,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                Utils.readFullyFrom(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
+                Utils.readFully(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
                 if (buf.hasRemaining())
                     throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
                 return magic[0];
@@ -137,7 +137,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 return record;
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
-            Utils.readFullyFrom(channel, recordBuffer, position + Records.LOG_OVERHEAD);
+            Utils.readFully(channel, recordBuffer, position + Records.LOG_OVERHEAD);
             if (recordBuffer.hasRemaining())
                 throw new IOException("Failed to read full record from channel " + channel);
 

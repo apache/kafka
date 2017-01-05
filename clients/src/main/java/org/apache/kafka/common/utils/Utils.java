@@ -787,36 +787,26 @@ public class Utils {
     /**
      * Read data from the channel to the given byte buffer
      * @param channel File channel containing the data to read from
-     * @param buffer The buffer into which bytes are to be transferred
-     * @param startPosition The file position at which the transfer is to begin; must be non-negative
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; must be non-negative
      *
      * @throws IllegalArgumentException If invalid arguments were passed
      * @throws IOException If some other I/O error occurs
      */
-    public static void readFullyFrom(FileChannel channel, ByteBuffer buffer, long startPosition) throws IOException {
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
         if (channel == null) {
             throw new IllegalArgumentException("Cannot read an empty file channel.");
         }
-        if (buffer == null) {
-            throw new IllegalArgumentException("Must specify the byte buffer for the channel.");
+        if (position < 0) {
+            throw new IllegalArgumentException("The file position cannot be negative, but we got " + position);
         }
-        if (startPosition < 0) {
-            throw new IllegalArgumentException("The file position cannot be negative.");
-        }
-        final int totalBytesToRead = buffer.capacity();
-        long currentPosition = startPosition;
-        int totalBytesRead = 0;
-
-        while (totalBytesRead < totalBytesToRead) {
-            int bytesRead = channel.read(buffer, currentPosition);
-            if (bytesRead == -1) {
-                log.warn(String.format("Read incomplete data from the given file channel. Current file channel size: %d, and wanted to read at position: %d",
-                        channel.size(), currentPosition));
+        long currentPosition = position;
+        while (destinationBuffer.hasRemaining()) {
+            int bytesRead = channel.read(destinationBuffer, currentPosition);
+            if (bytesRead == -1) { // encountered end-of-stream
                 break;
             }
-            totalBytesRead += bytesRead;
             currentPosition += bytesRead;
         }
-        buffer.flip(); // Make the buffer ready for read
     }
 }
