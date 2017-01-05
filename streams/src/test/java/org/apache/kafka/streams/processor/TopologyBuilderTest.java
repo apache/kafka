@@ -322,21 +322,21 @@ public class TopologyBuilderTest {
                                                                            new InternalTopicConfig(
                                                                                    store1,
                                                                                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
+                                                                                   Collections.<String, Object>emptyMap()))));
         expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
                                                   Collections.singletonMap(store2,
                                                                            new InternalTopicConfig(
                                                                                    store2,
                                                                                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
+                                                                                   Collections.<String, Object>emptyMap()))));
         expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
                                                   Collections.singletonMap(store3,
                                                                            new InternalTopicConfig(
                                                                                    store3,
                                                                                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
+                                                                                   Collections.<String, Object>emptyMap()))));
 
 
 

@@ -65,7 +65,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<K, V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String storeName) {
-        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
+        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName, topology.getTopicLogConfig()));
     }
 
 
@@ -126,7 +126,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String storeName) {
-        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
+        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName, topology.getTopicLogConfig()));
     }
 
     @Override
@@ -142,7 +142,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count(String storeName) {
-        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
+        return count(keyValueStore(keySerde, Serdes.Long(), storeName, topology.getTopicLogConfig()));
     }
 
     @Override

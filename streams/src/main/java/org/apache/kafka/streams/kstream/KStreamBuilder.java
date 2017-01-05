@@ -157,7 +157,7 @@ public class KStreamBuilder extends TopologyBuilder {
             keySerde,
             valSerde,
             false,
-            Collections.<String, String>emptyMap(),
+            getTopicLogConfig(),
             true);
 
         addStateStore(storeSupplier, name);

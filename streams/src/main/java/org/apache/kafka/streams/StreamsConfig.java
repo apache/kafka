@@ -17,6 +17,14 @@
 
 package org.apache.kafka.streams;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -28,17 +36,11 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 /**
  * Configuration for Kafka Streams. Documentation for these configurations can be found in the <a
@@ -53,6 +55,19 @@ public class StreamsConfig extends AbstractConfig {
 
     // Prefix used to isolate producer configs from consumer configs.
     public static final String PRODUCER_PREFIX = "producer.";
+    
+    // Prefix used to isolate topic configs from other configs.
+    public static final String TOPIC_PREFIX = "topic.";
+    
+    
+    private static final String[] TOPIC_CONFIGS = {"compression.type", "file.delete.delay.ms", "flush.messages",
+        "flush.ms", "index.interval.bytes", "max.message.bytes", "min.cleanable.dirty.ratio",
+        "min.compaction.lag.ms", "segment.bytes", "segment.index.bytes", "segment.jitter.ms", "segment.ms" };
+    private static final Set<String> TOPIC_CONFIG_NAMES = new HashSet<>();
+
+    static {
+        Collections.addAll(TOPIC_CONFIG_NAMES, TOPIC_CONFIGS);
+    }
 
     /** <code>state.dir</code> */
     public static final String STATE_DIR_CONFIG = "state.dir";
@@ -281,6 +296,15 @@ public class StreamsConfig extends AbstractConfig {
 
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
+    
+    private static final Map<String, Object> TOPIC_DEFAULT_OVERRIDES;
+    static
+    {
+        Map<String, Object> tempTopicDefaultOverrides = new HashMap<>();
+        tempTopicDefaultOverrides.put("segment.ms", 86400000L);
+
+        TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
+    }
 
     public static class InternalConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
@@ -304,6 +328,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static String producerPrefix(final String producerProp) {
         return PRODUCER_PREFIX + producerProp;
+    }
+    
+    /**
+     * Prefix a property with {@link StreamsConfig#TOPIC_PREFIX}. This is used to isolate topic configs
+     * from other configs
+     * @param topicProp
+     * @return TOPIC_PREFIX + topicProp
+     */
+    public static String topicPrefix(final String topicProp) {
+        return TOPIC_PREFIX + topicProp;
     }
 
     public StreamsConfig(Map<?, ?> props) {
@@ -396,7 +430,7 @@ public class StreamsConfig extends AbstractConfig {
      * will be used in favor over their non-prefixed versions except in the case of {@link ProducerConfig#BOOTSTRAP_SERVERS_CONFIG}
      * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
      * @param clientId  clientId
-     * @return  Map of the Consumer configuration
+     * @return  Map of the Producer configuration
      * @throws ConfigException
      */
     public Map<String, Object> getProducerConfigs(String clientId) {
@@ -410,7 +444,22 @@ public class StreamsConfig extends AbstractConfig {
 
         return props;
     }
+    
+    /**
+     * Get the configs for the internal Topics. Properties using the prefix {@link StreamsConfig#TOPIC_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link InternalTopicManager#RETENTION_MS} and {@link InternalTopicManager#CLEANUP_POLICY_PROP}
+     * where we always use the {@link InternalTopicManager} version as we only support reading/writing from/to the same Kafka Cluster
+     * @return  Map of the Topic configuration
+     * @throws ConfigException
+     */
+    public Map<String, Object> getTopicConfigs() {
+        // generate producer configs from original properties and overridden maps
+        final Map<String, Object> props = new HashMap<>(TOPIC_DEFAULT_OVERRIDES);
+        props.putAll(getClientPropsWithPrefix(TOPIC_PREFIX, TOPIC_CONFIG_NAMES));
 
+        return props;
+    }
+    
     private Map<String, Object> getClientPropsWithPrefix(final String prefix, final Set<String> configNames) {
         final Map<String, Object> props = clientProps(configNames, originals());
         props.putAll(this.originalsWithPrefix(prefix));

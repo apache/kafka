@@ -57,7 +57,7 @@ public class Stores {
                             public InMemoryKeyValueFactory<K, V> inMemory() {
                                 return new InMemoryKeyValueFactory<K, V>() {
                                     private int capacity = Integer.MAX_VALUE;
-                                    private final Map<String, String> logConfig = new HashMap<>();
+                                    private final Map<String, Object> logConfig = new HashMap<>();
                                     private boolean logged = true;
 
                                     /**
@@ -101,7 +101,7 @@ public class Stores {
                                 return new PersistentKeyValueFactory<K, V>() {
                                     public boolean cachingEnabled;
                                     private long windowSize;
-                                    private final Map<String, String> logConfig = new HashMap<>();
+                                    private final Map<String, Object> logConfig = new HashMap<>();
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
                                     private boolean retainDuplicates = false;
@@ -118,7 +118,7 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config) {
+                                    public PersistentKeyValueFactory<K, V> enableLogging(final Map<String, Object> config) {
                                         logged = true;
                                         logConfig.putAll(config);
                                         return this;
@@ -397,7 +397,7 @@ public class Stores {
          * @param config            any configs that should be applied to the changelog
          * @return  the factory to create a persistent key-value store
          */
-        PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config);
+        PersistentKeyValueFactory<K, V> enableLogging(final Map<String, Object> config);
 
         /**
          * Indicates that a changelog should not be created for the key-value store

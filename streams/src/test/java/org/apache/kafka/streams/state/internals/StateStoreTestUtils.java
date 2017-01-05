@@ -37,7 +37,7 @@ public class StateStoreTestUtils {
                                                                                                  null,
                                                                                                  new MockTime(),
                                                                                                  false,
-                                                                                                 Collections.<String, String>emptyMap());
+                                                                                                 Collections.<String, Object>emptyMap());
 
         final StateStore stateStore = supplier.get();
         stateStore.init(new MockProcessorContext(StateSerdes.withBuiltinTypes(name, keyType, valueType),
