@@ -21,8 +21,15 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public final class Max extends SampledStat {
 
+    private final boolean whetherCanBeNegative;
+
     public Max() {
-        super(Double.NEGATIVE_INFINITY);
+        this(false);
+    }
+
+    public Max(boolean whetherCanBeNegative) {
+        super(whetherCanBeNegative ? Double.NEGATIVE_INFINITY : 0.0);
+        this.whetherCanBeNegative = whetherCanBeNegative;
     }
 
     @Override
@@ -32,7 +39,7 @@ public final class Max extends SampledStat {
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double max = Double.NEGATIVE_INFINITY;
+        double max = whetherCanBeNegative ? Double.NEGATIVE_INFINITY : 0.0;
         for (int i = 0; i < samples.size(); i++)
             max = Math.max(max, samples.get(i).value);
         return max;
