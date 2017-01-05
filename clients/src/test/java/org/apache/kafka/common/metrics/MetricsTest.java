@@ -307,8 +307,19 @@ public class MetricsTest {
     }
 
     @Test
-    public void testOldDataHasNoEffect() {
+    public void testNonNegativeInitValuesForMax() {
         Max max = new Max();
+        long windowMs = 100;
+        int samples = 2;
+        MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
+        max.record(config, 50, time.milliseconds());
+        time.sleep(samples * windowMs);
+        assertEquals(0.0, max.measure(config, time.milliseconds()), EPS);
+    }
+
+    @Test
+    public void testOldDataHasNoEffect() {
+        Max max = new Max(true);
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
@@ -326,7 +337,7 @@ public class MetricsTest {
         // value, so we can use this. This doesn't work for Percentiles though.
         // This test looks a lot like testOldDataHasNoEffect because it's the same
         // flow that leads to this state.
-        Max max = new Max();
+        Max max = new Max(true);
         Min min = new Min();
         Avg avg = new Avg();
         Count count = new Count();
