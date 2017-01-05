@@ -134,7 +134,7 @@ public class ProcessorNode<K, V> {
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
 
         // record throughput
-        nodeMetrics.nodeThroughputSensor.record();
+        this.nodeMetrics.metrics.recordThroughput(nodeMetrics.nodeThroughputSensor, 1);
     }
 
     public void punctuate(long timestamp) {
@@ -160,7 +160,7 @@ public class ProcessorNode<K, V> {
     }
 
     protected class NodeMetrics  {
-        final StreamsMetrics metrics;
+        final StreamsMetricsImpl metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
 
@@ -175,7 +175,7 @@ public class ProcessorNode<K, V> {
             final String scope = "processor-node";
             final String tagKey = "processor-node-id";
             final String tagValue = name;
-            this.metrics = metrics;
+            this.metrics = (StreamsMetricsImpl) metrics;
             this.metricGrpName = "stream-processor-node-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put(tagKey, tagValue);

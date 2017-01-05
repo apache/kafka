@@ -20,9 +20,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -50,7 +50,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
 
 
     private K key;
@@ -118,7 +118,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final String name = name();
         this.context = context;
         this.root = root;
-        this.metrics = context.metrics();
+        this.metrics = (StreamsMetricsImpl) context.metrics();
         this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.INFO);
         this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.RecordLevel.INFO);
         this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordLevel.INFO);

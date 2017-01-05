@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Time;
 
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
@@ -45,6 +44,9 @@ public interface StreamsMetrics {
 
     /**
      * Record the given latency value of the sensor.
+     * @param sensor sensor whose latency we are recording.
+     * @param startNs start of measurement time in nanoseconds.
+     * @param endNs end of measurement time in nanoseconds.
      */
     void recordLatency(Sensor sensor, long startNs, long endNs);
 
@@ -60,34 +62,12 @@ public interface StreamsMetrics {
      */
     Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags);
 
-
     /**
-     * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordLevel, String...)} to ensure metric name well-formedness and conformity with the rest
-     * of the streams code base.
-     * @param scopeName Name of the scope, could be the type of the state store, etc.
-     * @param entityName Name of the entity, could be the name of the state store instance, etc.
-     * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
-     * @param operationName Name of the operation, could be get / put / delete / etc.
+     * Records the throughput value of a sensor.
+     * @param sensor sensor whose throughput we are recording.
+     * @param value throughput value.
      */
-    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel);
-
-    /**
-     * Same as previous constructor {@link #sensor(String, String, String, Sensor.RecordLevel, Sensor...)} sensor}, but takes a set of parents as well.
-     */
-    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents);
-
-    /**
-     * Helper function. Measure the latency of an action. This is equivalent to
-     * startTs = time.nanoseconds()
-     * action.run()
-     * endTs = time.nanoseconds()
-     * sensor.record(endTs - startTs)
-     * @param time      Time object.
-     * @param action    Action to run.
-     * @param sensor    Sensor to record value.
-     */
-    void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor);
+    void recordThroughput(Sensor sensor, long value);
 
     /**
      * Remove a sensor with the given name.
