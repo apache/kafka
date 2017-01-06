@@ -377,7 +377,7 @@ public class Fetcher<K, V> {
 
     private Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimesImpl(
             Map<TopicPartition, Long> timestampsToSearch,
-          long timeout, boolean requireTimestamps) {
+            long timeout, boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty())
             return Collections.emptyMap();
 
