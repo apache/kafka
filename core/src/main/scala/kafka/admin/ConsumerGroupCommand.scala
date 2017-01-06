@@ -204,6 +204,7 @@ object ConsumerGroupCommand extends Logging {
 
   }
 
+  @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
   class ZkConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
 
     private val zkUtils = {
