@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.Topic;
+import kafka.common.Topic;
 
 import java.util.Map;
 import java.util.Objects;
