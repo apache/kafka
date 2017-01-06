@@ -30,27 +30,33 @@ import java.util.TimeZone;
 /**
  * This transformation facilitates updating the record's topic field as a function of the original topic value and the record timestamp.
  * <p/>
- * The topic field determines what topic the records from a source connector are routed to.
- * In the case of a sink connector, the topic field is often used to determine the equivalent entity name in the destination system (e.g. database table name).
+ * It is mainly useful for sink connectors, since the topic field is often used to determine the equivalent entity name in the destination system
+ * (e.g. database table or search index name).
  */
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
 
+    public enum Keys {
+        ;
+        public static final String TOPIC_FORMAT = "topic.format";
+        public static final String TIMESTAMP_FORMAT = "timestamp.format";
+    }
+
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define("topic.format", ConfigDef.Type.STRING, "${topic}-${timestamp}", ConfigDef.Importance.HIGH,
+            .define(Keys.TOPIC_FORMAT, ConfigDef.Type.STRING, "${topic}-${timestamp}", ConfigDef.Importance.HIGH,
                     "Format string which can contain ``${topic}`` and ``${timestamp}`` as placeholders for the topic and timestamp, respectively.")
-            .define("timestamp.format", ConfigDef.Type.STRING, "yyyyMMdd", ConfigDef.Importance.HIGH,
+            .define(Keys.TIMESTAMP_FORMAT, ConfigDef.Type.STRING, "yyyyMMdd", ConfigDef.Importance.HIGH,
                     "Format string for the timestamp that is compatible with java.text.SimpleDateFormat.");
 
     private String topicFormat;
     private ThreadLocal<SimpleDateFormat> timestampFormat;
 
     @Override
-    public void init(Map<String, Object> props) {
+    public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
 
-        topicFormat = config.getString("topic.format");
+        topicFormat = config.getString(Keys.TOPIC_FORMAT);
 
-        final String timestampFormatStr = config.getString("timestamp.format");
+        final String timestampFormatStr = config.getString(Keys.TIMESTAMP_FORMAT);
         timestampFormat = new ThreadLocal<SimpleDateFormat>() {
             @Override
             protected SimpleDateFormat initialValue() {

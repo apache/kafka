@@ -1053,7 +1053,7 @@ public class ConfigDef {
      *
      * If grouping is not specified, the result will reflect "natural" order: listing required fields first, then ordering by importance, and finally by name.
      */
-    public List<ConfigKey> sortedConfigs() {
+    private List<ConfigKey> sortedConfigs() {
         final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
         int ord = 0;
         for (String group: groups) {
@@ -1087,6 +1087,83 @@ public class ConfigDef {
             }
         });
         return configs;
+    }
+
+    public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
+        int orderInGroup = startingOrd;
+        for (ConfigDef.ConfigKey key : child.sortedConfigs()) {
+            define(new ConfigDef.ConfigKey(
+                    keyPrefix + key.name,
+                    key.type,
+                    key.defaultValue,
+                    embeddedValidator(keyPrefix, key.validator),
+                    key.importance,
+                    key.documentation,
+                    groupPrefix + (key.group == null ? "" : ": " + key.group),
+                    orderInGroup++,
+                    key.width,
+                    key.displayName,
+                    embeddedDependents(keyPrefix, key.dependents),
+                    embeddedRecommender(keyPrefix, key.recommender)
+            ));
+        }
+    }
+
+    /**
+     * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
+     */
+    private static ConfigDef.Validator embeddedValidator(final String keyPrefix, final ConfigDef.Validator base) {
+        if (base == null) return null;
+        return new ConfigDef.Validator() {
+            @Override
+            public void ensureValid(String name, Object value) {
+                base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+        };
+    }
+
+    /**
+     * Updated list of dependent configs with the specified {@code prefix} added.
+     */
+    private static List<String> embeddedDependents(final String keyPrefix, final List<String> dependents) {
+        if (dependents == null) return null;
+        final List<String> updatedDependents = new ArrayList<>(dependents.size());
+        for (String dependent : dependents) {
+            updatedDependents.add(keyPrefix + dependent);
+        }
+        return updatedDependents;
+    }
+
+    /**
+     * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
+     */
+    private static ConfigDef.Recommender embeddedRecommender(final String keyPrefix, final ConfigDef.Recommender base) {
+        if (base == null) return null;
+        return new ConfigDef.Recommender() {
+            private String unprefixed(String k) {
+                return k.substring(keyPrefix.length());
+            }
+
+            private Map<String, Object> unprefixed(Map<String, Object> parsedConfig) {
+                final Map<String, Object> unprefixedParsedConfig = new HashMap<>(parsedConfig.size());
+                for (Map.Entry<String, Object> e : parsedConfig.entrySet()) {
+                    if (e.getKey().startsWith(keyPrefix)) {
+                        unprefixedParsedConfig.put(unprefixed(e.getKey()), e.getValue());
+                    }
+                }
+                return unprefixedParsedConfig;
+            }
+
+            @Override
+            public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                return base.validValues(unprefixed(name), unprefixed(parsedConfig));
+            }
+
+            @Override
+            public boolean visible(String name, Map<String, Object> parsedConfig) {
+                return base.visible(unprefixed(name), unprefixed(parsedConfig));
+            }
+        };
     }
 
 }

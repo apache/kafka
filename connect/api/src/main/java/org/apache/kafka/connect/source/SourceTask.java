@@ -89,6 +89,11 @@ public abstract class SourceTask implements Task {
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
      * </p>
+     * <p>
+     * Note that it is not necessary that all records get a corresponding callback,
+     * as filtering is possible with a user-configured {@link org.apache.kafka.connect.transforms.Transformation}.
+     * </p>
+     *
      * @param record {@link SourceRecord} that was successfully sent via the producer.
      * @throws InterruptedException
      */

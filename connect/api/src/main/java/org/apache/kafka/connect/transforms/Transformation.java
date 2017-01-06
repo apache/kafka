@@ -17,28 +17,27 @@
 
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
-import java.util.Map;
+import java.io.Closeable;
 
 /**
  * Single message transformation for Kafka Connect record types.
  *
  * Connectors can be configured with transformations to make lightweight message-at-a-time modifications.
  */
-public interface Transformation<R extends ConnectRecord<R>> {
-
-    /** Initialize with the provided configuration properties. **/
-    void init(Map<String, Object> props);
+public interface Transformation<R extends ConnectRecord<R>> extends Configurable, Closeable {
 
     /** Apply transformation to the {@code record} and return another record object (which may be {@code record} itself). Must be thread-safe. **/
     R apply(R record);
 
-    /** Signal that this transformation instance will no longer will be used. **/
-    void close();
-
     /** Configuration specification for this transformation. **/
     ConfigDef config();
+
+    /** Signal that this transformation instance will no longer will be used. **/
+    @Override
+    void close();
 
 }

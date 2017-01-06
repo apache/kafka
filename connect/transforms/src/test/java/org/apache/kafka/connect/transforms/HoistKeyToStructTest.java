@@ -33,7 +33,7 @@ public class HoistKeyToStructTest {
     @Test
     public void sanityCheck() {
         final HoistKeyToStruct<SinkRecord> xform = new HoistKeyToStruct<>();
-        xform.init(Collections.<String, Object>singletonMap("field", "magic"));
+        xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);

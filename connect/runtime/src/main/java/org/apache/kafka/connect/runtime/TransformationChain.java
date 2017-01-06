@@ -46,6 +46,12 @@ public class TransformationChain {
         return record;
     }
 
+    public void close() {
+        for (Transformation transformation : transformations) {
+            transformation.close();
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

@@ -119,6 +119,7 @@ class WorkerSourceTask extends WorkerTask {
 
     protected void close() {
         producer.close(30, TimeUnit.SECONDS);
+        transformationChain.close();
     }
 
     @Override

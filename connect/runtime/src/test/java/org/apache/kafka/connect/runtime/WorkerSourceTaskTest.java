@@ -147,6 +147,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
@@ -190,6 +193,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -238,6 +244,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -283,6 +292,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -321,6 +333,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -362,6 +377,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -508,6 +526,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();

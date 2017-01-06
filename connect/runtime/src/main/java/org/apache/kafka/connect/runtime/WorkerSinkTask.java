@@ -131,6 +131,7 @@ class WorkerSinkTask extends WorkerTask {
         task.stop();
         if (consumer != null)
             consumer.close();
+        transformationChain.close();
     }
 
     @Override

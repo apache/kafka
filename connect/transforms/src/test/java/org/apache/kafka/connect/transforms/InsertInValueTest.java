@@ -20,6 +20,7 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.Test;
@@ -36,7 +37,7 @@ public class InsertInValueTest {
     @Test(expected = DataException.class)
     public void schemaRequired() {
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
-        xform.init(Collections.<String, Object>singletonMap("topic", "topic_field"));
+        xform.configure(Collections.singletonMap("topic", "topic_field"));
         xform.apply(new SourceRecord(null, null,
                 "", 0,
                 null, null));
@@ -45,7 +46,7 @@ public class InsertInValueTest {
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
-        xform.init(Collections.<String, Object>singletonMap("topic", "topic_field"));
+        xform.configure(Collections.singletonMap("topic", "topic_field"));
         xform.apply(new SourceRecord(null, null,
                 "", 0,
                 Schema.INT32_SCHEMA, 42));
@@ -54,12 +55,12 @@ public class InsertInValueTest {
     @Test
     public void copySchemaAndInsertConfiguredFields() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("topic", "!topic_field");
+        props.put("topic", "topic_field!");
         props.put("partition", "partition_field");
-        props.put("timestamp", "?timestamp_field");
+        props.put("timestamp", "timestamp_field?");
 
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
-        xform.init(props);
+        xform.configure(props);
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final Struct simpleStruct = new Struct(simpleStructSchema).put("magic", 42L);
@@ -80,7 +81,7 @@ public class InsertInValueTest {
         assertEquals(Schema.OPTIONAL_INT32_SCHEMA, transformedRecord.valueSchema().field("partition_field").schema());
         assertEquals(0, ((Struct) transformedRecord.value()).getInt32("partition_field").intValue());
 
-        assertEquals(Schema.OPTIONAL_INT64_SCHEMA, transformedRecord.valueSchema().field("timestamp_field").schema());
+        assertEquals(Timestamp.builder().optional().build(), transformedRecord.valueSchema().field("timestamp_field").schema());
         assertEquals(null, ((Struct) transformedRecord.value()).getInt64("timestamp_field"));
 
         // Exercise caching

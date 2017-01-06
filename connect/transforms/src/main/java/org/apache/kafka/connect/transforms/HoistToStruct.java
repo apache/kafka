@@ -31,26 +31,18 @@ import java.util.Map;
 
 abstract class HoistToStruct<R extends ConnectRecord<R>> implements Transformation<R> {
 
+    public static final String FIELD_CONFIG = "field";
+
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define("field", ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+            .define(FIELD_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
                     "Field name for the single field that will be created in the resulting Struct.");
-
-    private static final class SchemaUpdateCacheEntry {
-        final Schema base;
-        final Schema updated;
-
-        private SchemaUpdateCacheEntry(Schema base, Schema updated) {
-            this.base = base;
-            this.updated = updated;
-        }
-    }
 
     private final SchemaUpdateCache schemaUpdateCache = new SchemaUpdateCache();
 
     private String fieldName;
 
     @Override
-    public void init(Map<String, Object> props) {
+    public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         fieldName = config.getString("field");
 

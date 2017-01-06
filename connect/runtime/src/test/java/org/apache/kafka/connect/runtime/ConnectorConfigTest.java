@@ -42,7 +42,7 @@ public class ConnectorConfigTest {
         int magicNumber = 0;
 
         @Override
-        public void init(Map<String, Object> props) {
+        public void configure(Map<String, ?> props) {
             magicNumber = Integer.parseInt((String) props.get("magic.number"));
         }
 
@@ -80,34 +80,24 @@ public class ConnectorConfigTest {
         new ConnectorConfig(props);
     }
 
-    @Test
+    @Test(expected = ConfigException.class)
     public void wrongTransformationType() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", "uninstantiable");
-        try {
-            new ConnectorConfig(props);
-            fail();
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("Class uninstantiable could not be found"));
-        }
+        new ConnectorConfig(props);
     }
 
-    @Test
+    @Test(expected = ConfigException.class)
     public void unconfiguredTransform() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
-        try {
-            new ConnectorConfig(props);
-            fail();
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("Missing required configuration"));
-        }
+        new ConnectorConfig(props);
     }
 
     @Test
@@ -141,7 +131,7 @@ public class ConnectorConfigTest {
         assertEquals(42, xform.magicNumber);
     }
 
-    @Test
+    @Test(expected = ConfigException.class)
     public void multipleTransformsOneDangling() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -149,11 +139,7 @@ public class ConnectorConfigTest {
         props.put("transforms", "a, b");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
-        try {
-            new ConnectorConfig(props);
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("Invalid value null for configuration transforms.b.type"));
-        }
+        new ConnectorConfig(props);
     }
 
     @Test

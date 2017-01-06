@@ -29,7 +29,7 @@ public class TimestampRouterTest {
     @Test
     public void defaultConfiguration() {
         final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
-        xform.init(Collections.<String, Object>emptyMap()); // defaults
+        xform.configure(Collections.<String, Object>emptyMap()); // defaults
         final SourceRecord record = new SourceRecord(
                 null, null,
                 "test", 0,

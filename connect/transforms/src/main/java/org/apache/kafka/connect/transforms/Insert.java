@@ -23,26 +23,38 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.util.SchemaUpdateCache;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.util.Date;
 import java.util.Map;
 
 abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    private static final String OPTIONALITY_DOC = "Prefix with '!' to make this a required field, or '?' to make it optional (the default).";
+    public enum Keys {
+        ;
+        public static final String TOPIC = "topic";
+        public static final String PARTITION = "partition";
+        public static final String OFFSET = "offset";
+        public static final String TIMESTAMP = "timestamp";
+    }
+
+    private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define("topic", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.TOPIC, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka topic.\n" + OPTIONALITY_DOC)
-            .define("partition", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.PARTITION, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka partition.\n" + OPTIONALITY_DOC)
-            .define("offset", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.OFFSET, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
-            .define("timestamp", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.TIMESTAMP, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for record timestamp.\n" + OPTIONALITY_DOC);
+
+    private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
 
     private static final class InsertionSpec {
         final String name;
@@ -55,23 +67,13 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
         public static InsertionSpec parse(String spec) {
             if (spec == null) return null;
-            if (spec.startsWith("?")) {
-                return new InsertionSpec(spec.substring(1), true);
+            if (spec.endsWith("?")) {
+                return new InsertionSpec(spec.substring(0, spec.length() - 1), true);
             }
-            if (spec.startsWith("!")) {
-                return new InsertionSpec(spec.substring(1), false);
+            if (spec.endsWith("!")) {
+                return new InsertionSpec(spec.substring(0, spec.length() - 1), false);
             }
             return new InsertionSpec(spec, true);
-        }
-    }
-
-    private static final class SchemaUpdateCacheEntry {
-        final Schema base;
-        final Schema updated;
-
-        private SchemaUpdateCacheEntry(Schema base, Schema updated) {
-            this.base = base;
-            this.updated = updated;
         }
     }
 
@@ -84,12 +86,12 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     private boolean applicable;
 
     @Override
-    public void init(Map<String, Object> props) {
+    public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        topicField = InsertionSpec.parse(config.getString("topic"));
-        partitionField = InsertionSpec.parse(config.getString("partition"));
-        offsetField = InsertionSpec.parse(config.getString("offset"));
-        timestampField = InsertionSpec.parse(config.getString("timestamp"));
+        topicField = InsertionSpec.parse(config.getString(Keys.TOPIC));
+        partitionField = InsertionSpec.parse(config.getString(Keys.PARTITION));
+        offsetField = InsertionSpec.parse(config.getString(Keys.OFFSET));
+        timestampField = InsertionSpec.parse(config.getString(Keys.TIMESTAMP));
         applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
 
         schemaUpdateCache.init();
@@ -126,17 +128,9 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     private Schema makeUpdatedSchema(Schema schema) {
         final SchemaBuilder builder = SchemaBuilder.struct();
 
-        if (schema.name() != null) {
-            builder.name(schema.name());
-        }
-
-        if (schema.version() != null) {
-            builder.version(schema.version());
-        }
-
-        if (schema.doc() != null) {
-            builder.doc(schema.doc());
-        }
+        builder.name(schema.name());
+        builder.version(schema.version());
+        builder.doc(schema.doc());
 
         final Map<String, String> params = schema.parameters();
         if (params != null) {
@@ -157,7 +151,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
             builder.field(offsetField.name, offsetField.optional ? Schema.OPTIONAL_INT64_SCHEMA : Schema.INT64_SCHEMA);
         }
         if (timestampField != null) {
-            builder.field(timestampField.name, timestampField.optional ? Schema.OPTIONAL_INT64_SCHEMA : Schema.INT64_SCHEMA);
+            builder.field(timestampField.name, timestampField.optional ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA);
         }
 
         return builder.build();
@@ -178,12 +172,12 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         }
         if (offsetField != null) {
             if (!(record instanceof SinkRecord)) {
-                throw new DataException("Offset insertion is only supported for sink conectors, record is of type: " + record.getClass());
+                throw new DataException("Offset insertion is only supported for sink connectors, record is of type: " + record.getClass());
             }
             value.put(offsetField.name, ((SinkRecord) record).kafkaOffset());
         }
         if (timestampField != null && record.timestamp() != null) {
-            value.put(timestampField.name, record.timestamp());
+            value.put(timestampField.name, new Date(record.timestamp()));
         }
     }
 
