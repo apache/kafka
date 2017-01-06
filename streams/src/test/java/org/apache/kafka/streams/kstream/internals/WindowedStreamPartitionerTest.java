@@ -89,12 +89,12 @@ public class WindowedStreamPartitionerTest {
         Map<String, String> props = new HashMap<>();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(StreamsConfig.KEY_SERIALIZER_INNER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(StreamsConfig.VALUE_SERIALIZER_INNER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         windowedSerializer.configure(props, true);
-        Serializer<?> inner = windowedSerializer.getInnerSer();
+        Serializer<?> inner = windowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("inner serializer should be with StringSer", inner instanceof StringSerializer);
+        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
 
 }

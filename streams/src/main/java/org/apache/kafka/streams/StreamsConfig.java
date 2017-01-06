@@ -141,6 +141,14 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
+    /** <code>key.serializer.inner.class</code> */
+    public static final String KEY_SERIALIZER_INNER_CLASS_CONFIG = "key.serializer.inner.class";
+    public static final String KEY_SERIALIZER_INNER_CLASS_DOC = "Inner serializer class used by wrapper serializer class for key that implements the <code>Serializer</code> interface.";
+
+    /** <code>value.serializer.inner.class</code> */
+    public static final String VALUE_SERIALIZER_INNER_CLASS_CONFIG = "value.serializer.inner.class";
+    public static final String VALUE_SERIALIZER_INNER_CLASS_DOC = "Inner serializer class used by wrapper serializer class for value that implements the <code>Serializer</code> interface.";
+
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -257,7 +265,16 @@ public class StreamsConfig extends AbstractConfig {
                                         10 * 1024 * 1024L,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CACHE_MAX_BYTES_BUFFERING_DOC);
+                                        CACHE_MAX_BYTES_BUFFERING_DOC)
+                                // inner serializer class support
+                                .define(KEY_SERIALIZER_INNER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        KEY_SERIALIZER_INNER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_INNER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        VALUE_SERIALIZER_INNER_CLASS_DOC);
     }
 
     // this is the list of configs for underlying clients

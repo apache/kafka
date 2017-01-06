@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -41,7 +40,9 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-            inner = new ProducerConfig(configs).getConfiguredInstance(isKey ? "key.serializer" : "value.serializer", Serializer.class);
+            inner = new StreamsConfig(configs).getConfiguredInstance(
+                    isKey ? StreamsConfig.KEY_SERIALIZER_INNER_CLASS_CONFIG : StreamsConfig.VALUE_SERIALIZER_INNER_CLASS_CONFIG,
+                    Serializer.class);
             inner.configure(configs, isKey);
         }
     }
@@ -66,7 +67,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
         return inner.serialize(topic, data.key());
     }
 
-    public Serializer<T> getInnerSer() {
+    public Serializer<T> innerSerializer() {
         return inner;
     }
 
