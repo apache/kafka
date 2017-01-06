@@ -234,24 +234,25 @@ public class ThreadCache {
     }
 
 
-    static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], LRUCacheEntry> {
+    static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
         private final Iterator<Bytes> keys;
         private final NamedCache cache;
-        private KeyValue<byte[], LRUCacheEntry> nextEntry;
+        private KeyValue<Bytes, LRUCacheEntry> nextEntry;
 
         MemoryLRUCacheBytesIterator(final Iterator<Bytes> keys, final NamedCache cache) {
             this.keys = keys;
             this.cache = cache;
         }
 
-        public byte[] peekNextKey() {
+        public Bytes peekNextKey() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
             return nextEntry.key;
         }
 
-        KeyValue<byte[], LRUCacheEntry> peekNext() {
+
+        public KeyValue<Bytes, LRUCacheEntry> peekNext() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
@@ -272,11 +273,11 @@ public class ThreadCache {
         }
 
         @Override
-        public KeyValue<byte[], LRUCacheEntry> next() {
+        public KeyValue<Bytes, LRUCacheEntry> next() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            final KeyValue<byte[], LRUCacheEntry> result = nextEntry;
+            final KeyValue<Bytes, LRUCacheEntry> result = nextEntry;
             nextEntry = null;
             return result;
         }
@@ -288,7 +289,7 @@ public class ThreadCache {
                 return;
             }
 
-            nextEntry = new KeyValue<>(cacheKey.get(), entry);
+            nextEntry = new KeyValue<>(cacheKey, entry);
         }
 
         @Override
