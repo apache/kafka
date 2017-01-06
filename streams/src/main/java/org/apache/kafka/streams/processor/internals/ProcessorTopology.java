@@ -86,12 +86,12 @@ public class ProcessorTopology {
         return storeToProcessorNodeMap;
     }
 
-    private String childrenToString(List<ProcessorNode<?, ?>> children) {
+    private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder("\t\t\t\t\tchildren:\t[");
+        StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
         for (ProcessorNode child : children) {
             sb.append(child.name());
             sb.append(", ");
@@ -101,11 +101,19 @@ public class ProcessorTopology {
 
         // recursively print children
         for (ProcessorNode child : children) {
-            sb.append("\t\t\t\t");
-            sb.append(child.toString());
-            sb.append(childrenToString(child.children()));
+            sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
+    }
+
+    /**
+     * Produces a string representation contain useful information this topology starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of this instance.
+     */
+    @Override
+    public String toString() {
+        return toString("");
     }
 
     /**
@@ -113,15 +121,14 @@ public class ProcessorTopology {
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
-    public String toString() {
-        StringBuilder sb = new StringBuilder("ProcessorTopology:\n");
+    public String toString(String indent) {
+        StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
         for (SourceNode source : sourceByTopics.values()) {
-            sb.append("\t\t\t\t");
-            sb.append(source.toString());
-            sb.append(childrenToString(source.children()));
+            sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();
     }
+
 }

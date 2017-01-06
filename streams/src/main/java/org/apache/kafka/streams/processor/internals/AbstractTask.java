@@ -161,25 +161,33 @@ public abstract class AbstractTask {
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation contain useful information about a StreamTask starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString(String indent) {
+        StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
 
         // print topology
         if (topology != null) {
-            sb.append("\t\t\t" + topology.toString());
+            sb.append(indent).append(topology.toString(indent + "\t"));
         }
 
         // print assigned partitions
         if (partitions != null && !partitions.isEmpty()) {
-            sb.append("\t\t\tPartitions [");
+            sb.append(indent).append("Partitions [");
             for (TopicPartition topicPartition : partitions) {
-                sb.append(topicPartition.toString() + ",");
+                sb.append(topicPartition.toString()).append(", ");
             }
-            sb.setLength(sb.length() - 1);
-            sb.append("]");
+            sb.setLength(sb.length() - 2);
+            sb.append("]\n");
         }
-
-        sb.append("\n");
         return sb.toString();
     }
 

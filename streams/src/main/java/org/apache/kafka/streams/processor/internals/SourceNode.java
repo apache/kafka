@@ -74,9 +74,17 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("\t\t\t\t\ttopics:\t\t[");
+        return toString("");
+    }
+
+    /**
+     * @return a string representation of this node starting with the given indent, useful for debugging.
+     */
+    public String toString(String indent) {
+        StringBuilder sb = new StringBuilder(super.toString(indent));
+        sb.append(indent).append("\ttopics:\t\t[");
         for (String topic : topics) {
             sb.append(topic);
             sb.append(", ");
@@ -85,4 +93,5 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         sb.append("]\n");
         return sb.toString();
     }
+
 }
