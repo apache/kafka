@@ -180,7 +180,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
-     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
+     * @param storeName  the state store name used
      * @return a {@link GlobalKTable} for the specified topics
      */
     @SuppressWarnings("unchecked")

@@ -1658,7 +1658,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather or not it finds an corresponding record in {@link GlobalKTable} the provided
+     * For each {@link KStream} record whether or not it finds an corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as this {@link KStream}
