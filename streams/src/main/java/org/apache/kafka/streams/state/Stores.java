@@ -337,7 +337,7 @@ public class Stores {
          * Keep all key-value entries off-heap in a local database, although for durability all entries are recorded in a Kafka
          * topic that can be read to restore the entries if they are lost.
          *
-         * @return the factory to create in-memory key-value stores; never null
+         * @return the factory to create persistent key-value stores; never null
          */
         PersistentKeyValueFactory<K, V> persistent();
     }
