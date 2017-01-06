@@ -184,7 +184,7 @@ class WorkerSourceTask extends WorkerTask {
      */
     private boolean sendRecords() {
         int processed = 0;
-        for (SourceRecord preTransformRecord : toSend) {
+        for (final SourceRecord preTransformRecord : toSend) {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) continue;
@@ -226,7 +226,7 @@ class WorkerSourceTask extends WorkerTask {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(record);
+                                    commitTaskRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
                             }
