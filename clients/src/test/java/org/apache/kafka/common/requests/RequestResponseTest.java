@@ -184,13 +184,13 @@ public class RequestResponseTest {
 
     @Test
     public void fetchResponseVersionTest() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, records));
 
-        FetchResponse v0Response = new FetchResponse(responseData);
-        FetchResponse v1Response = new FetchResponse(responseData, 10);
+        FetchResponse v0Response = new FetchResponse(0, responseData, 0);
+        FetchResponse v1Response = new FetchResponse(1, responseData, 10);
         assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
         assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0), v0Response.toStruct().schema());
@@ -279,7 +279,7 @@ public class RequestResponseTest {
     }
 
     private FetchResponse createFetchResponse() {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, records));
         return new FetchResponse(responseData, 25);
@@ -580,7 +580,9 @@ public class RequestResponseTest {
         private boolean closed = false;
 
         private ByteBufferChannel(long size) {
-            this.buf = ByteBuffer.allocate(Long.valueOf(size).intValue());
+            if (size > Integer.MAX_VALUE)
+                throw new IllegalArgumentException("size should be not be greater than Integer.MAX_VALUE");
+            this.buf = ByteBuffer.allocate((int) size);
         }
 
         @Override

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -25,6 +26,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import java.util.Collections;
+import java.util.Map;
 
 class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
@@ -47,6 +50,11 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         @Override
         public void close() {
 
+        }
+
+        @Override
+        public Map<TopicPartition, Long> offsets() {
+            return Collections.emptyMap();
         }
     };
 

@@ -173,7 +173,7 @@ public class ProcessorStateManager implements StateManager {
             try {
                 partitions = restoreConsumer.partitionsFor(topic);
             } catch (TimeoutException e) {
-                throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
+                throw new StreamsException(String.format("%s Could not fetch partition info for topic: %s before expiration of the configured request timeout", logPrefix, topic));
             }
             if (partitions == null) {
                 throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
@@ -211,7 +211,7 @@ public class ProcessorStateManager implements StateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException(String.format("%s Restore consumer should have not subscribed to any partitions beforehand", logPrefix));
+            throw new IllegalStateException(String.format("%s Restore consumer should have not subscribed to any partitions (%s) beforehand", logPrefix, restoreConsumer.subscription()));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -247,7 +247,8 @@ public class ProcessorStateManager implements StateManager {
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
                     // For a logging enabled changelog (no offset limit),
                     // the log end offset should not change while restoring since it is only written by this thread.
-                    throw new IllegalStateException(String.format("%s Log end offset should not change while restoring", logPrefix));
+                    throw new IllegalStateException(String.format("%s Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
+                            logPrefix, storePartition, endOffset, restoreConsumer.position(storePartition)));
                 }
             }
 
@@ -360,33 +361,35 @@ public class ProcessorStateManager implements StateManager {
                     }
                 }
 
-                Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
-                for (String storeName : stores.keySet()) {
-                    TopicPartition part;
-                    if (loggingEnabled.contains(storeName))
-                        part = new TopicPartition(storeChangelogTopic(applicationId, storeName), getPartition(storeName));
-                    else
-                        part = new TopicPartition(storeName, getPartition(storeName));
+                if (ackedOffsets != null) {
+                    Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
+                    for (String storeName : stores.keySet()) {
+                        TopicPartition part;
+                        if (loggingEnabled.contains(storeName))
+                            part = new TopicPartition(storeChangelogTopic(applicationId, storeName), getPartition(storeName));
+                        else
+                            part = new TopicPartition(storeName, getPartition(storeName));
 
-                    // only checkpoint the offset to the offsets file if it is persistent;
-                    if (stores.get(storeName).persistent()) {
-                        Long offset = ackedOffsets.get(part);
+                        // only checkpoint the offset to the offsets file if it is persistent;
+                        if (stores.get(storeName).persistent()) {
+                            Long offset = ackedOffsets.get(part);
 
-                        if (offset != null) {
-                            // store the last offset + 1 (the log position after restoration)
-                            checkpointOffsets.put(part, offset + 1);
-                        } else {
-                            // if no record was produced. we need to check the restored offset.
-                            offset = restoredOffsets.get(part);
-                            if (offset != null)
-                                checkpointOffsets.put(part, offset);
+                            if (offset != null) {
+                                // store the last offset + 1 (the log position after restoration)
+                                checkpointOffsets.put(part, offset + 1);
+                            } else {
+                                // if no record was produced. we need to check the restored offset.
+                                offset = restoredOffsets.get(part);
+                                if (offset != null)
+                                    checkpointOffsets.put(part, offset);
+                            }
                         }
                     }
+                    // write the checkpoint file before closing, to indicate clean shutdown
+                    OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
+                    checkpoint.write(checkpointOffsets);
                 }
 
-                // write the checkpoint file before closing, to indicate clean shutdown
-                OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
-                checkpoint.write(checkpointOffsets);
             }
         } finally {
             // release the state directory directoryLock

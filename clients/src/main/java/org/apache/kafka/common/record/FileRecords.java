@@ -38,12 +38,27 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
-    private final FileChannel channel;
     private final int start;
     private final int end;
-    private volatile File file;
-    private final AtomicInteger size;
 
+    private final Iterable<FileChannelLogEntry> shallowEntries;
+
+    private final Iterable<LogEntry> deepEntries = new Iterable<LogEntry>() {
+        @Override
+        public Iterator<LogEntry> iterator() {
+            return deepIterator();
+        }
+    };
+
+    // mutable state
+    private final AtomicInteger size;
+    private final FileChannel channel;
+    private volatile File file;
+
+    /**
+     * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
+     * The constructor is visible for tests.
+     */
     public FileRecords(File file,
                        FileChannel channel,
                        int start,
@@ -56,12 +71,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.isSlice = isSlice;
         this.size = new AtomicInteger();
 
-        // set the initial size of the buffer
-        resize();
-    }
-
-    public void resize() throws IOException {
         if (isSlice) {
+            // don't check the file size if this is just a slice view
             size.set(end - start);
         } else {
             int limit = Math.min((int) channel.size(), end);
@@ -71,6 +82,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // set the file position to the last byte in the file
             channel.position(limit);
         }
+
+        shallowEntries = shallowEntriesFrom(start);
     }
 
     @Override
@@ -126,6 +139,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             throw new IllegalArgumentException("Invalid size: " + size);
 
         final int end;
+        // handle integer overflow
         if (this.start + position + size < 0)
             end = sizeInBytes();
         else
@@ -222,11 +236,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
     @Override
     public long writeTo(GatheringByteChannel destChannel, long offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
-        if (newSize < size.get())
-            throw new KafkaException(String.format("Size of FileRecords %s has been truncated during write: old size %d, new size %d", file.getAbsolutePath(), size, newSize));
+        int oldSize = sizeInBytes();
+        if (newSize < oldSize)
+            throw new KafkaException(String.format(
+                    "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
+                    file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        long count = Math.min(length, size.get());
+        int count = Math.min(length, oldSize);
         final long bytesTransferred;
         if (destChannel instanceof TransportLayer) {
             TransportLayer tl = (TransportLayer) destChannel;
@@ -246,9 +263,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param startingPosition The starting position in the file to begin searching from.
      */
     public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        Iterator<FileChannelLogEntry> iterator = shallowIteratorFrom(Integer.MAX_VALUE, startingPosition);
-        while (iterator.hasNext()) {
-            FileChannelLogEntry entry = iterator.next();
+        for (FileChannelLogEntry entry : shallowEntriesFrom(startingPosition)) {
             long offset = entry.offset();
             if (offset >= targetOffset)
                 return new LogEntryPosition(offset, entry.position(), entry.sizeInBytes());
@@ -264,9 +279,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return The timestamp and offset of the message found. None, if no message is found.
      */
     public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition) {
-        Iterator<FileChannelLogEntry> shallowIterator = shallowIteratorFrom(startingPosition);
-        while (shallowIterator.hasNext()) {
-            LogEntry shallowEntry = shallowIterator.next();
+        for (LogEntry shallowEntry : shallowEntriesFrom(startingPosition)) {
             Record shallowRecord = shallowEntry.record();
             if (shallowRecord.timestamp() >= targetTimestamp) {
                 // We found a message
@@ -292,9 +305,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         long maxTimestamp = Record.NO_TIMESTAMP;
         long offsetOfMaxTimestamp = -1L;
 
-        Iterator<FileChannelLogEntry> shallowIterator = shallowIteratorFrom(startingPosition);
-        while (shallowIterator.hasNext()) {
-            LogEntry shallowEntry = shallowIterator.next();
+        for (LogEntry shallowEntry : shallowEntriesFrom(startingPosition)) {
             long timestamp = shallowEntry.record().timestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
@@ -311,8 +322,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return An iterator over the shallow entries
      */
     @Override
-    public Iterator<FileChannelLogEntry> shallowIterator() {
-        return shallowIteratorFrom(start);
+    public Iterable<FileChannelLogEntry> shallowEntries() {
+        return shallowEntries;
     }
 
     /**
@@ -320,15 +331,24 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
      * @return An iterator over the shallow entries
      */
-    public Iterator<FileChannelLogEntry> shallowIterator(int maxRecordSize) {
-        return shallowIteratorFrom(maxRecordSize, start);
+    public Iterable<FileChannelLogEntry> shallowEntries(int maxRecordSize) {
+        return shallowEntries(maxRecordSize, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int start) {
-        return shallowIteratorFrom(Integer.MAX_VALUE, start);
+    private Iterable<FileChannelLogEntry> shallowEntriesFrom(int start) {
+        return shallowEntries(Integer.MAX_VALUE, start);
     }
 
-    private Iterator<FileChannelLogEntry> shallowIteratorFrom(int maxRecordSize, int start) {
+    private Iterable<FileChannelLogEntry> shallowEntries(final int maxRecordSize, final int start) {
+        return new Iterable<FileChannelLogEntry>() {
+            @Override
+            public Iterator<FileChannelLogEntry> iterator() {
+                return shallowIterator(maxRecordSize, start);
+            }
+        };
+    }
+
+    private Iterator<FileChannelLogEntry> shallowIterator(int maxRecordSize, int start) {
         final int end;
         if (isSlice)
             end = this.end;
@@ -339,7 +359,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public Iterator<LogEntry> deepIterator() {
+    public Iterable<LogEntry> deepEntries() {
+        return deepEntries;
+    }
+
+    private Iterator<LogEntry> deepIterator() {
         final int end;
         if (isSlice)
             end = this.end;

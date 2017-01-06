@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -64,7 +65,7 @@ class LogManagerTest {
    */
   @Test
   def testCreateLog() {
-    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
+    val log = logManager.createLog(new TopicPartition(name, 0), logConfig)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.append(TestUtils.singletonRecords("test".getBytes()))
@@ -75,7 +76,7 @@ class LogManagerTest {
    */
   @Test
   def testGetNonExistentLog() {
-    val log = logManager.getLog(TopicAndPartition(name, 0))
+    val log = logManager.getLog(new TopicPartition(name, 0))
     assertEquals("No log should be found.", None, log)
     val logFile = new File(logDir, name + "-0")
     assertTrue(!logFile.exists)
@@ -86,7 +87,7 @@ class LogManagerTest {
    */
   @Test
   def testCleanupExpiredSegments() {
-    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
+    val log = logManager.createLog(new TopicPartition(name, 0), logConfig)
     var offset = 0L
     for(_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -129,7 +130,7 @@ class LogManagerTest {
     logManager.startup
 
     // create a log
-    val log = logManager.createLog(TopicAndPartition(name, 0), config)
+    val log = logManager.createLog(new TopicPartition(name, 0), config)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -166,7 +167,7 @@ class LogManagerTest {
   def testDoesntCleanLogsWithCompactDeletePolicy() {
     val logProps = new Properties()
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
-    val log = logManager.createLog(TopicAndPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    val log = logManager.createLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
@@ -195,7 +196,7 @@ class LogManagerTest {
 
     logManager = createLogManager()
     logManager.startup
-    val log = logManager.createLog(TopicAndPartition(name, 0), config)
+    val log = logManager.createLog(new TopicPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -219,7 +220,7 @@ class LogManagerTest {
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.createLog(TopicAndPartition("test", partition), logConfig)
+      logManager.createLog(new TopicPartition("test", partition), logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
@@ -244,7 +245,7 @@ class LogManagerTest {
    */
   @Test
   def testCheckpointRecoveryPoints() {
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1), TopicAndPartition("test-b", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1), new TopicPartition("test-b", 1)), logManager)
   }
 
   /**
@@ -257,7 +258,7 @@ class LogManagerTest {
     logManager = TestUtils.createLogManager(
       logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
     logManager.startup
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
   /**
@@ -271,13 +272,13 @@ class LogManagerTest {
     logDir.deleteOnExit()
     logManager = createLogManager()
     logManager.startup
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
 
-  private def verifyCheckpointRecovery(topicAndPartitions: Seq[TopicAndPartition],
+  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition],
                                        logManager: LogManager) {
-    val logs = topicAndPartitions.map(this.logManager.createLog(_, logConfig))
+    val logs = topicPartitions.map(this.logManager.createLog(_, logConfig))
     logs.foreach(log => {
       for (_ <- 0 until 50)
         log.append(TestUtils.singletonRecords("test".getBytes()))
@@ -288,7 +289,7 @@ class LogManagerTest {
     logManager.checkpointRecoveryPointOffsets()
     val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
-    topicAndPartitions.zip(logs).foreach {
+    topicPartitions.zip(logs).foreach {
       case(tp, log) => {
         assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
       }

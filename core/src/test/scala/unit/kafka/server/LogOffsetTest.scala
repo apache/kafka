@@ -85,9 +85,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     AdminUtils.createTopic(zkUtils, topic, 1, 1)
 
     val logManager = server.getLogManager
-    waitUntilTrue(() => logManager.getLog(TopicAndPartition(topic, part)).isDefined,
+    waitUntilTrue(() => logManager.getLog(new TopicPartition(topic, part)).isDefined,
                   "Log for partition [topic,0] should be created")
-    val log = logManager.getLog(TopicAndPartition(topic, part)).get
+    val log = logManager.getLog(new TopicPartition(topic, part)).get
 
     val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
@@ -115,9 +115,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   @Test
   def testEmptyLogsGetOffsets() {
     val topicPartition = "kafka-" + random.nextInt(10)
-    val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
+    val topicPartitionPath = TestUtils.tempDir().getAbsolutePath + "/" + topicPartition
     topicLogDir = new File(topicPartitionPath)
-    topicLogDir.mkdir
+    topicLogDir.mkdir()
 
     val topic = topicPartition.split("-").head
 
@@ -149,7 +149,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
+    val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
     val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
       log.append(MemoryRecords.withRecords(record))
@@ -178,7 +178,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     AdminUtils.createTopic(zkUtils, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
+    val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
     val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
       log.append(MemoryRecords.withRecords(record))
@@ -237,7 +237,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
     props.put("port", TestUtils.RandomPort.toString())
-    props.put("log.dir", getLogDir.getAbsolutePath)
+    props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")
     props.put("num.partitions", "20")
@@ -246,11 +246,6 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     props.put("log.segment.bytes", logSize.toString)
     props.put("zookeeper.connect", zkConnect.toString)
     props
-  }
-
-  private def getLogDir(): File = {
-    val dir = TestUtils.tempDir()
-    dir
   }
 
 }

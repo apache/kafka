@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -219,10 +220,11 @@ public class ProcessorTopologyTestDriver {
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
-                                  producer,
                                   restoreStateConsumer,
                                   config,
-                                  metrics, stateDirectory, new ThreadCache(1024 * 1024));
+                                  metrics, stateDirectory,
+                                  new ThreadCache(1024 * 1024),
+                                  new RecordCollectorImpl(producer, "id"));
         }
     }
 

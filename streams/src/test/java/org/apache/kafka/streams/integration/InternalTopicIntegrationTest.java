@@ -219,7 +219,7 @@ public class InternalTopicIntegrationTest {
         assertTrue(policies.contains(LogConfig.Compact()));
         assertTrue(policies.contains(LogConfig.Delete()));
         // retention should be 1 day + the window duration
-        final Long retention = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS) + durationMs;
-        assertEquals(retention, Long.valueOf(properties.getProperty(LogConfig.RetentionMsProp())));
+        final long retention = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS) + durationMs;
+        assertEquals(retention, Long.parseLong(properties.getProperty(LogConfig.RetentionMsProp())));
     }
 }

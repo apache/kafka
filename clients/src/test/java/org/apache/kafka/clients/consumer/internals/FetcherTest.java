@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -106,15 +107,15 @@ public class FetcherTest {
         metadata.update(cluster, time.milliseconds());
         client.setNode(node);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(1L, 0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(2L, 0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(3L, 0L, "key".getBytes(), "value-3".getBytes());
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        builder.append(0L, "key".getBytes(), "value-1".getBytes());
+        builder.append(0L, "key".getBytes(), "value-2".getBytes());
+        builder.append(0L, "key".getBytes(), "value-3".getBytes());
         records = builder.build();
 
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(4L, 0L, "key".getBytes(), "value-4".getBytes());
-        builder.append(5L, 0L, "key".getBytes(), "value-5".getBytes());
+        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
+        builder.append(0L, "key".getBytes(), "value-4".getBytes());
+        builder.append(0L, "key".getBytes(), "value-5".getBytes());
         nextRecords = builder.build();
     }
 
@@ -293,9 +294,9 @@ public class FetcherTest {
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-        builder.append(15L, 0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(20L, 0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(30L, 0L, "key".getBytes(), "value-3".getBytes());
+        builder.appendWithOffset(15L, 0L, "key".getBytes(), "value-1".getBytes());
+        builder.appendWithOffset(20L, 0L, "key".getBytes(), "value-2".getBytes());
+        builder.appendWithOffset(30L, 0L, "key".getBytes(), "value-3".getBytes());
         MemoryRecords records = builder.build();
 
         List<ConsumerRecord<byte[], byte[]>> consumerRecords;
@@ -607,7 +608,6 @@ public class FetcherTest {
      */
     @Test
     public void testQuotaMetrics() throws Exception {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
@@ -615,17 +615,10 @@ public class FetcherTest {
         for (int i = 1; i < 4; i++) {
             // We need to make sure the message offset grows. Otherwise they will be considered as already consumed
             // and filtered out by consumer.
-            if (i > 1) {
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
-                for (int v = 0; v < 3; v++) {
-                    builder.append((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
-                }
-                this.records = builder.build();
-            }
-            assertEquals(1, fetcher.sendFetches());
-            client.prepareResponse(fetchResponse(this.records, Errors.NONE.code(), 100L, 100 * i));
-            consumerClient.poll(0);
-            records = fetcher.fetchedRecords().get(tp);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+            for (int v = 0; v < 3; v++)
+                builder.appendWithOffset((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+            List<ConsumerRecord<byte[], byte[]>> records = fetchRecords(builder.build(), Errors.NONE.code(), 100L, 100 * i).get(tp);
             assertEquals(3, records.size());
         }
 
@@ -634,6 +627,39 @@ public class FetcherTest {
         KafkaMetric maxMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-max", metricGroup, ""));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
+    }
+
+    /*
+     * Send multiple requests. Verify that the client side quota metrics have the right values
+     */
+    @Test
+    public void testFetcherMetrics() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
+        KafkaMetric recordsFetchLagMax = allMetrics.get(metrics.metricName("records-lag-max", metricGroup, ""));
+
+        // recordsFetchLagMax should be initialized to negative infinity
+        assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
+
+        // recordsFetchLagMax should be hw - fetchOffset after receiving an empty FetchResponse
+        fetchRecords(MemoryRecords.EMPTY, Errors.NONE.code(), 100L, 0);
+        assertEquals(100, recordsFetchLagMax.value(), EPSILON);
+
+        // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+        for (int v = 0; v < 3; v++)
+            builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+        fetchRecords(builder.build(), Errors.NONE.code(), 200L, 0);
+        assertEquals(198, recordsFetchLagMax.value(), EPSILON);
+    }
+
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(MemoryRecords records, short error, long hw, int throttleTime) {
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(records, error, hw, throttleTime));
+        consumerClient.poll(0);
+        return fetcher.fetchedRecords();
     }
 
     @Test
@@ -728,7 +754,9 @@ public class FetcherTest {
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, short error, long hw, int throttleTime) {
-        return new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records)), throttleTime);
+        return new FetchResponse(
+                new LinkedHashMap<>(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records))),
+                throttleTime);
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {

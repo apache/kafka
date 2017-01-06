@@ -77,7 +77,7 @@ class LogSegmentTest {
     val ms = records(50, "hello", "there", "little", "bee")
     seg.append(50, 53, Record.NO_TIMESTAMP, -1L, ms)
     val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None).records
-    assertEquals(ms.deepIterator.asScala.toList, read.deepIterator.asScala.toList)
+    assertEquals(ms.deepEntries.asScala.toList, read.deepEntries.asScala.toList)
   }
 
   /**
@@ -91,8 +91,8 @@ class LogSegmentTest {
     val ms = records(baseOffset, "hello", "there", "beautiful")
     seg.append(baseOffset, 52, Record.NO_TIMESTAMP, -1L, ms)
     def validate(offset: Long) =
-      assertEquals(ms.deepIterator.asScala.filter(_.offset == offset).toList,
-                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).records.deepIterator.asScala.toList)
+      assertEquals(ms.deepEntries.asScala.filter(_.offset == offset).toList,
+                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).records.deepEntries.asScala.toList)
     validate(50)
     validate(51)
     validate(52)
@@ -122,7 +122,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepIterator.asScala.toList, read.records.deepIterator.asScala.toList)
+    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
   }
 
   /**
@@ -140,12 +140,12 @@ class LogSegmentTest {
       seg.append(offset + 1, offset + 1, Record.NO_TIMESTAMP, -1L, ms2)
       // check that we can read back both messages
       val read = seg.read(offset, None, 10000)
-      assertEquals(List(ms1.deepIterator.next(), ms2.deepIterator.next()), read.records.deepIterator.asScala.toList)
+      assertEquals(List(ms1.deepEntries.iterator.next(), ms2.deepEntries.iterator.next()), read.records.deepEntries.asScala.toList)
       // now truncate off the last message
       seg.truncateTo(offset + 1)
       val read2 = seg.read(offset, None, 10000)
-      assertEquals(1, read2.records.deepIterator.asScala.size)
-      assertEquals(ms1.deepIterator.next(), read2.records.deepIterator.next())
+      assertEquals(1, read2.records.deepEntries.asScala.size)
+      assertEquals(ms1.deepEntries.iterator.next(), read2.records.deepEntries.iterator.next())
       offset += 1
     }
   }
@@ -246,7 +246,7 @@ class LogSegmentTest {
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
-      assertEquals(i, seg.read(i, Some(i + 1), 1024).records.deepIterator.next().offset)
+      assertEquals(i, seg.read(i, Some(i + 1), 1024).records.deepEntries.iterator.next().offset)
   }
 
   /**
@@ -285,7 +285,7 @@ class LogSegmentTest {
       val position = recordPosition.position + TestUtils.random.nextInt(15)
       TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
       seg.recover(64*1024)
-      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.shallowIterator.asScala.map(_.offset).toList)
+      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.shallowEntries.asScala.map(_.offset).toList)
       seg.delete()
     }
   }
@@ -307,7 +307,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepIterator.asScala.toList, read.records.deepIterator.asScala.toList)
+    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
   }
 
   /* create a segment with   pre allocate and clearly shut down*/
@@ -321,7 +321,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepIterator.asScala.toList, read.records.deepIterator.asScala.toList)
+    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
     val oldSize = seg.log.sizeInBytes()
     val oldPosition = seg.log.channel.position
     val oldFileSize = seg.log.file.length
@@ -334,7 +334,7 @@ class LogSegmentTest {
     segments += segReopen
 
     val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepIterator.asScala.toList, readAgain.records.deepIterator.asScala.toList)
+    assertEquals(ms2.deepEntries.asScala.toList, readAgain.records.deepEntries.asScala.toList)
     val size = segReopen.log.sizeInBytes()
     val position = segReopen.log.channel.position
     val fileSize = segReopen.log.file.length

@@ -252,9 +252,8 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       val offsetRequest = OffsetRequest(initialOffsetMap)
       val offsetResponse = consumer.getOffsetsBefore(offsetRequest)
       assert(!offsetResponse.hasError, offsetResponseStringWithError(offsetResponse))
-      offsetResponse.partitionErrorAndOffsets.foreach{
-        case (topicAndPartition, partitionOffsetResponse) =>
-          fetchOffsetMap.put(topicAndPartition, partitionOffsetResponse.offsets.head)
+      offsetResponse.partitionErrorAndOffsets.foreach { case (topicAndPartition, partitionOffsetResponse) =>
+        fetchOffsetMap.put(topicAndPartition, partitionOffsetResponse.offsets.head)
       }
     }
   }
@@ -267,7 +266,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     fetchOffsetMap.get(topicAndPartition)
   }
 
-  def verifyCheckSum() {
+  def verifyCheckSum(println: String => Unit) {
     debug("Begin verification")
     maxLag = -1L
     for ((topicAndPartition, fetchResponsePerReplica) <- messageSetCache) {
@@ -275,9 +274,8 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       assert(fetchResponsePerReplica.size == expectedReplicasPerTopicAndPartition(topicAndPartition),
             "fetched " + fetchResponsePerReplica.size + " replicas for " + topicAndPartition + ", but expected "
             + expectedReplicasPerTopicAndPartition(topicAndPartition) + " replicas")
-      val logEntryIteratorMap = fetchResponsePerReplica.map {
-        case(replicaId, fetchResponse) =>
-          replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.shallowIterator.asScala
+      val logEntryIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
+        replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.shallowEntries.iterator
       }
       val maxHw = fetchResponsePerReplica.values.map(_.hw).max
 
@@ -285,10 +283,10 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       var isMessageInAllReplicas = true
       while (isMessageInAllReplicas) {
         var messageInfoFromFirstReplicaOpt: Option[MessageInfo] = None
-        for ( (replicaId, logEntries) <- logEntryIteratorMap) {
+        for ((replicaId, logEntriesIterator) <- logEntryIteratorMap) {
           try {
-            if (logEntries.hasNext) {
-              val logEntry = logEntries.next()
+            if (logEntriesIterator.hasNext) {
+              val logEntry = logEntriesIterator.next()
 
               // only verify up to the high watermark
               if (logEntry.offset >= fetchResponsePerReplica.get(replicaId).hw)
@@ -297,7 +295,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
                 messageInfoFromFirstReplicaOpt match {
                   case None =>
                     messageInfoFromFirstReplicaOpt = Some(
-                      MessageInfo(replicaId, logEntry.offset,logEntry.nextOffset, logEntry.record.checksum))
+                      MessageInfo(replicaId, logEntry.offset, logEntry.nextOffset, logEntry.record.checksum))
                   case Some(messageInfoFromFirstReplica) =>
                     if (messageInfoFromFirstReplica.offset != logEntry.offset) {
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition
@@ -378,9 +376,8 @@ private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAn
     }
 
     if (response != null) {
-      response.data.foreach {
-        case(topicAndPartition, partitionData) =>
-          replicaBuffer.addFetchedData(topicAndPartition, sourceBroker.id, partitionData)
+      response.data.foreach { case (topicAndPartition, partitionData) =>
+        replicaBuffer.addFetchedData(topicAndPartition, sourceBroker.id, partitionData)
       }
     } else {
       for (topicAndPartition <- topicAndPartitions)
@@ -397,7 +394,7 @@ private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAn
     // one of the fetchers will do the verification
     if (doVerification) {
       debug("Do verification")
-      replicaBuffer.verifyCheckSum()
+      replicaBuffer.verifyCheckSum(println)
       replicaBuffer.createNewFetcherBarrier()
       replicaBuffer.createNewVerificationBarrier()
       debug("Created new barrier")

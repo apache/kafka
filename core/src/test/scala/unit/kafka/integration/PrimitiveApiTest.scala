@@ -18,18 +18,22 @@
 package kafka.integration
 
 import java.nio.ByteBuffer
+
 import org.junit.Assert._
-import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
-import kafka.server.{KafkaRequestHandler, KafkaConfig}
+import kafka.api.{FetchRequest, FetchRequestBuilder, PartitionFetchInfo}
+import kafka.server.{KafkaConfig, KafkaRequestHandler}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
+
 import scala.collection._
-import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
-import kafka.utils.{StaticPartitioner, TestUtils, CoreUtils}
+import kafka.common.{ErrorMapping, OffsetOutOfRangeException, TopicAndPartition, UnknownTopicOrPartitionException}
+import kafka.utils.{CoreUtils, StaticPartitioner, TestUtils}
 import kafka.serializer.StringEncoder
 import java.util.Properties
+
+import org.apache.kafka.common.TopicPartition
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -71,7 +75,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
 
     producer.send(new KeyedMessage[String, String](topic, "test-message"))
 
-    val replica = servers.head.replicaManager.getReplica(topic, 0).get
+    val replica = servers.head.replicaManager.getReplica(new TopicPartition(topic, 0)).get
     assertTrue("HighWatermark should equal logEndOffset with just 1 replica",
                replica.logEndOffset.messageOffset > 0 && replica.logEndOffset.equals(replica.highWatermark))
 
@@ -243,23 +247,23 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
     }
 
     // wait until the messages are published
-    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(TopicAndPartition("test1", 0)).get.logEndOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(new TopicPartition("test1", 0)).get.logEndOffset == 2 },
                             "Published messages should be in the log")
-    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(TopicAndPartition("test2", 0)).get.logEndOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(new TopicPartition("test2", 0)).get.logEndOffset == 2 },
                             "Published messages should be in the log")
-    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(TopicAndPartition("test3", 0)).get.logEndOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(new TopicPartition("test3", 0)).get.logEndOffset == 2 },
                             "Published messages should be in the log")
-    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(TopicAndPartition("test4", 0)).get.logEndOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog(new TopicPartition("test4", 0)).get.logEndOffset == 2 },
                             "Published messages should be in the log")
 
     val replicaId = servers.head.config.brokerId
-    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test1", 0, replicaId).get.highWatermark.messageOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica(new TopicPartition("test1", 0), replicaId).get.highWatermark.messageOffset == 2 },
                             "High watermark should equal to log end offset")
-    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test2", 0, replicaId).get.highWatermark.messageOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica(new TopicPartition("test2", 0), replicaId).get.highWatermark.messageOffset == 2 },
                             "High watermark should equal to log end offset")
-    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test3", 0, replicaId).get.highWatermark.messageOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica(new TopicPartition("test3", 0), replicaId).get.highWatermark.messageOffset == 2 },
                             "High watermark should equal to log end offset")
-    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test4", 0, replicaId).get.highWatermark.messageOffset == 2 },
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica(new TopicPartition("test4", 0), replicaId).get.highWatermark.messageOffset == 2 },
                             "High watermark should equal to log end offset")
 
     // test if the consumer received the messages in the correct order when producer has enabled request pipelining

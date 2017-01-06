@@ -53,12 +53,12 @@ class AdminClient(val time: Time,
 
   private def sendAnyNode(api: ApiKeys, request: AbstractRequest): AbstractResponse = {
     bootstrapBrokers.foreach { broker =>
-        try {
-          return send(broker, api, request)
-        } catch {
-          case e: Exception =>
-            debug(s"Request $api failed against node $broker", e)
-        }
+      try {
+        return send(broker, api, request)
+      } catch {
+        case e: Exception =>
+          debug(s"Request $api failed against node $broker", e)
+      }
     }
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
