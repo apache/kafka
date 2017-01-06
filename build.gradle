@@ -393,7 +393,6 @@ project(':core') {
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    compile libs.jfreechart
     // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
     if (versions.baseScala != '2.10') {
       compile libs.scalaParserCombinators
@@ -415,6 +414,7 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+    testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
