@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.serialization.Serde;
 
 /**
  * The {@link KeyValueMapper} interface for mapping a {@link org.apache.kafka.streams.KeyValue key-value pair} to a new
@@ -40,9 +39,9 @@ import org.apache.kafka.common.serialization.Serde;
  * @see KStream#flatMap(KeyValueMapper)
  * @see KStream#selectKey(KeyValueMapper)
  * @see KStream#groupBy(KeyValueMapper)
- * @see KStream#groupBy(KeyValueMapper, Serde, Serde)
+ * @see KStream#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KTable#groupBy(KeyValueMapper)
- * @see KTable#groupBy(KeyValueMapper, Serde, Serde)
+ * @see KTable#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serdes, org.apache.kafka.common.serialization.Serde)
  * @see KTable#toStream(KeyValueMapper)
  */
 @InterfaceStability.Unstable
