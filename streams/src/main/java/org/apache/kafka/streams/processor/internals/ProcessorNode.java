@@ -85,6 +85,7 @@ public class ProcessorNode<K, V> {
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
         return toString("");
     }
@@ -93,7 +94,7 @@ public class ProcessorNode<K, V> {
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
     public String toString(String indent) {
-        StringBuilder sb = new StringBuilder(indent + name + ":\n");
+        final StringBuilder sb = new StringBuilder(indent + name + ":\n");
         if (stateStores != null && !stateStores.isEmpty()) {
             sb.append(indent).append("\tstates:\t\t[");
             for (String store : stateStores) {

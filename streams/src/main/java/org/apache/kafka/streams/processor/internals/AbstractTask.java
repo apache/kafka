@@ -157,7 +157,7 @@ public abstract class AbstractTask {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamTask.
+     * Produces a string representation containing useful information about a StreamTask.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
@@ -167,12 +167,12 @@ public abstract class AbstractTask {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamTask starting with the given indent.
+     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
-    public String toString(String indent) {
-        StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
 
         // print topology
         if (topology != null) {

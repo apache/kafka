@@ -1025,7 +1025,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamThread.
+     * Produces a string representation containing useful information about a StreamThread.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamThread instance.
      */
@@ -1035,12 +1035,12 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamThread, starting with the given indent.
+     * Produces a string representation containing useful information about a StreamThread, starting with the given indent.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamThread instance.
      */
-    public String toString(String indent) {
-        StringBuilder sb = new StringBuilder(indent + "StreamsThread appId: " + this.applicationId + "\n");
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsThread appId: " + this.applicationId + "\n");
         sb.append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n");
         sb.append(indent).append("\tStreamsThread threadId: ").append(this.getName()).append("\n");
 

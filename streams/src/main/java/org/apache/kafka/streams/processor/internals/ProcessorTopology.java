@@ -100,14 +100,14 @@ public class ProcessorTopology {
         sb.append("]\n");
 
         // recursively print children
-        for (ProcessorNode child : children) {
+        for (ProcessorNode<?, ?> child : children) {
             sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
     }
 
     /**
-     * Produces a string representation contain useful information this topology starting with the given indent.
+     * Produces a string representation containing useful information this topology starting with the given indent.
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
@@ -117,15 +117,15 @@ public class ProcessorTopology {
     }
 
     /**
-     * Produces a string representation contain useful information this topology.
+     * Produces a string representation containing useful information this topology.
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
-    public String toString(String indent) {
-        StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode source : sourceByTopics.values()) {
+        for (SourceNode<?, ?> source : sourceByTopics.values()) {
             sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();

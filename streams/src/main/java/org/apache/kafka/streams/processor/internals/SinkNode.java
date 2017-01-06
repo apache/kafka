@@ -108,7 +108,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
     public String toString(String indent) {
-        StringBuilder sb = new StringBuilder(super.toString(indent));
+        final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopic:\t\t");
         sb.append(topic);
         sb.append("\n");
