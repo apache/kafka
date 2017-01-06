@@ -14,6 +14,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -71,7 +72,12 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build() {
-            return new ProduceRequest(getVersion(), acks, timeout, partitionRecords);
+            short version = getVersion();
+            if (version < 2) {
+                throw new UnsupportedVersionException("ProduceRequest " +
+                        "versions older than 2 are not supported.");
+            }
+            return new ProduceRequest(version, acks, timeout, partitionRecords);
         }
 
         @Override
