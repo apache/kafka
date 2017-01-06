@@ -69,12 +69,6 @@ public interface StreamsMetrics {
      */
     void recordThroughput(Sensor sensor, long value);
 
-    /**
-     * Remove a sensor with the given name.
-     * @param name Sensor name to be removed.
-     */
-    void removeSensor(String name);
-
 }
 
 

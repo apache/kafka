@@ -72,10 +72,6 @@ public class MeteredSegmentedBytesStoreTest {
                 throughputRecorded.add(sensor.name());
             }
 
-            @Override
-            public void removeSensor(String name) {
-                return;
-            }
         };
 
         final MockProcessorContext context = new MockProcessorContext(null,

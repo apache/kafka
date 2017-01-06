@@ -408,7 +408,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
 
         public void removeAllSensors() {
-            metrics.removeSensor(taskCommitTimeSensor.name());
+            metrics.registry().removeSensor(taskCommitTimeSensor.name());
         }
     }
 

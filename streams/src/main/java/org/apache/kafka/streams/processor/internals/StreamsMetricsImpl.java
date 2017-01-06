@@ -63,11 +63,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    @Override
-    public void removeSensor(String name) {
-        metrics.removeSensor(name);
-    }
-
     private String groupNameFromScope(String scopeName) {
         return "stream-" + scopeName + "-metrics";
     }
