@@ -31,6 +31,8 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.metrics.MeasurableStat;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -500,6 +502,11 @@ public class Fetcher<K, V> {
                         "position to {}", position, partitionRecords.partition, nextOffset);
 
                 subscriptions.position(partitionRecords.partition, nextOffset);
+                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
+                if (partitionLag != null) {
+                    this.sensors.recordsFetchLag.record(partitionLag);
+                    this.sensors.recordPartitionFetchLag(partitionRecords.partition, partitionLag);
+                }
                 return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
@@ -763,12 +770,19 @@ public class Fetcher<K, V> {
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
-                    ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
-                    this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                } else if (partition.highWatermark >= 0) {
-                    log.trace("Received empty fetch response for partition {} with offset {}", tp, position);
-                    this.sensors.recordsFetchLag.record(partition.highWatermark - fetchOffset);
                 }
+
+                if (partition.highWatermark >= 0) {
+                    log.trace("Received {} records in fetch response for partition {} with offset {}", parsed.size(), tp, position);
+                    Long partitionLag = subscriptions.partitionLag(tp);
+                    subscriptions.updateHighWatermark(tp, partition.highWatermark);
+                    if (partitionLag == null) {
+                        partitionLag = subscriptions.partitionLag(tp);
+                        this.sensors.recordsFetchLag.record(partitionLag);
+                        this.sensors.recordPartitionFetchLag(tp, partitionLag);
+                    }
+                }
+
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
@@ -1056,6 +1070,34 @@ public class Fetcher<K, V> {
                         metricTags), new Rate());
             }
             recordsFetched.record(records);
+        }
+
+        public void recordPartitionFetchLag(TopicPartition tp, long lag) {
+            String name = tp + ".records-lag";
+            Sensor recordsLag = this.metrics.getSensor(name);
+            if (recordsLag == null) {
+                recordsLag = this.metrics.sensor(name);
+                recordsLag.add(this.metrics.metricName(tp + ".records-lag", this.metricGrpName, "The latest lag of the partition"),
+                    new MeasurableStat() {
+                        private double lag = 0;
+                        @Override
+                        public double measure(MetricConfig config, long now) {
+                            return lag;
+                        }
+
+                        @Override
+                        public void record(MetricConfig config, double value, long timeMs) {
+                            lag = value;
+                        }
+                    });
+                recordsLag.add(this.metrics.metricName(tp + ".records-lag-max",
+                        this.metricGrpName,
+                        "The max lag of the partition"), new Max());
+                recordsLag.add(this.metrics.metricName(tp + ".records-lag-avg",
+                        this.metricGrpName,
+                        "The average lag of the partition"), new Avg());
+            }
+            recordsLag.record(lag);
         }
     }
 

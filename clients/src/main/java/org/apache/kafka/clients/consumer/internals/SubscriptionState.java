@@ -17,6 +17,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
+import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -80,13 +81,20 @@ public class SubscriptionState {
     /* Listener to be invoked when assignment changes */
     private ConsumerRebalanceListener listener;
 
+    private final Metrics metrics;
+
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
+        this(defaultResetStrategy, new Metrics());
+    }
+
+    public SubscriptionState(OffsetResetStrategy defaultResetStrategy, Metrics metrics) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
+        this.metrics = metrics;
         this.subscriptionType = SubscriptionType.NONE;
     }
 
@@ -156,6 +164,7 @@ public class SubscriptionState {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         if (!this.assignment.partitionSet().equals(partitions)) {
+            removeAllLagSensors();
             Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
             for (TopicPartition partition : partitions) {
                 TopicPartitionState state = assignment.stateValue(partition);
@@ -176,6 +185,8 @@ public class SubscriptionState {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
+        removeAllLagSensors();
+
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
@@ -183,6 +194,11 @@ public class SubscriptionState {
         // after rebalancing, we always reinitialize the assignment value
         this.assignment.set(partitionToStateMap(assignments));
         this.needsFetchCommittedOffsets = true;
+    }
+
+    private void removeAllLagSensors() {
+        for (TopicPartition tp : assignment.partitionSet())
+            metrics.removeSensor(tp + ".records-lag");
     }
 
     private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
@@ -305,6 +321,15 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
+    public Long partitionLag(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
+    }
+
+    public void updateHighWatermark(TopicPartition tp, long highWatermark) {
+        assignedState(tp).highWatermark = highWatermark;
+    }
+
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
@@ -380,6 +405,7 @@ public class SubscriptionState {
 
     private static class TopicPartitionState {
         private Long position; // last consumed position
+        private Long highWatermark; // the high watermark from last fetch
         private OffsetAndMetadata committed;  // last committed position
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
@@ -387,6 +413,7 @@ public class SubscriptionState {
         public TopicPartitionState() {
             this.paused = false;
             this.position = null;
+            this.highWatermark = null;
             this.committed = null;
             this.resetStrategy = null;
         }
@@ -413,6 +440,10 @@ public class SubscriptionState {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = offset;
+        }
+
+        private void updateHighWatermark(long highWatermark) {
+            this.highWatermark = highWatermark;
         }
 
         private void committed(OffsetAndMetadata offset) {
