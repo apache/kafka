@@ -18,25 +18,43 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+
 public class KGroupedStreamImplTest {
 
+    private static final String TOPIC = "topic";
+    private final KStreamBuilder builder = new KStreamBuilder();
     private KGroupedStream<String, String> groupedStream;
 
     @Before
     public void before() {
-        final KStream<String, String> stream = new KStreamBuilder().stream("topic");
-        groupedStream = stream.groupByKey();
+        final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
+        groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
     }
 
     @Test(expected = NullPointerException.class)
@@ -63,7 +81,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsWithWindowedReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, null, "store");
+        groupedStream.reduce(MockReducer.STRING_ADDER, (Windows) null, "store");
     }
 
     @Test(expected = NullPointerException.class)
@@ -113,5 +131,210 @@ public class KGroupedStreamImplTest {
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
         StateStoreSupplier storeSupplier = null;
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), storeSupplier);
+    }
+
+    @Test
+    public void shouldAggregateSessionWindows() throws Exception {
+        final Map<Windowed<String>, Integer> results = new HashMap<>();
+        groupedStream.aggregate(new Initializer<Integer>() {
+            @Override
+            public Integer apply() {
+                return 0;
+            }
+        }, new Aggregator<String, String, Integer>() {
+            @Override
+            public Integer apply(final String aggKey, final String value, final Integer aggregate) {
+                return aggregate + 1;
+            }
+        }, new Merger<String, Integer>() {
+            @Override
+            public Integer apply(final String aggKey, final Integer aggOne, final Integer aggTwo) {
+                return aggOne + aggTwo;
+            }
+        }, SessionWindows.with(30), Serdes.Integer(), "session-store")
+                .foreach(new ForeachAction<Windowed<String>, Integer>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final Integer value) {
+                        results.put(key, value);
+                    }
+                });
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setTime(10);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(15);
+        driver.process(TOPIC, "2", "2");
+        driver.setTime(30);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(70);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(90);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(100);
+        driver.process(TOPIC, "1", "1");
+        driver.flushState();
+        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
+        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
+        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+    }
+
+    @Test
+    public void shouldCountSessionWindows() throws Exception {
+        final Map<Windowed<String>, Long> results = new HashMap<>();
+        groupedStream.count(SessionWindows.with(30), "session-store")
+                .foreach(new ForeachAction<Windowed<String>, Long>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final Long value) {
+                        results.put(key, value);
+                    }
+                });
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setTime(10);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(15);
+        driver.process(TOPIC, "2", "2");
+        driver.setTime(30);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(70);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(90);
+        driver.process(TOPIC, "1", "1");
+        driver.setTime(100);
+        driver.process(TOPIC, "1", "1");
+        driver.flushState();
+        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
+        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
+        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+    }
+
+    @Test
+    public void shouldReduceSessionWindows() throws Exception {
+        final Map<Windowed<String>, String> results = new HashMap<>();
+        groupedStream.reduce(
+                new Reducer<String>() {
+                    @Override
+                    public String apply(final String value1, final String value2) {
+                        return value1 + ":" + value2;
+                    }
+                }, SessionWindows.with(30),
+                "session-store")
+                .foreach(new ForeachAction<Windowed<String>, String>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final String value) {
+                        results.put(key, value);
+                    }
+                });
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setTime(10);
+        driver.process(TOPIC, "1", "A");
+        driver.setTime(15);
+        driver.process(TOPIC, "2", "Z");
+        driver.setTime(30);
+        driver.process(TOPIC, "1", "B");
+        driver.setTime(70);
+        driver.process(TOPIC, "1", "A");
+        driver.setTime(90);
+        driver.process(TOPIC, "1", "B");
+        driver.setTime(100);
+        driver.process(TOPIC, "1", "C");
+        driver.flushState();
+        assertEquals("A:B", results.get(new Windowed<>("1", new TimeWindow(10, 30))));
+        assertEquals("Z", results.get(new Windowed<>("2", new TimeWindow(15, 15))));
+        assertEquals("A:B:C", results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullReducerWhenReducingSessionWindows() throws Exception {
+        groupedStream.reduce(null, SessionWindows.with(10), "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullSessionWindowsReducingSessionWindows() throws Exception {
+        groupedStream.reduce(MockReducer.STRING_ADDER, (SessionWindows) null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStoreNameWhenReducingSessionWindows() throws Exception {
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStateStoreSupplierNameWhenReducingSessionWindows() throws Exception {
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), "storeName");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullAggregatorWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, null, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), "storeName");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT,
+                                MockAggregator.STRING_ADDER,
+                                null,
+                                SessionWindows.with(10),
+                                Serdes.String(),
+                                "storeName");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullSessionWindowsWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, null, Serdes.String(), "storeName");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStoreNameWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullSessionWindowsWhenCountingSessionWindows() throws Exception {
+        groupedStream.count((SessionWindows) null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStoreNameWhenCountingSessionWindows() throws Exception {
+        groupedStream.count(SessionWindows.with(90), (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStoreStoreSupplierNameWhenCountingSessionWindows() throws Exception {
+        groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
     }
 }

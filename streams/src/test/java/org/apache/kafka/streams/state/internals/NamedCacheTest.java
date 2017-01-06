@@ -232,6 +232,21 @@ public class NamedCacheTest {
     }
 
     @Test
+    public void shouldRemoveDeletedValuesOnFlush() throws Exception {
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                // no-op
+            }
+        });
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, true, 0, 0, 0, ""));
+        cache.flush();
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(Bytes.wrap(new byte[]{1})));
+    }
+
+    @Test
     public void shouldBeReentrantAndNotBreakLRU() throws Exception {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
@@ -291,4 +306,5 @@ public class NamedCacheTest {
         cache.put(key, dirty);
         cache.evict();
     }
+
 }

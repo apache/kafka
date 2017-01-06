@@ -165,7 +165,7 @@ public class JoinIntegrationTest {
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
         if (expectedResult != null) {
-            final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), Long.MAX_VALUE);
+            final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
             assertThat(result, is(expectedResult));
         }
     }

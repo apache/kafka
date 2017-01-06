@@ -113,6 +113,7 @@ class NamedCache {
         }
 
         final List<ThreadCache.DirtyEntry> entries  = new ArrayList<>();
+        final List<Bytes> deleted = new ArrayList<>();
 
         // evicted already been removed from the cache so add it to the list of
         // flushed entries and remove from dirtyKeys.
@@ -128,10 +129,16 @@ class NamedCache {
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
             node.entry.markClean();
+            if (node.entry.value == null) {
+                deleted.add(node.key);
+            }
         }
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
         dirtyKeys.clear();
         listener.apply(entries);
+        for (Bytes key : deleted) {
+            delete(key);
+        }
     }
 
 
@@ -267,7 +274,6 @@ class NamedCache {
         copy.addAll(keySet);
         return copy.iterator();
     }
-    
 
     synchronized Iterator<Bytes> allKeys() {
         return keySetIterator(cache.navigableKeySet());

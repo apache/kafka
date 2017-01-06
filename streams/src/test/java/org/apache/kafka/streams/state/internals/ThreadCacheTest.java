@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Test;
@@ -246,8 +248,8 @@ public class ThreadCacheTest {
         final String namespace = "streams";
         cache.put(namespace, theByte, dirtyEntry(theByte));
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, new byte[]{1});
-        assertArrayEquals(theByte, iterator.peekNextKey());
-        assertArrayEquals(theByte, iterator.peekNextKey());
+        assertEquals(Bytes.wrap(theByte), iterator.peekNextKey());
+        assertEquals(Bytes.wrap(theByte), iterator.peekNextKey());
     }
 
     @Test
@@ -257,7 +259,7 @@ public class ThreadCacheTest {
         final String namespace = "streams";
         cache.put(namespace, theByte, dirtyEntry(theByte));
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, new byte[]{1});
-        assertArrayEquals(iterator.peekNextKey(), iterator.next().key);
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
     }
 
     @Test(expected = NoSuchElementException.class)
@@ -285,10 +287,10 @@ public class ThreadCacheTest {
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, new byte[]{1}, new byte[]{4});
         int bytesIndex = 1;
         while (iterator.hasNext()) {
-            byte[] peekedKey = iterator.peekNextKey();
-            final KeyValue<byte[], LRUCacheEntry> next = iterator.next();
-            assertArrayEquals(bytes[bytesIndex], peekedKey);
-            assertArrayEquals(bytes[bytesIndex], next.key);
+            Bytes peekedKey = iterator.peekNextKey();
+            final KeyValue<Bytes, LRUCacheEntry> next = iterator.next();
+            assertArrayEquals(bytes[bytesIndex], peekedKey.get());
+            assertArrayEquals(bytes[bytesIndex], next.key.get());
             bytesIndex++;
         }
         assertEquals(5, bytesIndex);
@@ -315,7 +317,7 @@ public class ThreadCacheTest {
         // should evict byte[] {0}
         cache.put(namespace, new byte[]{6}, dirtyEntry(new byte[]{6}));
 
-        assertArrayEquals(new byte[]{1}, range.peekNextKey());
+        assertEquals(Bytes.wrap(new byte[]{1}), range.peekNextKey());
     }
 
     @Test

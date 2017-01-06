@@ -119,15 +119,15 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.context = context;
         this.root = root;
         this.metrics = (StreamsMetricsImpl) context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.INFO);
-        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.RecordLevel.INFO);
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordLevel.INFO);
-        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete", Sensor.RecordLevel.INFO);
-        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all", Sensor.RecordLevel.INFO);
-        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all", Sensor.RecordLevel.INFO);
-        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range", Sensor.RecordLevel.INFO);
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordLevel.INFO);
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordLevel.INFO);
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.DEBUG);
+        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.RecordLevel.DEBUG);
+        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordLevel.DEBUG);
+        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete", Sensor.RecordLevel.DEBUG);
+        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all", Sensor.RecordLevel.DEBUG);
+        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all", Sensor.RecordLevel.DEBUG);
+        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range", Sensor.RecordLevel.DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordLevel.DEBUG);
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordLevel.DEBUG);
 
         // register and possibly restore the state from the logs
         metrics.measureLatencyNs(time, initDelegate, this.restoreTime);
@@ -237,6 +237,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             } finally {
                 metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
             }
+        }
+
+        @Override
+        public K1 peekNextKey() {
+            return iter.peekNextKey();
         }
     }
 }

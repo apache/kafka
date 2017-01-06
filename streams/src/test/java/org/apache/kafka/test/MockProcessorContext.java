@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -109,6 +110,9 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     public void setTime(long timestamp) {
+        if (recordContext != null) {
+            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+        }
         this.timestamp = timestamp;
     }
 
