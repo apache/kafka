@@ -17,10 +17,10 @@
 
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -41,18 +41,12 @@ public class TimestampRouter<R extends ConnectRecord<R>> implements Transformati
             .define("timestamp.format", ConfigDef.Type.STRING, "yyyyMMdd", ConfigDef.Importance.HIGH,
                     "Format string for the timestamp that is compatible with java.text.SimpleDateFormat.");
 
-    private static class Config extends AbstractConfig {
-        public Config(Map<?, ?> originals) {
-            super(CONFIG_DEF, originals, false);
-        }
-    }
-
     private String topicFormat;
     private ThreadLocal<SimpleDateFormat> timestampFormat;
 
     @Override
     public void init(Map<String, Object> props) {
-        final Config config = new Config(props);
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
 
         topicFormat = config.getString("topic.format");
 
@@ -85,6 +79,7 @@ public class TimestampRouter<R extends ConnectRecord<R>> implements Transformati
 
     @Override
     public void close() {
+        timestampFormat = null;
     }
 
     @Override

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -26,6 +25,8 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.transforms.util.SchemaUpdateCache;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 
@@ -42,12 +43,6 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
                     "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
             .define("timestamp", ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for record timestamp.\n" + OPTIONALITY_DOC);
-
-    private static class Config extends AbstractConfig {
-        public Config(Map<?, ?> originals) {
-            super(CONFIG_DEF, originals, false);
-        }
-    }
 
     private static final class InsertionSpec {
         final String name;
@@ -80,23 +75,24 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         }
     }
 
+    private final SchemaUpdateCache schemaUpdateCache = new SchemaUpdateCache();
+
     private InsertionSpec topicField;
     private InsertionSpec partitionField;
     private InsertionSpec offsetField;
     private InsertionSpec timestampField;
     private boolean applicable;
 
-    // Expect this functionality to be refactored out as more transformations that operate on Schema's are added.
-    private final ThreadLocal<SchemaUpdateCacheEntry> schemaUpdateCache = new ThreadLocal<>();
-
     @Override
     public void init(Map<String, Object> props) {
-        final Config config = new Config(props);
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         topicField = InsertionSpec.parse(config.getString("topic"));
         partitionField = InsertionSpec.parse(config.getString("partition"));
         offsetField = InsertionSpec.parse(config.getString("offset"));
         timestampField = InsertionSpec.parse(config.getString("timestamp"));
         applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
+
+        schemaUpdateCache.init();
     }
 
     @Override
@@ -112,13 +108,10 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         if (schema.type() != Schema.Type.STRUCT)
             throw new DataException("Can only operate on Struct types: " + getClass().getName());
 
-        final Schema updatedSchema;
-        final SchemaUpdateCacheEntry schemaUpdateCacheEntry = schemaUpdateCache.get();
-        if (schemaUpdateCacheEntry == null || schemaUpdateCacheEntry.base != schema) {
+        Schema updatedSchema = schemaUpdateCache.get(schema);
+        if (updatedSchema == null) {
             updatedSchema = makeUpdatedSchema(schema);
-            schemaUpdateCache.set(new SchemaUpdateCacheEntry(schema, updatedSchema));
-        } else {
-            updatedSchema = schemaUpdateCacheEntry.updated;
+            schemaUpdateCache.put(schema, updatedSchema);
         }
 
         final Struct updatedValue = new Struct(updatedSchema);
@@ -196,6 +189,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
     @Override
     public void close() {
+        schemaUpdateCache.close();
     }
 
     @Override
