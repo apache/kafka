@@ -127,22 +127,7 @@ public class KTableGlobalKTableLeftJoinTest {
     }
 
     @Test
-    public void shouldNotSendAnythingIfChangeIsNullNullAndKeyMapsToNullInOtherTable() throws Exception {
-        global.put("1", "A");
-        final Processor<String, Change<String>> processor = join.get();
-        processor.init(context);
-        processor.process("A", new Change<String>(null, null));
-        assertThat(context.forwardedValues.get("A"), is(nullValue()));
-    }
-
-    @Test
     public void shouldNotForwardIfBothNewAndOldValuesAreNull() throws Exception {
-        final KTableGlobalKTableLeftJoin<String, String, String, String, String> join
-                = new KTableGlobalKTableLeftJoin<>(new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(new KTableValueGetterStub<String, String>()),
-                                               new KTableGlobalKTableJoinTest.ValueGetterSupplier<>(global),
-                                               MockValueJoiner.STRING_JOINER,
-                                               MockKeyValueMapper.<String, String>SelectKeyKeyValueMapper());
-
         global.put("1", "A");
         final Processor<String, Change<String>> processor = join.get();
         processor.init(context);
