@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
@@ -44,16 +45,18 @@ public class CachingWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
     private static final Long WINDOW_SIZE = 10000L;
-    private RocksDBWindowStore<Bytes, byte[]> underlying;
+    private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
     private ThreadCache cache;
     private String topic;
-    private static final Long DEFAULT_TIMESTAMP = 10L;
+    private static final long DEFAULT_TIMESTAMP = 10L;
+    private WindowStoreKeySchema keySchema;
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBWindowStore<>("test", 30000, 3, false, Serdes.Bytes(), Serdes.ByteArray());
+        keySchema = new WindowStoreKeySchema();
+        underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(underlying,
                                                 Serdes.String(),
@@ -85,9 +88,9 @@ public class CachingWindowStoreTest {
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
         int added = addItemsToCache();
         // all dirty entries should have been flushed
-        final WindowStoreIterator<byte[]> iter = underlying.fetch(Bytes.wrap("0".getBytes()), DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP);
-        final KeyValue<Long, byte[]> next = iter.next();
-        assertEquals(DEFAULT_TIMESTAMP, next.key);
+        final KeyValueIterator<Bytes, byte[]> iter = underlying.fetch(Bytes.wrap("0".getBytes()), DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP);
+        final KeyValue<Bytes, byte[]> next = iter.next();
+        assertEquals(DEFAULT_TIMESTAMP, keySchema.segmentTimestamp(next.key));
         assertArrayEquals("0".getBytes(), next.value);
         assertFalse(iter.hasNext());
         assertEquals(added - 1, cache.size());
@@ -143,7 +146,8 @@ public class CachingWindowStoreTest {
 
     @Test
     public void shouldIterateCacheAndStore() throws Exception {
-        underlying.put(Bytes.wrap("1".getBytes()), "a".getBytes());
+        final Bytes key = Bytes.wrap("1" .getBytes());
+        underlying.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.INNER_SERDES)), "a".getBytes());
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());

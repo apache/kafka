@@ -27,17 +27,18 @@ import static org.junit.Assert.assertTrue;
 
 public class DelegatingPeekingKeyValueIteratorTest {
 
+    private final String name = "name";
     private InMemoryKeyValueStore<String, String> store;
 
     @Before
     public void setUp() throws Exception {
-        store = new InMemoryKeyValueStore<>("name");
+        store = new InMemoryKeyValueStore<>(name);
     }
 
     @Test
     public void shouldPeekNext() throws Exception {
         store.put("A", "A");
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(store.all());
+        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         assertEquals("A", peekingIterator.peekNextKey());
         assertEquals("A", peekingIterator.peekNextKey());
         assertTrue(peekingIterator.hasNext());
@@ -50,7 +51,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
             store.put(kv, kv);
         }
 
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(store.all());
+        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         int index = 0;
         while (peekingIterator.hasNext()) {
             final String peekNext = peekingIterator.peekNextKey();
@@ -64,13 +65,13 @@ public class DelegatingPeekingKeyValueIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() throws Exception {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(store.all());
+        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.next();
     }
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() throws Exception {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(store.all());
+        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.peekNextKey();
     }
 
