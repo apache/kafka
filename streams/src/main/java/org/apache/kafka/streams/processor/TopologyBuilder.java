@@ -171,7 +171,7 @@ public class TopologyBuilder {
             // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
             // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
             if (subscribedTopics.isEmpty())
-                return new String[] { "Pattern[" + pattern + "]" };
+                return new String[] {"Pattern[" + pattern + "]"};
 
             List<String> matchedTopics = new ArrayList<>();
             for (String update : subscribedTopics) {
@@ -200,7 +200,7 @@ public class TopologyBuilder {
             // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
             // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
             if (sourceTopics == null)
-                return new SourceNode(name, new String[] { "Pattern[" + pattern + "]" }, keyDeserializer, valDeserializer);
+                return new SourceNode(name, new String[] {"Pattern[" + pattern + "]"}, keyDeserializer, valDeserializer);
             else
                 return new SourceNode(name, maybeDecorateInternalSourceTopics(sourceTopics).toArray(new String[sourceTopics.length]), keyDeserializer, valDeserializer);
         }
