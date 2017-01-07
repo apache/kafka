@@ -27,8 +27,10 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
- *  The inner serializer class must be specified by setting the property key.serializer.inner.class,
- *  value.serializer.inner.class or serializer.inner.class. The first two take precedence over the last.
+ *  The inner serializer class can be specified by setting the property key.serializer.inner.class,
+ *  value.serializer.inner.class or serializer.inner.class,
+ *  if the no-arg constructor is called and hence it is not passed during initialization.
+ *  Note that the first two take precedence over the last.
  */
 public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
@@ -45,23 +47,23 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-       if (inner == null) {
-           String propertyName = isKey ? "key.serializer.inner.class" : "value.serializer.inner.class";
-           Object innerSerializerClass = configs.get(propertyName);
-           propertyName = (innerSerializerClass == null) ? "serializer.inner.class" : propertyName;
-           String value = null;
-           try {
-               value = (String)configs.get(propertyName);
-               Object o = Utils.newInstance(value, Serializer.class);
-               if (!Serializer.class.isInstance(o)) {
-                   throw new KafkaException(value + " is not an instance of Serializer");
-               }
-               inner = Serializer.class.cast(o);
-               inner.configure(configs, isKey);
-           } catch (ClassNotFoundException e) {
-               throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
-           }
-       }
+        if (inner == null) {
+            String propertyName = isKey ? "key.serializer.inner.class" : "value.serializer.inner.class";
+            Object innerSerializerClass = configs.get(propertyName);
+            propertyName = (innerSerializerClass == null) ? "serializer.inner.class" : propertyName;
+            String value = null;
+            try {
+                value = (String) configs.get(propertyName);
+                Object o = Utils.newInstance(value, Serializer.class);
+                if (!Serializer.class.isInstance(o)) {
+                    throw new KafkaException(value + " is not an instance of Serializer");
+                }
+                inner = Serializer.class.cast(o);
+                inner.configure(configs, isKey);
+            } catch (ClassNotFoundException e) {
+                throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
+            }
+        }
     }
 
     @Override
@@ -88,5 +90,4 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
     public Serializer<T> innerSerializer() {
         return inner;
     }
-
 }
