@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
 
+    private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
@@ -44,36 +47,38 @@ public class InternalTopicManager {
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
     }
 
-    public void makeReady(final InternalTopicConfig topic, int numPartitions) {
-        Map<InternalTopicConfig, Integer> topics = new HashMap<>();
-        topics.put(topic, numPartitions);
-        makeReady(topics);
-    }
-
     /**
      * Prepares the set of given internal topics. If the topic with the correct number of partitions exists ignores it. For the ones with different number of
      * partitions delete them and create new ones with correct number of partitons along with the non existing topics.
-     * @param topics
+     * @param topic
      */
-    public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
+    public void makeReady(final InternalTopicConfig topic, int numPartitions) {
 
-        Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
-        Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
-        Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
-        topicsToBeCreated.putAll(topicsToBeDeleted);
-        streamsKafkaClient.deleteTopics(topicsToBeDeleted);
+        Map<InternalTopicConfig, Integer> topics = new HashMap<>();
+        topics.put(topic, numPartitions);
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
+                Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
+                Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
+                Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
+                topicsToBeCreated.putAll(topicsToBeDeleted);
+                streamsKafkaClient.deleteTopics(topicsToBeDeleted);
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
                 return;
             } catch (StreamsException ex) {
+                log.debug("Could not create internal topics: " + ex.getMessage());
+                log.debug("Retry #" + i);
             }
         }
         throw new StreamsException("Could not create internal topics.");
     }
 
-    public void close() throws IOException {
-        streamsKafkaClient.close();
+    public void close() {
+        try {
+            streamsKafkaClient.close();
+        } catch (IOException e) {
+            log.warn("Could not close StreamsKafkaClient.");
+        }
     }
 
     /**
@@ -83,7 +88,7 @@ public class InternalTopicManager {
      * @param topicsMetadata
      * @return
      */
-    public Map<InternalTopicConfig, Integer> filterExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+    private Map<InternalTopicConfig, Integer> filterExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
         Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
         Map<InternalTopicConfig, Integer> nonExistingTopics = new HashMap<>();
         // Add the topics that don't exist to the nonExistingTopics.
@@ -101,7 +106,7 @@ public class InternalTopicManager {
      * @param topicsMetadata
      * @return
      */
-    public Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+    private Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
         Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
         Map<InternalTopicConfig, Integer> deleteTopics = new HashMap<>();
         // Add the topics that don't exist to the nonExistingTopics.

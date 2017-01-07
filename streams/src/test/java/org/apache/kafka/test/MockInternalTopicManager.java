@@ -52,17 +52,4 @@ public class MockInternalTopicManager extends InternalTopicManager {
         restoreConsumer.updatePartitions(topic.name(), partitions);
     }
 
-    @Override
-    public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
-        for (InternalTopicConfig topic: topics.keySet()) {
-            int numPartitions = topics.get(topic);
-            readyTopics.put(topic.name(), numPartitions);
-            List<PartitionInfo> partitions = new ArrayList<>();
-            for (int i = 0; i < numPartitions; i++) {
-                partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
-            }
-            restoreConsumer.updatePartitions(topic.name(), partitions);
-        }
-
-    }
 }

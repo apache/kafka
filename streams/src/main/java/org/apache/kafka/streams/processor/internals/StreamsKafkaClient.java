@@ -190,24 +190,23 @@ public class StreamsKafkaClient {
     private ClientResponse sendRequest(final AbstractRequest request, final ApiKeys apiKeys) {
 
         String brokerId = null;
-        final SystemTime systemTime = new SystemTime();
 
         final Metadata metadata = new Metadata(streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), systemTime.milliseconds());
+        metadata.update(Cluster.bootstrap(addresses), Time.SYSTEM.milliseconds());
 
         final List<Node> nodes = metadata.fetch().nodes();
-        final long readyTimeout = systemTime.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        final long readyTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         boolean foundNode = false;
-        while (!foundNode && (systemTime.milliseconds() < readyTimeout)) {
+        while (!foundNode && (Time.SYSTEM.milliseconds() < readyTimeout)) {
             for (Node node: nodes) {
-                if (kafkaClient.ready(node, systemTime.milliseconds())) {
+                if (kafkaClient.ready(node, Time.SYSTEM.milliseconds())) {
                     brokerId = Integer.toString(node.id());
                     foundNode = true;
                     break;
                 }
             }
-            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
+            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
         }
         if (brokerId == null) {
             throw new StreamsException("Could not find any available broker.");
@@ -215,14 +214,14 @@ public class StreamsKafkaClient {
 
         final RequestHeader requestHeader = kafkaClient.nextRequestHeader(apiKeys);
 
-        final ClientRequest clientRequest = new ClientRequest(brokerId, systemTime.milliseconds(), true, requestHeader, request, null);
+        final ClientRequest clientRequest = new ClientRequest(brokerId, Time.SYSTEM.milliseconds(), true, requestHeader, request, null);
 
-        kafkaClient.send(clientRequest, systemTime.milliseconds());
+        kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
 
-        final long responseTimeout = systemTime.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        final long responseTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         // Poll for the response.
-        while (systemTime.milliseconds() < responseTimeout) {
-            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
+        while (Time.SYSTEM.milliseconds() < responseTimeout) {
+            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
             if (!responseList.isEmpty()) {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");

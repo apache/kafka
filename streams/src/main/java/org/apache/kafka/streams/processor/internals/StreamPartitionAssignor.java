@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -262,7 +261,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *
      * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
      */
-
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
 
@@ -747,7 +745,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    public void close() throws IOException {
+    public void close() {
         internalTopicManager.close();
     }
 }
