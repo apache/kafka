@@ -20,7 +20,6 @@ package kafka.tools
 import java.io.PrintStream
 import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
-
 import joptsimple._
 import kafka.admin.AdminUtils
 import kafka.api.OffsetRequest
@@ -28,7 +27,7 @@ import kafka.common.{MessageFormatter, StreamEndException}
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
-import kafka.utils.{ZkUtils, _}
+import kafka.utils._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
@@ -36,7 +35,6 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
-
 import scala.collection.JavaConverters._
 
 /**
