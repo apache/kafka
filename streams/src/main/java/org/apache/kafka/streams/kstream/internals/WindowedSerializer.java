@@ -17,13 +17,19 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+/**
+ *  The inner serializer class must be specified by setting the property key.serializer.inner.class,
+ *  value.serializer.inner.class or serializer.inner.class. The first two take precedence over the last.
+ */
 public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     private static final int TIMESTAMP_SIZE = 8;
@@ -39,12 +45,23 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        if (inner == null) {
-            inner = new StreamsConfig(configs).getConfiguredInstance(
-                    isKey ? StreamsConfig.KEY_SERIALIZER_INNER_CLASS_CONFIG : StreamsConfig.VALUE_SERIALIZER_INNER_CLASS_CONFIG,
-                    Serializer.class);
-            inner.configure(configs, isKey);
-        }
+       if (inner == null) {
+           String propertyName = isKey ? "key.serializer.inner.class" : "value.serializer.inner.class";
+           Object innerSerializerClass = configs.get(propertyName);
+           propertyName = (innerSerializerClass == null) ? "serializer.inner.class" : propertyName;
+           String value = null;
+           try {
+               value = (String)configs.get(propertyName);
+               Object o = Utils.newInstance(value, Serializer.class);
+               if (!Serializer.class.isInstance(o)) {
+                   throw new KafkaException(value + " is not an instance of Serializer");
+               }
+               inner = Serializer.class.cast(o);
+               inner.configure(configs, isKey);
+           } catch (ClassNotFoundException e) {
+               throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
+           }
+       }
     }
 
     @Override
@@ -67,6 +84,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
         return inner.serialize(topic, data.key());
     }
 
+    // Only for testing
     public Serializer<T> innerSerializer() {
         return inner;
     }
