@@ -89,14 +89,12 @@ object ZkUtils {
   }
 
   def maybeDeletePath(zkUrl: String, dir: String) {
-    val zk = createZkClient(zkUrl, 30*1000, 30*1000)
     try {
+      val zk = createZkClient(zkUrl, 30*1000, 30*1000)
       zk.deleteRecursive(dir)
-    } catch {
-      case _: ZkException => zk.deleteRecursive(dir) // Occasionally, child node list is not empty before deleting parent ZkNode, give a second chance to try deleting.
-      case _: Throwable => // swallow
-    } finally {
       zk.close()
+    } catch {
+      case _: Throwable => // swallow
     }
   }
 
