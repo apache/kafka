@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
-
 import java.util.Map;
 
 /**
@@ -45,16 +43,14 @@ import java.util.Map;
  * Both values (before and after) must not result in an "inverse" window,
  * i.e., lower-interval-bound must not be larger than upper-interval.bound.
  */
-public class JoinWindows extends Windows<TimeWindow> {
+public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
     public final long before;
     /** Maximum time difference for tuples that are after the join tuple. */
     public final long after;
 
-    private JoinWindows(long before, long after) {
-        super();
-
+    private JoinWindows(final long before, final long after) {
         if (before + after < 0) {
             throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
         }
@@ -68,7 +64,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public static JoinWindows of(long timeDifference) {
+    public static JoinWindows of(final long timeDifference) throws IllegalArgumentException {
         return new JoinWindows(timeDifference, timeDifference);
     }
 
@@ -79,8 +75,8 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows before(long timeDifference) {
-        return new JoinWindows(timeDifference, this.after);
+    public JoinWindows before(final long timeDifference) throws IllegalArgumentException {
+        return new JoinWindows(timeDifference, after);
     }
 
     /**
@@ -90,15 +86,15 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows after(long timeDifference) {
-        return new JoinWindows(this.before, timeDifference);
+    public JoinWindows after(final long timeDifference) throws IllegalArgumentException {
+        return new JoinWindows(before, timeDifference);
     }
 
     /**
      * Not supported by {@link JoinWindows}. Throws {@link UnsupportedOperationException}.
      */
     @Override
-    public Map<Long, TimeWindow> windowsFor(long timestamp) {
+    public Map<Long, Window> windowsFor(final long timestamp) {
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }
 
@@ -108,7 +104,22 @@ public class JoinWindows extends Windows<TimeWindow> {
     }
 
     @Override
-    public final boolean equals(Object o) {
+    public Windows<Window> until(final long duration) throws IllegalArgumentException {
+        if (duration < size()) {
+            throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window " +
+                "size.");
+        }
+        super.until(duration);
+        return this;
+    }
+
+    @Override
+    public long maintainMs() {
+        return Math.max(super.maintainMs(), size());
+    }
+
+    @Override
+    public final boolean equals(final Object o) {
         if (o == this) {
             return true;
         }
@@ -116,8 +127,8 @@ public class JoinWindows extends Windows<TimeWindow> {
             return false;
         }
 
-        JoinWindows other = (JoinWindows) o;
-        return this.before == other.before && this.after == other.after;
+        final JoinWindows other = (JoinWindows) o;
+        return before == other.before && after == other.after;
     }
 
     @Override

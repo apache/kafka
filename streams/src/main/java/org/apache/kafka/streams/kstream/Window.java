@@ -37,9 +37,6 @@ public abstract class Window {
         if (start < 0) {
             throw new IllegalArgumentException("Window start time cannot be negative.");
         }
-        if (end < 0) {
-            throw new IllegalArgumentException("Window end time cannot be negative.");
-        }
         if (end < start) {
             throw new IllegalArgumentException("Window end time cannot be smaller than window start time.");
         }
@@ -67,10 +64,10 @@ public abstract class Window {
      * @param other  another window
      * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      */
-    public abstract boolean overlap(Window other);
+    public abstract boolean overlap(final Window other);
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this) {
             return true;
         }
@@ -79,21 +76,20 @@ public abstract class Window {
             return false;
         }
 
-        Window other = (Window) obj;
-        return this.start == other.start && this.end == other.end;
+        final Window other = (Window) obj;
+        return start == other.start && end == other.end;
     }
 
     @Override
     public int hashCode() {
-        long n = (this.start << 32) | this.end;
-        return (int) (n % 0xFFFFFFFFL);
+        return (int) (((start << 32) | end) % 0xFFFFFFFFL);
     }
 
     @Override
     public String toString() {
         return "Window{" +
-                "start=" + start +
-                ", end=" + end +
-                '}';
+            "start=" + start +
+            ", end=" + end +
+            '}';
     }
 }

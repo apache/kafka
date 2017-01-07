@@ -81,7 +81,7 @@ public class WindowedStreamPartitionerTest {
 
             Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
-            for (int w = 0; w < 10; w++) {
+            for (int w = 1; w < 10; w++) {
                 TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 Windowed<Integer> windowedKey = new Windowed<>(key, window);

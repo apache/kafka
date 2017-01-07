@@ -60,12 +60,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Unstable
 public class SessionWindows {
 
-    private final long gapMs;
-    private long maintainDurationMs;
+    private final long gap;
+    private long maintainDuration;
 
-    private SessionWindows(final long gapMs, final long maintainDurationMs) {
-        this.gapMs = gapMs;
-        this.maintainDurationMs = maintainDurationMs;
+    private SessionWindows(final long gap) {
+        this.gap = gap;
+        maintainDuration = Windows.DEFAULT_MAINTAIN_DURATION;
     }
 
     /**
@@ -74,8 +74,11 @@ public class SessionWindows {
      * @return a new SessionWindows with the provided inactivity gap
      * and default maintain duration
      */
-    public static SessionWindows with(final long inactivityGapMs) {
-        return new SessionWindows(inactivityGapMs, Windows.DEFAULT_MAINTAIN_DURATION);
+    public static SessionWindows with(final long inactivityGap) {
+        if (inactivityGap < 1) {
+            throw new IllegalArgumentException("Gap time cannot be zero or negative.");
+        }
+        return new SessionWindows(inactivityGap);
     }
 
     /**
@@ -84,8 +87,12 @@ public class SessionWindows {
      *
      * @return  itself
      */
-    public SessionWindows until(final long durationMs) {
-        this.maintainDurationMs = durationMs;
+    public SessionWindows until(final long duration) throws IllegalArgumentException {
+        if (duration < gap) {
+            throw new IllegalArgumentException("Window maintain duration cannot be smaller than window gap.");
+        }
+        maintainDuration = duration;
+
         return this;
     }
 
@@ -93,13 +100,13 @@ public class SessionWindows {
      * @return the inactivityGap
      */
     public long inactivityGap() {
-        return gapMs;
+        return gap;
     }
 
     /**
      * @return the minimum amount of time a window will be maintained for.
      */
     public long maintainMs() {
-        return maintainDurationMs;
+        return Math.max(maintainDuration, gap);
     }
 }

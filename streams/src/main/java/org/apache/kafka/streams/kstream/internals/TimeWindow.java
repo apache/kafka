@@ -23,10 +23,13 @@ public class TimeWindow extends Window {
 
     public TimeWindow(long start, long end) {
         super(start, end);
+        if (start == end) {
+            throw new IllegalArgumentException("Window end time must be greater than window start time.");
+        }
     }
 
     @Override
-    public boolean overlap(Window other) {
+    public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {
             throw new IllegalArgumentException("Cannot compare windows of different type. Other window has type "
                 + other.getClass());

@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.fail;
 
 
 public class JoinWindowsTest {
@@ -85,14 +86,55 @@ public class JoinWindowsTest {
         JoinWindows.of(-1);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void afterBelowLower() {
-        JoinWindows.of(anySize).after(-anySize - 1);
+    @Test
+    public void endTimeShouldNotBeBeforeStart() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        try {
+            windowSpec.after(-anySize - 1);
+            fail("window end time should not be before window start time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void beforeOverUpper() {
-        JoinWindows.of(anySize).before(-anySize - 1);
+    @Test
+    public void startTimeShouldNotBeAfterEnd() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        try {
+            windowSpec.before(-anySize - 1);
+            fail("window start time should not be after window end time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void untilShouldSetMaintainDuration() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final long windowSize = windowSpec.size();
+        assertEquals(windowSize, windowSpec.until(windowSize).maintainMs());
+    }
+
+    @Test
+    public void shouldUseWindowSizeForMaintainDurationWhenSizeLargerThanDefaultMaintainMs() {
+        final long size = Windows.DEFAULT_MAINTAIN_DURATION;
+
+        final JoinWindows windowSpec = JoinWindows.of(size);
+        final long windowSize = windowSpec.size();
+
+        assertEquals(windowSize, windowSpec.maintainMs());
+    }
+
+    @Test
+    public void retentionTimeMustNoBeSmallerThanWindowSize() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final long windowSize = windowSpec.size();
+        try {
+            windowSpec.until(windowSize - 1);
+            fail("should not accept retention time smaller than window size");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
 }

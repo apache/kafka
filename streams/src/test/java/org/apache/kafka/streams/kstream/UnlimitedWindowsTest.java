@@ -26,10 +26,16 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class UnlimitedWindowsTest {
 
     private static long anyStartTime = 10L;
+
+    @Test
+    public void testStart() {
+        assertEquals(anyStartTime, UnlimitedWindows.of().startOn(anyStartTime).start);
+    }
 
     @Test(expected = IllegalArgumentException.class)
     public void startTimeMustNotBeNegative() {
@@ -37,8 +43,14 @@ public class UnlimitedWindowsTest {
     }
 
     @Test
-    public void startTimeCanBeZero() {
-        UnlimitedWindows.of().startOn(0);
+    public void shouldThrowOnUntil() {
+        final UnlimitedWindows windowSpec = UnlimitedWindows.of();
+        try {
+            windowSpec.until(42);
+            fail("should not allow to set window retention time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
     @Test

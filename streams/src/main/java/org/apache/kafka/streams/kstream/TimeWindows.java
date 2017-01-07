@@ -49,17 +49,8 @@ public class TimeWindows extends Windows<TimeWindow> {
      */
     public final long advance;
 
-
-    private TimeWindows(long size, long advance) {
-        super();
-        if (size <= 0) {
-            throw new IllegalArgumentException("window size must be > 0 (you provided " + size + ")");
-        }
+    private TimeWindows(final long size, final long advance) throws IllegalArgumentException {
         this.size = size;
-        if (!(0 < advance && advance <= size)) {
-            throw new IllegalArgumentException(
-                String.format("advance interval (%d) must lie within interval (0, %d]", advance, size));
-        }
         this.advance = advance;
     }
 
@@ -76,7 +67,10 @@ public class TimeWindows extends Windows<TimeWindow> {
      *             topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public static TimeWindows of(long size) {
+    public static TimeWindows of(final long size) throws IllegalArgumentException {
+        if (size <= 0) {
+            throw new IllegalArgumentException("Window size must be larger than zero.");
+        }
         return new TimeWindows(size, size);
     }
 
@@ -93,18 +87,21 @@ public class TimeWindows extends Windows<TimeWindow> {
      *                 {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public TimeWindows advanceBy(long interval) {
-        return new TimeWindows(this.size, interval);
+    public TimeWindows advanceBy(final long advance) {
+        if (!(0 < advance && advance <= size)) {
+            throw new IllegalArgumentException(String.format("Advance must lie within interval (0, %d]", size));
+        }
+        return new TimeWindows(size, advance);
     }
 
     @Override
-    public Map<Long, TimeWindow> windowsFor(long timestamp) {
-        long windowStart = (Math.max(0, timestamp - this.size + this.advance) / this.advance) * this.advance;
-        Map<Long, TimeWindow> windows = new HashMap<>();
+    public Map<Long, TimeWindow> windowsFor(final long timestamp) {
+        long windowStart = (Math.max(0, timestamp - size + advance) / advance) * advance;
+        final Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
-            TimeWindow window = new TimeWindow(windowStart, windowStart + this.size);
+            final TimeWindow window = new TimeWindow(windowStart, windowStart + size);
             windows.put(windowStart, window);
-            windowStart += this.advance;
+            windowStart += advance;
         }
         return windows;
     }
@@ -114,16 +111,30 @@ public class TimeWindows extends Windows<TimeWindow> {
         return size;
     }
 
+    public Windows<TimeWindow> until(final long duration) throws IllegalArgumentException {
+        if (duration < size) {
+            throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window " +
+                "size.");
+        }
+        super.until(duration);
+        return this;
+    }
+
     @Override
-    public final boolean equals(Object o) {
+    public long maintainMs() {
+        return Math.max(super.maintainMs(), size);
+    }
+
+    @Override
+    public final boolean equals(final Object o) {
         if (o == this) {
             return true;
         }
         if (!(o instanceof TimeWindows)) {
             return false;
         }
-        TimeWindows other = (TimeWindows) o;
-        return this.size == other.size && this.advance == other.advance;
+        final TimeWindows other = (TimeWindows) o;
+        return size == other.size && advance == other.advance;
     }
 
     @Override

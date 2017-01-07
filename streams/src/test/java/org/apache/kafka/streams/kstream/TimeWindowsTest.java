@@ -26,14 +26,37 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.fail;
 
 public class TimeWindowsTest {
 
-    private static long anySize = 123L;
+    private static final long ANY_SIZE = 123L;
+
+    @Test
+    public void testSize() {
+        assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).size);
+    }
+
+    @Test
+    public void testAdvance() {
+        final long anyAdvance = 4;
+        assertEquals(anyAdvance, TimeWindows.of(ANY_SIZE).advanceBy(anyAdvance).advance);
+    }
+
+    @Test
+    public void testUntil() {
+        assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).until(ANY_SIZE).maintainMs());
+    }
+
+    @Test
+    public void testMaintainMsForLargeWindowSize() {
+        final long windowSize = 2 * Windows.DEFAULT_MAINTAIN_DURATION;
+        assertEquals(windowSize, TimeWindows.of(windowSize).maintainMs());
+    }
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        TimeWindows w1 = TimeWindows.of(anySize);
+        TimeWindows w1 = TimeWindows.of(ANY_SIZE);
         TimeWindows w2 = TimeWindows.of(w1.size);
 
         // Reflexive
@@ -63,31 +86,58 @@ public class TimeWindowsTest {
         assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 
-
-    @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeNegative() {
-        TimeWindows.of(-1);
-    }
-
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeZero() {
         TimeWindows.of(0);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void advanceIntervalMustNotBeNegative() {
-        TimeWindows.of(anySize).advanceBy(-1);
+    public void windowSizeMustNotBeNegative() {
+        TimeWindows.of(-1);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void advanceIntervalMustNotBeZero() {
-        TimeWindows.of(anySize).advanceBy(0);
+        final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
+        try {
+            windowSpec.advanceBy(0);
+            fail("should not accept zero advance parameter");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    public void advanceIntervalMustNotBeNegative() {
+        final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
+        try {
+            windowSpec.advanceBy(-1);
+            fail("should not accept negative advance parameter");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
-        long size = anySize;
-        TimeWindows.of(size).advanceBy(size + 1);
+        final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
+        try {
+            windowSpec.advanceBy(ANY_SIZE + 1);
+            fail("should not accept advance greater than window size");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void retentionTimeMustNoBeSmallerThanWindowSize() {
+        final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
+        try {
+            windowSpec.until(ANY_SIZE - 1);
+            fail("should not accept retention time smaller than window size");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
     @Test
