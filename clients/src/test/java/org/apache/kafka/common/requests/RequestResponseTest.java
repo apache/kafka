@@ -558,7 +558,7 @@ public class RequestResponseTest {
         Map<String, CreateTopicsRequest.TopicDetails> request = new HashMap<>();
         request.put("my_t1", request1);
         request.put("my_t2", request2);
-        return new CreateTopicsRequest(request, 0);
+        return new CreateTopicsRequest.Builder(request, 0).build();
     }
 
     private CreateTopicsResponse createCreateTopicResponse() {
@@ -569,7 +569,8 @@ public class RequestResponseTest {
     }
 
     private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest(new HashSet<>(Arrays.asList("my_t1", "my_t2")), 10000);
+        return new DeleteTopicsRequest.Builder(new HashSet<>(Arrays.asList("my_t1", "my_t2")), 10000).
+                build();
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {
