@@ -40,7 +40,7 @@ public interface ForeachAction<K, V> {
      * @param key   the key of the record
      * @param value the value of the record
      */
-    void apply(K key, V value);
+    void apply(final K key, final V value);
 }
 
 
