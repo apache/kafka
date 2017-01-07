@@ -17,41 +17,17 @@
 
 package kafka.tools
 
-import java.io.{FileOutputStream, PrintStream}
-import java.util.Properties
+import java.io.{PrintStream, FileOutputStream}
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord, OldConsumer, Whitelist}
-import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.utils.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 
-class ConsoleConsumerTest extends KafkaServerTestHarness {
-
-  override def generateConfigs(): Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)
-    .map(KafkaConfig.fromProps(_, new Properties()))
-
-  @Test
-  def testZkNodeDeleteForOldConsumerWithUnspecifiedGroupID() {
-    val topic = "test-topic"
-    val consumerArgs: Array[String] = Array(
-      "--zookeeper", this.zkConnect,
-      "--topic", topic,
-      "--from-beginning")
-    val conf = new ConsoleConsumer.ConsumerConfig(consumerArgs)
-    val consumer = new OldConsumer(Whitelist(topic), ConsoleConsumer.getOldConsumerProps(conf))
-    val groupID = conf.consumerProps.get("group.id")
-    try {
-      assertTrue(s"Consumer group should be created.", zkUtils.getChildren(ZkUtils.ConsumersPath).head == groupID)
-    } finally {
-      consumer.stop()
-      ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), ZkUtils.ConsumersPath + "/" + groupID)
-    }
-    assertTrue("The zk node for this group should be deleted.", zkUtils.getChildren(ZkUtils.ConsumersPath).isEmpty)
-  }
+class ConsoleConsumerTest extends JUnitSuite {
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {
@@ -214,5 +190,4 @@ class ConsoleConsumerTest extends KafkaServerTestHarness {
 
     assertEquals("1000", config.consumerProps.getProperty("request.timeout.ms"))
   }
-
 }

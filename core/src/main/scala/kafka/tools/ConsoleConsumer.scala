@@ -20,19 +20,23 @@ package kafka.tools
 import java.io.PrintStream
 import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
+
 import joptsimple._
+import kafka.admin.AdminUtils
 import kafka.api.OffsetRequest
 import kafka.common.{MessageFormatter, StreamEndException}
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
-import kafka.utils._
+import kafka.utils.{ZkUtils, _}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
+
 import scala.collection.JavaConverters._
 
 /**
@@ -79,10 +83,9 @@ object ConsoleConsumer extends Logging {
       reportRecordCount()
 
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-      if (!conf.groupIdPassed && conf.options.has(conf.zkConnectOpt)) {
-        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+      if (!conf.groupIdPassed && conf.useOldConsumer) {
+        deleteZkPathForConsumerGroup(conf.options.valueOf(conf.zkConnectOpt), conf.consumerProps.getProperty("group.id"))
       }
-
       shutdownLatch.countDown()
     }
   }
@@ -181,8 +184,9 @@ object ConsoleConsumer extends Logging {
       System.exit(1)
     }
 
-    if (config.options.has(config.deleteConsumerOffsetsOpt))
-      ZkUtils.maybeDeletePath(config.options.valueOf(config.zkConnectOpt), "/consumers/" + config.consumerProps.getProperty("group.id"))
+    if (config.options.has(config.deleteConsumerOffsetsOpt)) {
+      deleteZkPathForConsumerGroup(config.options.valueOf(config.zkConnectOpt), config.consumerProps.getProperty("group.id"))
+    }
     if (config.timeoutMs >= 0)
       props.put("consumer.timeout.ms", config.timeoutMs.toString)
 
@@ -407,6 +411,15 @@ object ConsoleConsumer extends Logging {
       zk.exists(path)
     } catch {
       case _: Throwable => false
+    }
+  }
+
+  def deleteZkPathForConsumerGroup(zkUrl: String, path: String) {
+    val zkUtils = ZkUtils(zkUrl, 30000, 30000, JaasUtils.isZkSecurityEnabled())
+    try {
+      AdminUtils.deleteConsumerGroupInZK(zkUtils, path)
+    } finally {
+      zkUtils.close()
     }
   }
 }
