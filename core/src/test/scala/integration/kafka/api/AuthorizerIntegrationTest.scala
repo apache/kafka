@@ -253,11 +253,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createTopicsRequest = {
-    new CreateTopicsRequest(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0)
+    new CreateTopicsRequest.Builder(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0).build()
   }
 
   private def deleteTopicsRequest = {
-    new DeleteTopicsRequest(Set(deleteTopic).asJava, 5000)
+    new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
   }
 
   @Test

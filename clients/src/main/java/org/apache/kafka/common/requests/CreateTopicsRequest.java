@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,8 +32,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class CreateTopicsRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.CREATE_TOPICS.id);
-
     private static final String REQUESTS_KEY_NAME = "create_topic_requests";
 
     private static final String TIMEOUT_KEY_NAME = "timeout";
@@ -97,6 +94,32 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
     }
 
+    public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
+        private Map<String, TopicDetails> topics;
+        private Integer timeout;
+
+        public Builder(Map<String, TopicDetails> topics, Integer timeout) {
+            super(ApiKeys.CREATE_TOPICS);
+            this.topics = topics;
+            this.timeout = timeout;
+        }
+
+        @Override
+        public CreateTopicsRequest build() {
+            return new CreateTopicsRequest(topics, timeout, getVersion());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("{type: CreateTopicsRequest").
+                append(", topics: ").append(Utils.join(topics, " :", ", ")).
+                append(", timeout: ").append(timeout).
+                append("}");
+            return bld.toString();
+        }
+    }
+
     private final Map<String, TopicDetails> topics;
     private final Integer timeout;
 
@@ -107,8 +130,8 @@ public class CreateTopicsRequest extends AbstractRequest {
     public static final int NO_NUM_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
 
-    public CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout) {
-        super(new Struct(CURRENT_SCHEMA), ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id));
+    private CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.CREATE_TOPICS.id, version)), version);
 
         List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
         for (Map.Entry<String, TopicDetails> entry : topics.entrySet()) {

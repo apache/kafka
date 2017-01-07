@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -29,15 +30,40 @@ import java.util.Map;
 import java.util.Set;
 
 public class DeleteTopicsRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.DELETE_TOPICS.id);
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String TIMEOUT_KEY_NAME = "timeout";
 
     private final Set<String> topics;
     private final Integer timeout;
 
-    public DeleteTopicsRequest(Set<String> topics, Integer timeout) {
-        super(new Struct(CURRENT_SCHEMA), ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id));
+    public static class Builder extends AbstractRequest.Builder<DeleteTopicsRequest> {
+        private Set<String> topics;
+        private Integer timeout;
+
+        public Builder(Set<String> topics, Integer timeout) {
+            super(ApiKeys.DELETE_TOPICS);
+            this.topics = topics;
+            this.timeout = timeout;
+        }
+
+        @Override
+        public DeleteTopicsRequest build() {
+            return new DeleteTopicsRequest(topics, timeout, getVersion());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("{type: DeleteTopicsRequest").
+                append(", topics: ").append(Utils.join(topics, ", ")).
+                append(", timeout: ").append(timeout).
+                append("}");
+            return bld.toString();
+        }
+    }
+
+    private DeleteTopicsRequest(Set<String> topics, Integer timeout, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.DELETE_TOPICS.id, version)), version);
 
         struct.set(TOPICS_KEY_NAME, topics.toArray());
         struct.set(TIMEOUT_KEY_NAME, timeout);
