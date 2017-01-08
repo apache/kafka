@@ -212,5 +212,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
                 metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
             }
         }
+
+        @Override
+        public K1 peekNextKey() {
+            return iter.peekNextKey();
+        }
     }
 }
