@@ -19,13 +19,10 @@ import org.apache.kafka.common.PartitionInfo;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -97,51 +94,5 @@ public class DefaultPartitionerTest {
         Assert.assertEquals(10, (int) partitionCount.get(0));
         Assert.assertEquals(10, (int) partitionCount.get(1));
         Assert.assertEquals(10, (int) partitionCount.get(2));
-    }
-
-    @Test
-    public void testPartitionPerf() throws Exception {
-        List<PartitionInfo> allPartitions = new ArrayList<PartitionInfo>();
-
-        final int topicCount = 37;
-        for (int i = 0; i < topicCount; ++i) {
-            final String topici = "topic" + i;
-            allPartitions.add(new PartitionInfo(topici, 0, node0, nodes, nodes));
-            allPartitions.add(new PartitionInfo(topici, 1, node1, nodes, nodes));
-            allPartitions.add(new PartitionInfo(topici, 2, node2, nodes, nodes));
-        }
-        final Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
-
-        int threadCount = 10;
-        final List<Double> avgPartitionTimeList = Collections.synchronizedList(new ArrayList<Double>(threadCount));
-
-        final CountDownLatch latch = new CountDownLatch(threadCount);
-
-        final int loopCount = 1000000;
-        for (int i = 0; i < threadCount; ++i) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    long start = System.currentTimeMillis();
-                    for (int j = 0; j < loopCount; ++j) {
-                        String theTopic = "topic" + j % topicCount;
-                        partitioner.partition(theTopic, null, null, null, null, testCluster);
-                    }
-                    avgPartitionTimeList.add((double) (System.currentTimeMillis() - start) / (double) loopCount);
-                    latch.countDown();
-                }
-            }).start();
-        }
-
-        latch.await();
-
-        double sum = 0.0;
-        for (int i = 0; i < avgPartitionTimeList.size(); ++i) {
-            sum += avgPartitionTimeList.get(i);
-        }
-
-        double avg = sum / (double) avgPartitionTimeList.size();
-        System.out.println("avg partition time(ms)=" + String.format("%5f", avg));
     }
 }
