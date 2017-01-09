@@ -27,7 +27,7 @@ public class ClientResponse {
     private final long receivedTimeMs;
     private final long latencyMs;
     private final boolean disconnected;
-    private final boolean versionMismatch;
+    private final RuntimeException versionMismatch;
     private final AbstractResponse responseBody;
 
     /**
@@ -47,7 +47,7 @@ public class ClientResponse {
                           long createdTimeMs,
                           long receivedTimeMs,
                           boolean disconnected,
-                          boolean versionMismatch,
+                          RuntimeException versionMismatch,
                           AbstractResponse responseBody) {
         this.requestHeader = requestHeader;
         this.callback = callback;
@@ -67,7 +67,7 @@ public class ClientResponse {
         return disconnected;
     }
 
-    public boolean versionMismatch() {
+    public RuntimeException versionMismatch() {
         return versionMismatch;
     }
 

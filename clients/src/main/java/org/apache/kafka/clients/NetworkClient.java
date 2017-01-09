@@ -14,6 +14,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ObsoleteBrokerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
@@ -300,12 +301,14 @@ public class NetworkClient implements KafkaClient {
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             request = builder.build();
-        } catch (UnsupportedVersionException e) {
+        } catch (ObsoleteBrokerException | UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
+            log.debug("Version mismatch when attempting to send " + clientRequest.toString() + " to " +
+                    clientRequest.destination(), e);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(),
                     clientRequest.callback(), clientRequest.destination(), now, now,
-                    false, true, null);
+                    false, e, null);
             abortedSends.add(clientResponse);
             return;
         }
@@ -799,11 +802,11 @@ public class NetworkClient implements KafkaClient {
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, false, response);
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, null, response);
         }
 
         public ClientResponse disconnected(long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, false, null);
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
         }
 
     }
