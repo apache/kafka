@@ -92,6 +92,8 @@ public class ScramSaslServer implements SaslServer {
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
                             throw new SaslException("Authentication failed: Invalid user credentials");
+                        if (scramCredential.iterations() < mechanism.minIterations())
+                            throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
                         this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
                                 serverNonce,
                                 scramCredential.salt(),

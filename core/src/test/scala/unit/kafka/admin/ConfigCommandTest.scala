@@ -269,8 +269,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         }
       }
     }
-    val optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=1024,password=abc, def]")
-    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 1024))
+    val optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=8192,password=abc, def]")
+    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 8192))
     val optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]")
     ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("SCRAM-SHA-256", "SCRAM-SHA-512"), 4096))
 

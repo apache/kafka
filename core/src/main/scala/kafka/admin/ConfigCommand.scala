@@ -115,6 +115,8 @@ object ConfigCommand extends Config {
           case pattern(iterations, password) => (if (iterations != null) iterations.toInt else DefaultScramIterations, password)
           case _ => throw new IllegalArgumentException(s"Invalid credential property $mechanism=$credentialStr")
         }
+      if (iterations < mechanism.minIterations())
+        throw new IllegalArgumentException(s"Iterations $iterations is less than the minimum ${mechanism.minIterations()} required for $mechanism")
       val credential = new ScramFormatter(mechanism).generateCredential(password, iterations)
       ScramCredentialUtils.credentialToString(credential)
     }

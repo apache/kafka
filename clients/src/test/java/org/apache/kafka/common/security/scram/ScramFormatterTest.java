@@ -73,6 +73,50 @@ public class ScramFormatterTest {
     }
 
     /**
+     * Tests that the formatter implementation produces the same values for the
+     * example included in <a href="https://tools.ietf.org/html/rfc5802#section-5">RFC 7677</a>
+     */
+    @Test
+    public void rfc7677Example() throws Exception {
+        ScramFormatter formatter = new ScramFormatter("SHA-256", "HmacSHA256");
+
+        String password = "pencil";
+        String c1 = "n,,n=user,r=rOprNGfwEbeRWgbNEkqO";
+        String s1 = "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096";
+        String c2 = "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=";
+        String s2 = "v=6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4=";
+        ClientFirstMessage clientFirst = new ClientFirstMessage(formatter.toBytes(c1));
+        ServerFirstMessage serverFirst = new ServerFirstMessage(formatter.toBytes(s1));
+        ClientFinalMessage clientFinal = new ClientFinalMessage(formatter.toBytes(c2));
+        ServerFinalMessage serverFinal = new ServerFinalMessage(formatter.toBytes(s2));
+
+        String username = clientFirst.saslName();
+        assertEquals("user", username);
+        String clientNonce = clientFirst.nonce();
+        assertEquals("rOprNGfwEbeRWgbNEkqO", clientNonce);
+        String serverNonce = serverFirst.nonce().substring(clientNonce.length());
+        assertEquals("%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0", serverNonce);
+        byte[] salt = serverFirst.salt();
+        assertArrayEquals(DatatypeConverter.parseBase64Binary("W22ZaJ0SNY7soEsUEjb6gQ=="), salt);
+        int iterations = serverFirst.iterations();
+        assertEquals(4096, iterations);
+        byte[] channelBinding = clientFinal.channelBinding();
+        assertArrayEquals(DatatypeConverter.parseBase64Binary("biws"), channelBinding);
+        byte[] serverSignature = serverFinal.serverSignature();
+        assertArrayEquals(DatatypeConverter.parseBase64Binary("6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4="), serverSignature);
+
+        byte[] saltedPassword = formatter.saltedPassword(password, salt, iterations);
+        byte[] serverKey = formatter.serverKey(saltedPassword);
+        byte[] computedProof = formatter.clientProof(saltedPassword, clientFirst, serverFirst, clientFinal);
+        assertArrayEquals(clientFinal.proof(), computedProof);
+        byte[] computedSignature = formatter.serverSignature(serverKey, clientFirst, serverFirst, clientFinal);
+        assertArrayEquals(serverFinal.serverSignature(), computedSignature);
+
+        // Minimum iterations defined in RFC-7677
+        assertEquals(4096, ScramMechanism.SCRAM_SHA_256.minIterations());
+    }
+
+    /**
      * Tests encoding of username
      */
     @Test
