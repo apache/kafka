@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -83,6 +84,12 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, (String) null);
     }
 
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotHaveInvalidStoreNameOnReduce() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.reduce(MockReducer.STRING_ADDER, storeName);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
         groupedStream.reduce(MockReducer.STRING_ADDER, (StateStoreSupplier<KeyValueStore>) null);
@@ -103,6 +110,12 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), (String) null);
     }
 
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotHaveInvalidStoreNameWithWindowedReduce() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), storeName);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() throws Exception {
         groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Serdes.String(), "store");
@@ -116,6 +129,12 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotHaveInvalidStoreNameOnAggregate() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), storeName);
     }
 
     @Test(expected = NullPointerException.class)
@@ -136,6 +155,12 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotHaveInvalidStoreNameOnWindowedAggregate() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), storeName);
     }
 
     @Test(expected = NullPointerException.class)
@@ -268,8 +293,14 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (String) null);
     }
 
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAcceptInvalidStoreNameWhenReducingSessionWindows() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), storeName);
+    }
+
     @Test(expected = NullPointerException.class)
-    public void shouldNotAcceptNullStateStoreSupplierNameWhenReducingSessionWindows() throws Exception {
+    public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() throws Exception {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
     }
 
@@ -323,6 +354,17 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), (String) null);
     }
 
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAcceptInvalidStoreNameWhenAggregatingSessionWindows() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), storeName);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -343,8 +385,14 @@ public class KGroupedStreamImplTest {
         groupedStream.count(SessionWindows.with(90), (String) null);
     }
 
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAcceptInvalidStoreNameWhenCountingSessionWindows() throws Exception {
+        String storeName = "~foo bar~";
+        groupedStream.count(SessionWindows.with(90), storeName);
+    }
+
     @Test(expected = NullPointerException.class)
-    public void shouldNotAcceptNullStoreStoreSupplierNameWhenCountingSessionWindows() throws Exception {
+    public void shouldNotAcceptNullStateStoreSupplierWhenCountingSessionWindows() throws Exception {
         groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
     }
 
