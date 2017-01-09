@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,9 +49,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     }
 
-    @Override
     public Metrics registry() {
         return metrics;
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
     @Override
@@ -166,4 +172,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             recordLatency(sensor, startNs, time.nanoseconds());
         }
     }
+
+    @Override
+    public void removeSensor(String name) {
+        metrics.removeSensor(name);
+    }
+
 }

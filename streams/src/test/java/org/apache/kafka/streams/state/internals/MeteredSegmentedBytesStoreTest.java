@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,7 +32,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertTrue;
@@ -48,8 +52,8 @@ public class MeteredSegmentedBytesStoreTest {
         final StreamsMetrics streamsMetrics = new StreamsMetrics() {
 
             @Override
-            public Metrics registry() {
-                return metrics;
+            public Map<MetricName, ? extends Metric> metrics() {
+                return Collections.unmodifiableMap(metrics.metrics());
             }
 
             @Override
@@ -70,6 +74,11 @@ public class MeteredSegmentedBytesStoreTest {
             @Override
             public void recordThroughput(Sensor sensor, long value) {
                 throughputRecorded.add(sensor.name());
+            }
+
+            @Override
+            public void removeSensor(String name) {
+                metrics.removeSensor(name);
             }
 
         };

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -43,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,6 +207,14 @@ public class KafkaStreams {
      */
     public synchronized State state() {
         return state;
+    }
+
+    /**
+     * Get read-only handle on global metrics registry
+     * @return Map of all metrics.
+     */
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
     private class StreamStateListener implements StreamThread.StateListener {

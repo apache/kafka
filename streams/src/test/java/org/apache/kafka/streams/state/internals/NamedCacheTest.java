@@ -20,7 +20,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +42,7 @@ import static org.junit.Assert.assertSame;
 public class NamedCacheTest {
 
     private NamedCache cache;
-    private StreamsMetrics streamMetrics;
+    private MockStreamsMetrics streamMetrics;
 
     @Before
     public void setUp() throws Exception {

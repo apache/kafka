@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -358,7 +359,7 @@ class NamedCache {
     }
 
     class NamedCacheMetrics  {
-        final StreamsMetrics metrics;
+        final StreamsMetricsImpl metrics;
         final String groupName;
         final Map<String, String> metricTags;
         final Sensor hitRatioSensor;
@@ -371,7 +372,7 @@ class NamedCache {
             final String tagKey = "record-cache-id";
             final String tagValue = name;
             this.groupName = "stream-" + scope + "-metrics";
-            this.metrics = metrics;
+            this.metrics = (StreamsMetricsImpl) metrics;
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put(tagKey, tagValue);
 
