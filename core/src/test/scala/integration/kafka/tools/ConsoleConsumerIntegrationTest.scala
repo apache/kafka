@@ -1,4 +1,4 @@
-package integration.kafka.tools
+package kafka.tools
 
 import java.util.Properties
 
