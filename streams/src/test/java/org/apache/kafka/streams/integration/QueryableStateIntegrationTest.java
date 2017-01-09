@@ -286,10 +286,10 @@ public class QueryableStateIntegrationTest {
                         final ReadOnlyKeyValueStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
                         return store != null && store.get(key) != null;
                     } catch (final IllegalStateException e) {
-                        log.debug("Kafka Streams instance may have closed but re-balance hasn't happened", e);
+                        log.debug("Kafka Streams instance may have been closed but re-balance hasn't happened", e);
                         return false;
                     } catch (final InvalidStateStoreException e) {
-                        log.debug("There must have been at least one rebalance state", e);
+                        log.debug("The state store may have been closed already due to consecutive re-balances", e);
                         assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
                         return false;
                     }
@@ -318,10 +318,10 @@ public class QueryableStateIntegrationTest {
                         final ReadOnlyWindowStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
                         return store != null && store.fetch(key, from, to) != null;
                     } catch (final IllegalStateException e) {
-                        log.debug("Kafka Streams instance may have closed but re-balance hasn't happened", e);
+                        log.debug("Kafka Streams instance may have been closed but re-balance hasn't happened", e);
                         return false;
                     } catch (InvalidStateStoreException e) {
-                        log.debug("There must have been at least one rebalance state", e);
+                        log.debug("The state store may have been closed already due to consecutive re-balances", e);
                         assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
                         return false;
                     }

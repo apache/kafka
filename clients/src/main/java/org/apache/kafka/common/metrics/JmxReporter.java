@@ -16,6 +16,7 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -37,14 +38,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Register metrics in JMX as dynamic mbeans based on the metric names
+ * Register metrics in JMX as dynamic mbeans based on the metric names.
  */
 public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
-    private String prefix;
-    private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
+    private final String prefix;
+    private final Map<ObjectName, KafkaMbean> mbeans = new HashMap<>();
 
     public JmxReporter() {
         this("");
@@ -63,17 +64,25 @@ public class JmxReporter implements MetricsReporter {
     @Override
     public void init(List<KafkaMetric> metrics) {
         synchronized (LOCK) {
-            for (KafkaMetric metric : metrics)
-                addAttribute(metric);
-            for (KafkaMbean mbean : mbeans.values())
+            for (KafkaMetric metric : metrics) {
+                final KafkaMbean mbean = addAttribute(metric);
+                if (!this.mbeans.containsKey(mbean.name())) {
+                    this.mbeans.put(mbean.name(), mbean);
+                }
+            }
+            for (KafkaMbean mbean : this.mbeans.values()) {
                 reregister(mbean);
+            }
         }
     }
 
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {
-            KafkaMbean mbean = addAttribute(metric);
+            final KafkaMbean mbean = addAttribute(metric);
+            if (!this.mbeans.containsKey(mbean.name())) {
+                this.mbeans.put(mbean.name(), mbean);
+            }
             reregister(mbean);
         }
     }
@@ -81,73 +90,64 @@ public class JmxReporter implements MetricsReporter {
     @Override
     public void metricRemoval(KafkaMetric metric) {
         synchronized (LOCK) {
-            KafkaMbean mbean = removeAttribute(metric);
-            if (mbean != null) {
-                if (mbean.metrics.isEmpty())
-                    unregister(mbean);
-                else
-                    reregister(mbean);
+            final KafkaMbean mbean = removeAttribute(metric);
+            if (mbean.isEmpty()) {
+                unregister(mbean);
+                this.mbeans.remove(mbean.name());
+            } else {
+                reregister(mbean);
             }
         }
     }
 
     private KafkaMbean removeAttribute(KafkaMetric metric) {
-        MetricName metricName = metric.metricName();
-        String mBeanName = getMBeanName(metricName);
-        KafkaMbean mbean = this.mbeans.get(mBeanName);
-        if (mbean != null)
+        final MetricName metricName = metric.metricName();
+        final KafkaMbean mbean = getMBean(metricName);
+        if (!mbean.isEmpty()) {
             mbean.removeAttribute(metricName.name());
+        }
         return mbean;
     }
 
     private KafkaMbean addAttribute(KafkaMetric metric) {
-        try {
-            MetricName metricName = metric.metricName();
-            String mBeanName = getMBeanName(metricName);
-            if (!this.mbeans.containsKey(mBeanName))
-                mbeans.put(mBeanName, new KafkaMbean(mBeanName));
-            KafkaMbean mbean = this.mbeans.get(mBeanName);
-            mbean.setAttribute(metricName.name(), metric);
-            return mbean;
-        } catch (JMException e) {
-            throw new KafkaException("Error creating mbean attribute for metricName :" + metric.metricName(), e);
-        }
+        final MetricName metricName = metric.metricName();
+        final KafkaMbean mbean = getMBean(metricName);
+        mbean.setAttribute(metricName.name(), metric);
+        return mbean;
     }
 
     /**
-     * @param metricName
-     * @return standard JMX MBean name in the following format domainName:type=metricType,key1=val1,key2=val2
+     * Get {@link KafkaMbean} instance if metric with the given {@link MetricName} is already registered or create a new instance otherwise.
+     *
+     * @param metricName identifier for {@link KafkaMetric}
+     * @return standard JMX MBean for the given {@link MetricName}
      */
-    private String getMBeanName(MetricName metricName) {
-        StringBuilder mBeanName = new StringBuilder();
-        mBeanName.append(prefix);
-        mBeanName.append(":type=");
-        mBeanName.append(metricName.group());
-        for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
-                continue;
-            mBeanName.append(",");
-            mBeanName.append(entry.getKey());
-            mBeanName.append("=");
-            mBeanName.append(entry.getValue());
+    protected KafkaMbean getMBean(MetricName metricName) {
+        final ObjectName name = KafkaMbean.getObjectName(metricName, this.prefix);
+        KafkaMbean mbean = this.mbeans.get(name);
+        if (mbean == null) {
+            return KafkaMbean.of(name);
         }
-        return mBeanName.toString();
+        return mbean;
     }
 
     public void close() {
         synchronized (LOCK) {
-            for (KafkaMbean mbean : this.mbeans.values())
+            for (KafkaMbean mbean : this.mbeans.values()) {
                 unregister(mbean);
+            }
+            this.mbeans.clear();
         }
     }
 
     private void unregister(KafkaMbean mbean) {
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
-            if (server.isRegistered(mbean.name()))
+            if (server.isRegistered(mbean.name())) {
                 server.unregisterMBean(mbean.name());
+            }
         } catch (JMException e) {
-            throw new KafkaException("Error unregistering mbean", e);
+            throw new KafkaException("Error de-registering mbean " + mbean.name(), e);
         }
     }
 
@@ -160,17 +160,30 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
-    private static class KafkaMbean implements DynamicMBean {
+    public int mbeansQty() {
+        return this.mbeans.size();
+    }
+
+    protected static class KafkaMbean implements DynamicMBean {
+
         private final ObjectName objectName;
         private final Map<String, KafkaMetric> metrics;
 
-        public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
-            this.metrics = new HashMap<String, KafkaMetric>();
-            this.objectName = new ObjectName(mbeanName);
+        public static KafkaMbean of(ObjectName objectName) {
+            try {
+                return new KafkaMbean(objectName);
+            } catch (MalformedObjectNameException e) {
+                throw new KafkaException("Error creating mbean with " + objectName, e);
+            }
+        }
+
+        private KafkaMbean(ObjectName objectName) throws MalformedObjectNameException {
+            this.metrics = new HashMap<>();
+            this.objectName = objectName;
         }
 
         public ObjectName name() {
-            return objectName;
+            return this.objectName;
         }
 
         public void setAttribute(String name, KafkaMetric metric) {
@@ -179,18 +192,20 @@ public class JmxReporter implements MetricsReporter {
 
         @Override
         public Object getAttribute(String name) throws AttributeNotFoundException, MBeanException, ReflectionException {
-            if (this.metrics.containsKey(name))
+            if (this.metrics.containsKey(name)) {
                 return this.metrics.get(name).value();
-            else
+            } else {
                 throw new AttributeNotFoundException("Could not find attribute " + name);
+            }
         }
 
         @Override
         public AttributeList getAttributes(String[] names) {
             try {
                 AttributeList list = new AttributeList();
-                for (String name : names)
+                for (String name : names) {
                     list.add(new Attribute(name, getAttribute(name)));
+                }
                 return list;
             } catch (Exception e) {
                 log.error("Error getting JMX attribute: ", e);
@@ -204,18 +219,10 @@ public class JmxReporter implements MetricsReporter {
 
         @Override
         public MBeanInfo getMBeanInfo() {
-            MBeanAttributeInfo[] attrs = new MBeanAttributeInfo[metrics.size()];
+            MBeanAttributeInfo[] attrs = new MBeanAttributeInfo[this.metrics.size()];
             int i = 0;
             for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
-                String attribute = entry.getKey();
-                KafkaMetric metric = entry.getValue();
-                attrs[i] = new MBeanAttributeInfo(attribute,
-                                                  double.class.getName(),
-                                                  metric.metricName().description(),
-                                                  true,
-                                                  false,
-                                                  false);
-                i += 1;
+                attrs[i++] = new MBeanAttributeInfo(entry.getKey(), double.class.getName(), entry.getValue().metricName().description(), true, false, false);
             }
             return new MBeanInfo(this.getClass().getName(), "", attrs, null, null, null);
         }
@@ -238,6 +245,40 @@ public class JmxReporter implements MetricsReporter {
             throw new UnsupportedOperationException("Set not allowed.");
         }
 
-    }
+        public boolean isEmpty() {
+            return this.metrics.isEmpty();
+        }
 
+        public int attributesQty() {
+            return this.metrics.size();
+        }
+
+        /**
+         * Calculate name of {@link KafkaMbean} instance, using the given {@link MetricName}.
+         *
+         * @param metricName identifier for {@link KafkaMetric}
+         * @return standard JMX MBean name in the following format domainName:type=metricType,key1=val1,key2=val2
+         */
+        protected static ObjectName getObjectName(MetricName metricName, String prefix) {
+            try {
+                Objects.requireNonNull(metricName, "Parameter 'metricName' is mandatory");
+                StringBuilder mBeanName = new StringBuilder();
+                mBeanName.append(prefix);
+                mBeanName.append(":type=");
+                mBeanName.append(metricName.group());
+                for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
+                    if (entry.getKey().isEmpty() || entry.getValue().isEmpty()) {
+                        continue;
+                    }
+                    mBeanName.append(",");
+                    mBeanName.append(entry.getKey());
+                    mBeanName.append("=");
+                    mBeanName.append(entry.getValue());
+                }
+                return ObjectName.getInstance(mBeanName.toString());
+            } catch (MalformedObjectNameException e) {
+                throw new KafkaException("Error creating mbean for " + metricName, e);
+            }
+        }
+    }
 }

@@ -33,7 +33,23 @@ import org.apache.kafka.common.utils.Time;
  * MetricName metricName = new MetricName(&quot;Dummy Name&quot;, &quot;Dummy Group&quot;, &quot;Dummy Description&quot;, Collections.emptyMap());
  * metrics.add(metricName, new Avg());
  *
- * Collection<KafkaMetric> metricObjects = metrics.metrics().values(); // constructed KafkaMetric objects
+ * Collection&lt;KafkaMetric&gt; metricObjects = metrics.metrics().values(); // constructed KafkaMetric objects
+ * </pre>
+ *
+ * Also this class can be mocked or extended whenever is necessary, e.g.:
+ *
+ * <pre>
+ * private static class MockKafkaMetric extends KafkaMetric {
+ *
+ *     private MockKafkaMetric(Object lock, MetricName metricName, Measurable measurable, MetricConfig config, Time time) {
+ *         super(lock, metricName, measurable, config, time);
+ *     }
+ *
+ *     private static MockKafkaMetric of(String name, String group, Measurable measurable) {
+ *         final MetricName metricName = new MetricName(name, group, &quot;&quot;, Collections.&lt;String, String&gt;emptyMap());
+ *         return new MockKafkaMetric(new Object(), metricName, measurable, null, Time.SYSTEM);
+ *     }
+ * }
  * </pre>
  */
 public class KafkaMetric implements Metric {
