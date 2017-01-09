@@ -54,13 +54,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
-    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
-        return metrics.sensor(sensorName(operationName, entityName), recordLevel);
+    public Sensor addSensor(String name, Sensor.RecordLevel recordLevel) {
+        return metrics.sensor(name, recordLevel);
     }
 
     @Override
-    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
-        return metrics.sensor(sensorName(operationName, entityName), recordLevel, parents);
+    public Sensor addSensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
+        return metrics.sensor(name, recordLevel, parents);
     }
 
     @Override
@@ -167,7 +167,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * startTs = time.nanoseconds()
      * action.run()
      * endTs = time.nanoseconds()
-     * sensor.record(endTs - startTs)
+     * addSensor.record(endTs - startTs)
      * @param time      Time object.
      * @param action    Action to run.
      * @param sensor    Sensor to record value.
@@ -184,8 +184,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
-    public void removeSensor(String name) {
-        metrics.removeSensor(name);
+    public void removeSensor(Sensor sensor) {
+        if (sensor != null) {
+            metrics.removeSensor(sensor.name());
+        }
     }
 
 }

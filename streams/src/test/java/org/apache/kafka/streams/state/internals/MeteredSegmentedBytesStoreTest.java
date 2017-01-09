@@ -77,18 +77,18 @@ public class MeteredSegmentedBytesStoreTest {
             }
 
             @Override
-            public void removeSensor(String name) {
-                metrics.removeSensor(name);
+            public void removeSensor(Sensor sensor) {
+                metrics.removeSensor(sensor.name());
             }
 
             @Override
-            public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
-                return metrics.sensor(operationName);
+            public Sensor addSensor(String name, Sensor.RecordLevel recordLevel) {
+                return metrics.sensor(name);
             }
 
             @Override
-            public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
-                return metrics.sensor(operationName);
+            public Sensor addSensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
+                return metrics.sensor(name);
             }
 
         };
