@@ -36,7 +36,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             this.version = ProtoUtils.latestVersion(apiKey.id);
         }
 
-        public ApiKeys getApiKey() {
+        public ApiKeys apiKey() {
             return apiKey;
         }
 
@@ -45,7 +45,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             return this;
         }
 
-        public short getVersion() {
+        public short version() {
             return version;
         }
 

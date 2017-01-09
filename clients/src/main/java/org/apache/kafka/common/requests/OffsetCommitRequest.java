@@ -123,15 +123,6 @@ public class OffsetCommitRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder setOffsetData(Map<TopicPartition, PartitionData> offsetData) {
-            this.offsetData = offsetData;
-            return this;
-        }
-
-        public Map<TopicPartition, PartitionData> getOffsetData() {
-            return offsetData;
-        }
-
         public Builder setRetentionTime(long retentionTime) {
             this.retentionTime = retentionTime;
             return this;
@@ -139,7 +130,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         @Override
         public OffsetCommitRequest build() {
-            short version = getVersion();
+            short version = version();
             switch (version) {
                 case 0:
                     return new OffsetCommitRequest(groupId, offsetData);

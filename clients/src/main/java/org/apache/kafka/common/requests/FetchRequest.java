@@ -130,7 +130,7 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public FetchRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version < 3) {
                 maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }

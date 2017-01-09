@@ -106,7 +106,7 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         @Override
         public CreateTopicsRequest build() {
-            return new CreateTopicsRequest(topics, timeout, getVersion());
+            return new CreateTopicsRequest(topics, timeout, version());
         }
 
         @Override

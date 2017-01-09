@@ -72,7 +72,7 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version < 2) {
                 throw new UnsupportedVersionException("ProduceRequest " +
                         "versions older than 2 are not supported.");

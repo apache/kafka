@@ -73,7 +73,7 @@ public class SyncGroupRequest extends AbstractRequest {
         @Override
         public SyncGroupRequest build() {
             return new SyncGroupRequest(groupId, generationId, memberId,
-                    groupAssignment, getVersion());
+                    groupAssignment, version());
         }
 
         @Override

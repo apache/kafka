@@ -47,7 +47,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         @Override
         public DeleteTopicsRequest build() {
-            return new DeleteTopicsRequest(topics, timeout, getVersion());
+            return new DeleteTopicsRequest(topics, timeout, version());
         }
 
         @Override

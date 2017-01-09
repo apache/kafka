@@ -40,7 +40,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
         @Override
         public DescribeGroupsRequest build() {
-            short version = getVersion();
+            short version = version();
             return new DescribeGroupsRequest(this.groupIds, version);
         }
 

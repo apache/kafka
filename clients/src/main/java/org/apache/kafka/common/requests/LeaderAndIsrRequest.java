@@ -71,7 +71,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         @Override
         public LeaderAndIsrRequest build() {
             return new LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates,
-                    liveLeaders, getVersion());
+                    liveLeaders, version());
         }
 
         @Override

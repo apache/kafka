@@ -54,7 +54,7 @@ public class StopReplicaRequest extends AbstractRequest {
         @Override
         public StopReplicaRequest build() {
             return new StopReplicaRequest(controllerId, controllerEpoch,
-                    deletePartitions, partitions, getVersion());
+                    deletePartitions, partitions, version());
         }
 
         @Override

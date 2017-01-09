@@ -115,7 +115,7 @@ public class JoinGroupRequest extends AbstractRequest {
 
         @Override
         public JoinGroupRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version < 1) {
                 rebalanceTimeout = sessionTimeout;
             }

@@ -44,7 +44,7 @@ public class LeaveGroupRequest extends AbstractRequest {
 
         @Override
         public LeaveGroupRequest build() {
-            return new LeaveGroupRequest(groupId, memberId, getVersion());
+            return new LeaveGroupRequest(groupId, memberId, version());
         }
 
         @Override

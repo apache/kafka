@@ -34,7 +34,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
         @Override
         public ControlledShutdownRequest build() {
-            return new ControlledShutdownRequest(brokerId, getVersion());
+            return new ControlledShutdownRequest(brokerId, version());
         }
 
         @Override
