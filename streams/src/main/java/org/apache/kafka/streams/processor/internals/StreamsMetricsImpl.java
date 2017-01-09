@@ -167,7 +167,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * startTs = time.nanoseconds()
      * action.run()
      * endTs = time.nanoseconds()
-     * addSensor.record(endTs - startTs)
+     * sensor.record(endTs - startTs)
      * @param time      Time object.
      * @param action    Action to run.
      * @param sensor    Sensor to record value.
