@@ -108,7 +108,9 @@ if (new File('.git').exists()) {
         'CONTRIBUTING.md',
         'gradlew',
         'gradlew.bat',
-        '**/README.md'
+        '**/README.md',
+        '**/id_rsa',
+        '**/id_rsa.pub'
     ])
   }
 }
