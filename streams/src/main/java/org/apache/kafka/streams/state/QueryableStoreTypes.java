@@ -16,6 +16,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
@@ -44,6 +45,16 @@ public class QueryableStoreTypes {
      */
     public static <K, V> QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStore() {
         return new WindowStoreType<>();
+    }
+
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore}
+     * @param <K>   key type of the store
+     * @param <V>   value type of the store
+     * @return  {@link SessionStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, V>> sessionStore() {
+        return new SessionStoreType<>();
     }
 
     private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
@@ -85,6 +96,15 @@ public class QueryableStoreTypes {
                                                 final String storeName) {
             return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
         }
+    }
 
+    private static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+        SessionStoreType() {
+            super(ReadOnlySessionStore.class);
+        }
+        @Override
+        public ReadOnlySessionStore<K, V> create(final StateStoreProvider storeProvider, final String storeName) {
+            return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
+        }
     }
 }

@@ -19,6 +19,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
 
 import java.util.Iterator;
 import java.util.List;
@@ -103,12 +104,12 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new TheIterator(this.map.subMap(from, true, to, true).entrySet().iterator());
+        return new DelegatingPeekingKeyValueIterator<>(name, new TheIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new TheIterator(map.entrySet().iterator());
+        return new DelegatingPeekingKeyValueIterator<>(name(), new TheIterator(map.entrySet().iterator()));
     }
 
     private class TheIterator implements KeyValueIterator<K, V> {
@@ -122,6 +123,11 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public void close() {
 
+        }
+
+        @Override
+        public K peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey not supported");
         }
 
         @Override

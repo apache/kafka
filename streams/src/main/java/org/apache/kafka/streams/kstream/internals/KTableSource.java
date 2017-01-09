@@ -53,7 +53,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
@@ -63,7 +63,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
             V oldValue = store.get(key);
             store.put(key, value);
-            tupleForwarder.maybeForward(key, value, oldValue, sendOldValues);
+            tupleForwarder.maybeForward(key, value, oldValue);
         }
     }
 }

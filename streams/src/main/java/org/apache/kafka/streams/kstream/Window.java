@@ -80,4 +80,11 @@ public abstract class Window {
         return (int) (n % 0xFFFFFFFFL);
     }
 
+    @Override
+    public String toString() {
+        return "Window{" +
+                "start=" + start +
+                ", end=" + end +
+                '}';
+    }
 }
