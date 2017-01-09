@@ -36,7 +36,7 @@ public class UUID {
     public static final Schema SCHEMA = builder().schema();
 
     /**
-     * Convert a value from its logical format (Date) to it's encoded format.
+     * Convert a value from its logical format (UUID) to it's encoded format.
      * @param value the logical value
      * @return the encoded value
      */
