@@ -9,3 +9,4 @@ Vagrantfile.local
 
 .ducktape
 results/
+*.json
