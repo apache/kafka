@@ -137,11 +137,11 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
      * @throws IllegalStateException
      */
     @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
             throw new IllegalStateException("Can only create state stores during initialization.");
 
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
+        stateMgr.register(store, stateRestoreCallback);
     }
 
     /**

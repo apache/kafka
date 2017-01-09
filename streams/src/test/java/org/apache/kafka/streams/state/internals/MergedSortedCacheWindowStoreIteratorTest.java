@@ -49,14 +49,14 @@ public class MergedSortedCacheWindowStoreIteratorTest {
             final byte[] keyBytes = WindowStoreUtils.toBinaryKey("a", t + 10, 0, stateSerdes);
             final byte[] valBytes = String.valueOf(t + 10).getBytes();
             expectedKvPairs.add(KeyValue.pair(t + 10, valBytes));
-            cache.put(namespace, keyBytes, new LRUCacheEntry(valBytes));
+            cache.put(namespace, Bytes.wrap(keyBytes), new LRUCacheEntry(valBytes));
         }
 
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("name", new KeyValueIteratorStub<>(storeValues.iterator()));
 
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, binaryFrom, binaryTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, Bytes.wrap(binaryFrom), Bytes.wrap(binaryTo));
 
         final MergedSortedCacheWindowStoreIterator<Bytes, byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()));
         int index = 0;

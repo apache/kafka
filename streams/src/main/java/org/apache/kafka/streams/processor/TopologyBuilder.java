@@ -89,9 +89,9 @@ public class TopologyBuilder {
     // are connected to these state stores
     private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
 
-    // map from state store names that are directly associated with source processors to their subscribed topics,
+    // map from state store names to ths state store's corresponding changelog topic if possible,
     // this is used in the extended KStreamBuilder.
-    private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
+    private final HashMap<String, String> storeToChangelogTopic = new HashMap<>();
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
@@ -594,10 +594,10 @@ public class TopologyBuilder {
     }
 
     protected synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
-        if (sourceStoreToSourceTopic.containsKey(sourceStoreName)) {
+        if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");
         }
-        sourceStoreToSourceTopic.put(sourceStoreName, topic);
+        storeToChangelogTopic.put(sourceStoreName, topic);
         return this;
     }
 
@@ -779,7 +779,6 @@ public class TopologyBuilder {
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, SinkNode> topicSinkMap = new HashMap<>();
         Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
-        Map<StateStore, ProcessorNode> storeToProcessorNodeMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
@@ -797,7 +796,12 @@ public class TopologyBuilder {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
                             final StateStore stateStore = supplier.get();
                             stateStoreMap.put(stateStoreName, stateStore);
-                            storeToProcessorNodeMap.put(stateStore, node);
+
+                            // remember the changelog topic is this state store is change-logging enabled
+                            if (supplier.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
+                                final String changelogTopic = ProcessorStateManager.storeChangelogTopic(this.applicationId, stateStoreName);
+                                storeToChangelogTopic.put(stateStoreName, changelogTopic);
+                            }
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
@@ -830,7 +834,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic, storeToProcessorNodeMap);
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic);
     }
     
     /**

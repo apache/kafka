@@ -98,7 +98,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
                     valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
             // register the store
-            context.register(root, true, new StateRestoreCallback() {
+            context.register(root, new StateRestoreCallback() {
                 @Override
                 public void restore(byte[] key, byte[] value) {
                     // check value for null, to avoid  deserialization error.

@@ -149,7 +149,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
+    public void register(StateStore store, StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
     }

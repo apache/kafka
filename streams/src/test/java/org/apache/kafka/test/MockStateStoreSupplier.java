@@ -102,7 +102,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
 
         @Override
         public void init(ProcessorContext context, StateStore root) {
-            context.register(root, loggingEnabled, stateRestoreCallback);
+            context.register(root, stateRestoreCallback);
             initialized = true;
             closed = false;
         }

@@ -150,7 +150,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, loggingEnabled, new StateRestoreCallback() {
+        context.register(root, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 putInternal(key, value);

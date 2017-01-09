@@ -417,6 +417,18 @@ public class Stores {
          */
         PersistentSessionWindowedFactory<K, V> sessionWindowed(final long retentionPeriod);
 
+        @Override
+        PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config);
+
+        @Override
+        PersistentKeyValueFactory<K, V> disableLogging();
+
+        @Override
+        PersistentKeyValueFactory<K, V> enableCaching();
+
+        @Override
+        PersistentKeyValueFactory<K, V> disableCaching();
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
@@ -433,6 +445,26 @@ public class Stores {
             this.storeName = name;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
+        }
+
+        @Override
+        public PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config) {
+            return (PersistentKeyValueFactory<K, V>) super.enableLogging(config);
+        }
+
+        @Override
+        public PersistentKeyValueFactory<K, V> disableLogging() {
+            return (PersistentKeyValueFactory<K, V>) super.disableLogging();
+        }
+
+        @Override
+        public PersistentKeyValueFactory<K, V> enableCaching() {
+            return (PersistentKeyValueFactory<K, V>) super.enableCaching();
+        }
+
+        @Override
+        public PersistentKeyValueFactory<K, V> disableCaching() {
+            return (PersistentKeyValueFactory<K, V>) super.disableCaching();
         }
 
         @Override
@@ -460,6 +492,18 @@ public class Stores {
      * @param <V> the type of values
      */
     public interface PersistentTimeWindowedFactory<K, V> extends PersistentWrapperFactory<K, V> {
+        @Override
+        PersistentTimeWindowedFactory<K, V> enableLogging(final Map<String, String> config);
+
+        @Override
+        PersistentTimeWindowedFactory<K, V> disableLogging();
+
+        @Override
+        PersistentTimeWindowedFactory<K, V> enableCaching();
+
+        @Override
+        PersistentTimeWindowedFactory<K, V> disableCaching();
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
@@ -488,6 +532,26 @@ public class Stores {
         }
 
         @Override
+        public PersistentTimeWindowedFactory<K, V> enableLogging(final Map<String, String> config) {
+            return (PersistentTimeWindowedFactory<K, V>) super.enableLogging(config);
+        }
+
+        @Override
+        public PersistentTimeWindowedFactory<K, V> disableLogging() {
+            return (PersistentTimeWindowedFactory<K, V>) super.disableLogging();
+        }
+
+        @Override
+        public PersistentTimeWindowedFactory<K, V> enableCaching() {
+            return (PersistentTimeWindowedFactory<K, V>) super.enableCaching();
+        }
+
+        @Override
+        public PersistentTimeWindowedFactory<K, V> disableCaching() {
+            return (PersistentTimeWindowedFactory<K, V>) super.disableCaching();
+        }
+
+        @Override
         public WindowStoreSupplier<WindowStore> build() {
             log.trace("Creating RocksDb TimeWindowedStore name={} numSegments={} logged={}", storeName, numSegments, logged);
 
@@ -502,6 +566,18 @@ public class Stores {
      * @param <V> the type of values
      */
     public interface PersistentSessionWindowedFactory<K, V> extends PersistentWrapperFactory<K, V> {
+        @Override
+        PersistentSessionWindowedFactory<K, V> enableLogging(final Map<String, String> config);
+
+        @Override
+        PersistentSessionWindowedFactory<K, V> disableLogging();
+
+        @Override
+        PersistentSessionWindowedFactory<K, V> enableCaching();
+
+        @Override
+        PersistentSessionWindowedFactory<K, V> disableCaching();
+
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
@@ -520,6 +596,26 @@ public class Stores {
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
             this.retentionPeriod = retentionPeriod;
+        }
+
+        @Override
+        public PersistentSessionWindowedFactory<K, V> enableLogging(final Map<String, String> config) {
+            return (PersistentSessionWindowedFactory<K, V>) super.enableLogging(config);
+        }
+
+        @Override
+        public PersistentSessionWindowedFactory<K, V> disableLogging() {
+            return (PersistentSessionWindowedFactory<K, V>) super.disableLogging();
+        }
+
+        @Override
+        public PersistentSessionWindowedFactory<K, V> enableCaching() {
+            return (PersistentSessionWindowedFactory<K, V>) super.enableCaching();
+        }
+
+        @Override
+        public PersistentSessionWindowedFactory<K, V> disableCaching() {
+            return (PersistentSessionWindowedFactory<K, V>) super.disableCaching();
         }
 
         @Override

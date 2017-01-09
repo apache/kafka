@@ -29,21 +29,18 @@ public class ProcessorTopology {
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
     private final List<StateStore> stateStores;
-    private final Map<String, String> sourceStoreToSourceTopic;
-    private final Map<StateStore, ProcessorNode> storeToProcessorNodeMap;
+    private final Map<String, String> storeToChangelogTopic;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
                              Map<String, SinkNode> sinkByTopics,
                              List<StateStore> stateStores,
-                             Map<String, String> sourceStoreToSourceTopic,
-                             Map<StateStore, ProcessorNode> storeToProcessorNodeMap) {
+                             Map<String, String> storeToChangelogTopic) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStores = Collections.unmodifiableList(stateStores);
-        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
-        this.storeToProcessorNodeMap = Collections.unmodifiableMap(storeToProcessorNodeMap);
+        this.storeToChangelogTopic = storeToChangelogTopic;
     }
 
     public Set<String> sourceTopics() {
@@ -78,12 +75,8 @@ public class ProcessorTopology {
         return stateStores;
     }
 
-    public Map<String, String> sourceStoreToSourceTopic() {
-        return sourceStoreToSourceTopic;
-    }
-
-    public Map<StateStore, ProcessorNode> storeToProcessorNodeMap() {
-        return storeToProcessorNodeMap;
+    public Map<String, String> storeToChangelogTopic() {
+        return storeToChangelogTopic;
     }
 
     private String childrenToString(List<ProcessorNode<?, ?>> children) {

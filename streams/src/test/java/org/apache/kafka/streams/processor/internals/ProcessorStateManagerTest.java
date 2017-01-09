@@ -214,9 +214,9 @@ public class ProcessorStateManagerTest {
     public void testNoTopic() throws IOException {
         MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null);
         try {
-            stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
+            stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
         } finally {
             stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
@@ -242,7 +242,7 @@ public class ProcessorStateManagerTest {
 
         MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null);
         try {
             restoreConsumer.reset();
 
@@ -257,7 +257,7 @@ public class ProcessorStateManagerTest {
                 );
             }
 
-            stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
             assertEquals(new TopicPartition(persistentStoreTopicName, 2), restoreConsumer.assignedPartition);
             assertEquals(lastCheckpointedOffset, restoreConsumer.seekOffset);
@@ -291,7 +291,7 @@ public class ProcessorStateManagerTest {
 
         MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false); // non persistent store
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 2), noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 2), noPartitions, restoreConsumer, false, stateDirectory, null);
         try {
             restoreConsumer.reset();
 
@@ -306,7 +306,7 @@ public class ProcessorStateManagerTest {
                 );
             }
 
-            stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
+            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
 
             assertEquals(new TopicPartition(nonPersistentStoreTopicName, 2), restoreConsumer.assignedPartition);
             assertEquals(0L, restoreConsumer.seekOffset);
@@ -364,13 +364,13 @@ public class ProcessorStateManagerTest {
         // if there is an source partition, inherit the partition id
         Set<TopicPartition> sourcePartitions = Utils.mkSet(new TopicPartition(storeTopicName3, 1));
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, sourcePartitions, restoreConsumer, true, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap()); // standby
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, sourcePartitions, restoreConsumer, true, stateDirectory, null); // standby
         try {
             restoreConsumer.reset();
 
-            stateMgr.register(store1, true, store1.stateRestoreCallback);
-            stateMgr.register(store2, true, store2.stateRestoreCallback);
-            stateMgr.register(store3, true, store3.stateRestoreCallback);
+            stateMgr.register(store1, store1.stateRestoreCallback);
+            stateMgr.register(store2, store2.stateRestoreCallback);
+            stateMgr.register(store3, store3.stateRestoreCallback);
 
             Map<TopicPartition, Long> changeLogOffsets = stateMgr.checkpointedOffsets();
 
@@ -398,9 +398,9 @@ public class ProcessorStateManagerTest {
 
         MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, restoreConsumer, false, stateDirectory, null);
         try {
-            stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
+            stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
 
             assertNull(stateMgr.getStore("noSuchStore"));
             assertEquals(mockStateStore, stateMgr.getStore(nonPersistentStoreName));
@@ -436,16 +436,16 @@ public class ProcessorStateManagerTest {
         MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
         MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null);
         try {
             // make sure the checkpoint file is deleted
             assertFalse(checkpointFile.exists());
 
             restoreConsumer.reset();
-            stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
             restoreConsumer.reset();
-            stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
+            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
             stateMgr.flush(new MockProcessorContext(StateSerdes.withBuiltinTypes("foo", String.class, String.class), new NoOpRecordCollector()));
@@ -469,8 +469,8 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() throws Exception {
         MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
-        stateMgr.register(mockStateStore, false, mockStateStore.stateRestoreCallback);
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null);
+        stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
 
@@ -490,10 +490,10 @@ public class ProcessorStateManagerTest {
 
 
         final MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null);
 
         restoreConsumer.reset();
-        stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
         stateMgr.close(null);
         assertFalse(checkpointFile.exists());
     }

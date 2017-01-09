@@ -80,17 +80,16 @@ public abstract class AbstractStream<K> {
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
-    @SuppressWarnings("unchecked")
     public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
                                                                                      final Serde<T> aggValSerde,
                                                                                      final Windows<W> windows,
                                                                                      final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
+                .timeWindowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
     }
-    @SuppressWarnings("unchecked")
+
     public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
                                                                          final Serde<T> aggValueSerde,
                                                                          final String storeName) {
