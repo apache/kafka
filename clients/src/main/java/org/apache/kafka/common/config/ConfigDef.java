@@ -13,8 +13,10 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,6 +71,7 @@ import java.util.Set;
 public class ConfigDef {
 
     public static final Object NO_DEFAULT_VALUE = new String("");
+    public static final String EXECUTABLE_PASSWORD_ENABLE_CONFIG = "executable.password.enable";
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
     private final List<String> groups = new LinkedList<>();
@@ -409,13 +412,17 @@ public class ConfigDef {
             String joined = Utils.join(undefinedConfigKeys, ",");
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
+
+        // check if passwords are passed as executables
+        boolean isPasswdExecutable = props.containsKey(EXECUTABLE_PASSWORD_ENABLE_CONFIG) && Boolean.parseBoolean((String) props.get(EXECUTABLE_PASSWORD_ENABLE_CONFIG));
+
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values()) {
             Object value;
             // props map contains setting - assign ConfigKey value
             if (props.containsKey(key.name)) {
-                value = parseType(key.name, props.get(key.name), key.type);
+                value = parseType(key.name, props.get(key.name), key.type, isPasswdExecutable);
                 // props map doesn't contain setting, the key is required because no default value specified - its an error
             } else if (key.defaultValue == NO_DEFAULT_VALUE) {
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
@@ -585,6 +592,17 @@ public class ConfigDef {
      * @return The parsed object
      */
     private Object parseType(String name, Object value, Type type) {
+        return parseType(name, value, type, false);
+    }
+
+    /**
+     * Parse a value according to its expected type.
+     * @param name  The config name
+     * @param value The config value
+     * @param type  The expected type
+     * @return The parsed object
+     */
+    private Object parseType(String name, Object value, Type type, boolean isPasswordExecutable) {
         try {
             if (value == null) return null;
 
@@ -608,9 +626,16 @@ public class ConfigDef {
                 case PASSWORD:
                     if (value instanceof Password)
                         return value;
-                    else if (value instanceof String)
-                        return new Password(trimmed);
-                    else
+                    else if (value instanceof String) {
+                        String password = trimmed;
+                        if (isPasswordExecutable) {
+                            // Remove beginning and ending ", which is required for passing a value with space in configs
+                            password = Shell.execCommand(password.replaceAll("^\\\"|\\\"$", "").split(" "));
+                            // Get rid of newline character from the result
+                            password = password.substring(0, password.length() - 1);
+                        }
+                        return new Password(password);
+                    } else
                         throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
                 case STRING:
                     if (value instanceof String)
@@ -673,6 +698,10 @@ public class ConfigDef {
             throw new ConfigException(name, value, "Not a number of type " + type);
         } catch (ClassNotFoundException e) {
             throw new ConfigException(name, value, "Class " + value + " could not be found.");
+        } catch (IOException e) {
+            throw new ConfigException(name, value, "Failed to retrieve password for " + name + " by " +
+                    "executing " + value + ". If the password is not an executable, make sure " +
+                    EXECUTABLE_PASSWORD_ENABLE_CONFIG + " is not set to True.");
         }
     }
 
