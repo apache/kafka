@@ -33,6 +33,8 @@ import org.reflections.util.ConfigurationBuilder;
 
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -51,43 +53,6 @@ public class PluginDiscovery {
     private static List<ConnectorPluginInfo> validConnectorPlugins;
     private static List<Class<? extends Transformation>> validTransformationPlugins;
 
-    public static synchronized void scanClasspathForPlugins() {
-        if (scanned) return;
-
-        ReflectionsUtil.registerUrlTypes();
-        final Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
-
-        {
-            final Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
-            connectorClasses.removeAll(CONNECTOR_EXCLUDES);
-
-            final List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
-            for (Class<? extends Connector> connectorClass : connectorClasses) {
-                if (isConcrete(connectorClass)) {
-                    connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
-                }
-            }
-
-            validConnectorPlugins = connectorPlugins;
-        }
-
-        {
-            final Set<Class<? extends Transformation>> transformationClasses = reflections.getSubTypesOf(Transformation.class);
-            transformationClasses.removeAll(TRANSFORMATION_EXCLUDES);
-
-            final List<Class<? extends Transformation>> transformationPlugins = new LinkedList<>();
-            for (Class<? extends Transformation> transformationClass : transformationClasses) {
-                if (isConcrete(transformationClass)) {
-                    transformationPlugins.add(transformationClass);
-                }
-            }
-
-            validTransformationPlugins = transformationPlugins;
-        }
-
-        scanned = true;
-    }
-
     public static synchronized List<ConnectorPluginInfo> connectorPlugins() {
         scanClasspathForPlugins();
         return validConnectorPlugins;
@@ -96,6 +61,57 @@ public class PluginDiscovery {
     public static synchronized List<Class<? extends Transformation>> transformationPlugins() {
         scanClasspathForPlugins();
         return validTransformationPlugins;
+    }
+
+    public static synchronized void scanClasspathForPlugins() {
+        if (scanned) return;
+        ReflectionsUtil.registerUrlTypes();
+        final Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()));
+        validConnectorPlugins = Collections.unmodifiableList(connectorPlugins(reflections));
+        validTransformationPlugins = Collections.unmodifiableList(transformationPlugins(reflections));
+        scanned = true;
+    }
+
+    private static List<ConnectorPluginInfo> connectorPlugins(Reflections reflections) {
+        final Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
+        connectorClasses.removeAll(CONNECTOR_EXCLUDES);
+
+        final List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            if (isConcrete(connectorClass)) {
+                connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
+            }
+        }
+
+        Collections.sort(connectorPlugins, new Comparator<ConnectorPluginInfo>() {
+            @Override
+            public int compare(ConnectorPluginInfo a, ConnectorPluginInfo b) {
+                return a.clazz().compareTo(b.clazz());
+            }
+        });
+
+        return connectorPlugins;
+    }
+
+    private static List<Class<? extends Transformation>> transformationPlugins(Reflections reflections) {
+        final Set<Class<? extends Transformation>> transformationClasses = reflections.getSubTypesOf(Transformation.class);
+        transformationClasses.removeAll(TRANSFORMATION_EXCLUDES);
+
+        final List<Class<? extends Transformation>> transformationPlugins = new LinkedList<>();
+        for (Class<? extends Transformation> transformationClass : transformationClasses) {
+            if (isConcrete(transformationClass)) {
+                transformationPlugins.add(transformationClass);
+            }
+        }
+
+        Collections.sort(transformationPlugins, new Comparator<Class<? extends Transformation>>() {
+            @Override
+            public int compare(Class<? extends Transformation> a, Class<? extends Transformation> b) {
+                return a.getCanonicalName().compareTo(b.getCanonicalName());
+            }
+        });
+
+        return transformationPlugins;
     }
 
     private static boolean isConcrete(Class<?> cls) {
