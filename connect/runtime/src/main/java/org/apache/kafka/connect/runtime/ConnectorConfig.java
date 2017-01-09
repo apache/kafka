@@ -24,15 +24,9 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.transforms.HoistKeyToStruct;
-import org.apache.kafka.connect.transforms.HoistValueToStruct;
-import org.apache.kafka.connect.transforms.InsertInKey;
-import org.apache.kafka.connect.transforms.InsertInValue;
-import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -212,13 +206,7 @@ public class ConnectorConfig extends AbstractConfig {
     static final class TransformationClassRecommender implements ConfigDef.Recommender {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return Arrays.<Object>asList(
-                    HoistKeyToStruct.class,
-                    HoistValueToStruct.class,
-                    InsertInKey.class,
-                    InsertInValue.class,
-                    TimestampRouter.class
-            );
+            return (List) PluginDiscovery.transformationPlugins();
         }
 
         @Override
