@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Collections;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -155,6 +158,39 @@ public class UtilsTest {
         } catch (IOException e) {
             TestCloseable.checkClosed(mixedCloseables);
             TestCloseable.checkException(e, mixedCloseables[1], mixedCloseables[3], mixedCloseables[4]);
+        }
+    }
+
+    @Test
+    public void testReadFully() throws IOException {
+        RandomAccessFile raf = new RandomAccessFile(TestUtils.tempFile(), "rw");
+        FileChannel channel = raf.getChannel();
+        try {
+            // prepare channel
+            String msg = "hello, world";
+            channel.write(ByteBuffer.wrap(msg.getBytes()), 0);
+            channel.force(true);
+            assertTrue("Message should be written to the file channel.", channel.size() == msg.length());
+
+            ByteBuffer perfectBuffer = ByteBuffer.allocate(msg.length());
+            ByteBuffer smallBuffer = ByteBuffer.allocate(2);
+            ByteBuffer largeBuffer = ByteBuffer.allocate(msg.length() + 1);
+            // Scenario 1: test single read
+            Utils.readFully(channel, perfectBuffer, 0);
+            assertTrue("Buffer should be filled up.", !perfectBuffer.hasRemaining());
+            // Scenario 2: test multiple reads
+            Utils.readFully(channel, smallBuffer, 0);
+            assertTrue("Buffer should be filled up.", !smallBuffer.hasRemaining());
+            try {
+                // Scenario 3: test end of stream is reached before buffer is filled up
+                Utils.readFully(channel, largeBuffer, 0);
+                fail("Expected IOException to be raised");
+            } catch (IOException e) {
+                // expected
+            }
+        } finally {
+            channel.close();
+            raf.close();
         }
     }
 

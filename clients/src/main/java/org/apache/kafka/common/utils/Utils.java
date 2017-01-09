@@ -789,7 +789,7 @@ public class Utils {
      * @param position The file position at which the transfer is to begin; must be non-negative
      *
      * @throws IllegalArgumentException If position is negative
-     * @throws IOException If an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
+     * @throws IOException If reaching EOF or an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
      */
     public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
         if (position < 0) {
@@ -801,5 +801,9 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+        if (bytesRead == -1) {
+            throw new IOException(String.format("Reached EOF before filling up the buffer. Current file channel position = %d, buffer remaining = %d",
+                            currentPosition, destinationBuffer.remaining()));
+        }
     }
 }
