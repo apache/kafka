@@ -672,7 +672,7 @@ public class JsonConverterTest {
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
         assertTrue(payload.isTextual());
-        assertEquals("00000000-0000-0000-0000-000000000000",payload.asText());
+        assertEquals("00000000-0000-0000-0000-000000000000", payload.asText());
     }
 
     @Test
