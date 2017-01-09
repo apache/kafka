@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Map;
@@ -26,6 +27,7 @@ import java.util.Map;
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
  */
+@InterfaceStability.Unstable
 public interface StreamsMetrics {
 
     /**
@@ -72,6 +74,22 @@ public interface StreamsMetrics {
      * @param value throughput value.
      */
     void recordThroughput(Sensor sensor, long value);
+
+
+    /**
+     * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordLevel, String...)}
+     * or {@link #addLatencySensor(String, String, String, Sensor.RecordLevel, String...)} to ensure metric name well-formedness and conformity with the rest
+     * of the streams code base.
+     * @param scopeName Name of the scope, could be the type of the state store, etc.
+     * @param entityName Name of the entity, could be the name of the state store instance, etc.
+     * @param recordLevel The recording level (e.g., INFO or DEBUG) for this sensor.
+     * @param operationName Name of the operation, could be get / put / delete / etc.
+     */
+    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel);
+
+    /**
+     * Same as previous constructor {@link #sensor(String, String, String, Sensor.RecordLevel, Sensor...)} sensor}, but takes a set of parents as well.*/
+    Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents);
 
     /**
      * Remove a sensor with the given name.

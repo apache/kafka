@@ -81,6 +81,16 @@ public class MeteredSegmentedBytesStoreTest {
                 metrics.removeSensor(name);
             }
 
+            @Override
+            public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
+                return metrics.sensor(operationName);
+            }
+
+            @Override
+            public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
+                return metrics.sensor(operationName);
+            }
+
         };
 
         final MockProcessorContext context = new MockProcessorContext(null,

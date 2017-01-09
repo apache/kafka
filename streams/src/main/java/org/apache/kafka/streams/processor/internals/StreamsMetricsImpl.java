@@ -54,6 +54,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
+    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel) {
+        return metrics.sensor(sensorName(operationName, entityName), recordLevel);
+    }
+
+    @Override
+    public Sensor sensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, Sensor... parents) {
+        return metrics.sensor(sensorName(operationName, entityName), recordLevel, parents);
+    }
+
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
