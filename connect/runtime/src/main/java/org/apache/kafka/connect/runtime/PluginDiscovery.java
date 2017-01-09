@@ -32,10 +32,10 @@ import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -76,7 +76,7 @@ public class PluginDiscovery {
         final Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
         connectorClasses.removeAll(CONNECTOR_EXCLUDES);
 
-        final List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
+        final List<ConnectorPluginInfo> connectorPlugins = new ArrayList<>(connectorClasses.size());
         for (Class<? extends Connector> connectorClass : connectorClasses) {
             if (isConcrete(connectorClass)) {
                 connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
@@ -97,7 +97,7 @@ public class PluginDiscovery {
         final Set<Class<? extends Transformation>> transformationClasses = reflections.getSubTypesOf(Transformation.class);
         transformationClasses.removeAll(TRANSFORMATION_EXCLUDES);
 
-        final List<Class<? extends Transformation>> transformationPlugins = new LinkedList<>();
+        final List<Class<? extends Transformation>> transformationPlugins = new ArrayList<>(transformationClasses.size());
         for (Class<? extends Transformation> transformationClass : transformationClasses) {
             if (isConcrete(transformationClass)) {
                 transformationPlugins.add(transformationClass);
