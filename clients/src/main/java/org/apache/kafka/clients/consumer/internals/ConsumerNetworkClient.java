@@ -337,7 +337,7 @@ public class ConsumerNetworkClient implements Closeable {
                 for (ClientRequest request : requestEntry.getValue()) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     handler.onComplete(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                            request.createdTimeMs(), now, true, false, null));
+                            request.createdTimeMs(), now, true, null, null));
                 }
             }
         }

@@ -559,16 +559,6 @@ public class Fetcher<K, V> {
                         public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
                             synchronized (listOffsetRequestsFuture) {
                                 for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry: value.entrySet()) {
-                                    if (entry.getValue() != null) {
-                                        long timestamp = entry.getValue().timestamp();
-                                        if (requireTimestamps && (timestamp < 0)) {
-                                            listOffsetRequestsFuture.raise(
-                                                    new ObsoleteBrokerException("When attempting to list offsets for " +
-                                                            entry.getKey() + ", an obsolete ListOffsetsV0 response did not " +
-                                                            "provide the timestamp information that we require."));
-                                            return;
-                                        }
-                                    }
                                     fetchedTimestampOffsets.put(entry.getKey(), entry.getValue());
                                 }
                                 if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone())
@@ -613,6 +603,10 @@ public class Fetcher<K, V> {
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
+                        if (response.versionMismatch() != null) {
+                            future.raise(response.versionMismatch());
+                            return;
+                        }
                         ListOffsetResponse lor = (ListOffsetResponse) response.responseBody();
                         log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                         handleListOffsetResponse(timestampsToSearch, lor, future);

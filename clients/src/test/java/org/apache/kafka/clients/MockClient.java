@@ -128,7 +128,7 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
                 responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                        request.createdTimeMs(), now, true, false, null));
+                        request.createdTimeMs(), now, true, null, null));
                 iter.remove();
             }
         }
@@ -148,7 +148,7 @@ public class MockClient implements KafkaClient {
                 throw new IllegalStateException("Next in line response did not match expected request");
 
             ClientResponse resp = new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, false, futureResp.responseBody);
+                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
@@ -188,7 +188,7 @@ public class MockClient implements KafkaClient {
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
         responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                request.createdTimeMs(), time.milliseconds(), disconnected, false, response));
+                request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
@@ -202,7 +202,7 @@ public class MockClient implements KafkaClient {
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
                 responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                        request.createdTimeMs(), time.milliseconds(), disconnected, false, response));
+                        request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;
             }
         }
