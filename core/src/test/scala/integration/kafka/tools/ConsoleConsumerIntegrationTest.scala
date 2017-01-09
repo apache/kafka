@@ -5,7 +5,6 @@ import java.util.Properties
 import kafka.consumer.{OldConsumer, Whitelist}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.tools.ConsoleConsumer
 import kafka.utils.{TestUtils, ZkUtils}
 import org.junit.Assert.assertTrue
 import org.junit.Test
