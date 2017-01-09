@@ -90,4 +90,25 @@ public class InsertInValueTest {
         assertSame(transformedRecord.valueSchema(), transformedRecord2.valueSchema());
     }
 
+    @Test
+    public void schemalessInsertConfiguredFields() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic", "topic_field!");
+        props.put("partition", "partition_field");
+        props.put("timestamp", "timestamp_field?");
+
+        final InsertInValue<SourceRecord> xform = new InsertInValue<>();
+        xform.configure(props);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, Collections.singletonMap("magic", 42L));
+
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(42L, ((Map) transformedRecord.value()).get("magic"));
+        assertEquals("test", ((Map) transformedRecord.value()).get("topic_field"));
+        assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
+        assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
+    }
+
 }

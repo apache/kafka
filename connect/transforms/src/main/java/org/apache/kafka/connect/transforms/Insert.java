@@ -30,6 +30,7 @@ import org.apache.kafka.connect.transforms.util.SchemaUpdateCache;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
@@ -104,12 +105,42 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         final Schema schema = operatingSchema(record);
         final Object value = operatingValue(record);
 
-        if (schema == null)
-            throw new DataException("Schemaless mode not supported by " + getClass().getName());
+        if (value == null)
+            throw new DataException("null value");
 
-        if (schema.type() != Schema.Type.STRUCT)
-            throw new DataException("Can only operate on Struct types: " + getClass().getName());
+        if (schema == null) {
+            if (!(value instanceof Map))
+                throw new DataException("Can only operate on Map value in schemaless mode: " + value.getClass().getName());
+            return applySchemaless(record, (Map<String, Object>) value);
+        } else {
+            if (schema.type() != Schema.Type.STRUCT)
+                throw new DataException("Can only operate on Struct types: " + value.getClass().getName());
+            return applyWithSchema(record, schema, (Struct) value);
+        }
+    }
 
+    private R applySchemaless(R record, Map<String, Object> value) {
+        final Map<String, Object> updatedValue = new HashMap<>(value);
+
+        if (topicField != null) {
+            updatedValue.put(topicField.name, record.topic());
+        }
+        if (partitionField != null && record.kafkaPartition() != null) {
+            updatedValue.put(partitionField.name, record.kafkaPartition());
+        }
+        if (offsetField != null) {
+            if (!(record instanceof SinkRecord))
+                throw new DataException("Offset insertion is only supported for sink connectors, record is of type: " + record.getClass());
+            updatedValue.put(offsetField.name, ((SinkRecord) record).kafkaOffset());
+        }
+        if (timestampField != null && record.timestamp() != null) {
+            updatedValue.put(timestampField.name, record.timestamp());
+        }
+
+        return newRecord(record, null, updatedValue);
+    }
+
+    private R applyWithSchema(R record, Schema schema, Struct value) {
         Schema updatedSchema = schemaUpdateCache.get(schema);
         if (updatedSchema == null) {
             updatedSchema = makeUpdatedSchema(schema);
@@ -118,7 +149,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
         final Struct updatedValue = new Struct(updatedSchema);
 
-        copyFields((Struct) value, updatedValue);
+        copyFields(value, updatedValue);
 
         insertFields(record, updatedValue);
 
