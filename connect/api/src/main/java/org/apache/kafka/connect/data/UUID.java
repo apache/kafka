@@ -53,7 +53,7 @@ public class UUID {
         try {
             return java.util.UUID.fromString(value);
         } catch (IllegalArgumentException e) {
-            throw new DataException("Requested conversion to UUID object but %s does not conform with UUID string representation".format(value));
+            throw new DataException(String.format("Requested conversion to UUID object but %s does not conform with UUID string representation",value));
         }
     }
 }
