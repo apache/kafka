@@ -65,6 +65,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<? super K, ? super V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 

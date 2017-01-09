@@ -63,6 +63,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(reducer, keyValueStore(keySerde, valSerde, storeName));
     }
 
@@ -83,6 +85,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows,
                                                             final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, storeName));
     }
 
@@ -106,6 +110,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                       final Aggregator<? super K, ? super V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
@@ -129,6 +135,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, storeName));
     }
 
@@ -151,6 +159,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public KTable<K, Long> count(final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(keyValueStore(keySerde, Serdes.Long(), storeName));
     }
 
@@ -172,6 +182,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                               final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(windows, windowedStore(keySerde, Serdes.Long(), windows, storeName));
     }
 
