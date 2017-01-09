@@ -51,11 +51,11 @@ public class CachingWindowStoreTest {
     private ThreadCache cache;
     private String topic;
     private static final long DEFAULT_TIMESTAMP = 10L;
-    private WindowStoreKeySchema keySchema;
+    private WindowKeySchema keySchema;
 
     @Before
     public void setUp() throws Exception {
-        keySchema = new WindowStoreKeySchema();
+        keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(underlying,

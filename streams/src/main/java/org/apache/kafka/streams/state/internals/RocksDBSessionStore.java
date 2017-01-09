@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -32,9 +33,9 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
-    private final SegmentedBytesStore bytesStore;
-    private StateSerdes<K, AGG> serdes;
+    protected final SegmentedBytesStore bytesStore;
 
+    protected StateSerdes<K, AGG> serdes;
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore,
                         final Serde<K> keySerde,
@@ -44,14 +45,43 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         this.aggSerde = aggSerde;
     }
 
+    // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
+    private static class RocksDBSessionBytesStore extends RocksDBSessionStore<Bytes, byte[]> {
+        RocksDBSessionBytesStore(final SegmentedBytesStore inner) {
+            super(inner, Serdes.Bytes(), Serdes.ByteArray());
+        }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
-        return new SessionStoreIterator(bytesIterator, serdes);
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, earliestSessionEndTime, latestSessionStartTime);
+            return new SerializedSessionStoreIterator<>(bytesIterator, serdes);
+        }
+
+        @Override
+        public void remove(final Windowed<Bytes> key) {
+            bytesStore.remove(SessionKeySerde.bytesToBinary(key));
+        }
+
+        @Override
+        public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+            bytesStore.put(SessionKeySerde.bytesToBinary(sessionKey), aggregate);
+        }
     }
 
+    static RocksDBSessionStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner) {
+        return new RocksDBSessionBytesStore(inner);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
+        return new SerializedSessionStoreIterator<>(bytesIterator, serdes);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
+        return findSessions(key, 0, Long.MAX_VALUE);
+    }
 
     @Override
     public void remove(final Windowed<K> key) {
@@ -96,48 +126,5 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
     @Override
     public boolean isOpen() {
         return bytesStore.isOpen();
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-        return findSessionsToMerge(key, 0, Long.MAX_VALUE);
-    }
-
-    private static class SessionStoreIterator<K, AGG> implements KeyValueIterator<Windowed<K>, AGG> {
-
-        private final KeyValueIterator<Bytes, byte[]> bytesIterator;
-        private final StateSerdes<K, AGG> serdes;
-
-        SessionStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator, final StateSerdes<K, AGG> serdes) {
-            this.bytesIterator = bytesIterator;
-            this.serdes = serdes;
-        }
-
-        @Override
-        public void close() {
-            bytesIterator.close();
-        }
-
-        @Override
-        public Windowed<K> peekNextKey() {
-            final Bytes bytes = bytesIterator.peekNextKey();
-            return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer());
-        }
-
-        @Override
-        public boolean hasNext() {
-            return bytesIterator.hasNext();
-        }
-
-        @Override
-        public KeyValue<Windowed<K>, AGG> next() {
-            final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer()), serdes.valueFrom(next.value));
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove not supported by SessionStoreIterator");
-        }
     }
 }

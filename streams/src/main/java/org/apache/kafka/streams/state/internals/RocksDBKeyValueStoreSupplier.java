@@ -33,30 +33,59 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
+public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore<K, V>> {
 
-    private final boolean enableCaching;
+    private final boolean cached;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
-        this(name, keySerde, valueSerde, null, logged, logConfig, enableCaching);
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
+        this(name, keySerde, valueSerde, null, logged, logConfig, cached);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
-        this.enableCaching = enableCaching;
+        this.cached = cached;
     }
 
-    public KeyValueStore get() {
-        if (!enableCaching) {
-            RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
-            return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
+    @Override
+    public KeyValueStore<K, V> get() {
+        final String metricsScope = "rocksdb-state";
+
+        KeyValueStore<K, V> store;
+
+        if (cached && logged) {
+            KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+
+            // logging wrapper
+            inner = ChangeLoggingKeyValueStore.bytesStore(inner, name);
+
+            // metering wrapper, currently enforced
+            inner = new MeteredKeyValueStore<>(inner, metricsScope, time);
+
+            // caching wrapper
+            store = new CachingKeyValueStore<>(inner, keySerde, valueSerde);
+        } else if (cached) {
+            KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+
+            // metering wrapper, currently enforced
+            inner = new MeteredKeyValueStore<>(inner, metricsScope, time);
+
+            // caching wrapper
+            store = new CachingKeyValueStore<>(inner, keySerde, valueSerde);
+        } else if (logged) {
+            KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+
+            // logging wrapper
+            store = new ChangeLoggingKeyValueStore<>(inner, name, keySerde, valueSerde);
+
+            // metering wrapper, currently enforced
+            store = new MeteredKeyValueStore<>(store, metricsScope, time);
+        } else {
+            store = new RocksDBStore<>(name, keySerde, valueSerde);
+
+            // metering wrapper, currently enforced
+            store = new MeteredKeyValueStore<>(store, metricsScope, time);
         }
 
-        final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
-        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
-                "rocksdb-state",
-                time),
-                keySerde,
-                valueSerde);
+        return store;
     }
 }

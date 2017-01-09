@@ -30,7 +30,6 @@ class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
     private final SegmentedBytesStore bytesStore;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
-
     ChangeLoggingSegmentedBytesStore(final SegmentedBytesStore bytesStore) {
         this.bytesStore = bytesStore;
     }
@@ -91,5 +90,4 @@ class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
     public boolean isOpen() {
         return bytesStore.isOpen();
     }
-
 }

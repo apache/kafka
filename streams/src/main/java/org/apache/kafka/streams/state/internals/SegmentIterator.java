@@ -27,10 +27,8 @@ import java.util.NoSuchElementException;
 
 /**
  * Iterate over multiple Segments
- * @param <K>
- * @param <V>
  */
-class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
+class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
 
     private final Iterator<Segment> segments;
     private final HasNextCondition hasNextCondition;
@@ -39,10 +37,12 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     private KeyValueIterator<Bytes, byte[]> currentIterator;
     private KeyValueStore<Bytes, byte[]> currentSegment;
 
-    SegmentIterator(final Iterator<Segment> segments,
+    SegmentIterator(final String name,
+                    final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
                     final Bytes to) {
+        super(name);
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;
@@ -50,6 +50,8 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     }
 
     public void close() {
+        super.close();
+
         if (currentIterator != null) {
             currentIterator.close();
             currentIterator = null;
@@ -66,6 +68,8 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
     @SuppressWarnings("unchecked")
     public boolean hasNext() {
+        validateIsOpen();
+
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
                 && segments.hasNext()) {
@@ -86,9 +90,4 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         }
         return currentIterator.next();
     }
-
-    public void remove() {
-        throw new UnsupportedOperationException("remove not supported");
-    }
-
 }

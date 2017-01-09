@@ -30,9 +30,9 @@ import java.util.Iterator;
  * Users need to call its {@code close} method explicitly upon completeness to release resources,
  * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
  *
- * @param <E> Type of values
+ * @param <V> Type of values
  */
-public interface WindowStoreIterator<E> extends Iterator<KeyValue<Long, E>>, Closeable {
+public interface WindowStoreIterator<V> extends KeyValueIterator<Long, V>, Closeable {
 
     @Override
     void close();

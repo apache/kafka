@@ -18,8 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Map;
 
@@ -36,12 +38,12 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
 
     private static final int NUM_SEGMENTS = 3;
     private final long retentionPeriod;
-    private final boolean enableCaching;
+    private final boolean cached;
 
-    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, Time.SYSTEM, logged, logConfig);
         this.retentionPeriod = retentionPeriod;
-        this.enableCaching = enableCaching;
+        this.cached = cached;
     }
 
     public String name() {
@@ -49,17 +51,55 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     }
 
     public SessionStore<K, V> get() {
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
-                                                                                     retentionPeriod,
-                                                                                     NUM_SEGMENTS,
-                                                                                     new SessionKeySchema());
-        final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
-                                                                                          : bytesStore, "rocksdb-session-store", time);
-        if (enableCaching) {
-            return new CachingSessionStore<>(metered, keySerde, valueSerde);
-        }
-        return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
+        final String metricsScope = "rocksdb-session";
 
+        SessionStore<K, V> store;
+
+        // for session stores, the key schema needs to be used in both
+        // underlying segmented bytes store as well as in caching
+        SessionKeySchema keySchema = new SessionKeySchema();
+
+        SegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name, retentionPeriod, NUM_SEGMENTS, keySchema);
+
+        if (cached && logged) {
+            // logging wrapper
+            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
+
+            // metering wrapper, currently enforced
+            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+
+            // sessioned
+            SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
+
+            // caching wrapper
+            store = new CachingSessionStore<>(bytes, keySerde, valueSerde, keySchema);
+        } else if (cached) {
+            // metering wrapper, currently enforced
+            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+
+            // windowed
+            SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
+
+            // caching wrapper
+            store = new CachingSessionStore<>(bytes, keySerde, valueSerde, keySchema);
+        } else if (logged) {
+            // logging wrapper
+            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
+
+            // metering wrapper, currently enforced
+            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+
+            // windowed
+            store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);
+        } else {
+            // metering wrapper, currently enforced
+            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+
+            // windowed
+            store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);
+        }
+
+        return store;
     }
 
     public long retentionPeriod() {

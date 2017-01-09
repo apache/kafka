@@ -171,7 +171,5 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         public Bytes peekNextKey() {
             return iter.peekNextKey();
         }
-
     }
-
 }

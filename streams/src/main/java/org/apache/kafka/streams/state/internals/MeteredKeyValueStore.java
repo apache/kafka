@@ -29,16 +29,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.List;
 
 /**
- * Metered KeyValueStore wrapper is used for recording operation metrics, and hence its
+ * Metered {@link KeyValueStore} wrapper is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
  *
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> {
 
-    protected final KeyValueStore<K, V> inner;
-    protected final String metricScope;
+    private final KeyValueStore<K, V> innerKV;
+    private final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
@@ -53,15 +53,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private StreamsMetrics metrics;
 
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, String metricScope, Time time) {
-        this.inner = inner;
+    MeteredKeyValueStore(final KeyValueStore<K, V> inner, final String metricScope, final Time time) {
+        super(inner);
+        this.innerKV = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : Time.SYSTEM;
-    }
-
-    @Override
-    public String name() {
-        return inner.name();
     }
 
     @Override
@@ -81,27 +77,17 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
         try {
-            inner.init(context, root);
+            innerKV.init(context, root);
         } finally {
             this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public boolean persistent() {
-        return inner.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return inner.isOpen();
-    }
-
-    @Override
     public V get(K key) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.get(key);
+            return this.innerKV.get(key);
         } finally {
             this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
         }
@@ -111,7 +97,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public void put(K key, V value) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.put(key, value);
+            this.innerKV.put(key, value);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
@@ -121,7 +107,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public V putIfAbsent(K key, V value) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.putIfAbsent(key, value);
+            return this.innerKV.putIfAbsent(key, value);
         } finally {
             this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
         }
@@ -131,7 +117,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public void putAll(List<KeyValue<K, V>> entries) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.putAll(entries);
+            this.innerKV.putAll(entries);
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
@@ -141,7 +127,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public V delete(K key) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.delete(key);
+            return this.innerKV.delete(key);
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }
@@ -149,29 +135,19 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        return new MeteredKeyValueIterator<>(this.inner.range(from, to), this.rangeTime);
+        return new MeteredKeyValueIterator<>(this.innerKV.range(from, to), this.rangeTime);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator<>(this.inner.all(), this.allTime);
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return this.inner.approximateNumEntries();
-    }
-
-    @Override
-    public void close() {
-        inner.close();
+        return new MeteredKeyValueIterator<>(this.innerKV.all(), this.allTime);
     }
 
     @Override
     public void flush() {
         long startNs = time.nanoseconds();
         try {
-            this.inner.flush();
+            this.innerKV.flush();
         } finally {
             this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }
@@ -183,7 +159,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         private final Sensor sensor;
         private final long startNs;
 
-        public MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
+        MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();

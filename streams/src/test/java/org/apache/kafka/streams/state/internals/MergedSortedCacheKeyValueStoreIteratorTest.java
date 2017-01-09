@@ -46,13 +46,13 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (int i = 0; i < bytes.length; i += 2) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i + 1], new LRUCacheEntry(bytes[i + 1]));
+            cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
         }
 
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store",  store.range(from, to));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from.get(), to.get());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
         byte[][] values = new byte[8][];
@@ -70,7 +70,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     public void shouldSkipLargerDeletedCacheValue() throws Exception {
         final byte[][] bytes = {{0}, {1}};
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
-        cache.put(namespace, bytes[1], new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
         assertArrayEquals(bytes[0], iterator.next().key);
         assertFalse(iterator.hasNext());
@@ -79,7 +79,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldSkipSmallerDeletedCachedValue() throws Exception {
         final byte[][] bytes = {{0}, {1}};
-        cache.put(namespace, bytes[0], new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
         assertArrayEquals(bytes[1], iterator.next().key);
@@ -89,7 +89,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldIgnoreIfDeletedInCacheButExistsInStore() throws Exception {
         final byte[][] bytes = {{0}};
-        cache.put(namespace, bytes[0], new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
         assertFalse(iterator.hasNext());
@@ -100,7 +100,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (int i = 0; i < bytes.length; i++) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i], new LRUCacheEntry(null));
+            cache.put(namespace, Bytes.wrap(bytes[i]), new LRUCacheEntry(null));
         }
         assertFalse(createIterator().hasNext());
     }
@@ -109,7 +109,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (int i = 0; i < bytes.length; i++) {
-            cache.put(namespace, bytes[i], new LRUCacheEntry(null));
+            cache.put(namespace, Bytes.wrap(bytes[i]), new LRUCacheEntry(null));
         }
         assertFalse(createIterator().hasNext());
     }
@@ -119,13 +119,13 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (int i = 0; i < bytes.length; i++) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i], new LRUCacheEntry(bytes[i]));
+            cache.put(namespace, Bytes.wrap(bytes[i]), new LRUCacheEntry(bytes[i]));
         }
-        cache.put(namespace, bytes[1], new LRUCacheEntry(null));
-        cache.put(namespace, bytes[2], new LRUCacheEntry(null));
-        cache.put(namespace, bytes[3], new LRUCacheEntry(null));
-        cache.put(namespace, bytes[8], new LRUCacheEntry(null));
-        cache.put(namespace, bytes[11], new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[2]), new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[3]), new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[8]), new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(bytes[11]), new LRUCacheEntry(null));
 
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
         assertArrayEquals(bytes[0], iterator.next().key);
@@ -147,13 +147,13 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final String namespace = "one";
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i + 1], new LRUCacheEntry(bytes[i + 1]));
+            cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
         }
 
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
         final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from.get(), to.get());
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator =
                 new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator,

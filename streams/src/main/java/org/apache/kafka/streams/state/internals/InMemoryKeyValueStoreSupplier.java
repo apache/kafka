@@ -47,7 +47,6 @@ import java.util.TreeMap;
  */
 public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
-
     public InMemoryKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
         this(name, keySerde, valueSerde, null, logged, logConfig);
     }
@@ -203,14 +202,12 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
             }
 
             @Override
-            public void close() {
-            }
+            public void close() {}
 
             @Override
             public K peekNextKey() {
-                throw new UnsupportedOperationException("peekNextKey not supported on MemoryStoreIterator");
+                throw new UnsupportedOperationException("peekNextKey() not supported on MemoryStoreIterator");
             }
-
         }
     }
 }

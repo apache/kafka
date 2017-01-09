@@ -58,7 +58,7 @@ public class MergedSortedCacheWindowStoreIteratorTest {
 
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, binaryFrom, binaryTo);
 
-        final MergedSortedCachedWindowStoreIterator<Bytes, byte[]> iterator = new MergedSortedCachedWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()));
+        final MergedSortedCacheWindowStoreIterator<Bytes, byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()));
         int index = 0;
         while (iterator.hasNext()) {
             final KeyValue<Long, byte[]> next = iterator.next();

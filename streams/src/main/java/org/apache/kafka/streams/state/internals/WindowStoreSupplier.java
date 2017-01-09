@@ -19,6 +19,13 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
+/**
+ * A windowed state store supplier that extends the {@link StateStoreSupplier} interface.
+ *
+ * @param <T> State store type
+ */
 public interface WindowStoreSupplier<T extends StateStore> extends StateStoreSupplier<T> {
+
+    // window retention period in milli-second
     long retentionPeriod();
 }

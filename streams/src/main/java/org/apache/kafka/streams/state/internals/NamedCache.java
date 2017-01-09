@@ -142,7 +142,7 @@ class NamedCache {
 
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
-        if (!value.isDirty && dirtyKeys.contains(key)) {
+        if (!value.isDirty() && dirtyKeys.contains(key)) {
             throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
                                                                   "into NamedCache [%s] when it already contains " +
                                                                   "a dirty entry for the same key",
@@ -296,10 +296,6 @@ class NamedCache {
 
     synchronized LRUNode tail() {
         return tail;
-    }
-
-    synchronized long dirtySize() {
-        return dirtyKeys.size();
     }
 
     synchronized void close() {

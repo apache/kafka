@@ -17,80 +17,75 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.ThreadCache.MemoryLRUCacheBytesIterator;
 
 import java.util.List;
 
-class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
+class CachingWindowStore<K, V> extends WrapperWindowStore.AbstractWindowStore<K, V> implements CachedStateStore<Windowed<K>, V> {
 
-    private final SegmentedBytesStore underlying;
+    private final WindowStore<Bytes, byte[]> innerWindowBytes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private CacheFlushListener<Windowed<K>, V> flushListener;
-    private final long windowSize;
+
     private String name;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
+    private final long windowSize;
+    private CacheFlushListener<Windowed<K>, V> flushListener;
 
-    CachingWindowStore(final SegmentedBytesStore underlying,
+    CachingWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde,
                        final long windowSize) {
-        this.underlying = underlying;
+        super(inner);
+        this.innerWindowBytes = inner;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.windowSize = windowSize;
     }
 
-    @Override
-    public String name() {
-        return underlying.name();
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        underlying.init(context, root);
-        initInternal(context);
-    }
+        innerWindowBytes.init(context, root);
 
-    @SuppressWarnings("unchecked")
-    void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
-        this.serdes = new StateSerdes<>(underlying.name(),
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
-        this.name = context.taskId() + "-" + underlying.name();
+        this.serdes = new StateSerdes<>(innerWindowBytes.name(),
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        this.name = context.taskId() + "-" + innerWindowBytes.name();
         this.cache = this.context.getCache();
+
+        // set cache flush listener
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    final byte[] binaryKey = entry.key().get();
-                    final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryKey);
-                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
-                    final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryKey, serdes),
-                                                                   new TimeWindow(timestamp, timestamp + windowSize));
-                    maybeForward(entry, Bytes.wrap(binaryKey), windowedKey, (InternalProcessorContext) context);
-                    underlying.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, 0, WindowStoreUtils.INNER_SERDES)), entry.newValue());
+                    final byte[] binaryComboKey = entry.key().get();
+                    final Bytes comboKey = Bytes.wrap(binaryComboKey);
+                    final K key = WindowStoreUtils.keyFromBinaryKey(binaryComboKey, serdes);
+                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryComboKey);
+                    final Windowed<K> windowedKey = new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize));
+
+                    maybeForward(entry, comboKey, windowedKey, (InternalProcessorContext) context);
+
+                    innerWindowBytes.put(comboKey, entry.newValue(), timestamp);
                 }
             }
         });
-
     }
 
     private void maybeForward(final ThreadCache.DirtyEntry entry,
@@ -101,12 +96,10 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
             final RecordContext current = context.recordContext();
             context.setRecordContext(entry.recordContext());
             try {
-                flushListener.apply(windowedKey,
-                                    serdes.valueFrom(entry.newValue()), fetchPrevious(key));
+                flushListener.apply(windowedKey, serdes.valueFrom(entry.newValue()), serdes.valueFrom(fetchPrevious(key, windowedKey.window().start())));
             } finally {
                 context.setRecordContext(current);
             }
-
         }
     }
 
@@ -117,24 +110,14 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
     @Override
     public synchronized void flush() {
         cache.flush(name);
-        underlying.flush();
+        innerWindowBytes.flush();
     }
 
     @Override
     public void close() {
         flush();
-        underlying.close();
         cache.close(name);
-    }
-
-    @Override
-    public boolean persistent() {
-        return underlying.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return underlying.isOpen();
+        innerWindowBytes.close();
     }
 
     @Override
@@ -142,11 +125,13 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
         put(key, value, context.timestamp());
     }
 
-
     @Override
     public synchronized void put(final K key, final V value, final long timestamp) {
+        // since this function may not access the underlying inner store, we need to validate
+        // if store is open outside as well.
         validateStoreOpen();
-        final byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes);
+
+        final Bytes binaryKey = Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes));
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
         cache.put(name, binaryKey, entry);
@@ -154,27 +139,26 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
 
     @Override
     public synchronized WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        // since this function may not access the underlying inner store, we need to validate
+        // if store is open outside as well.
         validateStoreOpen();
-        byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
-        byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes);
 
-        final KeyValueIterator<Bytes, byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
-        return new MergedSortedCachedWindowStoreIterator<>(cacheIterator, new DelegatingPeekingKeyValueIterator<>(name, underlyingIterator), serdes);
+        byte[] binaryKey = serdes.rawKey(key);
+        Bytes binaryFrom = Bytes.wrap(WindowStoreUtils.toBinaryKey(binaryKey, timeFrom, 0));
+        Bytes binaryTo = Bytes.wrap(WindowStoreUtils.toBinaryKey(binaryKey, timeTo, 0));
+
+        final WindowStoreIterator<byte[]> storeIterator = innerWindowBytes.fetch(Bytes.wrap(binaryKey), timeFrom, timeTo);
+        final MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
+        return new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator,
+                                                          new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
     }
 
+    private byte[] fetchPrevious(final Bytes binaryKey, long timestamp) {
+        final WindowStoreIterator<byte[]> iter = innerWindowBytes.fetch(binaryKey, timestamp, timestamp);
 
-    private V fetchPrevious(final Bytes key) {
-        final byte[] result = underlying.get(key);
-        if (result == null) {
+        if (!iter.hasNext())
             return null;
-        }
-        return serdes.valueFrom(result);
-    }
-
-    private void validateStoreOpen() {
-        if (!isOpen()) {
-            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
-        }
+        else
+            return iter.next().value;
     }
 }
