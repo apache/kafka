@@ -95,17 +95,9 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData{").
-                append("errorCode: ").append((int) errorCode);
-            if (timestamp == null) {
-                bld.append(", timestamp: null");
-            } else {
-                bld.append(", timestamp: ").append(timestamp);
-            }
-            if (offset == null) {
-                bld.append(", offset: null");
-            } else {
-                bld.append(", offset: ").append(offset);
-            }
+                append("errorCode: ").append((int) errorCode).
+                append(", timestamp: ").append(timestamp).
+                append(", offset: ").append(offset);
             if (offsets == null) {
                 bld.append(", offsets: null");
             } else {
