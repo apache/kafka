@@ -42,5 +42,5 @@ public interface ValueMapper<V, VR> {
      * @param value the value to be mapped
      * @return the new value
      */
-    VR apply(V value);
+    VR apply(final V value);
 }

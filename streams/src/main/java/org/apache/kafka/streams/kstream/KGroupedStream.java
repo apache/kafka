@@ -263,7 +263,7 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -303,7 +303,8 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
+     * max.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -349,7 +350,7 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, Windows, String)} can be used to compute aggregate functions like sum, min, or max.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -397,7 +398,8 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, Windows, StateStoreSupplier)} can be used to compute aggregate functions like sum,
+     * min, or max.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -445,7 +447,8 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, SessionWindows, String)} can be used to compute aggregate functions like sum, min,
+     * or max.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -495,7 +498,8 @@ public interface KGroupedStream<K, V> {
      * aggregate and the record's value.
      * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
      * value as-is.
-     * Thus, {@link #reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * Thus, {@code reduce(Reducer, SessionWindows, StateStoreSupplier)} can be used to compute aggregate functions like
+     * sum, min, or max.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -547,13 +551,13 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, Serde, String)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count(String)}) TODO add more examples.
+     * Thus, {@code aggregate(Initializer, Aggregator, Serde, String)} can be used to compute aggregate functions like
+     * count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // some aggregation on value type double TODO update example
+     * KafkaStreams streams = ... // some aggregation on value type double
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -595,14 +599,14 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, StateStoreSupplier)} can be used to compute aggregate functions
-     * like count (c.f. {@link #count(String)}) TODO add more examples.
+     * Thus, {@code aggregate(Initializer, Aggregator, StateStoreSupplier)} can be used to compute aggregate functions
+     * like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
-     * KafkaStreams streams = ... // some aggregation on value type double TODO update example
+     * KafkaStreams streams = ... // some aggregation on value type double
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
@@ -646,13 +650,13 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)}) TODO add more examples.
+     * Thus, {@code aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
+     * functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // some windowed aggregation on value type double TODO update example
+     * KafkaStreams streams = ... // some windowed aggregation on value type double
      * ReadOnlyWindowStore<String,Long> localWindowStore = streams.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
      * String key = "some-key";
      * long fromTime = ...;
@@ -703,7 +707,7 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
+     * Thus, {@code aggregate(Initializer, Aggregator, Windows, StateStoreSupplier)} can be used to compute aggregate
      * functions like count (c.f. {@link #count(String)}) TODO add more examples.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
@@ -750,8 +754,8 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)})
+     * Thus, {@code aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute
+     * aggregate functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -800,8 +804,8 @@ public interface KGroupedStream<K, V> {
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
-     * Thus, {@link #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)})
+     * Thus, {@code #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, StateStoreSupplier)} can be used
+     * to compute aggregate functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
