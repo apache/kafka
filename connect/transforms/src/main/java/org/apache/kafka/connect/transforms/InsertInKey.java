@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Schema;
 
 /**
  * This transformation allows inserting configured attributes of the record metadata as fields in the record key.
+ * It also allows adding a static data field.
  * The record key is required to be of type {@link Schema.Type#STRUCT}.
  */
 public class InsertInKey<R extends ConnectRecord<R>> extends Insert<R> {

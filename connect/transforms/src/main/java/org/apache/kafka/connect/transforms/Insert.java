@@ -37,23 +37,29 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public enum Keys {
         ;
-        public static final String TOPIC = "topic";
-        public static final String PARTITION = "partition";
-        public static final String OFFSET = "offset";
-        public static final String TIMESTAMP = "timestamp";
+        public static final String TOPIC_FIELD = "topic.field";
+        public static final String PARTITION_FIELD = "partition.field";
+        public static final String OFFSET_FIELD = "offset.field";
+        public static final String TIMESTAMP_FIELD = "timestamp.field";
+        public static final String STATIC_FIELD = "static.field";
+        public static final String STATIC_VALUE = "static.value";
     }
 
     private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(Keys.TOPIC, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.TOPIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka topic.\n" + OPTIONALITY_DOC)
-            .define(Keys.PARTITION, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.PARTITION_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka partition.\n" + OPTIONALITY_DOC)
-            .define(Keys.OFFSET, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(Keys.OFFSET_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
-            .define(Keys.TIMESTAMP, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for record timestamp.\n" + OPTIONALITY_DOC);
+            .define(Keys.TIMESTAMP_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+                    "Field name for record timestamp.\n" + OPTIONALITY_DOC)
+            .define(Keys.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+                    "Field name for static data field.\n" + OPTIONALITY_DOC)
+            .define(Keys.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+                    "Static field value, if field name configured.");
 
     private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
 
@@ -84,15 +90,19 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     private InsertionSpec partitionField;
     private InsertionSpec offsetField;
     private InsertionSpec timestampField;
+    private InsertionSpec staticField;
+    private String staticValue;
     private boolean applicable;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        topicField = InsertionSpec.parse(config.getString(Keys.TOPIC));
-        partitionField = InsertionSpec.parse(config.getString(Keys.PARTITION));
-        offsetField = InsertionSpec.parse(config.getString(Keys.OFFSET));
-        timestampField = InsertionSpec.parse(config.getString(Keys.TIMESTAMP));
+        topicField = InsertionSpec.parse(config.getString(Keys.TOPIC_FIELD));
+        partitionField = InsertionSpec.parse(config.getString(Keys.PARTITION_FIELD));
+        offsetField = InsertionSpec.parse(config.getString(Keys.OFFSET_FIELD));
+        timestampField = InsertionSpec.parse(config.getString(Keys.TIMESTAMP_FIELD));
+        staticField = InsertionSpec.parse(config.getString(Keys.STATIC_FIELD));
+        staticValue = config.getString(Keys.STATIC_VALUE);
         applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
 
         schemaUpdateCache.init();
@@ -136,7 +146,9 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         if (timestampField != null && record.timestamp() != null) {
             updatedValue.put(timestampField.name, record.timestamp());
         }
-
+        if (staticField != null && staticValue != null) {
+            updatedValue.put(staticField.name, staticValue);
+        }
         return newRecord(record, null, updatedValue);
     }
 
@@ -184,6 +196,9 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         if (timestampField != null) {
             builder.field(timestampField.name, timestampField.optional ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA);
         }
+        if (staticField != null) {
+            builder.field(staticField.name, staticField.optional ? Schema.OPTIONAL_STRING_SCHEMA : Schema.STRING_SCHEMA);
+        }
 
         return builder.build();
     }
@@ -209,6 +224,9 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         }
         if (timestampField != null && record.timestamp() != null) {
             value.put(timestampField.name, new Date(record.timestamp()));
+        }
+        if (staticField != null && staticValue != null) {
+            value.put(staticField.name, staticValue);
         }
     }
 

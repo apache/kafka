@@ -35,18 +35,9 @@ import static org.junit.Assert.assertSame;
 public class InsertInValueTest {
 
     @Test(expected = DataException.class)
-    public void schemaRequired() {
-        final InsertInValue<SourceRecord> xform = new InsertInValue<>();
-        xform.configure(Collections.singletonMap("topic", "topic_field"));
-        xform.apply(new SourceRecord(null, null,
-                "", 0,
-                null, null));
-    }
-
-    @Test(expected = DataException.class)
     public void topLevelStructRequired() {
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
-        xform.configure(Collections.singletonMap("topic", "topic_field"));
+        xform.configure(Collections.singletonMap("topic.field", "topic_field"));
         xform.apply(new SourceRecord(null, null,
                 "", 0,
                 Schema.INT32_SCHEMA, 42));
@@ -55,9 +46,11 @@ public class InsertInValueTest {
     @Test
     public void copySchemaAndInsertConfiguredFields() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("topic", "topic_field!");
-        props.put("partition", "partition_field");
-        props.put("timestamp", "timestamp_field?");
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
 
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
         xform.configure(props);
@@ -84,6 +77,9 @@ public class InsertInValueTest {
         assertEquals(Timestamp.builder().optional().build(), transformedRecord.valueSchema().field("timestamp_field").schema());
         assertEquals(null, ((Struct) transformedRecord.value()).getInt64("timestamp_field"));
 
+        assertEquals(Schema.OPTIONAL_STRING_SCHEMA, transformedRecord.valueSchema().field("instance_id").schema());
+        assertEquals("my-instance-id", ((Struct) transformedRecord.value()).getString("instance_id"));
+
         // Exercise caching
         final SourceRecord transformedRecord2 = xform.apply(
                 new SourceRecord(null, null, "test", 1, simpleStructSchema, new Struct(simpleStructSchema)));
@@ -93,9 +89,11 @@ public class InsertInValueTest {
     @Test
     public void schemalessInsertConfiguredFields() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("topic", "topic_field!");
-        props.put("partition", "partition_field");
-        props.put("timestamp", "timestamp_field?");
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
 
         final InsertInValue<SourceRecord> xform = new InsertInValue<>();
         xform.configure(props);
@@ -109,6 +107,7 @@ public class InsertInValueTest {
         assertEquals("test", ((Map) transformedRecord.value()).get("topic_field"));
         assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
         assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
+        assertEquals("my-instance-id", ((Map) transformedRecord.value()).get("instance_id"));
     }
 
 }
