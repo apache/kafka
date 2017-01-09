@@ -33,6 +33,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see KGroupedStream#reduce(Reducer, Windows, String)
  * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
+ * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see Aggregator
  */
 @InterfaceStability.Unstable
@@ -45,5 +47,5 @@ public interface Reducer<V> {
      * @param value2 the second value for the aggregation
      * @return the aggregated value
      */
-    V apply(V value1, V value2);
+    V apply(final V value1, final V value2);
 }

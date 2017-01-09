@@ -43,5 +43,5 @@ public interface Predicate<K, V> {
      * @return {@code true} if the {@link org.apache.kafka.streams.KeyValue key-value pair} satisfies the
      * predicate&mdash;{@code false} otherwise
      */
-    boolean test(K key, V value);
+    boolean test(final K key, final V value);
 }
