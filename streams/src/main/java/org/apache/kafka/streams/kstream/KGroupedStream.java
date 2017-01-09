@@ -64,13 +64,14 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param storeName the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
      * (rolling) count (i.e., number of records) for each key
      */
@@ -133,6 +134,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -140,7 +142,7 @@ public interface KGroupedStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param windows   the specification of the aggregation {@link Windows}
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param storeName the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
      * the latest (rolling) count (i.e., number of records) for each key within a window
      */
@@ -205,7 +207,7 @@ public interface KGroupedStream<K, V> {
      *
      *
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
-     * @param storeName      the name of the state store created from this operation.
+     * @param storeName      the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values
      *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
@@ -277,6 +279,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -284,7 +287,7 @@ public interface KGroupedStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param storeName the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
      * (rolling) aggregate for each key
      */
@@ -365,6 +368,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -373,7 +377,7 @@ public interface KGroupedStream<K, V> {
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @param windows   the specification of the aggregation {@link Windows}
-     * @param storeName the name of the state store created from this operation
+     * @param storeName the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
@@ -459,6 +463,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -466,7 +471,7 @@ public interface KGroupedStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * @param reducer           the instance of {@link Reducer}
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
-     * @param storeName         the name of the state store created from this operation
+     * @param storeName         the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values
      *         that represent the latest (rolling) aggregate for each key within that window
@@ -509,6 +514,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -562,6 +568,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -572,7 +579,7 @@ public interface KGroupedStream<K, V> {
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param storeName     the name of the state store created from this operation
+     * @param storeName     the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
      * (rolling) aggregate for each key
@@ -663,6 +670,7 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
@@ -676,7 +684,7 @@ public interface KGroupedStream<K, V> {
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param <VR>          the value type of the resulting {@link KTable}
-     * @param storeName     the name of the state store created from this operation
+     * @param storeName     the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
@@ -773,7 +781,7 @@ public interface KGroupedStream<K, V> {
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulting {@link KTable}
-     * @param storeName     the name of the state store created from this operation
+     * @param storeName     the name of the state store created from this operation; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values with type {@code T}
      *         that represent the latest (rolling) aggregate for each key within that window

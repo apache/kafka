@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -77,6 +78,7 @@ public abstract class AbstractStream<K> {
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
@@ -86,6 +88,7 @@ public abstract class AbstractStream<K> {
                                                                                      final Windows<W> windows,
                                                                                      final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return storeFactory(keySerde, aggValSerde, storeName)
                 .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
