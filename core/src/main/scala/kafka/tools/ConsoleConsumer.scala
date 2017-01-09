@@ -412,7 +412,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def deleteZkPathForConsumerGroup(zkUrl: String, path: String) {
+  private def deleteZkPathForConsumerGroup(zkUrl: String, path: String) {
     val zkUtils = ZkUtils(zkUrl, 30000, 30000, JaasUtils.isZkSecurityEnabled())
     try {
       AdminUtils.deleteConsumerGroupInZK(zkUtils, path)
