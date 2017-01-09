@@ -269,6 +269,15 @@ public class JsonConverter implements Converter {
                 return Timestamp.fromLogical(schema, (java.util.Date) value);
             }
         });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(UUID.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.UUID))
+                    throw new DataException("Invalid type for UUID, expected UUID but was " + value.getClass());
+                return UUID.fromLogical(schema, (java.util.UUID) value);
+            }
+        });
     }
 
 

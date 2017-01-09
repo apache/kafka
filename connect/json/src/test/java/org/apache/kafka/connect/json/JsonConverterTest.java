@@ -664,6 +664,16 @@ public class JsonConverterTest {
         assertEquals(4000000000L, payload.longValue());
     }
 
+    @Test
+    public void UUIDToJson() throws IOException {
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, UUID.SCHEMA, new java.util.UUID(0l, 0l)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"string\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isTextual());
+        assertEquals("00000000-0000-0000-0000-000000000000",payload.asText());
+    }
 
     @Test
     public void nullSchemaAndPrimitiveToJson() {
