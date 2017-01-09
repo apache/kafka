@@ -373,9 +373,9 @@ public class JsonConverterTest {
     @Test
     public void UUIDToConnect() {
         Schema schema = UUID.SCHEMA;
-        java.util.UUID reference = java.util.UUID.randomUUID();
+        java.util.UUID reference = new java.util.UUID(0l, 0l);
         // Payload is string representation of java.util.UUID
-        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1}, \"payload\": \"%s\" }".format(reference.toString());
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1 }, \"payload\": \"00000000-0000-0000-0000-000000000000\" }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         java.util.UUID converted = (java.util.UUID) schemaAndValue.value();
         assertEquals(schema, schemaAndValue.schema());
@@ -385,7 +385,7 @@ public class JsonConverterTest {
     @Test
     public void UUIDToConnectOptional() {
         Schema schema = UUID.builder().optional().schema();
-        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true, \"payload\": null }";
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertNull(schemaAndValue.value());
@@ -395,7 +395,7 @@ public class JsonConverterTest {
     public void UUIDToConnectWithDefaultValue() {
         java.util.UUID reference = new java.util.UUID(0l, 0l);
         Schema schema = UUID.builder().defaultValue(reference).build();
-        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"default\": \"00000000-0000-0000-0000-000000000000\", \"payload\": null }";
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"default\": \"00000000-0000-0000-0000-000000000000\"}, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, schemaAndValue.value());
@@ -405,7 +405,7 @@ public class JsonConverterTest {
     public void UUIDToConnectOptionalWithDefaultValue() {
         java.util.UUID reference = new java.util.UUID(0l, 0l);
         Schema schema = UUID.builder().optional().defaultValue(reference).build();
-        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true, \"default\": \"00000000-0000-0000-0000-000000000000\", \"payload\": null }";
+        String msg = "{ \"schema\": { \"type\": \"string\", \"name\": \"org.apache.kafka.connect.data.UUID\", \"version\": 1, \"optional\": true, \"default\": \"00000000-0000-0000-0000-000000000000\" } , \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, schemaAndValue.value());

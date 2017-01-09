@@ -43,17 +43,15 @@ public class UUID {
     public static String fromLogical(Schema schema, java.util.UUID value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of UUID object but the schema does not match.");
-
         return value.toString();
     }
 
     public static java.util.UUID toLogical(Schema schema, String value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of UUID object but the schema does not match.");
-
+        // Strings must conform to UUID format, https://docs.oracle.com/javase/7/docs/api/java/util/UUID.html#toString()
         try {
             return java.util.UUID.fromString(value);
-            // Strings must conform to UUID format, https://docs.oracle.com/javase/7/docs/api/java/util/UUID.html#toString()
         } catch (IllegalArgumentException e) {
             throw new DataException("Requested conversion to UUID object but %s does not conform with UUID string representation".format(value));
         }
