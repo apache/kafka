@@ -50,7 +50,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         @Override
         public UpdateMetadataRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version == 0) {
                 for (Broker broker : liveBrokers) {
                     if ((broker.endPoints.get(SecurityProtocol.PLAINTEXT) == null)

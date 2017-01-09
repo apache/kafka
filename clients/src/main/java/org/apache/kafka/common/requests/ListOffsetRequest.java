@@ -79,10 +79,6 @@ public class ListOffsetRequest extends AbstractRequest {
             return this;
         }
 
-        public Map<TopicPartition, Long> getPartitionTimestamps() {
-            return partitionTimestamps;
-        }
-
         public Builder setReplicaId(int replicaId) {
             this.replicaId = replicaId;
             return this;
@@ -90,7 +86,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
         @Override
         public ListOffsetRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version < minVersion) {
                 throw new ObsoleteBrokerException("The broker is too old to send this request.");
             }

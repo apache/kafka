@@ -53,7 +53,7 @@ public class HeartbeatRequest extends AbstractRequest {
 
         @Override
         public HeartbeatRequest build() {
-            return new HeartbeatRequest(groupId, groupGenerationId, memberId, getVersion());
+            return new HeartbeatRequest(groupId, groupGenerationId, memberId, version());
         }
 
         @Override

@@ -47,7 +47,7 @@ public class MetadataRequest extends AbstractRequest {
             this.topics = topics;
         }
 
-        public List<String> getTopics() {
+        public List<String> topics() {
             return this.topics;
         }
 
@@ -57,7 +57,7 @@ public class MetadataRequest extends AbstractRequest {
 
         @Override
         public MetadataRequest build() {
-            short version = getVersion();
+            short version = version();
             if (version < 1) {
                 throw new UnsupportedVersionException("MetadataRequest " +
                         "versions older than 1 are not supported.");

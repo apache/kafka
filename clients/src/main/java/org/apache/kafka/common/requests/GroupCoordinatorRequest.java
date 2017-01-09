@@ -38,7 +38,7 @@ public class GroupCoordinatorRequest extends AbstractRequest {
 
         @Override
         public GroupCoordinatorRequest build() {
-            short version = getVersion();
+            short version = version();
             return new GroupCoordinatorRequest(this.groupId, version);
         }
 

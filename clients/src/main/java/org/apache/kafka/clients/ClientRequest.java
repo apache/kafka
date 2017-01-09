@@ -71,12 +71,12 @@ public final class ClientRequest {
     }
 
     public ApiKeys apiKey() {
-        return requestBuilder.getApiKey();
+        return requestBuilder.apiKey();
     }
 
     public RequestHeader makeHeader() {
-        return new RequestHeader(requestBuilder.getApiKey().id,
-                requestBuilder.getVersion(), clientId, correlationId);
+        return new RequestHeader(requestBuilder.apiKey().id,
+                requestBuilder.version(), clientId, correlationId);
     }
 
     public AbstractRequest.Builder requestBuilder() {
@@ -97,9 +97,5 @@ public final class ClientRequest {
 
     public int correlationId() {
         return correlationId;
-    }
-
-    public AbstractRequest.Builder getRequestBuilder() {
-        return requestBuilder;
     }
 }

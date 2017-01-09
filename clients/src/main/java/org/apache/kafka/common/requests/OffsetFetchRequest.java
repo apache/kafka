@@ -59,7 +59,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         @Override
         public OffsetFetchRequest build() {
-            return new OffsetFetchRequest(groupId, partitions, getVersion());
+            return new OffsetFetchRequest(groupId, partitions, version());
         }
 
         @Override

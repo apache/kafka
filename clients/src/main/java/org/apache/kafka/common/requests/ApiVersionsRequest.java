@@ -28,7 +28,7 @@ public class ApiVersionsRequest extends AbstractRequest {
 
         @Override
         public ApiVersionsRequest build() {
-            return new ApiVersionsRequest(getVersion());
+            return new ApiVersionsRequest(version());
         }
     }
 

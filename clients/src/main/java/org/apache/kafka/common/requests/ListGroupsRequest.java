@@ -28,7 +28,7 @@ public class ListGroupsRequest extends AbstractRequest {
 
         @Override
         public ListGroupsRequest build() {
-            return new ListGroupsRequest(getVersion());
+            return new ListGroupsRequest(version());
         }
 
         @Override
