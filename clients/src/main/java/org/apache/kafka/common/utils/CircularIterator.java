@@ -21,11 +21,11 @@ import java.util.Iterator;
 import java.util.List;
 
 public class CircularIterator<T> implements Iterator<T> {
-    int i = 0;
+    private int i = 0;
     private List<T> list;
 
     public CircularIterator(List<T> list) {
-        if (list.isEmpty()) {
+        if (list == null || list.isEmpty()) {
             throw new IllegalArgumentException("CircularIterator can only be used on non-empty lists");
         }
         this.list = list;

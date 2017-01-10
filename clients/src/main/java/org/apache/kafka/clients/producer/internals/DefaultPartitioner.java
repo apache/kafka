@@ -73,11 +73,8 @@ public class DefaultPartitioner implements Partitioner {
     private int nextValue(String topic) {
         AtomicInteger counter = topicCounterMap.get(topic);
         if (null == counter) {
-            counter = new AtomicInteger(new Random().nextInt());
-            AtomicInteger currentCounter = topicCounterMap.putIfAbsent(topic, counter);
-            if (currentCounter != null) {
-                counter = currentCounter;
-            }
+            topicCounterMap.putIfAbsent(topic, new AtomicInteger(new Random().nextInt()));
+            counter = topicCounterMap.get(topic);
         }
         return counter.getAndIncrement();
     }

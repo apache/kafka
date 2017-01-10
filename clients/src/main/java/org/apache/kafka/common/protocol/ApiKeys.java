@@ -50,10 +50,9 @@ public enum ApiKeys {
         int maxKey = -1;
         for (ApiKeys key : ApiKeys.values())
             maxKey = Math.max(maxKey, key.id);
-        ApiKeys[] idToType = new ApiKeys[maxKey + 1];
+        ID_TO_TYPE = new ApiKeys[maxKey + 1];
         for (ApiKeys key : ApiKeys.values())
-            idToType[key.id] = key;
-        ID_TO_TYPE = idToType;
+            ID_TO_TYPE[key.id] = key;
         MAX_API_KEY = maxKey;
     }
 
@@ -64,6 +63,9 @@ public enum ApiKeys {
     public final String name;
 
     ApiKeys(int id, String name) {
+        if (id < MIN_API_KEY) {
+            throw new IllegalArgumentException("APIKeys id should not be lesser than " + MIN_API_KEY);
+        }
         this.id = (short) id;
         this.name = name;
     }

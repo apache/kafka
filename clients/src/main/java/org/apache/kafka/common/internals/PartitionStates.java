@@ -18,13 +18,13 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -121,8 +121,8 @@ public class PartitionStates<S> {
             }
             partitions.add(tp);
         }
-        for (Map.Entry<String, List<TopicPartition>> entry : topicToPartitions.entrySet()) {
-            for (TopicPartition tp : entry.getValue()) {
+        for (List<TopicPartition> topicPartitionList : topicToPartitions.values()) {
+            for (TopicPartition tp : topicPartitionList) {
                 S state = partitionToState.get(tp);
                 map.put(tp, state);
             }
@@ -134,8 +134,8 @@ public class PartitionStates<S> {
         private final S value;
 
         public PartitionState(TopicPartition topicPartition, S state) {
-            this.topicPartition = Objects.requireNonNull(topicPartition);
-            this.value = Objects.requireNonNull(state);
+            this.topicPartition = Utils.notNull(topicPartition);
+            this.value = Utils.notNull(state);
         }
 
         public S value() {
