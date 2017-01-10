@@ -20,7 +20,7 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.core.Meter
+import com.codahale.metrics.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
 import org.apache.kafka.common.protocol.Errors
@@ -126,12 +126,10 @@ class DelayedProduce(delayMs: Long,
 
 object DelayedProduceMetrics extends KafkaMetricsGroup {
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", null)
 
   private val partitionExpirationMeterFactory = (key: TopicPartition) =>
     newMeter("ExpiresPerSec",
-             "requests",
-             TimeUnit.SECONDS,
              tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
   private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
 

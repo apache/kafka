@@ -32,7 +32,7 @@ import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForP
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.JavaConverters._
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.PartitionState
@@ -71,7 +71,7 @@ class Partition(val topic: String,
 
   newGauge("UnderReplicated",
     new Gauge[Int] {
-      def value = {
+      override def getValue: Int = {
         if (isUnderReplicated) 1 else 0
       }
     },
@@ -80,7 +80,7 @@ class Partition(val topic: String,
 
   newGauge("InSyncReplicasCount",
     new Gauge[Int] {
-      def value = {
+      override def getValue: Int = {
         if (isLeaderReplicaLocal) inSyncReplicas.size else 0
       }
     },
@@ -89,7 +89,7 @@ class Partition(val topic: String,
 
   newGauge("ReplicasCount",
     new Gauge[Int] {
-      def value = {
+      override def getValue: Int = {
         if (isLeaderReplicaLocal) assignedReplicas.size else 0
       }
     },
@@ -108,7 +108,7 @@ class Partition(val topic: String,
                                          AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
         val log = logManager.createLog(topicPartition, config)
         val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
-        val offsetMap = checkpoint.read
+        val offsetMap = checkpoint.read()
         if (!offsetMap.contains(topicPartition))
           info(s"No checkpointed highwatermark is found for partition $topicPartition")
         val offset = math.min(offsetMap.getOrElse(topicPartition, 0L), log.logEndOffset)

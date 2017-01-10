@@ -20,11 +20,12 @@ import java.io.{File, IOException}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.{Gauge, Meter}
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
 import kafka.common._
 import kafka.controller.KafkaController
+import kafka.controller.KafkaController.StateChangeLogger
 import kafka.log.{LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -39,6 +40,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
+import scala.collection.Map
 import scala.collection._
 import scala.collection.JavaConverters._
 
@@ -46,7 +48,7 @@ import scala.collection.JavaConverters._
  * Result metadata of a log append operation on the log
  */
 case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None) {
-  def errorCode = error match {
+  def errorCode: Short = error match {
     case None => Errors.NONE.code
     case Some(e) => Errors.forException(e).code
   }
@@ -68,12 +70,12 @@ case class LogReadResult(info: FetchDataInfo,
                          readSize: Int,
                          error: Option[Throwable] = None) {
 
-  def errorCode = error match {
+  def errorCode: Short = error match {
     case None => Errors.NONE.code
     case Some(e) => Errors.forException(e).code
   }
 
-  override def toString = {
+  override def toString: String = {
     "Fetch Data: [%s], HW: [%d], leaderLogEndOffset: [%d], readSize: [%d], error: [%s]"
             .format(info, hw, leaderLogEndOffset, readSize, error)
   }
@@ -91,7 +93,7 @@ object LogReadResult {
 
 case class BecomeLeaderOrFollowerResult(responseMap: collection.Map[TopicPartition, Short], errorCode: Short) {
 
-  override def toString = {
+  override def toString: String = {
     "update results: [%s], global error: [%d]".format(responseMap, errorCode)
   }
 }
@@ -119,47 +121,47 @@ class ReplicaManager(val config: KafkaConfig,
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
+  val highWatermarkCheckpoints: Map[String, OffsetCheckpoint] = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
-  val stateChangeLogger = KafkaController.stateChangeLogger
+  val stateChangeLogger: StateChangeLogger = KafkaController.stateChangeLogger
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
 
-  val delayedProducePurgatory = DelayedOperationPurgatory[DelayedProduce](
+  val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce] = DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", localBrokerId, config.producerPurgatoryPurgeIntervalRequests)
-  val delayedFetchPurgatory = DelayedOperationPurgatory[DelayedFetch](
+  val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch] = DelayedOperationPurgatory[DelayedFetch](
     purgatoryName = "Fetch", localBrokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
-  val leaderCount = newGauge(
+  val leaderCount: Gauge[Int] = newGauge(
     "LeaderCount",
     new Gauge[Int] {
-      def value = {
+      override def getValue: Int = {
           getLeaderPartitions().size
       }
     }
   )
-  val partitionCount = newGauge(
+  val partitionCount: Gauge[Int] = newGauge(
     "PartitionCount",
     new Gauge[Int] {
-      def value = allPartitions.size
+      override def getValue: Int = allPartitions.size
     }
   )
-  val underReplicatedPartitions = newGauge(
+  val underReplicatedPartitions: Gauge[Int] = newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
-      def value = underReplicatedPartitionCount()
+      override def getValue: Int = underReplicatedPartitionCount()
     }
   )
-  val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
-  val isrShrinkRate = newMeter("IsrShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
+  val isrExpandRate: Meter = newMeter("IsrExpandsPerSec")
+  val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec")
 
   def underReplicatedPartitionCount(): Int = {
       getLeaderPartitions().count(_.isUnderReplicated)
   }
 
-  def startHighWaterMarksCheckPointThread() = {
+  def startHighWaterMarksCheckPointThread(): Unit = {
     if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }

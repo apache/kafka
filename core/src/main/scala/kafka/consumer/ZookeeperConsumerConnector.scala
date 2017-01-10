@@ -23,7 +23,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantLock
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.api._
 import kafka.client.ClientUtils
 import kafka.cluster._
@@ -109,15 +109,15 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var consumerRebalanceListener: ConsumerRebalanceListener = null
 
   // useful for tracking migration of consumers to store offsets in kafka
-  private val kafkaCommitMeter = newMeter("KafkaCommitsPerSec", "commits", TimeUnit.SECONDS, Map("clientId" -> config.clientId))
-  private val zkCommitMeter = newMeter("ZooKeeperCommitsPerSec", "commits", TimeUnit.SECONDS, Map("clientId" -> config.clientId))
-  private val rebalanceTimer = new KafkaTimer(newTimer("RebalanceRateAndTime", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, Map("clientId" -> config.clientId)))
+  private val kafkaCommitMeter = newMeter("KafkaCommitsPerSec", Map("clientId" -> config.clientId))
+  private val zkCommitMeter = newMeter("ZooKeeperCommitsPerSec", Map("clientId" -> config.clientId))
+  private val rebalanceTimer = new KafkaTimer(newTimer("RebalanceRateAndTime", Map("clientId" -> config.clientId)))
 
   newGauge(
     "yammer-metrics-count",
     new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry().allMetrics().size()
+      override def getValue: Int = {
+        KafkaMetricsGroup.registry.getMetrics.size()
       }
     }
   )
@@ -131,7 +131,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       => val uuid = UUID.randomUUID()
       consumerUuid = "%s-%d-%s".format(
         InetAddress.getLocalHost.getHostName, System.currentTimeMillis,
-        uuid.getMostSignificantBits().toHexString.substring(0,8))
+        uuid.getMostSignificantBits.toHexString.substring(0,8))
     }
     config.groupId + "_" + consumerUuid
   }
@@ -142,7 +142,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   ensureOffsetManagerConnected()
 
   if (config.autoCommitEnable) {
-    scheduler.startup
+    scheduler.startup()
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
     scheduler.schedule("kafka-consumer-autocommit",
                        autoCommit,
@@ -170,7 +170,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter,
                                         numStreams: Int,
                                         keyDecoder: Decoder[K] = new DefaultDecoder(),
-                                        valueDecoder: Decoder[V] = new DefaultDecoder()) = {
+                                        valueDecoder: Decoder[V] = new DefaultDecoder()): Seq[KafkaStream[K, V]] = {
     val wildcardStreamsHandler = new WildcardStreamsHandler[K,V](topicFilter, numStreams, keyDecoder, valueDecoder)
     wildcardStreamsHandler.streams
   }
@@ -192,7 +192,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     zkUtils = ZkUtils(config.zkConnect,
                       config.zkSessionTimeoutMs,
                       config.zkConnectionTimeoutMs,
-                      JaasUtils.isZkSecurityEnabled())
+                      JaasUtils.isZkSecurityEnabled)
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
@@ -565,7 +565,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     @volatile private var allTopicsOwnedPartitionsCount = 0
     newGauge("OwnedPartitionsCount",
       new Gauge[Int] {
-        def value() = allTopicsOwnedPartitionsCount
+        override def getValue: Int = allTopicsOwnedPartitionsCount
       },
       Map("clientId" -> config.clientId, "groupId" -> config.groupId))
 
@@ -736,7 +736,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                       .foreach { case (topic, partitionThreadPairs) =>
               newGauge("OwnedPartitionsCount",
                 new Gauge[Int] {
-                  def value() = partitionThreadPairs.size
+                  override def getValue: Int = partitionThreadPairs.size
                 },
                 ownedPartitionsCountMetricTags(topic))
             }
@@ -927,9 +927,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         queuesAndStreams
     }
 
-    val topicThreadIds = consumerThreadIdsPerTopic.map { case (topic, threadIds) =>
+    val topicThreadIds = consumerThreadIdsPerTopic.flatMap { case (topic, threadIds) =>
       threadIds.map((topic, _))
-    }.flatten
+    }
 
     require(topicThreadIds.size == allQueuesAndStreams.size,
       "Mismatch between thread ID count (%d) and queue count (%d)"
@@ -944,7 +944,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       newGauge(
         "FetchQueueSize",
         new Gauge[Int] {
-          def value = q.size
+          override def getValue: Int = q.size
         },
         Map("clientId" -> config.clientId,
           "topic" -> topicThreadId._1,

@@ -29,9 +29,9 @@ class ProducerTopicMetrics(metricId: ClientIdTopic) extends KafkaMetricsGroup {
     case ClientIdAllTopics(clientId) => Map("clientId" -> clientId)
   }
 
-  val messageRate = newMeter("MessagesPerSec", "messages", TimeUnit.SECONDS, tags)
-  val byteRate = newMeter("BytesPerSec", "bytes", TimeUnit.SECONDS, tags)
-  val droppedMessageRate = newMeter("DroppedMessagesPerSec", "drops", TimeUnit.SECONDS, tags)
+  val messageRate = newMeter("MessagesPerSec", tags)
+  val byteRate = newMeter("BytesPerSec", tags)
+  val droppedMessageRate = newMeter("DroppedMessagesPerSec", tags)
 }
 
 /**
