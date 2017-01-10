@@ -126,7 +126,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     Errors.forException(e).code()));
         }
 
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             // OffsetFetchResponseV0 == OffsetFetchResponseV1
             case 0:

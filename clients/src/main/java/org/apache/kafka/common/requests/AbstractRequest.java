@@ -64,7 +64,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     /**
      * Get the version of this AbstractRequest object.
      */
-    public short getVersion() {
+    public short version() {
         return version;
     }
 

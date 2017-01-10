@@ -488,7 +488,7 @@ public class SaslAuthenticatorTest {
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id,
-                request.getVersion(), "someclient", 2);
+                request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -554,7 +554,7 @@ public class SaslAuthenticatorTest {
         MetadataRequest metadataRequest1 =
                 new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
         RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id,
-                metadataRequest1.getVersion(), "someclient", 1);
+                metadataRequest1.version(), "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -569,7 +569,7 @@ public class SaslAuthenticatorTest {
         MetadataRequest metadataRequest2 =
                 new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
         RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id,
-                metadataRequest2.getVersion(), "someclient", 2);
+                metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
         NetworkTestUtils.waitForChannelClose(selector, node2);
         selector.close();
@@ -762,7 +762,7 @@ public class SaslAuthenticatorTest {
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
         RequestHeader header =
-                new RequestHeader(apiKey.id, request.getVersion(), "someclient", 1);
+                new RequestHeader(apiKey.id, request.version(), "someclient", 1);
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();

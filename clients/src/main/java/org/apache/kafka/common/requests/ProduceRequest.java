@@ -152,7 +152,7 @@ public class ProduceRequest extends AbstractRequest {
             responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET, Record.NO_TIMESTAMP));
         }
 
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new ProduceResponse(responseMap);

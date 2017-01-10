@@ -127,15 +127,15 @@ public class MetadataRequest extends AbstractRequest {
                 topicMetadatas.add(new MetadataResponse.TopicMetadata(error, topic, false, partitions));
         }
 
-        short versionId = getVersion();
-        switch (getVersion()) {
+        short versionId = version();
+        switch (version()) {
             case 0:
             case 1:
             case 2:
                 return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        getVersion(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+                        version(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
         }
     }
 

@@ -178,7 +178,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     val firstTopic = topics(0).asInstanceOf[Struct]
     val newTopics = firstTopic :: topics.toList
     struct.set("create_topic_requests", newTopics.toArray)
-    new CreateTopicsRequest(struct, request.getVersion)
+    new CreateTopicsRequest(struct, request.version)
   }
 
   private def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
@@ -187,7 +187,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     val firstTopic = topics(0).asInstanceOf[Struct]
     firstTopic.set("num_partitions", 1)
     firstTopic.set("replication_factor", 1.toShort)
-    new CreateTopicsRequest(struct, request.getVersion)
+    new CreateTopicsRequest(struct, request.version)
   }
 
   private def validateErrorCreateTopicsRequests(request: CreateTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
@@ -226,7 +226,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
 
   private def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
     val response = send(request, ApiKeys.CREATE_TOPICS, socketServer)
-    CreateTopicsResponse.parse(response, request.getVersion)
+    CreateTopicsResponse.parse(response, request.version)
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {

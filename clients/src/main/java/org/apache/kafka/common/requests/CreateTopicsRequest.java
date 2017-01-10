@@ -235,7 +235,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             topicErrors.put(topic, Errors.forException(e));
         }
 
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new CreateTopicsResponse(topicErrors);

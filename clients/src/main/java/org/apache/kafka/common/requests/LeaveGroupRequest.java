@@ -78,7 +78,7 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(Throwable e) {
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new LeaveGroupResponse(Errors.forException(e).code());
