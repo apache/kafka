@@ -346,7 +346,7 @@ public class NetworkClient implements KafkaClient {
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
-        handleConnections(updatedNow);
+        handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
         handleTimedOutRequests(responses, updatedNow);
 
@@ -558,7 +558,7 @@ public class NetworkClient implements KafkaClient {
     /**
      * Record any newly completed connections
      */
-    private void handleConnections(long now) {
+    private void handleConnections() {
         for (String node : this.selector.connected()) {
             log.debug("Completed connection to node {}", node);
             // Though the node is connected, we might not still be able to send requests. For instance,
