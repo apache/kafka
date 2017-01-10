@@ -226,7 +226,8 @@ object AdminClient {
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       DefaultRequestTimeoutMs,
-      time)
+      time,
+      true)
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,
