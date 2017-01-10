@@ -747,14 +747,14 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
         fail(msg)
-      Thread.sleep(waitTime.min(100L))
+      Thread.sleep(waitTime.min(pause))
     }
     // should never hit here
     throw new RuntimeException("unexpected error")
