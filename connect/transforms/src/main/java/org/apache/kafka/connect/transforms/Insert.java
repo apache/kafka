@@ -35,14 +35,13 @@ import java.util.Map;
 
 abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public enum Keys {
-        ;
-        public static final String TOPIC_FIELD = "topic.field";
-        public static final String PARTITION_FIELD = "partition.field";
-        public static final String OFFSET_FIELD = "offset.field";
-        public static final String TIMESTAMP_FIELD = "timestamp.field";
-        public static final String STATIC_FIELD = "static.field";
-        public static final String STATIC_VALUE = "static.value";
+    public interface Keys {
+        String TOPIC_FIELD = "topic.field";
+        String PARTITION_FIELD = "partition.field";
+        String OFFSET_FIELD = "offset.field";
+        String TIMESTAMP_FIELD = "timestamp.field";
+        String STATIC_FIELD = "static.field";
+        String STATIC_VALUE = "static.value";
     }
 
     private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";

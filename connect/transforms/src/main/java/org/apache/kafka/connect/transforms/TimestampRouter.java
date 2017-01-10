@@ -35,10 +35,9 @@ import java.util.TimeZone;
  */
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public enum Keys {
-        ;
-        public static final String TOPIC_FORMAT = "topic.format";
-        public static final String TIMESTAMP_FORMAT = "timestamp.format";
+    public interface Keys {
+        String TOPIC_FORMAT = "topic.format";
+        String TIMESTAMP_FORMAT = "timestamp.format";
     }
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
