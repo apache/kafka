@@ -384,15 +384,26 @@ public class KafkaStreams {
     }
 
     /**
-     * Produces a string representation contain useful information about Kafka Streams
+     * Produces a string representation containing useful information about Kafka Streams
      * Such as thread IDs, task IDs and a representation of the topology. This is useful
      * in debugging scenarios.
      * @return A string representation of the Kafka Streams instance.
      */
+    @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("KafkaStreams processID:" + processId + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about Kafka Streams
+     * such as thread IDs, task IDs and a representation of the topology starting with the given indent. This is useful
+     * in debugging scenarios.
+     * @return A string representation of the Kafka Streams instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "KafkaStreams processID:" + processId + "\n");
         for (final StreamThread thread : threads) {
-            sb.append("\t").append(thread.toString());
+            sb.append(thread.toString(indent + "\t"));
         }
         sb.append("\n");
 
