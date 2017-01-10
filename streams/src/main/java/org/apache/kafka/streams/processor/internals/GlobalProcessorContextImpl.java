@@ -26,13 +26,13 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
 
-public class GlobalProcessorContext extends AbstractProcessorContext {
+public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
 
-    public GlobalProcessorContext(final StreamsConfig config,
-                           final StateManager stateMgr,
-                           final StreamsMetrics metrics,
-                           final ThreadCache cache) {
+    public GlobalProcessorContextImpl(final StreamsConfig config,
+                                      final StateManager stateMgr,
+                                      final StreamsMetrics metrics,
+                                      final ThreadCache cache) {
         super(new TaskId(-1, -1), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), config, metrics, stateMgr, cache);
     }
 

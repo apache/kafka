@@ -33,7 +33,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.processor.internals.GlobalProcessorContext;
+import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -209,7 +209,7 @@ public class ProcessorTopologyTestDriver {
             }
             final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
-                                                        new GlobalProcessorContext(config, stateManager, metrics, new ThreadCache(1024 * 1024)),
+                                                        new GlobalProcessorContextImpl(config, stateManager, metrics, new ThreadCache(1024 * 1024)),
                                                         stateManager);
             globalStateTask.initialize();
         }

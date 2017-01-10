@@ -154,7 +154,7 @@ public class GlobalStreamThread extends Thread {
             final StateConsumer stateConsumer
                     = new StateConsumer(consumer,
                                         new GlobalStateUpdateTask(topology,
-                                                                  new GlobalProcessorContext(
+                                                                  new GlobalProcessorContextImpl(
                                                                           config,
                                                                           stateMgr,
                                                                           streamsMetrics,
