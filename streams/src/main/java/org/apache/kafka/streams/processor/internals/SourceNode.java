@@ -35,11 +35,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.valDeserializer = valDeserializer;
     }
 
-    public K deserializeKey(String topic, byte[] data) {
+    K deserializeKey(String topic, byte[] data) {
         return keyDeserializer.deserialize(topic, data);
     }
 
-    public V deserializeValue(String topic, byte[] data) {
+    V deserializeValue(String topic, byte[] data) {
         return valDeserializer.deserialize(topic, data);
     }
 
@@ -74,14 +74,24 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("topics: [");
+        return toString("");
+    }
+
+    /**
+     * @return a string representation of this node starting with the given indent, useful for debugging.
+     */
+    public String toString(String indent) {
+        final StringBuilder sb = new StringBuilder(super.toString(indent));
+        sb.append(indent).append("\ttopics:\t\t[");
         for (String topic : topics) {
-            sb.append(topic + ",");
+            sb.append(topic);
+            sb.append(", ");
         }
-        sb.setLength(sb.length() - 1);
-        sb.append("] ");
+        sb.setLength(sb.length() - 2);  // remove the last comma
+        sb.append("]\n");
         return sb.toString();
     }
+
 }
