@@ -93,9 +93,9 @@ public class NetworkClient implements KafkaClient {
     private final Time time;
 
     /**
-     * True if we should send an ApiVersionRequest when first connecting to a peer.
+     * True if we should send an ApiVersionRequest when first connecting to a broker.
      */
-    private final boolean discoverPeerVersions;
+    private final boolean discoverBrokerVersions;
 
     private final Map<Integer, NodeApiVersions> nodeApiVersions = new HashMap<>();
 
@@ -112,9 +112,9 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         boolean discoverPeerVersions) {
+                         boolean discoverBrokerVersions) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverPeerVersions);
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions);
     }
 
     public NetworkClient(Selectable selector,
@@ -126,9 +126,9 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         boolean discoverPeerVersions) {
+                         boolean discoverBrokerVersions) {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverPeerVersions);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -141,7 +141,7 @@ public class NetworkClient implements KafkaClient {
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
                           Time time,
-                          boolean discoverPeerVersions) {
+                          boolean discoverBrokerVersions) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -164,7 +164,7 @@ public class NetworkClient implements KafkaClient {
         this.requestTimeoutMs = requestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
-        this.discoverPeerVersions = discoverPeerVersions;
+        this.discoverBrokerVersions = discoverBrokerVersions;
     }
 
     /**
@@ -287,9 +287,9 @@ public class NetworkClient implements KafkaClient {
             NodeApiVersions versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
             // Note: if versionInfo is null, we have no server version information. This would be
             // the case when sending the initial ApiVersionRequest which fetches the version
-            // information itself.  It is also the case when discoverPeerVersions is set to false.
+            // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
-                if ((!discoverPeerVersions) && (log.isTraceEnabled()))
+                if ((!discoverBrokerVersions) && (log.isTraceEnabled()))
                     log.trace("No version information found when sending message of type {} to node {}",
                             clientRequest.apiKey(), nodeId);
             } else {
@@ -573,7 +573,7 @@ public class NetworkClient implements KafkaClient {
             // if SSL is enabled, the SSL handshake happens after the connection is established.
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
-            if (discoverPeerVersions) {
+            if (discoverBrokerVersions) {
                 this.connectionStates.checkingApiVersions(node);
                 nodesNeedingApiVersionsFetch.add(node);
                 log.debug("Completed connection to node {}.  Fetching API versions.", node);
@@ -811,7 +811,7 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-    public boolean discoverPeerVersions() {
-        return discoverPeerVersions;
+    public boolean discoverBrokerVersions() {
+        return discoverBrokerVersions;
     }
 }

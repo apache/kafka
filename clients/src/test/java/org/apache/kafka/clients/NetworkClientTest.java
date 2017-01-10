@@ -59,7 +59,7 @@ public class NetworkClientTest {
 
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
 
-    private final NetworkClient clientWithNoPeerDiscovery = createNetworkClientWithNoPeerDiscovery();
+    private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient() {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
@@ -71,7 +71,7 @@ public class NetworkClientTest {
                 "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time, true);
     }
 
-    private NetworkClient createNetworkClientWithNoPeerDiscovery() {
+    private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, false);
     }
@@ -102,8 +102,8 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testSimpleRequestResponseWithNoPeerDiscovery() {
-        checkSimpleRequestResponse(clientWithNoPeerDiscovery);
+    public void testSimpleRequestResponseWithNoBrokerDiscovery() {
+        checkSimpleRequestResponse(clientWithNoVersionDiscovery);
     }
 
     @Test
@@ -160,7 +160,7 @@ public class NetworkClientTest {
     }
 
     protected void awaitReady(NetworkClient client, Node node) {
-        if (client.discoverPeerVersions()) {
+        if (client.discoverBrokerVersions()) {
             maybeSetExpectedApiVersionsResponse();
         }
         while (!client.ready(node, time.milliseconds()))
