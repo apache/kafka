@@ -209,9 +209,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not produce new messages while paused
-        num_messages = len(self.source.messages())
+        num_messages = len(self.source.sent_messages())
         time.sleep(10)
-        assert num_messages == len(self.source.messages()), "Paused source connector should not produce any messages"
+        assert num_messages == len(self.source.sent_messages()), "Paused source connector should not produce any messages"
 
         self.cc.resume_connector(self.source.name)
 
@@ -220,7 +220,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records produced again
-        wait_until(lambda: len(self.source.messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=30,
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
@@ -237,6 +237,9 @@ class ConnectDistributedTest(Test):
         # use the verifiable source to produce a steady stream of messages
         self.source = VerifiableSource(self.cc)
         self.source.start()
+
+        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
+                   err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc)
         self.sink.start()
@@ -264,7 +267,7 @@ class ConnectDistributedTest(Test):
 
         # after resuming, we should see records consumed again
         wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
-                   err_msg="Failed to consume messages after resuming source connector")
+                   err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
     def test_pause_state_persistent(self):
@@ -374,8 +377,8 @@ class ConnectDistributedTest(Test):
         success = True
         errors = []
         allow_dups = not clean
-        src_messages = self.source.messages()
-        sink_messages = self.sink.messages()
+        src_messages = self.source.committed_messages()
+        sink_messages = self.sink.flushed_messages()
         for task in range(num_tasks):
             # Validate source messages
             src_seqnos = [msg['seqno'] for msg in src_messages if msg['task'] == task]
@@ -398,7 +401,7 @@ class ConnectDistributedTest(Test):
 
 
             # Validate sink messages
-            sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task and 'flushed' in msg]
+            sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
             sink_seqno_max = max(sink_seqnos)

@@ -93,4 +93,8 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
         return (int) (start ^ (start >>> 32));
     }
 
+    @Override
+    public long maintainMs() {
+        return Long.MAX_VALUE;
+    }
 }

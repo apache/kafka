@@ -68,7 +68,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
@@ -110,7 +110,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
+                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -121,7 +121,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
                 windowStore.put(key, newAgg, windowStartMs);
-                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), newAgg, oldAgg, sendOldValues);
+                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), newAgg, oldAgg);
             }
         }
     }
