@@ -68,7 +68,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
-                append(", partitionStates=").append(Utils.join(partitionStates, ": ", " ,")).
+                append(", partitionStates=").append(Utils.mkString(partitionStates)).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, " ,")).
                 append(")");
             return bld.toString();
@@ -95,7 +95,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(id=").append(id);
-            bld.append(", endPoints=").append(Utils.join(endPoints));
+            bld.append(", endPoints=").append(Utils.mkString(endPoints));
             bld.append(", rack=").append(rack);
             bld.append(")");
             return bld.toString();

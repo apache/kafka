@@ -80,7 +80,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             bld.append("(type=LeaderAndIsRequest")
                 .append(", controllerId=").append(controllerId)
                 .append(", controllerEpoch=").append(controllerEpoch)
-                .append(", partitionStates=").append(Utils.join(partitionStates))
+                .append(", partitionStates=").append(Utils.mkString(partitionStates))
                 .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
                 .append(")");
             return bld.toString();

@@ -86,7 +86,7 @@ public class ProduceRequest extends AbstractRequest {
             bld.append("(type=ProduceRequest")
                     .append(", acks=").append(acks)
                     .append(", timeout=").append(timeout)
-                    .append(", partitionRecords=(").append(Utils.join(partitionRecords))
+                    .append(", partitionRecords=(").append(Utils.mkString(partitionRecords))
                     .append("))");
             return bld.toString();
         }

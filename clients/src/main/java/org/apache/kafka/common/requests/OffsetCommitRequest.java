@@ -153,7 +153,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 append(", memberId=").append(memberId).
                 append(", generationId=").append(generationId).
                 append(", retentionTime=").append(retentionTime).
-                append(", offsetData=").append(Utils.join(offsetData)).
+                append(", offsetData=").append(Utils.mkString(offsetData)).
                 append(")");
             return bld.toString();
         }
