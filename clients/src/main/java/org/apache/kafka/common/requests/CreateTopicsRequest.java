@@ -87,8 +87,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             StringBuilder bld = new StringBuilder();
             bld.append("(numPartitions=").append(numPartitions).
                     append(", replicationFactor=").append(replicationFactor).
-                    append(", replicasAssignments=").append(Utils.join(replicasAssignments)).
-                    append(", configs=").append(Utils.join(configs)).
+                    append(", replicasAssignments=").append(Utils.mkString(replicasAssignments)).
+                    append(", configs=").append(Utils.mkString(configs)).
                     append(")");
             return bld.toString();
         }
@@ -113,7 +113,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=CreateTopicsRequest").
-                append(", topics=").append(Utils.join(topics)).
+                append(", topics=").append(Utils.mkString(topics)).
                 append(", timeout=").append(timeout).
                 append(")");
             return bld.toString();

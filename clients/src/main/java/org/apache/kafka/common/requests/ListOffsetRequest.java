@@ -133,10 +133,10 @@ public class ListOffsetRequest extends AbstractRequest {
             bld.append("(type=ListOffsetRequest")
                .append(", replicaId=").append(replicaId);
             if (offsetData != null) {
-                bld.append(", offsetData=").append(Utils.join(offsetData));
+                bld.append(", offsetData=").append(Utils.mkString(offsetData));
             }
             if (partitionTimestamps != null) {
-                bld.append(", partitionTimestamps=").append(Utils.join(partitionTimestamps));
+                bld.append(", partitionTimestamps=").append(Utils.mkString(partitionTimestamps));
             }
             bld.append(", minVersion=").append(minVersion);
             bld.append(")");
