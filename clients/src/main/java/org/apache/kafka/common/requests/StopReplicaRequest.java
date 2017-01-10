@@ -60,12 +60,12 @@ public class StopReplicaRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: StopReplicaRequest").
-                append(", controllerId: ").append(controllerId).
-                append(", controllerEpoch: ").append(controllerEpoch).
-                append(", deletePartitions: ").append(deletePartitions).
-                append(", partitions: ").append(Utils.join(partitions, ",")).
-                append("}");
+            bld.append("(type=StopReplicaRequest").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", deletePartitions=").append(deletePartitions).
+                append(", partitions=").append(Utils.join(partitions, ",")).
+                append(")");
             return bld.toString();
         }
     }

@@ -53,10 +53,10 @@ public class DeleteTopicsRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: DeleteTopicsRequest").
-                append(", topics: ").append(Utils.join(topics, ", ")).
-                append(", timeout: ").append(timeout).
-                append("}");
+            bld.append("(type=DeleteTopicsRequest").
+                append(", topics=(").append(Utils.join(topics, ", ")).append(")").
+                append(", timeout=").append(timeout).
+                append(")");
             return bld.toString();
         }
     }

@@ -83,11 +83,11 @@ public class ProduceRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: ProduceRequest, ")
-                    .append("acks: ").append(acks)
-                    .append("timeout: ").append(timeout)
-                    .append("partitionRecords: {").append(Utils.join(partitionRecords, ": ", " ,"))
-                    .append("}}");
+            bld.append("(type=ProduceRequest")
+                    .append(", acks=").append(acks)
+                    .append(", timeout=").append(timeout)
+                    .append(", partitionRecords=(").append(Utils.join(partitionRecords))
+                    .append("))");
             return bld.toString();
         }
     }

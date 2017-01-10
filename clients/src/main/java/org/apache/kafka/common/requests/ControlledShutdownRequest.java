@@ -40,9 +40,9 @@ public class ControlledShutdownRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: ControlledShutdownRequest").
-                append(", brokerId: ").append(brokerId).
-                append("}");
+            bld.append("(type=ControlledShutdownRequest").
+                append(", brokerId=").append(brokerId).
+                append(")");
             return bld.toString();
         }
     }

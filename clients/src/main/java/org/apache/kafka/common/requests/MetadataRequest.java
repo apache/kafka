@@ -68,14 +68,14 @@ public class MetadataRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: MetadataRequest, ").
-                append("topics: ");
+            bld.append("(type=MetadataRequest").
+                append(", topics=");
             if (topics == null) {
                 bld.append("<ALL>");
             } else {
                 bld.append(Utils.join(topics, ","));
             }
-            bld.append("}");
+            bld.append(")");
             return bld.toString();
         }
     }

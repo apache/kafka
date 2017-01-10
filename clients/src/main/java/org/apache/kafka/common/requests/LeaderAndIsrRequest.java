@@ -77,12 +77,12 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: LeaderAndIsRequest")
-                .append(", controllerId: ").append(controllerId)
-                .append(", controllerEpoch: ").append(controllerEpoch)
-                .append(", partitionStates: ").append(Utils.join(partitionStates, ": ", " ,"))
-                .append(", liveLeaders: {").append(Utils.join(liveLeaders, ", ")).append("}")
-                .append("}");
+            bld.append("(type=LeaderAndIsRequest")
+                .append(", controllerId=").append(controllerId)
+                .append(", controllerEpoch=").append(controllerEpoch)
+                .append(", partitionStates=").append(Utils.join(partitionStates))
+                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
+                .append(")");
             return bld.toString();
         }
     }

@@ -50,10 +50,10 @@ public class LeaveGroupRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: LeaveGroupRequest").
-                append(", groupId: ").append(groupId).
-                append(", memberId: ").append(memberId).
-                append("}");
+            bld.append("(type=LeaveGroupRequest").
+                append(", groupId=").append(groupId).
+                append(", memberId=").append(memberId).
+                append(")");
             return bld.toString();
         }
     }

@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.utils.Utils;
 
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
@@ -59,6 +60,11 @@ public class FetchRequest extends AbstractRequest {
         public PartitionData(long offset, int maxBytes) {
             this.offset = offset;
             this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public String toString() {
+            return "(offset=" + offset + ", maxBytes=" + maxBytes + ")";
         }
     }
 
@@ -119,11 +125,6 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder setFetchData(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-            this.fetchData = fetchData;
-            return this;
-        }
-
         public LinkedHashMap<TopicPartition, PartitionData> getFetchData() {
             return this.fetchData;
         }
@@ -137,6 +138,18 @@ public class FetchRequest extends AbstractRequest {
 
             return new FetchRequest(version, replicaId, maxWait, minBytes,
                     maxBytes, fetchData);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type:FetchRequest").
+                    append(", replicaId=").append(replicaId).
+                    append(", maxWait=").append(maxWait).
+                    append(", minBytes=").append(minBytes).
+                    append(", fetchData=").append(Utils.join(fetchData)).
+                    append(")");
+            return bld.toString();
         }
     }
 

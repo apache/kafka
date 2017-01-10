@@ -45,8 +45,8 @@ public class GroupCoordinatorRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: GroupCoordinatorRequest, groupId: ");
-            bld.append(groupId).append("}");
+            bld.append("(type=GroupCoordinatorRequest, groupId=");
+            bld.append(groupId).append(")");
             return bld.toString();
         }
     }

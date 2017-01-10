@@ -87,10 +87,10 @@ public class OffsetCommitRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{timestamp: ").append(timestamp).
-                append(", offset: ").append(offset).
-                append(", metadata: ").append(metadata).
-                append("}");
+            bld.append("(timestamp=").append(timestamp).
+                append(", offset=").append(offset).
+                append(", metadata=").append(metadata).
+                append(")");
             return bld.toString();
         }
     }
@@ -148,13 +148,13 @@ public class OffsetCommitRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: OffsetCommitRequest").
-                append(", groupId: ").append(groupId).
-                append(", memberId: ").append(memberId).
-                append(", generationId: ").append(generationId).
-                append(", retentionTime: ").append(retentionTime).
-                append(", offsetData: ").append(Utils.join(offsetData, ": ", " ,")).
-                append("}");
+            bld.append("(type=OffsetCommitRequest").
+                append(", groupId=").append(groupId).
+                append(", memberId=").append(memberId).
+                append(", generationId=").append(generationId).
+                append(", retentionTime=").append(retentionTime).
+                append(", offsetData=").append(Utils.join(offsetData)).
+                append(")");
             return bld.toString();
         }
     }

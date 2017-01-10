@@ -126,14 +126,14 @@ public class JoinGroupRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: JoinGroupRequest").
-                append(", groupId:").append(groupId).
-                append(", sessionTimeout:").append(sessionTimeout).
-                append(", rebalanceTimeout:").append(rebalanceTimeout).
-                append(", memberId:").append(memberId).
-                append(", protocolType:").append(protocolType).
-                append(", groupProtocols:").append(Utils.join(groupProtocols, ", ")).
-                append("}");
+            bld.append("(type: JoinGroupRequest").
+                append(", groupId=").append(groupId).
+                append(", sessionTimeout=").append(sessionTimeout).
+                append(", rebalanceTimeout=").append(rebalanceTimeout).
+                append(", memberId=").append(memberId).
+                append(", protocolType=").append(protocolType).
+                append(", groupProtocols=").append(Utils.join(groupProtocols, ", ")).
+                append(")");
             return bld.toString();
         }
     }

@@ -33,9 +33,7 @@ public class ListGroupsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("{type: ListGroupsRequest, ").append("}");
-            return bld.toString();
+            return "(type=ListGroupsRequest)";
         }
     }
 

@@ -59,11 +59,11 @@ public class HeartbeatRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: HeartbeatRequest").
-                append(", groupId: ").append(groupId).
-                append(", groupGenerationId: ").append(groupGenerationId).
-                append(", memberId: ").append(memberId).
-                append("}");
+            bld.append("(type=HeartbeatRequest").
+                append(", groupId=").append(groupId).
+                append(", groupGenerationId=").append(groupGenerationId).
+                append(", memberId=").append(memberId).
+                append(")");
             return bld.toString();
         }
     }

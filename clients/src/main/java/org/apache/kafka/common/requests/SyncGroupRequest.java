@@ -79,13 +79,13 @@ public class SyncGroupRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: SyncGroupRequest").
-                    append(", groupId: ").append(groupId).
-                    append(", generationId: ").append(generationId).
-                    append(", memberId: ").append(memberId).
-                    append(", groupAssignment: ").
+            bld.append("(type=SyncGroupRequest").
+                    append(", groupId=").append(groupId).
+                    append(", generationId=").append(generationId).
+                    append(", memberId=").append(memberId).
+                    append(", groupAssignment=").
                     append(Utils.join(groupAssignment.keySet(), ",")).
-                    append("}"); // should we print groupAssignment values as well?  If so, as hex?
+                    append(")"); // should we print groupAssignment values as well?  If so, as hex?
             return bld.toString();
         }
     }
