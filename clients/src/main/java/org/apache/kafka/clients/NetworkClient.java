@@ -96,7 +96,7 @@ public class NetworkClient implements KafkaClient {
 
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
-    private final List<ClientResponse> abortedSends = new LinkedList<ClientResponse>();
+    private final List<ClientResponse> abortedSends = new LinkedList<>();
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -256,8 +256,7 @@ public class NetworkClient implements KafkaClient {
 
     private void sendInternalMetadataRequest(MetadataRequest.Builder builder,
                                              String nodeConnectionId, long now) {
-        ClientRequest clientRequest = newClientRequest(
-                nodeConnectionId, builder, now, true, null);
+        ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true, null);
         doSend(clientRequest, true, now);
     }
 
@@ -313,9 +312,8 @@ public class NetworkClient implements KafkaClient {
             return;
         }
         RequestHeader header = clientRequest.makeHeader();
-        if (log.isTraceEnabled()) {
+        if (log.isTraceEnabled())
             log.trace("Sending {} to node {}", request,  nodeId);
-        }
         Send send = request.toSend(nodeId, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
                 header,
@@ -486,13 +484,9 @@ public class NetworkClient implements KafkaClient {
             metadataUpdater.requestUpdate();
     }
 
-    private void handleAbortedSends(List<ClientResponse> responses, long now) {
-        for (Iterator<ClientResponse> iter = abortedSends.iterator();
-             iter.hasNext();) {
-            ClientResponse response = iter.next();
-            responses.add(response);
-            iter.remove();
-        }
+    private void handleAbortedSends(List<ClientResponse> responses) {
+        responses.addAll(abortedSends);
+        abortedSends.clear();
     }
 
     /**
@@ -588,8 +582,7 @@ public class NetworkClient implements KafkaClient {
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
                 ApiVersionsRequest.Builder apiVersionRequest = new ApiVersionsRequest.Builder();
-                ClientRequest clientRequest = newClientRequest(
-                        node, apiVersionRequest, now, true, null);
+                ClientRequest clientRequest = newClientRequest(node, apiVersionRequest, now, true, null);
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
@@ -732,8 +725,7 @@ public class NetworkClient implements KafkaClient {
                 if (metadata.needMetadataForAllTopics())
                     metadataRequest = MetadataRequest.Builder.allTopics();
                 else
-                    metadataRequest = new MetadataRequest.Builder(
-                            new ArrayList<>(metadata.topics()));
+                    metadataRequest = new MetadataRequest.Builder(new ArrayList<>(metadata.topics()));
 
 
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
