@@ -15,14 +15,15 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Protocol;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.TreeMap;
 
 public class NodeApiVersions {
-    private final Collection<ApiVersionsResponse.ApiVersion> apiVersions;
+    private final Collection<ApiVersion> apiVersions;
 
     private final static ApiKeys[] ID_TO_APIKEY;
 
@@ -35,11 +36,11 @@ public class NodeApiVersions {
     // An array of the usable versions of each API, indexed by ApiKeys ID.
     private final short[] usableVersions;
 
-    public NodeApiVersions(Collection<ApiVersionsResponse.ApiVersion> apiVersions) {
+    public NodeApiVersions(Collection<ApiVersion> apiVersions) {
         this.apiVersions = apiVersions;
         this.usableVersions = new short[ID_TO_APIKEY.length];
         Arrays.fill(usableVersions, (short) -1);
-        for (ApiVersionsResponse.ApiVersion apiVersion: apiVersions) {
+        for (ApiVersion apiVersion: apiVersions) {
             int index = apiVersion.apiKey;
             if ((index < 0) || (index >= usableVersions.length)) {
                 continue;
@@ -61,13 +62,12 @@ public class NodeApiVersions {
     }
 
     public short getUsableVersion(short apiKey) {
-        if ((apiKey < 0) || (apiKey >= usableVersions.length)) {
+        if ((apiKey < 0) || (apiKey >= usableVersions.length) || (usableVersions[apiKey] < 0)) {
             throw new UnsupportedVersionException("The client cannot send an " +
                     "API request of type " + (int) apiKey + ", because the " +
                     "server does not understand any of the versions this client supports.");
-        } else {
-            return usableVersions[apiKey];
         }
+        return usableVersions[apiKey];
     }
 
     @Override
@@ -79,49 +79,44 @@ public class NodeApiVersions {
         //
         // This toString method is relatively expensive, so you probably want to avoid
         // calling it unless debug logging is turned on.
-        TreeMap<Integer, CharSequence> apiKeysText = new TreeMap<Integer, CharSequence>();
-        for (ApiVersionsResponse.ApiVersion apiVersion: this.apiVersions) {
-            StringBuilder bld = new StringBuilder();
-            int apiKey = apiVersion.apiKey;
-            if ((apiKey < 0) || (apiKey >= ID_TO_APIKEY.length)) {
-                bld.append("UNKNOWN(").append(apiKey).append("): ");
-            } else {
-                bld.append(ID_TO_APIKEY[apiKey].name).
-                    append("(").append(apiKey).append("): ");
-            }
-            if (apiVersion.minVersion == apiVersion.maxVersion) {
-                bld.append((int) apiVersion.minVersion);
-            } else {
-                bld.append((int) apiVersion.minVersion).
-                        append(" to ").
-                        append(apiVersion.maxVersion);
-            }
-            if ((apiKey >= 0) && (apiKey < ID_TO_APIKEY.length)) {
-                int usableVersion = usableVersions[apiKey];
-                if (usableVersion < 0) {
-                    bld.append(" [usable: NONE]");
-                } else {
-                    bld.append(" [usable: ").append(usableVersion).append("]");
-                }
-            }
-            apiKeysText.put(Integer.valueOf(apiVersion.apiKey), bld);
-        }
+        TreeMap<Integer, String> apiKeysText = new TreeMap<>();
+        for (ApiVersion apiVersion: this.apiVersions)
+            apiKeysText.put(Integer.valueOf(apiVersion.apiKey), apiVersionToText(apiVersion));
         for (int apiKey = ApiKeys.MIN_API_KEY; apiKey <= ApiKeys.MAX_API_KEY; apiKey++) {
             if (!apiKeysText.containsKey(apiKey)) {
                 StringBuilder bld = new StringBuilder();
                 bld.append(ID_TO_APIKEY[apiKey].name).append("(").
                     append(apiKey).append("): ").append("UNSUPPORTED");
-                apiKeysText.put(Integer.valueOf(apiKey), bld);
+                apiKeysText.put(Integer.valueOf(apiKey), bld.toString());
             }
         }
+        return "{" + Utils.join(apiKeysText.values(), ", ") + "}";
+    }
+
+    private String apiVersionToText(ApiVersion apiVersion) {
         StringBuilder bld = new StringBuilder();
-        bld.append("{");
-        String prefix = "";
-        for (CharSequence seq : apiKeysText.values()) {
-            bld.append(prefix).append(seq);
-            prefix = ", ";
+        int apiKey = apiVersion.apiKey;
+        if ((apiKey < 0) || (apiKey >= ID_TO_APIKEY.length)) {
+            bld.append("UNKNOWN(").append(apiKey).append("): ");
+        } else {
+            bld.append(ID_TO_APIKEY[apiKey].name).
+                    append("(").append(apiKey).append("): ");
         }
-        bld.append("}");
+        if (apiVersion.minVersion == apiVersion.maxVersion) {
+            bld.append((int) apiVersion.minVersion);
+        } else {
+            bld.append((int) apiVersion.minVersion).
+                    append(" to ").
+                    append(apiVersion.maxVersion);
+        }
+        if ((apiKey >= 0) && (apiKey < ID_TO_APIKEY.length)) {
+            int usableVersion = usableVersions[apiKey];
+            if (usableVersion < 0) {
+                bld.append(" [usable: NONE]");
+            } else {
+                bld.append(" [usable: ").append(usableVersion).append("]");
+            }
+        }
         return bld.toString();
     }
 }
