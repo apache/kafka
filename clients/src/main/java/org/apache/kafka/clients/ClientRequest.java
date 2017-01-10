@@ -59,10 +59,10 @@ public final class ClientRequest {
         return "ClientRequest(expectResponse=" + expectResponse +
             ", callback=" + callback +
             ", destination=" + destination +
-            ", requestBuilder=" + requestBuilder +
             ", correlationId=" + correlationId +
             ", clientId=" + clientId +
             ", createdTimeMs=" + createdTimeMs +
+            ", requestBuilder=" + requestBuilder +
             ")";
     }
 
