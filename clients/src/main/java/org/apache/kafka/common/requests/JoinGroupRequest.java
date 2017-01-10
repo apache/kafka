@@ -117,7 +117,7 @@ public class JoinGroupRequest extends AbstractRequest {
         public JoinGroupRequest build() {
             short version = version();
             if (version < 1) {
-                rebalanceTimeout = sessionTimeout;
+                rebalanceTimeout = -1;
             }
             return new JoinGroupRequest(version, groupId, sessionTimeout,
                     rebalanceTimeout, memberId, protocolType, groupProtocols);
