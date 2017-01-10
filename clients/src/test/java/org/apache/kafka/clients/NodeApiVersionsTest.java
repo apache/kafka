@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -87,7 +89,12 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, (short) 0, (short) 0));
         versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
-        assertEquals(-1, versions.getUsableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id));
+        try {
+            versions.getUsableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
+            Assert.fail("expected UnsupportedVersionException");
+        } catch (UnsupportedVersionException e) {
+            // pass
+        }
         assertEquals(2, versions.getUsableVersion(ApiKeys.FETCH.id));
     }
 }
