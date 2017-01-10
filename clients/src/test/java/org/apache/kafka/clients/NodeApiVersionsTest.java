@@ -90,11 +90,11 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         try {
-            versions.getUsableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
+            versions.getUsableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
             Assert.fail("expected UnsupportedVersionException");
         } catch (UnsupportedVersionException e) {
             // pass
         }
-        assertEquals(2, versions.getUsableVersion(ApiKeys.FETCH.id));
+        assertEquals(2, versions.getUsableVersion(ApiKeys.FETCH));
     }
 }

@@ -386,8 +386,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 protocolType(),
                 metadata()).setRebalanceTimeout(this.rebalanceTimeoutMs);
 
-        log.debug("Sending JoinGroup ({}) to coordinator {}",
-                requestBuilder, this.coordinator);
+        log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
         return client.send(coordinator, requestBuilder)
                 .compose(new JoinGroupResponseHandler());
     }
