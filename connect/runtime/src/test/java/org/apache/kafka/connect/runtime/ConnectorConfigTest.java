@@ -32,7 +32,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class ConnectorConfigTest {
+public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     public static abstract class TestConnector extends Connector {
     }
@@ -125,7 +125,7 @@ public class ConnectorConfigTest {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(props);
-        final List<Transformation> transformations = config.transformations();
+        final List<Transformation<R>> transformations = config.transformations();
         assertEquals(1, transformations.size());
         final SimpleTransformation xform = (SimpleTransformation) transformations.get(0);
         assertEquals(42, xform.magicNumber);
@@ -153,7 +153,7 @@ public class ConnectorConfigTest {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(props);
-        final List<Transformation> transformations = config.transformations();
+        final List<Transformation<R>> transformations = config.transformations();
         assertEquals(2, transformations.size());
         assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);
         assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);

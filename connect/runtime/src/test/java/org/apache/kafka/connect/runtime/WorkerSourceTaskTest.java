@@ -85,7 +85,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Mock private SourceTask sourceTask;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
-    @Mock private TransformationChain transformationChain;
+    @Mock private TransformationChain<SourceRecord> transformationChain;
     @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private OffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;

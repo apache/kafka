@@ -55,7 +55,7 @@ class WorkerSourceTask extends WorkerTask {
     private final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
-    private final TransformationChain transformationChain;
+    private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
     private final OffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
@@ -81,7 +81,7 @@ class WorkerSourceTask extends WorkerTask {
                             TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
-                            TransformationChain transformationChain,
+                            TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,

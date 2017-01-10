@@ -24,22 +24,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-public class TransformationChain {
+public class TransformationChain<R extends ConnectRecord<R>> {
 
-    public static final TransformationChain NO_OP = new TransformationChain(Collections.<Transformation>emptyList());
+    private final List<Transformation<R>> transformations;
 
-    private final List<Transformation> transformations;
-
-    public TransformationChain(List<Transformation> transformations) {
+    public TransformationChain(List<Transformation<R>> transformations) {
         this.transformations = transformations;
     }
 
-    @SuppressWarnings("unchecked")
-    public <R extends ConnectRecord<R>> R apply(R record) {
+    public R apply(R record) {
         if (transformations.isEmpty()) return record;
 
-        for (Transformation transformation : transformations) {
-            record = (R) transformation.apply(record);
+        for (Transformation<R> transformation : transformations) {
+            record = transformation.apply(record);
             if (record == null) break;
         }
 
@@ -47,7 +44,7 @@ public class TransformationChain {
     }
 
     public void close() {
-        for (Transformation transformation : transformations) {
+        for (Transformation<R> transformation : transformations) {
             transformation.close();
         }
     }
@@ -64,4 +61,9 @@ public class TransformationChain {
     public int hashCode() {
         return Objects.hash(transformations);
     }
+
+    public static <R extends ConnectRecord<R>> TransformationChain<R> noOp() {
+        return new TransformationChain<R>(Collections.<Transformation<R>>emptyList());
+    }
+
 }

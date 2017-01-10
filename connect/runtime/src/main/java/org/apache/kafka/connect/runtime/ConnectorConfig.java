@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.transforms.Transformation;
 
@@ -115,16 +116,16 @@ public class ConnectorConfig extends AbstractConfig {
     /**
      * Returns the initialized list of {@link Transformation} which are specified in {@link #TRANSFORMS_CONFIG}.
      */
-    public List<Transformation> transformations() {
+    public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
         if (transformAliases == null || transformAliases.isEmpty()) {
             return Collections.emptyList();
         }
 
-        final List<Transformation> transformations = new ArrayList<>(transformAliases.size());
+        final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
-            final Transformation transformation;
+            final Transformation<R> transformation;
             try {
                 transformation = getClass(prefix + "type").asSubclass(Transformation.class).newInstance();
             } catch (Exception e) {

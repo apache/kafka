@@ -109,7 +109,7 @@ public class WorkerSinkTaskTest {
     @Mock
     private Converter valueConverter;
     @Mock
-    private TransformationChain transformationChain;
+    private TransformationChain<SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock

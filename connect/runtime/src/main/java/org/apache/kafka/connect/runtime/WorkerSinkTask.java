@@ -62,7 +62,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
-    private final TransformationChain transformationChain;
+    private final TransformationChain<SinkRecord> transformationChain;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
@@ -83,7 +83,7 @@ class WorkerSinkTask extends WorkerTask {
                           WorkerConfig workerConfig,
                           Converter keyConverter,
                           Converter valueConverter,
-                          TransformationChain transformationChain,
+                          TransformationChain<SinkRecord> transformationChain,
                           Time time) {
         super(id, statusListener, initialState);
 
