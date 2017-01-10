@@ -59,14 +59,21 @@ public class NetworkClientTest {
 
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
 
+    private final NetworkClient clientWithNoPeerDiscovery = createNetworkClientWithNoPeerDiscovery();
+
     private NetworkClient createNetworkClient() {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
-                64 * 1024, 64 * 1024, requestTimeoutMs, time);
+                64 * 1024, 64 * 1024, requestTimeoutMs, time, true);
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-                "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+                "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time, true);
+    }
+
+    private NetworkClient createNetworkClientWithNoPeerDiscovery() {
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+                64 * 1024, 64 * 1024, requestTimeoutMs, time, false);
     }
 
     @Before
@@ -95,6 +102,11 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testSimpleRequestResponseWithNoPeerDiscovery() {
+        checkSimpleRequestResponse(clientWithNoPeerDiscovery);
+    }
+
+    @Test
     public void testClose() {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
@@ -116,10 +128,9 @@ public class NetworkClientTest {
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest.Builder builder =
-            new ProduceRequest.Builder((short) 1, 1000,
-                Collections.<TopicPartition, MemoryRecords>emptyMap());
+                new ProduceRequest.Builder((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = client.newClientRequest(
+        ClientRequest request = networkClient.newClientRequest(
                 node.idString(), builder, time.milliseconds(), true, handler);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
@@ -149,7 +160,9 @@ public class NetworkClientTest {
     }
 
     protected void awaitReady(NetworkClient client, Node node) {
-        maybeSetExpectedApiVersionsResponse();
+        if (client.discoverPeerVersions()) {
+            maybeSetExpectedApiVersionsResponse();
+        }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
