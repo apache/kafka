@@ -33,52 +33,11 @@ public class ScramFormatterTest {
 
     /**
      * Tests that the formatter implementation produces the same values for the
-     * example included in <a href="https://tools.ietf.org/html/rfc5802#section-5">RFC 5802</a>
-     */
-    @Test
-    public void rfc5802Example() throws Exception {
-        ScramFormatter formatter = new ScramFormatter("SHA-1", "HmacSHA1");
-
-        String password = "pencil";
-        String c1 = "n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL";
-        String s1 = "r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096";
-        String c2 = "c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts=";
-        String s2 = "v=rmF9pqV8S7suAoZWja4dJRkFsKQ=";
-        ClientFirstMessage clientFirst = new ClientFirstMessage(formatter.toBytes(c1));
-        ServerFirstMessage serverFirst = new ServerFirstMessage(formatter.toBytes(s1));
-        ClientFinalMessage clientFinal = new ClientFinalMessage(formatter.toBytes(c2));
-        ServerFinalMessage serverFinal = new ServerFinalMessage(formatter.toBytes(s2));
-
-        String username = clientFirst.saslName();
-        assertEquals("user", username);
-        String clientNonce = clientFirst.nonce();
-        assertEquals("fyko+d2lbbFgONRv9qkxdawL", clientNonce);
-        String serverNonce = serverFirst.nonce().substring(clientNonce.length());
-        assertEquals("3rfcNHYJY1ZVvWVs7j", serverNonce);
-        byte[] salt = serverFirst.salt();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("QSXCR+Q6sek8bf92"), salt);
-        int iterations = serverFirst.iterations();
-        assertEquals(4096, iterations);
-        byte[] channelBinding = clientFinal.channelBinding();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("biws"), channelBinding);
-        byte[] serverSignature = serverFinal.serverSignature();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("rmF9pqV8S7suAoZWja4dJRkFsKQ="), serverSignature);
-
-        byte[] saltedPassword = formatter.saltedPassword(password, salt, iterations);
-        byte[] serverKey = formatter.serverKey(saltedPassword);
-        byte[] computedProof = formatter.clientProof(saltedPassword, clientFirst, serverFirst, clientFinal);
-        assertArrayEquals(clientFinal.proof(), computedProof);
-        byte[] computedSignature = formatter.serverSignature(serverKey, clientFirst, serverFirst, clientFinal);
-        assertArrayEquals(serverFinal.serverSignature(), computedSignature);
-    }
-
-    /**
-     * Tests that the formatter implementation produces the same values for the
      * example included in <a href="https://tools.ietf.org/html/rfc5802#section-5">RFC 7677</a>
      */
     @Test
     public void rfc7677Example() throws Exception {
-        ScramFormatter formatter = new ScramFormatter("SHA-256", "HmacSHA256");
+        ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
 
         String password = "pencil";
         String c1 = "n,,n=user,r=rOprNGfwEbeRWgbNEkqO";

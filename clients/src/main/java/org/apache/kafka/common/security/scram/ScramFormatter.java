@@ -43,12 +43,8 @@ public class ScramFormatter {
     private final SecureRandom random;
 
     public ScramFormatter(ScramMechanism mechanism) throws NoSuchAlgorithmException {
-        this(mechanism.hashAlgorithm(), mechanism.macAlgorithm());
-    }
-
-    ScramFormatter(String hashAlgorithm, String macAlgorithm) throws NoSuchAlgorithmException {
-        this.messageDigest = MessageDigest.getInstance(hashAlgorithm);
-        this.mac = Mac.getInstance(macAlgorithm);
+        this.messageDigest = MessageDigest.getInstance(mechanism.hashAlgorithm());
+        this.mac = Mac.getInstance(mechanism.macAlgorithm());
         this.random = new SecureRandom();
     }
 
