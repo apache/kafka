@@ -547,7 +547,6 @@ public class TopologyBuilderTest {
 
             final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder, LocalMockProcessorSupplier.STORE_NAME);
             driver.process("topic", null, null);
-
         } catch (final StreamsException e) {
             final Throwable cause = e.getCause();
             if (cause != null

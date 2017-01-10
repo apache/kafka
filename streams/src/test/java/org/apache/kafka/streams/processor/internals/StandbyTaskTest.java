@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -81,8 +80,12 @@ public class StandbyTaskTest {
                     new MockStateStoreSupplier(storeName1, false).get(),
                     new MockStateStoreSupplier(storeName2, true).get()
             ),
-            Collections.<String, String>emptyMap(),
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            new HashMap<String, String>() {
+                {
+                    put(storeName1, storeChangelogTopicName1);
+                    put(storeName2, storeChangelogTopicName2);
+                }
+            });
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
@@ -97,8 +100,7 @@ public class StandbyTaskTest {
             {
                 put("ktable1", ktable.topic());
             }
-        },
-            Collections.<StateStore, ProcessorNode>emptyMap());
+        });
     private File baseDir;
     private StateDirectory stateDirectory;
 
@@ -319,7 +321,7 @@ public class StandbyTaskTest {
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
         final KStreamBuilder builder = new KStreamBuilder();
         builder.stream("topic").groupByKey().count("my-store");
-        final ProcessorTopology topology = builder.build(0);
+        final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
         StreamsConfig config = createConfig(baseDir);
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config, new StreamsMetrics() {
             @Override

@@ -65,8 +65,7 @@ public class AbstractTaskTest {
                                                       Collections.<String, SourceNode>emptyMap(),
                                                       Collections.<String, SinkNode>emptyMap(),
                                                       Collections.<StateStore>emptyList(),
-                                                      Collections.<String, String>emptyMap(),
-                                                      Collections.<StateStore, ProcessorNode>emptyMap()
+                                                      Collections.<String, String>emptyMap()
                                                ),
                                 consumer,
                                 consumer,

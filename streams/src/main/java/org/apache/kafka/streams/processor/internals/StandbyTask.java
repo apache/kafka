@@ -98,6 +98,11 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+        return recordCollector.offsets();
+    }
+
+    @Override
     public void close() {
         //no-op
     }

@@ -152,7 +152,7 @@ public class ProcessorTopologyTestDriver {
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
-        topology = builder.setApplicationId("ProcessorTopologyTestDriver").build(null);
+        topology = builder.setApplicationId(applicationId).build(null);
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
