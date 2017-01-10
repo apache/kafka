@@ -41,10 +41,11 @@ public interface KGroupedTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param adder         the instance of {@link Reducer} for addition
      * @param subtractor    the instance of {@link Reducer} for subtraction
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
      *         containing aggregated values for each key
      */
@@ -73,13 +74,14 @@ public interface KGroupedTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param subtractor    the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
@@ -97,11 +99,12 @@ public interface KGroupedTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param subtractor   the instance of {@link Aggregator} for subtraction
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
@@ -136,8 +139,9 @@ public interface KGroupedTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
      *         containing the number of values for each key
      */

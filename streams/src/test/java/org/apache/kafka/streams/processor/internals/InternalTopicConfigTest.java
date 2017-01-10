@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -44,6 +45,11 @@ public class InternalTopicConfigTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfNameIsNull() throws Exception {
         new InternalTopicConfig(null, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldThrowIfNameIsInvalid() throws Exception {
+        new InternalTopicConfig("foo bar baz", Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
     }
 
     @Test

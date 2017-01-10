@@ -173,9 +173,10 @@ public interface KTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic         the topic name
-     * @param storeName     the state store name used for this KTable
+     * @param storeName     the state store name used for this KTable; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(String topic, String storeName);
@@ -188,11 +189,12 @@ public interface KTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
      *                     if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic        the topic name
-     * @param storeName    the state store name used for this KTable
+     * @param storeName    the state store name used for this KTable; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic, String storeName);
@@ -208,13 +210,14 @@ public interface KTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param keySerde     key serde used to send key-value pairs,
      *                     if not specified the default key serde defined in the configuration will be used
      * @param valSerde     value serde used to send key-value pairs,
      *                     if not specified the default value serde defined in the configuration will be used
      * @param topic        the topic name
-     * @param storeName    the state store name used for this KTable
+     * @param storeName    the state store name used for this KTable; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic, String storeName);
@@ -228,6 +231,7 @@ public interface KTable<K, V> {
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param keySerde     key serde used to send key-value pairs,
      *                     if not specified the default key serde defined in the configuration will be used
@@ -238,7 +242,7 @@ public interface KTable<K, V> {
      *                     {@link org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner} will be used
      *                     &mdash; otherwise {@link DefaultPartitioner} will be used
      * @param topic        the topic name
-     * @param storeName    the state store name used for this KTable
+     * @param storeName    the state store name used for this KTable; valid characters are ASCII alphanumerics, '.', '_' and '-'
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
     KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic, String storeName);
