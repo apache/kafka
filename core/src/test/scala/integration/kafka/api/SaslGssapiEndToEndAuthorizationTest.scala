@@ -18,12 +18,10 @@ package kafka.api
 
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils
-import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection.immutable.List
 
-class SaslSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
-  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+class SaslGssapiEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override val clientPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName
   override val kafkaPrincipal = JaasTestUtils.KafkaServerPrincipalUnqualifiedName
   

@@ -20,6 +20,7 @@ import java.io.File
 import java.util.Properties
 
 import kafka.utils.{JaasTestUtils,TestUtils}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.GroupAuthorizationException
 import org.junit.{Before,Test}
@@ -28,7 +29,7 @@ import scala.collection.immutable.List
 import scala.collection.JavaConverters._
 
 abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
-
+  override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
   protected var clientKeytabFile: Option[File] = None
   
@@ -59,7 +60,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * The first consumer succeeds because it is allowed by the ACL, 
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
-  @Test
+  @Test(timeout=20000L)
   def testTwoConsumersWithDifferentSASLCredentials {
     setAclsAndProduce()
     val consumer1 = consumers.head

@@ -109,15 +109,17 @@ object JaasTestUtils {
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
   private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
   
-  val KafkaPlainUser = "testuser"
-  private val KafkaPlainPassword = "testuser-secret"
-  val KafkaPlainUser2 = "testuser2"
-  val KafkaPlainPassword2 = "testuser2-secret"
-  val KafkaPlainAdmin = "admin"
-  private val KafkaPlainAdminPassword = "admin-secret"
+  val KafkaPlainUser = "plain-user"
+  private val KafkaPlainPassword = "plain-user-secret"
+  val KafkaPlainUser2 = "plain-user2"
+  val KafkaPlainPassword2 = "plain-user2-secret"
+  val KafkaPlainAdmin = "plain-admin"
+  private val KafkaPlainAdminPassword = "plain-admin-secret"
 
   val KafkaScramUser = "scram-user"
   val KafkaScramPassword = "scram-user-secret"
+  val KafkaScramUser2 = "scram-user2"
+  val KafkaScramPassword2 = "scram-user2-secret"
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
@@ -141,8 +143,9 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
 
+  // this method returns the dynamic configuration, using credentials for user #1
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword).toString
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
 
   private def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
@@ -175,7 +178,11 @@ object JaasTestUtils {
     new JaasSection(KafkaServerContextName, modules)
   }
 
-  private def kafkaClientModule(mechanism: String, keytabLocation: Option[File], clientPrincipal: String, plainUser: String, plainPassword: String): JaasModule = {
+  // this method needs a cleanup when we are going to add more mechanisms 
+  private def kafkaClientModule(mechanism: String, 
+      keytabLocation: Option[File], clientPrincipal: String,
+      plainUser: String, plainPassword: String, 
+      scramUser: String, scramPassword: String): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -193,18 +200,20 @@ object JaasTestUtils {
         ).toJaasModule
       case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
         ScramLoginModule(
-          KafkaScramUser,
-          KafkaScramPassword
+          scramUser,
+          scramPassword
         ).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
   }
 
   /*
-   * uses the credentials for client2, as the credentials for client1 are set in the client configuration
+   * used for the static JAAS configuration, 
+   * so uses the credentials for client#2, as the credentials for client#1 are set with the dynamic configuration
    */
   private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanisms.map(m => kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2)))
+    new JaasSection(KafkaClientContextName, mechanisms.map(m => 
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)))
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
