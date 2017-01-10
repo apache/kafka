@@ -42,13 +42,13 @@ public class MockTime implements Time {
     }
 
     @Override
-    public synchronized long milliseconds() {
+    public long milliseconds() {
         maybeSleep(autoTickMs);
         return timeMs.get();
     }
 
     @Override
-    public synchronized long nanoseconds() {
+    public long nanoseconds() {
         maybeSleep(autoTickMs);
         return highResTimeNs.get();
     }
@@ -64,7 +64,7 @@ public class MockTime implements Time {
     }
 
     @Override
-    public synchronized void sleep(long ms) {
+    public void sleep(long ms) {
         timeMs.addAndGet(ms);
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
     }

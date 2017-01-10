@@ -1312,8 +1312,8 @@ public class ConsumerCoordinatorTest {
         time.sleep(heartbeatIntervalMs + 100);
         Thread.yield(); // Give heartbeat thread a chance to attempt heartbeat
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
-        Thread[] threads = new Thread[10];
-        int threadCount = Thread.currentThread().getThreadGroup().enumerate(threads);
+        Thread[] threads = new Thread[Thread.activeCount()];
+        int threadCount = Thread.enumerate(threads);
         for (int i = 0; i < threadCount; i++)
             assertFalse("Heartbeat thread active after close", threads[i].getName().contains(groupId));
     }

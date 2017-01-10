@@ -417,9 +417,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         long now = time.milliseconds();
         long endTimeMs = now + Math.min(timeoutMs - (now - startTimeMs), requestTimeoutMs);
         while (pendingAsyncCommits.get() > 0 || (coordinator != null && client.pendingRequestCount(coordinator) > 0)) {
-            long remainingTimeMs = endTimeMs - time.milliseconds();
             if (Thread.currentThread().isInterrupted())
                 throw new InterruptException("Consumer close was interrupted");
+            long remainingTimeMs = endTimeMs - time.milliseconds();
             if (remainingTimeMs > 0) {
                 if (coordinator == null)
                     ensureCoordinatorReady(remainingTimeMs);
