@@ -274,7 +274,6 @@ public class ProcessorStateManager {
         List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
 
         // restore states from changelog records
-
         StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
 
         long lastOffset = -1L;
@@ -295,6 +294,7 @@ public class ProcessorStateManager {
             }
             count++;
         }
+
         // record the restored offset for its change log partition
         restoredOffsets.put(storePartition, lastOffset + 1);
 
@@ -349,24 +349,22 @@ public class ProcessorStateManager {
                 if (ackedOffsets != null) {
                     Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
                     for (String storeName : stores.keySet()) {
-                        TopicPartition part;
-                        if (storeToChangelogTopic.containsKey(storeName))
-                            part = new TopicPartition(storeChangelogTopic(applicationId, storeName), getPartition(storeName));
-                        else
-                            part = new TopicPartition(storeName, getPartition(storeName));
+                        // only checkpoint the offset to the offsets file if
+                        // it is persistent AND changelog enabled
+                        if (stores.get(storeName).persistent() && storeToChangelogTopic.containsKey(storeName)) {
+                            String changelogTopic = storeToChangelogTopic.get(storeName);
+                            TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
 
-                        // only checkpoint the offset to the offsets file if it is persistent;
-                        if (stores.get(storeName).persistent()) {
-                            Long offset = ackedOffsets.get(part);
+                            Long offset = ackedOffsets.get(topicPartition);
 
                             if (offset != null) {
                                 // store the last offset + 1 (the log position after restoration)
-                                checkpointOffsets.put(part, offset + 1);
+                                checkpointOffsets.put(topicPartition, offset + 1);
                             } else {
                                 // if no record was produced. we need to check the restored offset.
-                                offset = restoredOffsets.get(part);
+                                offset = restoredOffsets.get(topicPartition);
                                 if (offset != null)
-                                    checkpointOffsets.put(part, offset);
+                                    checkpointOffsets.put(topicPartition, offset);
                             }
                         }
                     }

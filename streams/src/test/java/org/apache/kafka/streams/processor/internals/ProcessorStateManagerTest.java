@@ -63,11 +63,11 @@ public class ProcessorStateManagerTest {
     public static class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
         private final Serializer<Integer> serializer = new IntegerSerializer();
 
-        public TopicPartition assignedPartition = null;
-        public TopicPartition seekPartition = null;
-        public long seekOffset = -1L;
-        public boolean seekToBeginingCalled = false;
-        public boolean seekToEndCalled = false;
+        private TopicPartition assignedPartition = null;
+        private TopicPartition seekPartition = null;
+        private long seekOffset = -1L;
+        private boolean seekToBeginingCalled = false;
+        private boolean seekToEndCalled = false;
         private long endOffset = 0L;
         private long currentOffset = 0L;
 
@@ -192,7 +192,6 @@ public class ProcessorStateManagerTest {
 
     private final Set<TopicPartition> noPartitions = Collections.emptySet();
     private final String applicationId = "test-application";
-    private final String stateDir = "test";
     private final String persistentStoreName = "persistentStore";
     private final String nonPersistentStoreName = "nonPersistentStore";
     private final String persistentStoreTopicName = ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreName);
@@ -213,7 +212,11 @@ public class ProcessorStateManagerTest {
     public void testNoTopic() throws IOException {
         MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, Collections.<String, String>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, new HashMap<String, String>() {
+            {
+                put(nonPersistentStoreName, nonPersistentStoreName);
+            }
+        });
         try {
             stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
         } finally {
@@ -241,7 +244,12 @@ public class ProcessorStateManagerTest {
 
         MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, Collections.<String, String>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, new HashMap<String, String>() {
+            {
+                put(persistentStoreName, persistentStoreTopicName);
+                put(nonPersistentStoreName, nonPersistentStoreName);
+            }
+        });
         try {
             restoreConsumer.reset();
 
@@ -290,7 +298,12 @@ public class ProcessorStateManagerTest {
 
         MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false); // non persistent store
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 2), noPartitions, restoreConsumer, false, stateDirectory, Collections.<String, String>emptyMap());
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 2), noPartitions, restoreConsumer, false, stateDirectory, new HashMap<String, String>() {
+            {
+                put(persistentStoreName, persistentStoreTopicName);
+                put(nonPersistentStoreName, nonPersistentStoreTopicName);
+            }
+        });
         try {
             restoreConsumer.reset();
 
@@ -331,6 +344,11 @@ public class ProcessorStateManagerTest {
         String storeTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
         String storeTopicName3 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName3);
 
+        Map<String, String> storeToChangelogTopic = new HashMap<>();
+        storeToChangelogTopic.put(storeName1, storeTopicName1);
+        storeToChangelogTopic.put(storeName2, storeTopicName2);
+        storeToChangelogTopic.put(storeName3, storeTopicName3);
+
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME));
         checkpoint.write(Collections.singletonMap(new TopicPartition(storeTopicName1, 0), lastCheckpointedOffset));
 
@@ -363,7 +381,7 @@ public class ProcessorStateManagerTest {
         // if there is an source partition, inherit the partition id
         Set<TopicPartition> sourcePartitions = Utils.mkSet(new TopicPartition(storeTopicName3, 1));
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, sourcePartitions, restoreConsumer, true, stateDirectory, Collections.<String, String>emptyMap()); // standby
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, sourcePartitions, restoreConsumer, true, stateDirectory, storeToChangelogTopic); // standby
         try {
             restoreConsumer.reset();
 
@@ -435,7 +453,12 @@ public class ProcessorStateManagerTest {
         MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
         MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, null);
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, taskId, noPartitions, restoreConsumer, false, stateDirectory, new HashMap<String, String>() {
+            {
+                put(persistentStoreName, persistentStoreTopicName);
+                put(nonPersistentStoreName, nonPersistentStoreTopicName);
+            }
+        });
         try {
             // make sure the checkpoint file is deleted
             assertFalse(checkpointFile.exists());
