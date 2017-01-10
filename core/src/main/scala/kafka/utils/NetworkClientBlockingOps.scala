@@ -107,7 +107,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     client.send(request, time.milliseconds())
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.requestHeader().correlationId() == request.correlationId
+        response.requestHeader.correlationId == request.correlationId
       }
       response.foreach { r =>
         if (r.wasDisconnected)
