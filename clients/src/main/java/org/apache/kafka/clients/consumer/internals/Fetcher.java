@@ -646,7 +646,7 @@ public class Fetcher<K, V> {
                         timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
                     }
                 } else {
-                    // Handle v1 and later reponse
+                    // Handle v1 and later response
                     log.debug("handling ListOffsetResponse response for {}.  Fetched offset {}, timestamp {}",
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {

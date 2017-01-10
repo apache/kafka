@@ -97,7 +97,7 @@ public class NetworkClient implements KafkaClient {
      */
     private final boolean discoverBrokerVersions;
 
-    private final Map<Integer, NodeApiVersions> nodeApiVersions = new HashMap<>();
+    private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
 
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
@@ -284,7 +284,7 @@ public class NetworkClient implements KafkaClient {
         AbstractRequest request = null;
         AbstractRequest.Builder builder = clientRequest.requestBuilder();
         try {
-            NodeApiVersions versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
+            NodeApiVersions versionInfo = nodeApiVersions.get(nodeId);
             // Note: if versionInfo is null, we have no server version information. This would be
             // the case when sending the initial ApiVersionRequest which fetches the version
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
@@ -293,7 +293,7 @@ public class NetworkClient implements KafkaClient {
                     log.trace("No version information found when sending message of type {} to node {}",
                             clientRequest.apiKey(), nodeId);
             } else {
-                short version = versionInfo.getUsableVersion(clientRequest.apiKey().id);
+                short version = versionInfo.getUsableVersion(clientRequest.apiKey());
                 if (log.isTraceEnabled())
                     log.trace("When sending message of type {} to node {}, the best usable " +
                             "version is {}", clientRequest.apiKey(), nodeId, version);
@@ -305,8 +305,8 @@ public class NetworkClient implements KafkaClient {
         } catch (ObsoleteBrokerException | UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
-            log.debug("Version mismatch when attempting to send " + clientRequest.toString() + " to " +
-                    clientRequest.destination(), e);
+            log.debug("Version mismatch when attempting to send {} to {}",
+                    clientRequest.toString(), clientRequest.destination(), e);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(),
                     clientRequest.callback(), clientRequest.destination(), now, now,
                     false, e, null);
@@ -454,7 +454,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
-        nodeApiVersions.remove(Integer.valueOf(nodeId));
+        nodeApiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
@@ -534,17 +534,17 @@ public class NetworkClient implements KafkaClient {
         final String node = req.destination;
         if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
             log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
-                    node, apiVersionsResponse.errorCode());
+                    node, Errors.forCode(apiVersionsResponse.errorCode()));
             this.selector.close(node);
             processDisconnection(responses, node, now);
             return;
         }
         int nodeId = Integer.parseInt(node);
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
-        nodeApiVersions.put(nodeId, nodeVersionInfo);
+        nodeApiVersions.put(String.valueOf(nodeId), nodeVersionInfo);
         this.connectionStates.ready(node);
         if (log.isDebugEnabled()) {
-            log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo.toString());
+            log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
         }
     }
 
