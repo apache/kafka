@@ -126,11 +126,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new IllegalArgumentException(String.format("Trying to register store %s that is not a known global store", store.name()));
         }
 
-        // Store is a view on other stores so don't bother trying to restore
         if (stateRestoreCallback == null) {
-            log.debug("No StateRestoreCallback provided for {}. State won't be restored assuming it is a view", store.name());
-            stores.put(store.name(), store);
-            return;
+            throw new IllegalArgumentException(String.format("The stateRestoreCallback provided for store %s was null", store.name()));
         }
 
         log.info("restoring state for global store {}", store.name());
@@ -189,10 +186,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public void flush(final InternalProcessorContext context) {
         log.debug("Flushing all global stores registered in the state manager");
         for (StateStore store : this.stores.values()) {
-            final ProcessorNode processorNode = topology.storeToProcessorNodeMap().get(store);
-            if (processorNode != null) {
-                context.setCurrentNode(processorNode);
-            }
             try {
                 log.trace("Flushing global store={}", store.name());
                 store.flush();

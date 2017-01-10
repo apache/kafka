@@ -51,7 +51,6 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -68,6 +67,7 @@ public class GlobalStateManagerImplTest {
     private NoOpReadOnlyStore store2;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
+    private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
 
     @Before
     public void before() throws IOException {
@@ -281,7 +281,6 @@ public class GlobalStateManagerImplTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws Exception {
         stateManager.initialize(context);
-        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         initializeConsumer(1, 1, t1);
         stateManager.register(new NoOpReadOnlyStore(store1.name()) {
             @Override
@@ -294,10 +293,14 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldRegisterButNotRestoreIfCallbackIsNull() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() throws Exception {
         stateManager.initialize(context);
-        stateManager.register(store1, false, null);
-        assertNotNull(stateManager.getStore(store1.name()));
+        try {
+            stateManager.register(store1, false, null);
+            fail("should have thrown due to null callback");
+        } catch (IllegalArgumentException e) {
+            //pass
+        }
     }
 
     @Test
@@ -316,6 +319,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotCloseStoresIfCloseAlreadyCalled() throws Exception {
         stateManager.initialize(context);
+        initializeConsumer(1, 1, t1);
         stateManager.register(new NoOpReadOnlyStore("t1-store") {
             @Override
             public void close() {
@@ -324,7 +328,7 @@ public class GlobalStateManagerImplTest {
                 }
                 super.close();
             }
-        }, false, null);
+        }, false, stateRestoreCallback);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
 
 
@@ -332,8 +336,10 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldAttemptToCloseAllStoresEventWhenSomeException() throws Exception {
+    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws Exception {
         stateManager.initialize(context);
+        initializeConsumer(1, 1, t1);
+        initializeConsumer(1, 1, t2);
         final NoOpReadOnlyStore store = new NoOpReadOnlyStore("t1-store") {
             @Override
             public void close() {
@@ -341,9 +347,9 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.register(store, false, null);
+        stateManager.register(store, false, stateRestoreCallback);
 
-        stateManager.register(store2, false, null);
+        stateManager.register(store2, false, stateRestoreCallback);
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
