@@ -20,7 +20,7 @@ package kafka.admin
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
-import kafka.server.{DynamicConfig, ConfigType}
+import kafka.server.{DynamicConfig, ConfigEntityName, ConfigType}
 import kafka.utils._
 import kafka.utils.ZkUtils._
 import java.util.Random
@@ -504,7 +504,10 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
   def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties) {
-    DynamicConfig.Client.validate(configs)
+    if (sanitizedEntityName == ConfigEntityName.Default || sanitizedEntityName.contains("/clients"))
+      DynamicConfig.Client.validate(configs)
+    else
+      DynamicConfig.User.validate(configs)
     changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
