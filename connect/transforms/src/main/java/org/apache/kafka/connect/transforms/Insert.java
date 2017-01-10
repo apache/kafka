@@ -17,6 +17,9 @@
 
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -26,7 +29,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.transforms.util.SchemaUpdateCache;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Date;
@@ -83,8 +85,6 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         }
     }
 
-    private final SchemaUpdateCache schemaUpdateCache = new SchemaUpdateCache();
-
     private InsertionSpec topicField;
     private InsertionSpec partitionField;
     private InsertionSpec offsetField;
@@ -92,6 +92,8 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     private InsertionSpec staticField;
     private String staticValue;
     private boolean applicable;
+
+    private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -104,7 +106,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
         staticValue = config.getString(Keys.STATIC_VALUE);
         applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
 
-        schemaUpdateCache.init();
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
     }
 
     @Override
@@ -231,7 +233,7 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
 
     @Override
     public void close() {
-        schemaUpdateCache.close();
+        schemaUpdateCache = null;
     }
 
     @Override
