@@ -41,11 +41,11 @@ public final class Sensor {
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
 
-    public enum RecordLevel {
+    public enum RecordingLevel {
         INFO("INFO"), DEBUG("DEBUG");
         private String value;
 
-        RecordLevel(String value) {
+        RecordingLevel(String value) {
             this.value = value;
         }
 
@@ -58,8 +58,8 @@ public final class Sensor {
             return this.getValue();
         }
 
-        public static RecordLevel fromString(String value) {
-            for (RecordLevel v : values()) {
+        public static RecordingLevel fromString(String value) {
+            for (RecordingLevel v : values()) {
                 if (v.getValue().equalsIgnoreCase(value)) {
                     return v;
                 }
@@ -67,7 +67,7 @@ public final class Sensor {
             throw new IllegalArgumentException("record Level " + value + " type not defined");
         }
 
-        public boolean shouldRecord(final RecordLevel configLevel) {
+        public boolean shouldRecord(final RecordingLevel configLevel) {
             if (configLevel.equals(DEBUG)) {
                 return true;
             } else {
@@ -77,10 +77,10 @@ public final class Sensor {
 
     }
 
-    private final RecordLevel recordLevel;
+    private final RecordingLevel recordingLevel;
 
     Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
-           long inactiveSensorExpirationTimeSeconds, RecordLevel recordLevel) {
+           long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
@@ -91,7 +91,7 @@ public final class Sensor {
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
-        this.recordLevel = recordLevel;
+        this.recordingLevel = recordingLevel;
         checkForest(new HashSet<Sensor>());
     }
 
@@ -123,7 +123,7 @@ public final class Sensor {
      * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
      */
     public boolean shouldRecord() {
-        return this.recordLevel.shouldRecord(config.recordLevel());
+        return this.recordingLevel.shouldRecord(config.recordLevel());
     }
     /**
      * Record a value with this sensor

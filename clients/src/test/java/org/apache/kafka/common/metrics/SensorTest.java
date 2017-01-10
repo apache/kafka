@@ -22,37 +22,37 @@ import org.junit.Test;
 public class SensorTest {
     @Test
     public void testRecordLevelEnum() {
-        Sensor.RecordLevel configLevel = Sensor.RecordLevel.INFO;
-        assertTrue(Sensor.RecordLevel.INFO.shouldRecord(configLevel));
-        assertFalse(Sensor.RecordLevel.DEBUG.shouldRecord(configLevel));
+        Sensor.RecordingLevel configLevel = Sensor.RecordingLevel.INFO;
+        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel));
+        assertFalse(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel));
 
-        configLevel = Sensor.RecordLevel.DEBUG;
-        assertTrue(Sensor.RecordLevel.INFO.shouldRecord(configLevel));
-        assertTrue(Sensor.RecordLevel.DEBUG.shouldRecord(configLevel));
+        configLevel = Sensor.RecordingLevel.DEBUG;
+        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel));
+        assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel));
 
-        assertEquals(Sensor.RecordLevel.valueOf(Sensor.RecordLevel.DEBUG.toString()),
-            Sensor.RecordLevel.DEBUG);
-        assertEquals(Sensor.RecordLevel.valueOf(Sensor.RecordLevel.INFO.toString()),
-            Sensor.RecordLevel.INFO);
+        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()),
+            Sensor.RecordingLevel.DEBUG);
+        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()),
+            Sensor.RecordingLevel.INFO);
     }
 
     @Test
     public void testShouldRecord() {
-        MetricConfig debugConfig = new MetricConfig().recordLevel(Sensor.RecordLevel.DEBUG);
-        MetricConfig infoConfig = new MetricConfig().recordLevel(Sensor.RecordLevel.INFO);
+        MetricConfig debugConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
+        MetricConfig infoConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
 
         Sensor infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
-            0, Sensor.RecordLevel.INFO);
+            0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
         infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
-            0, Sensor.RecordLevel.DEBUG);
+            0, Sensor.RecordingLevel.DEBUG);
         assertTrue(infoSensor.shouldRecord());
 
         Sensor debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
-            0, Sensor.RecordLevel.INFO);
+            0, Sensor.RecordingLevel.INFO);
         assertTrue(debugSensor.shouldRecord());
         debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
-            0, Sensor.RecordLevel.DEBUG);
+            0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
     }
 }

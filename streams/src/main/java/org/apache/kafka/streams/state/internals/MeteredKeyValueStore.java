@@ -119,15 +119,15 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.context = context;
         this.root = root;
         this.metrics = (StreamsMetricsImpl) context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.DEBUG);
-        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.RecordLevel.DEBUG);
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordLevel.DEBUG);
-        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete", Sensor.RecordLevel.DEBUG);
-        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all", Sensor.RecordLevel.DEBUG);
-        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all", Sensor.RecordLevel.DEBUG);
-        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range", Sensor.RecordLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordLevel.DEBUG);
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordLevel.DEBUG);
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
+        this.putIfAbsentTime = this.metrics.addLatencySensor(metricScope, name, "put-if-absent", Sensor.RecordingLevel.DEBUG);
+        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
+        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete", Sensor.RecordingLevel.DEBUG);
+        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all", Sensor.RecordingLevel.DEBUG);
+        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all", Sensor.RecordingLevel.DEBUG);
+        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range", Sensor.RecordingLevel.DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
 
         // register and possibly restore the state from the logs
         metrics.measureLatencyNs(time, initDelegate, this.restoreTime);

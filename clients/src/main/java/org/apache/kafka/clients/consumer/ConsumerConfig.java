@@ -178,7 +178,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>metrics.log.level</code>
      */
-    public static final String METRICS_RECORD_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORD_LEVEL_CONFIG;
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     /**
      * <code>metric.reporters</code>
@@ -333,12 +333,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_RECORD_LEVEL_CONFIG,
+                                .define(METRICS_RECORDING_LEVEL_CONFIG,
                                         Type.STRING,
-                                        Sensor.RecordLevel.INFO.toString(),
-                                        in(Sensor.RecordLevel.INFO.toString(), Sensor.RecordLevel.DEBUG.toString()),
+                                        Sensor.RecordingLevel.INFO.toString(),
+                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
+                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",

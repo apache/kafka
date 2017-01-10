@@ -54,13 +54,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
-    public Sensor addSensor(String name, Sensor.RecordLevel recordLevel) {
-        return metrics.sensor(name, recordLevel);
+    public Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel) {
+        return metrics.sensor(name, recordingLevel);
     }
 
     @Override
-    public Sensor addSensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
-        return metrics.sensor(name, recordLevel, parents);
+    public Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return metrics.sensor(name, recordingLevel, parents);
     }
 
     @Override
@@ -109,15 +109,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
         Map<String, String> tagMap = tagMap(tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
+        Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
         addLatencyMetrics(scopeName, parent, "all", operationName, tagMap);
 
         // add the operation metrics with additional tags
-        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
+        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addLatencyMetrics(scopeName, sensor, entityName, operationName, tagMap);
 
         return sensor;
@@ -127,15 +127,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+    public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
         Map<String, String> tagMap = tagMap(tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor(sensorName(operationName, null), recordLevel);
+        Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
         addThroughputMetrics(scopeName, parent, "all", operationName, tagMap);
 
         // add the operation metrics with additional tags
-        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordLevel, parent);
+        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addThroughputMetrics(scopeName, sensor, entityName, operationName, tagMap);
 
         return sensor;

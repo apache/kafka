@@ -57,7 +57,7 @@ public class MeteredSegmentedBytesStoreTest {
             }
 
             @Override
-            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
                 return metrics.sensor(operationName);
             }
 
@@ -67,7 +67,7 @@ public class MeteredSegmentedBytesStoreTest {
             }
 
             @Override
-            public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordLevel recordLevel, String... tags) {
+            public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
                 return metrics.sensor(operationName);
             }
 
@@ -82,12 +82,12 @@ public class MeteredSegmentedBytesStoreTest {
             }
 
             @Override
-            public Sensor addSensor(String name, Sensor.RecordLevel recordLevel) {
+            public Sensor addSensor(String name, Sensor.RecordingLevel recordLevel) {
                 return metrics.sensor(name);
             }
 
             @Override
-            public Sensor addSensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
+            public Sensor addSensor(String name, Sensor.RecordingLevel recordLevel, Sensor... parents) {
                 return metrics.sensor(name);
             }
 

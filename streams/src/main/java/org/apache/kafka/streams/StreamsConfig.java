@@ -123,7 +123,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
     /** <code>metrics.record.level</code> */
-    public static final String METRICS_RECORD_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORD_LEVEL_CONFIG;
+    public static final String METRICS_RECORD_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
@@ -244,10 +244,10 @@ public class StreamsConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
                                 .define(METRICS_RECORD_LEVEL_CONFIG,
                                         Type.STRING,
-                                        Sensor.RecordLevel.INFO.toString(),
-                                        in(Sensor.RecordLevel.INFO.toString(), Sensor.RecordLevel.DEBUG.toString()),
+                                        Sensor.RecordingLevel.INFO.toString(),
+                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_RECORD_LEVEL_DOC)
+                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(APPLICATION_SERVER_CONFIG,
                                         Type.STRING,
                                         "",

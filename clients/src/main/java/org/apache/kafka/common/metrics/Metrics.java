@@ -242,18 +242,18 @@ public class Metrics implements Closeable {
      * @return The sensor
      */
     public Sensor sensor(String name) {
-        return this.sensor(name, Sensor.RecordLevel.INFO);
+        return this.sensor(name, Sensor.RecordingLevel.INFO);
     }
 
     /**
      * Get or create a sensor with the given unique name and no parent sensors and with a given
      * recording level.
      * @param name The sensor name.
-     * @param recordLevel The recording level.
+     * @param recordingLevel The recording level.
      * @return The sensor
      */
-    public Sensor sensor(String name, Sensor.RecordLevel recordLevel) {
-        return sensor(name, null, recordLevel, (Sensor[]) null);
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel) {
+        return sensor(name, null, recordingLevel, (Sensor[]) null);
     }
 
 
@@ -265,7 +265,7 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public Sensor sensor(String name, Sensor... parents) {
-        return this.sensor(name, Sensor.RecordLevel.INFO, parents);
+        return this.sensor(name, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**
@@ -273,11 +273,11 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor.
      * @param parents The parent sensors.
-     * @param recordLevel The recording level.
+     * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public Sensor sensor(String name, Sensor.RecordLevel recordLevel, Sensor... parents) {
-        return sensor(name, null, recordLevel, parents);
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, null, recordingLevel, parents);
     }
 
     /**
@@ -289,7 +289,7 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return this.sensor(name, config, Sensor.RecordLevel.INFO, parents);
+        return this.sensor(name, config, Sensor.RecordingLevel.INFO, parents);
     }
 
 
@@ -298,12 +298,12 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param recordLevel The recording level.
+     * @param recordingLevel The recording level.
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordLevel recordLevel, Sensor... parents) {
-        return sensor(name, config, Long.MAX_VALUE, recordLevel, parents);
+    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
     }
 
     /**
@@ -314,13 +314,13 @@ public class Metrics implements Closeable {
      * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
-     * @param recordLevel The recording level.
+     * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordLevel recordLevel, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordLevel);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -348,7 +348,7 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
-        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordLevel.INFO, parents);
+        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**

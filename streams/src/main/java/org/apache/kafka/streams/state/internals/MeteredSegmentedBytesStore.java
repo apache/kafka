@@ -55,13 +55,13 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordLevel.DEBUG);
-        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.RecordLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordLevel.DEBUG);
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordLevel.DEBUG);
-        this.removeTime = this.metrics.addLatencySensor(metricScope, name, "remove", Sensor.RecordLevel.DEBUG);
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
+        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
+        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
+        this.removeTime = this.metrics.addLatencySensor(metricScope, name, "remove", Sensor.RecordingLevel.DEBUG);
 
-        final Sensor restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordLevel.DEBUG);
+        final Sensor restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
