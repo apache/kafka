@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -162,11 +162,17 @@ public class TopologyBuilder {
             this.valDeserializer = valDeserializer;
         }
 
-        public String[] getTopics() {
+        String[] getTopics() {
             return topics;
         }
 
-        public String[] getTopics(Collection<String> subscribedTopics) {
+        String[] getTopics(Collection<String> subscribedTopics) {
+            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
+            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
+            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
+            if (subscribedTopics.isEmpty())
+                return new String[] {"Pattern[" + pattern + "]"};
+
             List<String> matchedTopics = new ArrayList<>();
             for (String update : subscribedTopics) {
                 if (this.pattern == topicToPatterns.get(update)) {
@@ -188,7 +194,15 @@ public class TopologyBuilder {
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build() {
-            return new SourceNode(name, nodeToSourceTopics.get(name), keyDeserializer, valDeserializer);
+            final String[] sourceTopics = nodeToSourceTopics.get(name);
+
+            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
+            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
+            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
+            if (sourceTopics == null)
+                return new SourceNode(name, new String[] {"Pattern[" + pattern + "]"}, keyDeserializer, valDeserializer);
+            else
+                return new SourceNode(name, maybeDecorateInternalSourceTopics(sourceTopics).toArray(new String[sourceTopics.length]), keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(String topic) {
@@ -727,7 +741,10 @@ public class TopologyBuilder {
         int nodeGroupId = 0;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        for (String nodeName : Utils.sorted(nodeToSourceTopics.keySet())) {
+        final HashSet<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
+        allSourceNodes.addAll(nodeToSourcePatterns.keySet());
+
+        for (String nodeName : Utils.sorted(allSourceNodes)) {
             String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -805,6 +822,7 @@ public class TopologyBuilder {
                     String[] topics = (sourceNodeFactory.pattern != null) ?
                             sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) :
                             sourceNodeFactory.getTopics();
+
                     for (String topic : topics) {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
@@ -912,11 +930,11 @@ public class TopologyBuilder {
     }
 
     private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier supplier, final String name) {
-        if (!(supplier instanceof RocksDBWindowStoreSupplier)) {
+        if (!(supplier instanceof WindowStoreSupplier)) {
             return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
         }
 
-        final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) supplier;
+        final WindowStoreSupplier windowStoreSupplier = (WindowStoreSupplier) supplier;
         final InternalTopicConfig config = new InternalTopicConfig(name,
                                                                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
                                                                                InternalTopicConfig.CleanupPolicy.delete),

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -30,11 +32,11 @@ import java.util.NoSuchElementException;
  */
 class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator<V> {
     private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
-    private final PeekingWindowIterator<byte[]> storeIterator;
+    private final KeyValueIterator<Bytes, byte[]> storeIterator;
     private final StateSerdes<K, V> serdes;
 
     public MergedSortedCachedWindowStoreIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
-                                                 final PeekingWindowIterator<byte[]> storeIterator,
+                                                 final KeyValueIterator<Bytes, byte[]> storeIterator,
                                                  final StateSerdes<K, V> serdes) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
@@ -55,16 +57,16 @@ class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator
 
         Long nextCacheTimestamp = null;
         if (cacheIterator.hasNext()) {
-            nextCacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheIterator.peekNextKey());
+            nextCacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheIterator.peekNextKey().get());
         }
 
         Long nextStoreTimestamp = null;
         if (storeIterator.hasNext()) {
-            nextStoreTimestamp = storeIterator.peekNext().key;
+            nextStoreTimestamp = WindowStoreUtils.timestampFromBinaryKey(storeIterator.peekNextKey().get());
         }
 
         if (nextCacheTimestamp == null) {
-            return nextStoreValue();
+            return nextStoreValue(nextStoreTimestamp);
         }
 
         if (nextStoreTimestamp == null) {
@@ -73,7 +75,7 @@ class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator
 
         final int comparison = nextCacheTimestamp.compareTo(nextStoreTimestamp);
         if (comparison > 0) {
-            return nextStoreValue();
+            return nextStoreValue(nextStoreTimestamp);
         } else if (comparison < 0) {
             return nextCacheValue(nextCacheTimestamp);
         } else {
@@ -83,13 +85,13 @@ class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator
     }
 
     private KeyValue<Long, V> nextCacheValue(final Long timestamp) {
-        final KeyValue<byte[], LRUCacheEntry> next = cacheIterator.next();
+        final KeyValue<Bytes, LRUCacheEntry> next = cacheIterator.next();
         return KeyValue.pair(timestamp, serdes.valueFrom(next.value.value));
     }
 
-    private KeyValue<Long, V> nextStoreValue() {
-        final KeyValue<Long, byte[]> next = storeIterator.next();
-        return KeyValue.pair(next.key, serdes.valueFrom(next.value));
+    private KeyValue<Long, V> nextStoreValue(final Long timestamp) {
+        final KeyValue<Bytes, byte[]> next = storeIterator.next();
+        return KeyValue.pair(timestamp, serdes.valueFrom(next.value));
     }
 
     @Override

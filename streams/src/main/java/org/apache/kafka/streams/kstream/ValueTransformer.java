@@ -36,7 +36,7 @@ public interface ValueTransformer<V, R> {
      *
      * @param context the context; may not be null
      */
-    void init(ProcessorContext context);
+    void init(final ProcessorContext context);
 
     /**
      * Transform the record with the given key and value.
@@ -44,7 +44,7 @@ public interface ValueTransformer<V, R> {
      * @param value the value for the record
      * @return new value
      */
-    R transform(V value);
+    R transform(final V value);
 
     /**
      * Perform any periodic operations and possibly return a new value, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
@@ -53,7 +53,7 @@ public interface ValueTransformer<V, R> {
      * @param timestamp the stream time when this method is being called
      * @return new value; if null it will not be forwarded to down stream
      */
-    R punctuate(long timestamp);
+    R punctuate(final long timestamp);
 
     /**
      * Close this processor and clean up any resources.

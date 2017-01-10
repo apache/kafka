@@ -15,23 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.smoketest;
+package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.TimestampExtractor;
+import javax.security.auth.callback.Callback;
 
-public class TestTimestampExtractor implements TimestampExtractor {
+public class ScramCredentialCallback implements Callback {
+    private ScramCredential scramCredential;
 
-    private final long base = SmokeTestUtil.START_TIME;
-
-    @Override
-    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
-        switch (record.topic()) {
-            case "data":
-                return base + (Integer) record.value();
-            default:
-                return System.currentTimeMillis();
-        }
+    public ScramCredential scramCredential() {
+        return scramCredential;
     }
 
+    public void scramCredential(ScramCredential scramCredential) {
+        this.scramCredential = scramCredential;
+    }
 }

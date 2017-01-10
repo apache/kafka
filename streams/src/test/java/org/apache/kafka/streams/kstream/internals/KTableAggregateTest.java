@@ -156,13 +156,14 @@ public class KTableAggregateTest {
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
                 public KeyValue<String, String> apply(String key, String value) {
-                    if (key.equals("null")) {
+                switch (key) {
+                    case "null":
                         return KeyValue.pair(null, value);
-                    } else if (key.equals("NULL")) {
+                    case "NULL":
                         return null;
-                    } else {
+                    default:
                         return KeyValue.pair(value, value);
-                    }
+                }
                 }
             },
                 stringSerde,

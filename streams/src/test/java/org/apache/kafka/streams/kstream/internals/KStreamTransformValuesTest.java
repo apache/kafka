@@ -88,8 +88,8 @@ public class KStreamTransformValuesTest {
         stream.transformValues(valueTransformerSupplier).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
         }
 
         assertEquals(4, processor.processed.size());

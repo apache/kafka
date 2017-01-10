@@ -81,7 +81,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         }
 
         public PartitionData(long offset, String metadata) {
-            this(offset, DEFAULT_TIMESTAMP, metadata);
+            this(offset, DEFAULT_RETENTION_TIME, metadata);
         }
     }
 

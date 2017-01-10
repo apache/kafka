@@ -747,14 +747,14 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
         fail(msg)
-      Thread.sleep(waitTime.min(100L))
+      Thread.sleep(waitTime.min(pause))
     }
     // should never hit here
     throw new RuntimeException("unexpected error")
@@ -1038,6 +1038,12 @@ object TestUtils extends Logging {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
     new String(bytes, encoding)
+  }
+
+  def copyOf(props: Properties): Properties = {
+    val copy = new Properties()
+    copy.putAll(props)
+    copy
   }
 
   def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {

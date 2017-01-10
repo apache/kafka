@@ -108,7 +108,9 @@ if (new File('.git').exists()) {
         'CONTRIBUTING.md',
         'gradlew',
         'gradlew.bat',
-        '**/README.md'
+        '**/README.md',
+        '**/id_rsa',
+        '**/id_rsa.pub'
     ])
   }
 }
@@ -414,6 +416,7 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+    testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime

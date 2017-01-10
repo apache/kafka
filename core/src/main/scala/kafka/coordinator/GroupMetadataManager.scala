@@ -489,7 +489,7 @@ class GroupMetadataManager(val brokerId: Int,
             expireTimestamp = {
               // special handling for version 0:
               // set the expiration time stamp as commit time stamp + server default retention time
-              if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+              if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME)
                 offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs
               else
                 offsetAndMetadata.expireTimestamp

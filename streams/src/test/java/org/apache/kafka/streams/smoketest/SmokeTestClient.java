@@ -19,7 +19,6 @@ package org.apache.kafka.streams.smoketest;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -27,15 +26,13 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.Windowed;
 
 import java.io.File;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
@@ -84,7 +81,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TestTimestampExtractor.class.getName());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
@@ -124,7 +120,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value < aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of(),
+                TimeWindows.of(TimeUnit.DAYS.toMillis(1)),
                 intSerde, "uwin-min"
         ).toStream().map(
                 new Unwindow<String, Integer>()
@@ -146,7 +142,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value > aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of(),
+                TimeWindows.of(TimeUnit.DAYS.toMillis(2)),
                 intSerde, "uwin-max"
         ).toStream().map(
                 new Unwindow<String, Integer>()
@@ -168,7 +164,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (long) value + aggregate;
                     }
                 },
-                UnlimitedWindows.of(),
+                TimeWindows.of(TimeUnit.DAYS.toMillis(2)),
                 longSerde, "win-sum"
         ).toStream().map(
                 new Unwindow<String, Long>()
@@ -179,7 +175,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
-        groupedData.count(UnlimitedWindows.of(), "uwin-cnt")
+        groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
             .toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
@@ -205,17 +201,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 }
         ).to(stringSerde, doubleSerde, "avg");
-
-        // windowed count
-        groupedData.count(TimeWindows.of(WINDOW_SIZE), "tumbling-win-cnt")
-            .toStream().map(
-                new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
-                    @Override
-                    public KeyValue<String, Long> apply(Windowed<String> key, Long value) {
-                        return new KeyValue<>(key.key() + "@" + key.window().start(), value);
-                    }
-                }
-        ).to(stringSerde, longSerde, "wcnt");
 
         // test repartition
         Agg agg = new Agg();

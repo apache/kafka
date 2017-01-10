@@ -161,7 +161,7 @@ public class StreamThread extends Thread {
     private synchronized void setState(State newState) {
         State oldState = state;
         if (!state.isValidTransition(newState)) {
-            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+            log.warn("Unexpected state transition from " + state + " to " + newState);
         }
         state = newState;
         if (stateListener != null) {
@@ -1025,31 +1025,40 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamThread.
+     * Produces a string representation containing useful information about a StreamThread.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamThread instance.
      */
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
-        sb.append("\tStreamsThread clientId:" + clientId + "\n");
-        sb.append("\tStreamsThread threadId:" + this.getName() + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamThread, starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsThread appId: " + this.applicationId + "\n");
+        sb.append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n");
+        sb.append(indent).append("\tStreamsThread threadId: ").append(this.getName()).append("\n");
 
         // iterate and print active tasks
         if (activeTasks != null) {
-            sb.append("\tActive tasks:\n");
+            sb.append(indent).append("\tActive tasks:\n");
             for (TaskId tId : activeTasks.keySet()) {
                 StreamTask task = activeTasks.get(tId);
-                sb.append("\t\t" + task.toString());
+                sb.append(indent).append(task.toString(indent + "\t\t"));
             }
         }
 
         // iterate and print standby tasks
         if (standbyTasks != null) {
-            sb.append("\tStandby tasks:\n");
+            sb.append(indent).append("\tStandby tasks:\n");
             for (TaskId tId : standbyTasks.keySet()) {
                 StandbyTask task = standbyTasks.get(tId);
-                sb.append("\t\t" + task.toString());
+                sb.append(indent).append(task.toString(indent + "\t\t"));
             }
             sb.append("\n");
         }
