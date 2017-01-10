@@ -51,5 +51,5 @@ public interface ValueJoiner<V1, V2, VR> {
      * @param value2 the second value for joining
      * @return the joined value
      */
-    VR apply(V1 value1, V2 value2);
+    VR apply(final V1 value1, final V2 value2);
 }

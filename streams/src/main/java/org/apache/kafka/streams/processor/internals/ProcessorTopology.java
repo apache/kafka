@@ -89,43 +89,52 @@ public class ProcessorTopology {
         return storeToProcessorNodeMap;
     }
 
+
     public List<StateStore> globalStateStores() {
         return globalStateStores;
     }
 
-    private String childrenToString(List<ProcessorNode<?, ?>> children) {
+    private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder("children [");
+        StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
         for (ProcessorNode child : children) {
-            sb.append(child.name() + ",");
+            sb.append(child.name());
+            sb.append(", ");
         }
-        sb.setLength(sb.length() - 1);
+        sb.setLength(sb.length() - 2);  // remove the last comma
         sb.append("]\n");
 
         // recursively print children
-        for (ProcessorNode child : children) {
-            sb.append("\t\t\t\t" + child.toString());
-            sb.append(childrenToString(child.children()));
+        for (ProcessorNode<?, ?> child : children) {
+            sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
     }
 
     /**
-     * Produces a string representation contain useful information this topology.
+     * Produces a string representation containing useful information this topology starting with the given indent.
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("ProcessorTopology:\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information this topology.
+     * This is useful in debugging scenarios.
+     * @return A string representation of this instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode source : sourceByTopics.values()) {
-            sb.append("\t\t\t\t" + source.toString());
-            sb.append(childrenToString(source.children()));
-            sb.append("\n");
+        for (SourceNode<?, ?> source : sourceByTopics.values()) {
+            sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();
     }
