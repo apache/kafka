@@ -461,7 +461,7 @@ public class Utils {
         StringBuilder bld = new StringBuilder();
         bld.append("{");
         String prefix = "";
-        for (Map.Entry<K, V> entry: map.entrySet()) {
+        for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
                     append(keyValueSeparator).append(entry.getValue());
             prefix = elementSeperator;
