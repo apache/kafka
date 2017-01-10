@@ -51,7 +51,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e: Throwable =>
         error("Unknown error when running consumer: ", e)
-        System.exit(1);
+        System.exit(1)
     }
   }
 
