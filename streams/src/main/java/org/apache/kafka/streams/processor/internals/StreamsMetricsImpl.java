@@ -42,6 +42,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     final Metrics metrics;
     final String groupName;
     final Map<String, String> tags;
+    final Map<Sensor, Sensor> parentSensors;
 
     public StreamsMetricsImpl(Metrics metrics, String groupName,  Map<String, String> tags) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -49,7 +50,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         this.metrics = metrics;
         this.groupName = groupName;
         this.tags = tags;
-
+        this.parentSensors = new HashMap<>();
     }
 
     public Metrics registry() {
@@ -123,6 +124,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addLatencyMetrics(scopeName, sensor, entityName, operationName, tagMap);
 
+        parentSensors.put(sensor, parent);
+
         return sensor;
     }
 
@@ -140,6 +143,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         // add the operation metrics with additional tags
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addThroughputMetrics(scopeName, sensor, entityName, operationName, tagMap);
+
+        parentSensors.put(sensor, parent);
 
         return sensor;
     }
@@ -185,12 +190,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             recordLatency(sensor, startNs, time.nanoseconds());
         }
     }
-
+    
+    /**
+     * Deletes a sensor and its parents, if any
+     */
     @Override
     public void removeSensor(Sensor sensor) {
+        Sensor parent = null;
         Objects.requireNonNull(sensor, "Sensor is null");
 
         metrics.removeSensor(sensor.name());
+        parent = parentSensors.get(sensor);
+        if (parent != null) {
+            metrics.removeSensor(parent.name());
+        }
 
     }
 

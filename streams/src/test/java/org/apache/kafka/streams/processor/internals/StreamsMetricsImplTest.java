@@ -82,6 +82,10 @@ public class StreamsMetricsImplTest {
         Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         // 6 metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         assertEquals(metrics.size(), 7);
+
+        streamsMetrics.removeSensor(sensor1);
+        metrics = streamsMetrics.metrics();
+        assertEquals(metrics.size(), 1);
     }
 
     @Test
@@ -98,5 +102,9 @@ public class StreamsMetricsImplTest {
         Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         // 2 metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         assertEquals(metrics.size(), 3);
+
+        streamsMetrics.removeSensor(sensor1);
+        metrics = streamsMetrics.metrics();
+        assertEquals(metrics.size(), 1);
     }
 }
