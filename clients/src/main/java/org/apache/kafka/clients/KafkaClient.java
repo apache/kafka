@@ -126,6 +126,6 @@ public interface KafkaClient extends Closeable {
      * @return
      */
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder requestBuilder,
-                                   long createdTimeMs, boolean expectResponse,
-                                   RequestCompletionHandler callback);
+                                          long createdTimeMs, boolean expectResponse,
+                                          RequestCompletionHandler callback);
 }

@@ -101,9 +101,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
-        ProduceRequest.Builder builder =
-            new ProduceRequest.Builder((short) 1, 1000,
-                Collections.<TopicPartition, MemoryRecords>emptyMap());
+        ProduceRequest.Builder builder = new ProduceRequest.Builder((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         ClientRequest request = client.newClientRequest(
                 node.idString(), builder, time.milliseconds(), true, null);
         client.send(request, time.milliseconds());
