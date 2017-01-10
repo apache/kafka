@@ -19,11 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -67,9 +64,8 @@ public class StreamsMetricsImplTest {
         Sensor sensor2 = streamsMetrics.addLatencySensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
 
-        Sensor sensor3= streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
-
     }
 
     @Test
@@ -86,7 +82,6 @@ public class StreamsMetricsImplTest {
         Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         // 6 metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         assertEquals(metrics.size(), 7);
-
     }
 
     @Test
@@ -103,6 +98,5 @@ public class StreamsMetricsImplTest {
         Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         // 2 metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         assertEquals(metrics.size(), 3);
-
     }
 }
