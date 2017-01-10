@@ -188,7 +188,10 @@ class WorkerSourceTask extends WorkerTask {
         for (final SourceRecord preTransformRecord : toSend) {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
-            if (record == null) continue;
+            if (record == null) {
+                commitTaskRecord(preTransformRecord);
+                continue;
+            }
 
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
