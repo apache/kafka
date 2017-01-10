@@ -47,7 +47,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
         return new SessionStoreIterator(bytesIterator, serdes);
     }
@@ -100,7 +100,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-        return findSessionsToMerge(key, 0, Long.MAX_VALUE);
+        return findSessions(key, 0, Long.MAX_VALUE);
     }
 
     private static class SessionStoreIterator<K, AGG> implements KeyValueIterator<Windowed<K>, AGG> {
