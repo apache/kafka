@@ -60,7 +60,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override val consumerCount = 2
   override val serverCount = 3
 
-  override def setAclsBeforeServersStart() {
+  override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
   }
 

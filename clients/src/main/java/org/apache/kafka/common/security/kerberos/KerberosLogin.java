@@ -294,7 +294,7 @@ public class KerberosLogin extends AbstractLogin {
     private String getServiceName(Configuration jaasConfig, Map<String, ?> configs, String loginContext) {
         String jaasServiceName;
         try {
-            jaasServiceName = JaasUtils.jaasConfigOption(jaasConfig, loginContext, JaasUtils.SERVICE_NAME);
+            jaasServiceName = JaasUtils.jaasConfigOption(jaasConfig, loginContext, JaasUtils.SERVICE_NAME, null);
         } catch (IOException e) {
             throw new KafkaException("JAAS configuration entry not found", e);
         }
