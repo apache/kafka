@@ -185,10 +185,7 @@ class RequestSendThread(val controllerId: Int,
               backoff()
             }
             else {
-              val version = apiVersion match  {
-                case None => ProtoUtils.latestVersion(apiKey.id)
-                case Some(v) => v
-              }
+              val version: Short = apiVersion.getOrElse(ProtoUtils.latestVersion(apiKey.id))
               val clientRequest = networkClient.newClientRequest(
                   brokerNode.idString, requestBuilder, time.milliseconds(), true, null)
               val abstractRequest = clientRequest.requestBuilder().build()
@@ -382,33 +379,30 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         topicPartition -> partitionState
       }
 
-      val version :Short  = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
+      val version: Short = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
                     else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1: Short
                     else 0: Short
 
-      val updateMetadataRequest =
-        if (version == 0) {
+      val updateMetadataRequest = {
+        val liveBrokers = if (version == 0) {
           // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
-          val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+          controllerContext.liveOrShuttingDownBrokers.map { broker =>
             val node = broker.getNode(SecurityProtocol.PLAINTEXT)
-            val endPoints = Map{ SecurityProtocol.PLAINTEXT -> new EndPoint(node.host(), node.port()) }
+            val endPoints = Map(SecurityProtocol.PLAINTEXT -> new EndPoint(node.host(), node.port()))
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
-          new UpdateMetadataRequest.Builder(
-              controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
-              setVersion(0)
-        }
-        else {
-          val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+        } else {
+          controllerContext.liveOrShuttingDownBrokers.map { broker =>
             val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
               securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
             }
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
-          new UpdateMetadataRequest.Builder(
-              controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
-              setVersion(version)
         }
+        new UpdateMetadataRequest.Builder(
+            controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
+            setVersion(0)
+      }
 
       updateMetadataRequestBrokerSet.foreach {broker =>
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
