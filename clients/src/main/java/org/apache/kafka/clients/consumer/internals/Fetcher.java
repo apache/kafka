@@ -355,8 +355,10 @@ public class Fetcher<K, V> {
                     sendListOffsetRequests(false, Collections.singletonMap(partition, timestamp));
             client.poll(future);
             if (future.succeeded()) {
-                Map<TopicPartition, OffsetAndTimestamp> ret = future.value();
-                return ret.get(partition).offset();
+                OffsetAndTimestamp offsetAndTimestamp = future.value().get(partition);
+                if (offsetAndTimestamp == null)
+                    throw new NoOffsetForPartitionException(partition);
+                return offsetAndTimestamp.offset();
             }
             if (!future.isRetriable())
                 throw future.exception();
