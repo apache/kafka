@@ -389,7 +389,7 @@ class NamedCache {
         }
 
         public void removeAllSensors() {
-            metrics.registry().removeSensor(hitRatioSensor.name());
+            metrics.removeSensor(hitRatioSensor);
         }
     }
 }

@@ -190,7 +190,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             recordLatency(sensor, startNs, time.nanoseconds());
         }
     }
-    
+
     /**
      * Deletes a sensor and its parents, if any
      */

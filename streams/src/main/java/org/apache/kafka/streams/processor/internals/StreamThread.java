@@ -418,6 +418,7 @@ public class StreamThread extends Thread {
 
         log.info("{} Stream thread shutdown complete", logPrefix);
         setState(State.NOT_RUNNING);
+        streamsMetrics.removeAllSensors();
     }
 
     private RuntimeException unAssignChangeLogPartitions() {
@@ -1121,6 +1122,17 @@ public class StreamThread extends Thread {
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
             sensor.record(endNs - startNs, timerStartedMs);
+        }
+
+        public void removeAllSensors() {
+            removeSensor(commitTimeSensor);
+            removeSensor(pollTimeSensor);
+            removeSensor(processTimeSensor);
+            removeSensor(punctuateTimeSensor);
+            removeSensor(taskCreationSensor);
+            removeSensor(taskDestructionSensor);
+            removeSensor(skippedRecordsSensor);
+
         }
     }
 

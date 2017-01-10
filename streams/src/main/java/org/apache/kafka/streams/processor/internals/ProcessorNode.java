@@ -198,11 +198,11 @@ public class ProcessorNode<K, V> {
         }
 
         public void removeAllSensors() {
-            metrics.registry().removeSensor(nodeProcessTimeSensor.name());
-            metrics.registry().removeSensor(nodePunctuateTimeSensor.name());
-            metrics.registry().removeSensor(nodeThroughputSensor.name());
-            metrics.registry().removeSensor(nodeCreationSensor.name());
-            metrics.registry().removeSensor(nodeDestructionSensor.name());
+            metrics.removeSensor(nodeProcessTimeSensor);
+            metrics.removeSensor(nodePunctuateTimeSensor);
+            metrics.removeSensor(nodeThroughputSensor);
+            metrics.removeSensor(nodeCreationSensor);
+            metrics.removeSensor(nodeDestructionSensor);
         }
     }
 }
