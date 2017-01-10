@@ -23,6 +23,7 @@ import javax.security.auth.login.Configuration;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
@@ -40,6 +41,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final Mode mode;
     private final LoginType loginType;
     private final boolean handshakeRequestEnable;
+    private final CredentialCache credentialCache;
 
     private Configuration jaasConfig;
     private LoginManager loginManager;
@@ -47,12 +49,14 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
 
-    public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol, String clientSaslMechanism, boolean handshakeRequestEnable) {
+    public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol,
+            String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache) {
         this.mode = mode;
         this.loginType = loginType;
         this.securityProtocol = securityProtocol;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
+        this.credentialCache = credentialCache;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -98,7 +102,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasConfig, loginManager.subject(), kerberosShortNamer,
-                        socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize);
+                        socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize, credentialCache);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
@@ -124,5 +128,4 @@ public class SaslChannelBuilder implements ChannelBuilder {
             return new PlaintextTransportLayer(key);
         }
     }
-
 }
