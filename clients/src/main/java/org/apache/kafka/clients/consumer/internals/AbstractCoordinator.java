@@ -194,7 +194,7 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized void ensureCoordinatorReady(long timeoutMs) {
         long remainingMs = timeoutMs;
         long startTimeMs = time.milliseconds();
-        while (coordinatorUnknown() && remainingMs > 0) {
+        while (coordinatorUnknown()) {
             RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, remainingMs);
 
