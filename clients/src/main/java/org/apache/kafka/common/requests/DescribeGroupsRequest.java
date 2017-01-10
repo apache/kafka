@@ -46,10 +46,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("{type: DescribeGroupsRequest, groupIds: ");
-            bld.append(Utils.join(groupIds, ",")).append("}");
-            return bld.toString();
+            return "(type=DescribeGroupsRequest, groupIds=(" + Utils.join(groupIds, ",") + "))";
         }
     }
 

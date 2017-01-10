@@ -30,6 +30,11 @@ public class ApiVersionsRequest extends AbstractRequest {
         public ApiVersionsRequest build() {
             return new ApiVersionsRequest(version());
         }
+
+        @Override
+        public String toString() {
+            return "(type=ApiVersionsRequest)";
+        }
     }
 
     public ApiVersionsRequest(short version) {

@@ -130,18 +130,16 @@ public class ListOffsetRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: ListOffsetRequest")
-               .append(", replicaId: ").append(replicaId);
+            bld.append("(type=ListOffsetRequest")
+               .append(", replicaId=").append(replicaId);
             if (offsetData != null) {
-                bld.append(", offsetData: ").
-                    append(Utils.join(offsetData, ": ", " ,"));
+                bld.append(", offsetData=").append(Utils.join(offsetData));
             }
             if (partitionTimestamps != null) {
-                bld.append(", partitionTimestamps: ").
-                    append(Utils.join(partitionTimestamps, ": ", " ,"));
+                bld.append(", partitionTimestamps=").append(Utils.join(partitionTimestamps));
             }
-            bld.append(", minVersion: ").append(minVersion);
-            bld.append("}");
+            bld.append(", minVersion=").append(minVersion);
+            bld.append(")");
             return bld.toString();
         }
     }

@@ -65,12 +65,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: UpdateMetadataRequest: ").
-                append(", controllerId: ").append(controllerId).
-                append(", controllerEpoch: ").append(controllerEpoch).
-                append(", partitionStates: ").append(Utils.join(partitionStates, ": ", " ,")).
-                append(", liveBrokers: ").append(Utils.join(liveBrokers, " ,")).
-                append("}");
+            bld.append("(type: UpdateMetadataRequest=").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", partitionStates=").append(Utils.join(partitionStates, ": ", " ,")).
+                append(", liveBrokers=").append(Utils.join(liveBrokers, " ,")).
+                append(")");
             return bld.toString();
         }
     }
@@ -94,15 +94,10 @@ public class UpdateMetadataRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{id: ").append(id);
-            bld.append(", endPoints: ").append(Utils.join(endPoints, ": ", " ,"));
-            bld.append(", rack: ");
-            if (rack == null) {
-                bld.append("(null)");
-            } else {
-                bld.append(rack);
-            }
-            bld.append("}");
+            bld.append("(id=").append(id);
+            bld.append(", endPoints=").append(Utils.join(endPoints));
+            bld.append(", rack=").append(rack);
+            bld.append(")");
             return bld.toString();
         }
     }
@@ -118,11 +113,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("{host: ").append(host).
-                append(", port: ").append(port).
-                append("}");
-            return bld.toString();
+            return "(host=" + host + ", port=" + port + ")";
         }
     }
 

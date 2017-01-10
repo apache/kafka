@@ -65,10 +65,10 @@ public class OffsetFetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("{type: OffsetFetchRequest, ").
-                    append("groupId: ").append(groupId).
-                    append(", partitions: ").append(Utils.join(partitions, ",")).
-                    append("}");
+            bld.append("(type=OffsetFetchRequest, ").
+                    append("groupId=").append(groupId).
+                    append(", partitions=").append(Utils.join(partitions, ",")).
+                    append(")");
             return bld.toString();
         }
     }

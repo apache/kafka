@@ -456,6 +456,10 @@ public class Utils {
         return sb.toString();
     }
 
+    public static <K, V> String join(Map<K, V> map) {
+        return join(map, "=", " ,");
+    }
+
     public static <K, V> String join(Map<K, V> map,
                                      String keyValueSeparator, String elementSeperator) {
         StringBuilder bld = new StringBuilder();
