@@ -35,6 +35,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KGroupedStream#aggregate(Initializer, Aggregator, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see Reducer
  */
 @InterfaceStability.Unstable
@@ -48,5 +50,5 @@ public interface Aggregator<K, V, VA> {
      * @param aggregate the current aggregate value
      * @return the new aggregate value
      */
-    VA apply(K key, V value, VA aggregate);
+    VA apply(final K key, final V value, final VA aggregate);
 }
