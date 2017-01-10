@@ -27,7 +27,7 @@ public class NodeApiVersions {
     private final static ApiKeys[] ID_TO_APIKEY;
 
     static {
-        ID_TO_APIKEY= new ApiKeys[ApiKeys.MAX_API_KEY + 1];
+        ID_TO_APIKEY = new ApiKeys[ApiKeys.MAX_API_KEY + 1];
         for (ApiKeys key : ApiKeys.values())
             ID_TO_APIKEY[key.id] = key;
     }
