@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
     private static final Logger log = LoggerFactory.getLogger(StreamsMetricsImpl.class);
@@ -43,6 +44,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     final Map<String, String> tags;
 
     public StreamsMetricsImpl(Metrics metrics, String groupName,  Map<String, String> tags) {
+        Objects.requireNonNull(metrics, "Metrics cannot be null");
+
         this.metrics = metrics;
         this.groupName = groupName;
         this.tags = tags;
@@ -185,9 +188,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     @Override
     public void removeSensor(Sensor sensor) {
-        if (sensor != null) {
-            metrics.removeSensor(sensor.name());
-        }
+        Objects.requireNonNull(sensor, "Sensor is null");
+
+        metrics.removeSensor(sensor.name());
+
     }
 
 }
