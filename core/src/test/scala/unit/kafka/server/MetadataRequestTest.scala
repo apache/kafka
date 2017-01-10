@@ -178,6 +178,6 @@ class MetadataRequestTest extends BaseRequestTest {
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
     val response = send(request, ApiKeys.METADATA)
-    MetadataResponse.parse(response, request.getVersion)
+    MetadataResponse.parse(response, request.version)
   }
 }

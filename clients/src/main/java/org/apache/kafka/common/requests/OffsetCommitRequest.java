@@ -296,7 +296,7 @@ public class OffsetCommitRequest extends AbstractRequest {
             responseData.put(entry.getKey(), Errors.forException(e).code());
         }
 
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             // OffsetCommitResponseV0 == OffsetCommitResponseV1 == OffsetCommitResponseV2
             case 0:

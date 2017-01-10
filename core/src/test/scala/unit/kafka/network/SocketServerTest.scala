@@ -121,7 +121,7 @@ class SocketServerTest extends JUnitSuite {
 
     val emptyRequest = new ProduceRequest.Builder(
         ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
-    val emptyHeader = new RequestHeader(apiKey, emptyRequest.getVersion, clientId, correlationId)
+    val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
     val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
     emptyHeader.writeTo(byteBuffer)
@@ -290,7 +290,7 @@ class SocketServerTest extends JUnitSuite {
       val ack = 0: Short
       val emptyRequest = new ProduceRequest.Builder(
           ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
-      val emptyHeader = new RequestHeader(apiKey, emptyRequest.getVersion, clientId, correlationId)
+      val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
       val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
       emptyHeader.writeTo(byteBuffer)

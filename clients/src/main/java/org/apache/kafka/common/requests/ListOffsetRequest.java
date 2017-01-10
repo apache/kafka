@@ -242,7 +242,7 @@ public class ListOffsetRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(Throwable e) {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
 
-        short versionId = getVersion();
+        short versionId = version();
         if (versionId == 0) {
             for (Map.Entry<TopicPartition, PartitionData> entry : offsetData.entrySet()) {
                 ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), new ArrayList<Long>());

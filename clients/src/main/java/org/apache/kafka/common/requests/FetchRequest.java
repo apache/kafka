@@ -208,7 +208,7 @@ public class FetchRequest extends AbstractRequest {
 
             responseData.put(entry.getKey(), partitionResponse);
         }
-        short versionId = getVersion();
+        short versionId = version();
         return new FetchResponse(versionId, responseData, 0);
     }
 

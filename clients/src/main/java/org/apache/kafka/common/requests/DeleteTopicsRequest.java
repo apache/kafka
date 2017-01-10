@@ -88,12 +88,12 @@ public class DeleteTopicsRequest extends AbstractRequest {
         for (String topic : topics)
             topicErrors.put(topic, Errors.forException(e));
 
-        switch (getVersion()) {
+        switch (version()) {
             case 0:
                 return new DeleteTopicsResponse(topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    getVersion(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id)));
+                    version(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id)));
         }
     }
 

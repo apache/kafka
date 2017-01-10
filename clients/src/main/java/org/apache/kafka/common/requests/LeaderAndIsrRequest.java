@@ -183,7 +183,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             responses.put(partition, Errors.forException(e).code());
         }
 
-        short versionId = getVersion();
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new LeaderAndIsrResponse(Errors.NONE.code(), responses);

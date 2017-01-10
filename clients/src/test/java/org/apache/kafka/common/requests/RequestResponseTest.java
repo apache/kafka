@@ -151,7 +151,7 @@ public class RequestResponseTest {
     }
 
     private void checkSerialization(AbstractRequest req) throws Exception {
-        checkSerialization(req, Integer.valueOf(req.getVersion()));
+        checkSerialization(req, Integer.valueOf(req.version()));
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
