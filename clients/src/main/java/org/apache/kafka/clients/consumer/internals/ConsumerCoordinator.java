@@ -524,7 +524,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         long startMs = time.milliseconds();
         long remainingMs = timeoutMs;
-        while (remainingMs > 0) {
+        do {
             ensureCoordinatorReady(remainingMs);
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
@@ -544,7 +544,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             time.sleep(retryBackoffMs);
             remainingMs = timeoutMs - (time.milliseconds() - startMs);
-        }
+        } while (remainingMs > 0);
     }
 
     private void maybeAutoCommitOffsetsAsync(long now) {

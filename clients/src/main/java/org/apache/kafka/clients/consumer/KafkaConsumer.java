@@ -1497,8 +1497,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
-     * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
+     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the default
+     * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
+     * cannot be used to interrupt close.
      * 
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      * before or while this function is called
@@ -1511,13 +1513,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Tries to close the consumer cleanly within the specified timeout. This method waits up to
      * <code>timeout</code> for the consumer to complete pending commits and leave the group.
-     * If the consumer is unable to complete the requests before the timeout expires, the consumer
-     * is force closed.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the
+     * timeout. If rebalance is in progress, auto-commits and pending asynchronous commits may
+     * be aborted if the coordinator is not known within the timeout. If the consumer is unable
+     * to complete commit and leave group requests before the timeout expires, the consumer is
+     * force closed. Note that {@link #wakeup()} cannot be used to interrupt close.
      *
-     * @param timeout The maximum time to wait for consumer to complete pending requests. The value should be
+     * @param timeout The maximum time to wait for consumer to close gracefully. The value should be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      * @param timeUnit The time unit for the <code>timeout</code>
-     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
      */
     public void close(long timeout, TimeUnit timeUnit) {
@@ -1573,7 +1578,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (exception instanceof InterruptException) {
                 throw (InterruptException) exception;
             }
-            throw new KafkaException("Failed to close kafka consumer", firstException.get());
+            throw new KafkaException("Failed to close kafka consumer", exception);
         }
     }
 

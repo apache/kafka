@@ -41,6 +41,9 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   val part = 0
   val tp = new TopicPartition(topic, part)
 
+  // Time to process commit and leave group requests in tests when brokers are available
+  val gracefulCloseTimeMs = 1000
+
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
@@ -160,7 +163,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers.remove(0)
     consumer.subscribe(Collections.singletonList(topic))
     receiveRecords(consumer, numRecords)
-    closeAndValidate(consumer, Long.MaxValue, None, Some(1000))
+    closeAndValidate(consumer, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     checkClosedState(consumers.head, numRecords)
   }
 
@@ -178,7 +181,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val adminClient = AdminClient.createSimplePlaintext(this.brokerList)
     val coordinator = adminClient.findCoordinator("my-test").id
     killBroker(coordinator)
-    closeAndValidate(consumer, Long.MaxValue, None, Some(1000))
+    closeAndValidate(consumer, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     checkClosedState(consumers.head, 0)
   }
 
@@ -197,7 +200,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val adminClient = AdminClient.createSimplePlaintext(this.brokerList)
     val coordinator = adminClient.findCoordinator("my-test").id
     killBroker(coordinator)
-    closeAndValidate(consumer, Long.MaxValue, None, Some(1000))
+    closeAndValidate(consumer, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     checkClosedState(consumers.head, numRecords)
   }
 
@@ -255,13 +258,13 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   /**
    * Consumer closed during rebalance when brokers are not available.
-   * Close should terminate immediately since coordinator not known.
+   * Close should terminate immediately without sending leaving group since coordinator not known.
    */
   @Test
   def testCloseDuringRebalanceBrokersUnavailable() {
     val executor = Executors.newSingleThreadExecutor
     try {
-      closeDuringRebalance(executor, true)
+      closeDuringRebalance(executor, false)
     } finally {
       executor.shutdownNow()
     }
@@ -272,6 +275,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkUtils, topic, 10, serverCount, this.servers)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Future[Any] = {
       executor.submit(new Runnable() {
@@ -307,11 +311,14 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       servers.foreach(server => killBroker(server.config.brokerId))
 
     // consumer1 should leave group and close immediately even though rebalance is in progress
-    closeAndValidate(consumer1, Long.MaxValue, None, Some(1000))
-    restartDeadBrokers()
+    // If brokers are not available, leave group is not processed and close completes immediately
+    val maxCloseTime = if (brokersAvailableDuringClose) gracefulCloseTimeMs else 0
+    closeAndValidate(consumer1, Long.MaxValue, None, Some(maxCloseTime))
 
-    // Rebalance should complete without waiting for consumer1 to timeout since consumer1 has left the group
-    waitForRebalance(consumer2, future3, 2000)
+    if (brokersAvailableDuringClose) {
+      // Rebalance should complete without waiting for consumer1 to timeout since consumer1 has left the group
+      waitForRebalance(consumer2, future3, 2000)
+    }
   }
 
   /**
@@ -328,7 +335,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       val consumer = createNewConsumer
       consumer.subscribe(Collections.singletonList(topic))
       consumer.poll(100)
-      closeAndValidate(consumer, 1000, None, Some(1000))
+      val closeTimeoutMs = 1000
+      closeAndValidate(consumer, closeTimeoutMs, None, Some(closeTimeoutMs))
     }
   }
 

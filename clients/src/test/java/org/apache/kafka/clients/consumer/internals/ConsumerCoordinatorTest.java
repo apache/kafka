@@ -1227,15 +1227,15 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCloseAutoAssignment() throws Exception {
+    public void testCloseDynamicAssignment() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
-        gracefulCloseTest(coordinator);
+        gracefulCloseTest(coordinator, true);
     }
 
     @Test
     public void testCloseManualAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
-        gracefulCloseTest(coordinator);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true);
+        gracefulCloseTest(coordinator, false);
     }
 
     @Test
@@ -1375,7 +1375,7 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    private void gracefulCloseTest(ConsumerCoordinator coordinator) throws Exception {
+    private void gracefulCloseTest(ConsumerCoordinator coordinator, boolean dynamicAssignment) throws Exception {
         final AtomicBoolean commitRequested = new AtomicBoolean();
         final AtomicBoolean leaveGroupRequested = new AtomicBoolean();
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -1397,7 +1397,8 @@ public class ConsumerCoordinatorTest {
 
         closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
         assertTrue("Commit not requested", commitRequested.get());
-        assertTrue("Leave group not requested", leaveGroupRequested.get());
+        if (dynamicAssignment)
+            assertTrue("Leave group not requested", leaveGroupRequested.get());
     }
 
     private ConsumerCoordinator buildCoordinator(Metrics metrics,

@@ -200,7 +200,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (future.failed()) {
                 if (future.isRetriable()) {
-                    remainingMs = timeoutMs == Long.MAX_VALUE ? Long.MAX_VALUE : time.milliseconds() - startTimeMs;
+                    remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
                     client.awaitMetadataUpdate(remainingMs);
                 } else
                     throw future.exception();
@@ -210,7 +210,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 coordinatorDead();
                 time.sleep(retryBackoffMs);
             }
-            remainingMs = timeoutMs == Long.MAX_VALUE ? Long.MAX_VALUE : (timeoutMs - time.milliseconds() - startTimeMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
+            if (remainingMs <= 0)
+                break;
         }
     }
 
