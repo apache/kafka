@@ -574,14 +574,10 @@ public class NetworkClient implements KafkaClient {
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
             if (discoverPeerVersions) {
-                // If the NetworkClient has been configured to discover the versions of peers, move this
-                // connection into state CHECKING_API_VERSIONS.
                 this.connectionStates.checkingApiVersions(node);
                 nodesNeedingApiVersionsFetch.add(node);
                 log.debug("Completed connection to node {}.  Fetching API versions.", node);
             } else {
-                // If the NetworkClient has not been configured to discover the versions of peers,
-                // go directly into the READY state.
                 this.connectionStates.ready(node);
                 log.debug("Completed connection to node {}.  Ready.", node);
             }
