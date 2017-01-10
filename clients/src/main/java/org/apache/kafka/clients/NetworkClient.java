@@ -278,23 +278,16 @@ public class NetworkClient implements KafkaClient {
             NodeApiVersions versionInfo = nodeApiVersions.get(Integer.parseInt(nodeId));
             // Note: if versionInfo is null, we have no server version information.
             // This would be the case when sending the initial ApiVersionRequest which
-            // fetches the version information itself, for example.
+            // fetches the version information itself.
             if (versionInfo == null) {
-                if (log.isTraceEnabled()) {
+                if (log.isTraceEnabled())
                     log.trace("No version information found when sending message of type {} to node {}",
                             clientRequest.apiKey(), nodeId);
-                }
             } else {
                 short version = versionInfo.getUsableVersion(clientRequest.apiKey().id);
-                if (log.isTraceEnabled()) {
+                if (log.isTraceEnabled())
                     log.trace("When sending message of type {} to node {}, the best usable " +
                             "version is {}", clientRequest.apiKey(), nodeId, version);
-                }
-                if (version < 0) {
-                    throw new UnsupportedVersionException("The client cannot send an " +
-                            "API request of type " + clientRequest.apiKey() + ", because the " +
-                            "server does not understand any of the versions this client supports.");
-                }
                 builder.setVersion(version);
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
@@ -349,7 +342,7 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
-        handleAbortedSends(responses, updatedNow);
+        handleAbortedSends(responses);
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
@@ -452,7 +445,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
-        nodeApiVersions.remove(nodeId);
+        nodeApiVersions.remove(Integer.valueOf(nodeId));
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
@@ -528,18 +521,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void handleApiVersionsResponse(List<ClientResponse> responses,
-            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
+                                           InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
         if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
-            log.warn("Node " + node + " got error " + apiVersionsResponse.errorCode() +
-                    " when making an ApiVersionsRequest.  Disconnecting.");
+            log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
+                    node, apiVersionsResponse.errorCode());
             this.selector.close(node);
             processDisconnection(responses, node, now);
             return;
         }
-        int nodexIndex = Integer.parseInt(node);
+        int nodeId = Integer.parseInt(node);
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
-        nodeApiVersions.put(nodexIndex, nodeVersionInfo);
+        nodeApiVersions.put(nodeId, nodeVersionInfo);
         this.connectionStates.ready(node);
         if (log.isDebugEnabled()) {
             log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo.toString());
