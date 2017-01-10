@@ -444,7 +444,6 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        start_time_ms = int(time.time() * 1000)
         ts_fieldname = 'the_timestamp'
 
         NamedConnector = namedtuple('Connector', ['name'])
@@ -461,7 +460,7 @@ class ConnectDistributedTest(Test):
             'transforms.hoistToStruct.type': 'org.apache.kafka.connect.transforms.HoistValueToStruct',
             'transforms.hoistToStruct.field': 'content',
             'transforms.insertTimestampField.type': 'org.apache.kafka.connect.transforms.InsertInValue',
-            'transforms.insertTimestampField.timestamp': ts_fieldname,
+            'transforms.insertTimestampField.timestamp.field': ts_fieldname,
         })
 
         wait_until(lambda: self.connector_is_running(source_connector), timeout_sec=30, err_msg='Failed to see connector transition to the RUNNING state')
@@ -469,7 +468,7 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
         consumer.run()
 
         assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)
@@ -484,10 +483,15 @@ class ConnectDistributedTest(Test):
         }
 
         for msg in consumer.messages_consumed[1]:
-            obj = json.loads(msg)
+            (ts_info, value) = msg.split('\t')
+
+            assert ts_info.startswith('CreateTime:')
+            ts = int(ts_info[len('CreateTime:'):])
+
+            obj = json.loads(value)
             assert obj['schema'] == expected_schema
             assert obj['payload']['content'] in self.FIRST_INPUT_LIST
-            assert obj['payload'][ts_fieldname] > start_time_ms
+            assert obj['payload'][ts_fieldname] == ts
 
     def _validate_file_output(self, input):
         input_set = set(input)
