@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,8 @@ import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.ScramMechanism;
 
 public class TestJaasConfig extends Configuration {
 
@@ -35,7 +38,7 @@ public class TestJaasConfig extends Configuration {
         TestJaasConfig config = new TestJaasConfig();
         config.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, loginModule(clientMechanism), defaultClientOptions());
         for (String mechanism : serverMechanisms) {
-            config.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_SERVER, loginModule(mechanism), defaultServerOptions());
+            config.addEntry(JaasUtils.LOGIN_CONTEXT_SERVER, loginModule(mechanism), defaultServerOptions(mechanism));
         }
         Configuration.setConfiguration(config);
         return config;
@@ -59,6 +62,14 @@ public class TestJaasConfig extends Configuration {
         entryMap.put(name, new AppConfigurationEntry[] {entry});
     }
 
+    public void addEntry(String name, String loginModule, Map<String, Object> options) {
+        AppConfigurationEntry entry = new AppConfigurationEntry(loginModule, LoginModuleControlFlag.REQUIRED, options);
+        AppConfigurationEntry[] existing = entryMap.get(name);
+        AppConfigurationEntry[] newEntries = existing == null ? new AppConfigurationEntry[1] : Arrays.copyOf(existing, existing.length + 1);
+        newEntries[newEntries.length - 1] = entry;
+        entryMap.put(name, newEntries);
+    }
+
     @Override
     public AppConfigurationEntry[] getAppConfigurationEntry(String name) {
         return entryMap.get(name);
@@ -74,7 +85,10 @@ public class TestJaasConfig extends Configuration {
                 loginModule = TestDigestLoginModule.class.getName();
                 break;
             default:
-                throw new IllegalArgumentException("Unsupported mechanism " + mechanism);
+                if (ScramMechanism.isScram(mechanism))
+                    loginModule = ScramLoginModule.class.getName();
+                else
+                    throw new IllegalArgumentException("Unsupported mechanism " + mechanism);
         }
         return loginModule;
     }
@@ -86,9 +100,17 @@ public class TestJaasConfig extends Configuration {
         return options;
     }
 
-    public static Map<String, Object> defaultServerOptions() {
+    public static Map<String, Object> defaultServerOptions(String mechanism) {
         Map<String, Object> options = new HashMap<>();
-        options.put("user_" + USERNAME, PASSWORD);
+        switch (mechanism) {
+            case "PLAIN":
+            case "DIGEST-MD5":
+                options.put("user_" + USERNAME, PASSWORD);
+                break;
+            default:
+                if (!ScramMechanism.isScram(mechanism))
+                    throw new IllegalArgumentException("Unsupported mechanism " + mechanism);
+        }
         return options;
     }
 }
