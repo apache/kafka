@@ -37,7 +37,8 @@ public interface StreamsMetrics {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * Add a latency sensor. This is equivalent to adding a sensor with metrics on latency and rate.
+     * Add a latency sensor and default associated metrics. Metrics include both latency ones
+     * (average and max latency) and throughput ones (operations/time unit).
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.
@@ -57,7 +58,8 @@ public interface StreamsMetrics {
     void recordLatency(Sensor sensor, long startNs, long endNs);
 
     /**
-     * Add a throughput sensor. This is equivalent to adding a sensor with metrics rate.
+     * Add a throughput sensor and default associated metrics. Metrics include throughput ones
+     * (operations/time unit).
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.
@@ -77,22 +79,29 @@ public interface StreamsMetrics {
 
 
     /**
-     * Generic sensor creation. Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure metric name well-formedness and conformity with the rest
-     * of the streams code base.
+     * Generic method to create a sensor.
+     * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
+     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * metric name well-formedness and conformity with the rest of the streams code base. However,
+     * if the above two methods are not sufficient, this method can also be used.
      * @param name Name of the sensor.
      * @param recordingLevel The recording level (e.g., INFO or DEBUG) for this sensor.
      */
     Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel);
 
     /**
-     * Same as previous constructor {@link #addSensor(String, Sensor.RecordingLevel, Sensor...)} sensor}, but takes a set of parents as well.
-     *
+     * Generic method to create a sensor with parent sensors.
+     * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
+     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * metric name well-formedness and conformity with the rest of the streams code base. However,
+     * if the above two methods are not sufficient, this method can also be used.
+     * @param name Name of the sensor.
+     * @param recordingLevel The recording level (e.g., INFO or DEBUG) for this sensor.
      */
     Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents);
 
     /**
-     * Remove a sensor with the given name.
+     * Remove a sensor.
      * @param sensor Sensor to be removed.
      */
     void removeSensor(Sensor sensor);
