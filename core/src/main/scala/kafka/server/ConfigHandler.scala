@@ -140,7 +140,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaC
     // Entity path is <user> or <user>/clients/<client>
     val entities = quotaEntityPath.split("/")
     if (entities.length != 1 && entities.length != 3)
-      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath);
+      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
     val sanitizedUser = entities(0)
     val clientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), clientId, config)
