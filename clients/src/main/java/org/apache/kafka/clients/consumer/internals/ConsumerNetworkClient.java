@@ -87,13 +87,11 @@ public class ConsumerNetworkClient implements Closeable {
      * instead, the future will be failed with a {@link DisconnectException}.
      *
      * @param node The destination of the request
-     * @param api The Kafka API call
      * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
     public RequestFuture<ClientResponse> send(Node node,
-                                               ApiKeys api,
-                                               AbstractRequest.Builder requestBuilder) {
+                                              AbstractRequest.Builder requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(),

@@ -42,7 +42,7 @@ class AdminClient(val time: Time,
                    request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     var future: RequestFuture[ClientResponse] = null
 
-    future = client.send(target, api, request)
+    future = client.send(target, request)
     client.poll(future)
 
     if (future.succeeded())

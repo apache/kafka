@@ -36,7 +36,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -624,7 +623,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.trace("Sending offset-commit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
-        return client.send(coordinator, ApiKeys.OFFSET_COMMIT, builder)
+        return client.send(coordinator, builder)
                 .compose(new OffsetCommitResponseHandler(offsets));
     }
 
@@ -722,7 +721,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 new OffsetFetchRequest.Builder(this.groupId, new ArrayList<>(partitions));
 
         // send the request with a callback
-        return client.send(coordinator, ApiKeys.OFFSET_FETCH, requestBuilder)
+        return client.send(coordinator, requestBuilder)
                 .compose(new OffsetFetchResponseHandler());
     }
 

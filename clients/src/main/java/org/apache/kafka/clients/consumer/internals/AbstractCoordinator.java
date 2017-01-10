@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.GroupCoordinatorRequest;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
@@ -389,7 +388,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         log.debug("Sending JoinGroup ({}) to coordinator {}",
                 requestBuilder, this.coordinator);
-        return client.send(coordinator, ApiKeys.JOIN_GROUP, requestBuilder)
+        return client.send(coordinator, requestBuilder)
                 .compose(new JoinGroupResponseHandler());
     }
 
@@ -477,7 +476,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest.Builder requestBuilder) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
-        return client.send(coordinator, ApiKeys.SYNC_GROUP, requestBuilder)
+        return client.send(coordinator, requestBuilder)
                 .compose(new SyncGroupResponseHandler());
     }
 
@@ -524,7 +523,7 @@ public abstract class AbstractCoordinator implements Closeable {
         log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
         GroupCoordinatorRequest.Builder requestBuilder =
                 new GroupCoordinatorRequest.Builder(this.groupId);
-        return client.send(node, ApiKeys.GROUP_COORDINATOR, requestBuilder)
+        return client.send(node, requestBuilder)
                      .compose(new GroupCoordinatorResponseHandler());
     }
 
@@ -639,7 +638,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             LeaveGroupRequest.Builder request =
                     new LeaveGroupRequest.Builder(groupId, generation.memberId);
-            client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
+            client.send(coordinator, request)
                     .compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
         }
@@ -665,7 +664,7 @@ public abstract class AbstractCoordinator implements Closeable {
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
         HeartbeatRequest.Builder requestBuilder =
                 new HeartbeatRequest.Builder(this.groupId, this.generation.generationId, this.generation.memberId);
-        return client.send(coordinator, ApiKeys.HEARTBEAT, requestBuilder)
+        return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
     }
 
