@@ -45,7 +45,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -118,80 +117,9 @@ public class GlobalKTableIntegrationTest {
     public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
-        runAndVerifyLeftJoin(inputStream);
-    }
-
-    @Test
-    public void shouldKStreamGlobalKTableJoin() throws Exception {
-        final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
-        streamTableJoin.foreach(foreachAction);
-        runAndVerifyJoin(inputStream);
-    }
-
-    @Test
-    public void shouldKTableGlobalKTableLeftJoin() throws Exception {
-        final KTable<String, String> tableGlobalTableJoin = table.leftJoin(globalTable, keyMapper, joiner);
-        tableGlobalTableJoin.foreach(foreachAction);
-        runAndVerifyLeftJoin(inputTable);
-    }
-
-    @Test
-    public void shouldKTableGlobalKTableJoin() throws Exception {
-        final KTable<String, String> tableGlobalTableJoin = table.join(globalTable, keyMapper, joiner);
-        tableGlobalTableJoin.foreach(foreachAction);
-        runAndVerifyJoin(inputTable);
-    }
-
-    private void runAndVerifyJoin(final String topic) throws InterruptedException, ExecutionException {
         produceInitialGlobalTableValues();
         startStreams();
-        produceTopicValues(topic);
-
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("a", "1+A");
-        expected.put("b", "2+B");
-        expected.put("c", "3+C");
-        expected.put("d", "4+D");
-
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for initial values");
-
-
-        produceGlobalTableValues();
-
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
-
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return "J".equals(replicatedStore.get(5L));
-            }
-        }, 30000, "waiting for data in replicated store");
-
-        produceTopicValues(topic);
-
-        expected.put("a", "1+F");
-        expected.put("b", "2+G");
-        expected.put("c", "3+H");
-        expected.put("d", "4+I");
-        expected.put("e", "5+J");
-
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for final values");
-    }
-
-    private void runAndVerifyLeftJoin(final String topic) throws InterruptedException, ExecutionException {
-        produceInitialGlobalTableValues();
-        startStreams();
-        produceTopicValues(topic);
+        produceTopicValues(inputStream);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("a", "1+A");
@@ -218,7 +146,56 @@ public class GlobalKTableIntegrationTest {
                 return "J".equals(replicatedStore.get(5L));
             }
         }, 30000, "waiting for data in replicated store");
-        produceTopicValues(topic);
+        produceTopicValues(inputStream);
+
+        expected.put("a", "1+F");
+        expected.put("b", "2+G");
+        expected.put("c", "3+H");
+        expected.put("d", "4+I");
+        expected.put("e", "5+J");
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return results.equals(expected);
+            }
+        }, 30000L, "waiting for final values");
+    }
+
+    @Test
+    public void shouldKStreamGlobalKTableJoin() throws Exception {
+        final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
+        streamTableJoin.foreach(foreachAction);
+        produceInitialGlobalTableValues();
+        startStreams();
+        produceTopicValues(inputStream);
+
+        final Map<String, String> expected = new HashMap<>();
+        expected.put("a", "1+A");
+        expected.put("b", "2+B");
+        expected.put("c", "3+C");
+        expected.put("d", "4+D");
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return results.equals(expected);
+            }
+        }, 30000L, "waiting for initial values");
+
+
+        produceGlobalTableValues();
+
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return "J".equals(replicatedStore.get(5L));
+            }
+        }, 30000, "waiting for data in replicated store");
+
+        produceTopicValues(inputStream);
 
         expected.put("a", "1+F");
         expected.put("b", "2+G");
