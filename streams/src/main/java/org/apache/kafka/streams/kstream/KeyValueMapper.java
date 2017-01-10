@@ -41,7 +41,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KStream#groupBy(KeyValueMapper)
  * @see KStream#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KTable#groupBy(KeyValueMapper)
- * @see KTable#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serdes, org.apache.kafka.common.serialization.Serde)
+ * @see KTable#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KTable#toStream(KeyValueMapper)
  */
 @InterfaceStability.Unstable
@@ -54,5 +54,5 @@ public interface KeyValueMapper<K, V, VR> {
      * @param value the value of the record
      * @return the new value
      */
-    VR apply(K key, V value);
+    VR apply(final K key, final V value);
 }

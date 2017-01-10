@@ -23,7 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The interface for merging aggregate values for {@link SessionWindows} with the given key.
  *
  * @param <K>   key type
- * @param <T>   aggregate value type
+ * @param <V>   aggregate value type
  */
 @InterfaceStability.Unstable
 public interface Merger<K, V> {
@@ -36,5 +36,5 @@ public interface Merger<K, V> {
      * @param aggTwo    the second aggregate
      * @return          the new aggregate value
      */
-    V apply(K aggKey, V aggOne, V aggTwo);
+    V apply(final K aggKey, final V aggOne, final V aggTwo);
 }
