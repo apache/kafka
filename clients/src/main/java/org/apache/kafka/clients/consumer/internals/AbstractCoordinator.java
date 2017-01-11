@@ -95,7 +95,7 @@ public abstract class AbstractCoordinator implements Closeable {
         STABLE,      // the client has joined and is sending heartbeats
     }
 
-    private final int rebalanceTimeoutMs;
+    protected final int rebalanceTimeoutMs;
     private final int sessionTimeoutMs;
     private final GroupCoordinatorMetrics sensors;
     private final Heartbeat heartbeat;
@@ -188,12 +188,12 @@ public abstract class AbstractCoordinator implements Closeable {
      * Block until the coordinator for this group is known and is ready to receive requests.
      */
     public synchronized void ensureCoordinatorReady() {
-        ensureCoordinatorReady(Long.MAX_VALUE);
+        ensureCoordinatorReady(0, Long.MAX_VALUE);
     }
 
-    public synchronized void ensureCoordinatorReady(long timeoutMs) {
+    protected synchronized long ensureCoordinatorReady(long now, long timeoutMs) {
         long remainingMs = timeoutMs;
-        long startTimeMs = time.milliseconds();
+        long startTimeMs = now;
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, remainingMs);
@@ -214,6 +214,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (remainingMs <= 0)
                 break;
         }
+        return remainingMs;
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {

@@ -73,7 +73,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
-    private final AtomicInteger pendingAsyncCommits;
+    private final AtomicInteger pendingCommits;
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
@@ -125,7 +125,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
-        this.pendingAsyncCommits = new AtomicInteger();
+        this.pendingCommits = new AtomicInteger();
 
         if (autoCommitEnabled)
             this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
@@ -328,7 +328,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(Long.MAX_VALUE);
+        maybeAutoCommitOffsetsSync(rebalanceTimeoutMs);
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -413,16 +413,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             super.close();
         }
 
+        // At this point, there may be pending commits (async commits or sync commits that were
+        // interrupted using wakeup) and the leave group request from super.close() above which
+        // have been queued, but not yet sent to the broker. Wait up to close timeout for these
+        // pending requests to be processed.
         Node coordinator = coordinator();
         long now = time.milliseconds();
         long endTimeMs = now + Math.min(timeoutMs - (now - startTimeMs), requestTimeoutMs);
-        while (pendingAsyncCommits.get() > 0 || (coordinator != null && client.pendingRequestCount(coordinator) > 0)) {
+        while (pendingCommits.get() > 0 || (coordinator != null && client.pendingRequestCount(coordinator) > 0)) {
             if (Thread.currentThread().isInterrupted())
                 throw new InterruptException("Consumer close was interrupted");
-            long remainingTimeMs = endTimeMs - time.milliseconds();
+            long remainingTimeMs = endTimeMs - now;
             if (remainingTimeMs > 0) {
                 if (coordinator == null)
-                    ensureCoordinatorReady(remainingTimeMs);
+                    ensureCoordinatorReady(now, remainingTimeMs);
                 else
                     client.poll(remainingTimeMs);
                 coordinator = coordinator();
@@ -434,6 +438,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         timeoutMs, client.pendingRequestCount(coordinator), groupId);
                 break;
             }
+            now = time.milliseconds();
         }
     }
 
@@ -451,7 +456,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
-        pendingAsyncCommits.incrementAndGet();
+        pendingCommits.incrementAndGet();
         if (!coordinatorUnknown()) {
             doCommitOffsetsAsync(offsets, callback);
         } else {
@@ -469,7 +474,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    pendingAsyncCommits.decrementAndGet();
+                    pendingCommits.decrementAndGet();
                     completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets, new RetriableCommitFailedException(e)));
                 }
             });
@@ -488,7 +493,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
-                pendingAsyncCommits.decrementAndGet();
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
 
@@ -499,7 +503,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onFailure(RuntimeException e) {
                 Exception commitException = e;
 
-                pendingAsyncCommits.decrementAndGet();
                 if (e instanceof RetriableException)
                     commitException = new RetriableCommitFailedException(e);
 
@@ -522,16 +525,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return;
 
-        long startMs = time.milliseconds();
+        long now = time.milliseconds();
+        long startMs = now;
         long remainingMs = timeoutMs;
         do {
-            ensureCoordinatorReady(remainingMs);
+            remainingMs = ensureCoordinatorReady(now, remainingMs);
 
+            pendingCommits.incrementAndGet();
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-            if (timeoutMs == Long.MAX_VALUE)
-                client.poll(future);
-            else
-                client.poll(future, remainingMs);
+            client.poll(future, remainingMs);
 
             if (future.succeeded()) {
                 if (interceptors != null)
@@ -543,7 +545,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw future.exception();
 
             time.sleep(retryBackoffMs);
-            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+
+            now = time.milliseconds();
+            remainingMs = timeoutMs - (now - startMs);
         } while (remainingMs > 0);
     }
 
@@ -646,8 +650,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.trace("Sending offset-commit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
-        return client.send(coordinator, builder)
+        RequestFuture<Void> future = client.send(coordinator, builder);
                 .compose(new OffsetCommitResponseHandler(offsets));
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                pendingCommits.decrementAndGet();
+            }
+            @Override
+            public void onFailure(RuntimeException e) {
+                pendingCommits.decrementAndGet();
+            }
+        });
+        return future;
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
