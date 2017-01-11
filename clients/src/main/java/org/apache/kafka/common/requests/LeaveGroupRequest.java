@@ -23,23 +23,13 @@ public class LeaveGroupRequest extends AbstractRequest {
     private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
-        private String groupId;
-        private String memberId;
+        private final String groupId;
+        private final String memberId;
 
         public Builder(String groupId, String memberId) {
             super(ApiKeys.LEAVE_GROUP);
             this.groupId = groupId;
             this.memberId = memberId;
-        }
-
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
-
-        public Builder setMemberId(String memberId) {
-            this.memberId = memberId;
-            return this;
         }
 
         @Override
@@ -97,8 +87,8 @@ public class LeaveGroupRequest extends AbstractRequest {
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new LeaveGroupRequest(
-                ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer), (short) versionId);
+        return new LeaveGroupRequest(ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer) {

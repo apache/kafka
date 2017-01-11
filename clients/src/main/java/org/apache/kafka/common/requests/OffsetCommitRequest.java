@@ -96,21 +96,16 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     public static class Builder extends AbstractRequest.Builder<OffsetCommitRequest> {
-        private String groupId;
+        private final String groupId;
+        private final Map<TopicPartition, PartitionData> offsetData;
         private String memberId = DEFAULT_MEMBER_ID;
         private int generationId = DEFAULT_GENERATION_ID;
         private long retentionTime = DEFAULT_RETENTION_TIME;
-        private Map<TopicPartition, PartitionData> offsetData;
 
         public Builder(String groupId, Map<TopicPartition, PartitionData> offsetData) {
             super(ApiKeys.OFFSET_COMMIT);
             this.groupId = groupId;
             this.offsetData = offsetData;
-        }
-
-        Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
         }
 
         public Builder setMemberId(String memberId) {
@@ -205,8 +200,7 @@ public class OffsetCommitRequest extends AbstractRequest {
      */
     private OffsetCommitRequest(String groupId, int generationId, String memberId, long retentionTime,
                                 Map<TopicPartition, PartitionData> offsetData, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, version)),
-                version);
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, version)), version);
         initCommonFields(groupId, offsetData);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
@@ -298,7 +292,6 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         short versionId = version();
         switch (versionId) {
-            // OffsetCommitResponseV0 == OffsetCommitResponseV1 == OffsetCommitResponseV2
             case 0:
             case 1:
             case 2:

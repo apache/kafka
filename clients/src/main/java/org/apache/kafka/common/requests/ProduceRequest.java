@@ -44,9 +44,9 @@ public class ProduceRequest extends AbstractRequest {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
-        private short acks;
-        private int timeout;
-        private Map<TopicPartition, MemoryRecords> partitionRecords;
+        private final short acks;
+        private final int timeout;
+        private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
         public Builder(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
             super(ApiKeys.PRODUCE);
@@ -55,27 +55,11 @@ public class ProduceRequest extends AbstractRequest {
             this.partitionRecords = partitionRecords;
         }
 
-        public Builder setAcks(short acks) {
-            this.acks = acks;
-            return this;
-        }
-
-        public Builder setTimeout(int timeout) {
-            this.timeout = timeout;
-            return this;
-        }
-
-        public Builder setPartitionRecords(Map<TopicPartition, MemoryRecords> partitionRecords) {
-            this.partitionRecords = partitionRecords;
-            return this;
-        }
-
         @Override
         public ProduceRequest build() {
             short version = version();
             if (version < 2) {
-                throw new UnsupportedVersionException("ProduceRequest " +
-                        "versions older than 2 are not supported.");
+                throw new UnsupportedVersionException("ProduceRequest versions older than 2 are not supported.");
             }
             return new ProduceRequest(version, acks, timeout, partitionRecords);
         }
@@ -97,8 +81,7 @@ public class ProduceRequest extends AbstractRequest {
     private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, version)),
-                version);
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, version)), version);
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
@@ -182,9 +165,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
-        return new ProduceRequest(
-                ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer),
-                (short) versionId);
+        return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer), (short) versionId);
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {

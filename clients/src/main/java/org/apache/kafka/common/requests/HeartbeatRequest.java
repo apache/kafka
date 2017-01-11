@@ -25,30 +25,15 @@ public class HeartbeatRequest extends AbstractRequest {
     private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     public static class Builder extends AbstractRequest.Builder<HeartbeatRequest> {
-        private String groupId;
-        private int groupGenerationId;
-        private String memberId;
+        private final String groupId;
+        private final int groupGenerationId;
+        private final String memberId;
 
         public Builder(String groupId, int groupGenerationId, String memberId) {
             super(ApiKeys.HEARTBEAT);
             this.groupId = groupId;
             this.groupGenerationId = groupGenerationId;
             this.memberId = memberId;
-        }
-
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
-
-        public Builder setMemberId(int groupGenerationId) {
-            this.groupGenerationId = groupGenerationId;
-            return this;
-        }
-
-        public Builder setMemberId(String memberId) {
-            this.memberId = memberId;
-            return this;
         }
 
         @Override
@@ -115,9 +100,7 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, int versionId) {
-        return new HeartbeatRequest(
-                ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer),
-                (short) versionId);
+        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer), (short) versionId);
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {

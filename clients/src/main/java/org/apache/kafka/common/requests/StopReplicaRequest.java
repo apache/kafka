@@ -37,10 +37,10 @@ public class StopReplicaRequest extends AbstractRequest {
     private static final String PARTITION_KEY_NAME = "partition";
 
     public static class Builder extends AbstractRequest.Builder<StopReplicaRequest> {
-        private int controllerId;
-        private int controllerEpoch;
-        private boolean deletePartitions;
-        private Set<TopicPartition> partitions;
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final boolean deletePartitions;
+        private final Set<TopicPartition> partitions;
 
         public Builder(int controllerId, int controllerEpoch, boolean deletePartitions,
                        Set<TopicPartition> partitions) {
@@ -77,8 +77,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
     private StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions,
                                Set<TopicPartition> partitions, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version)),
-                version);
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version)), version);
 
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
@@ -150,8 +149,7 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, int versionId) {
-        return new StopReplicaRequest(
-                ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer),
+        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer),
                 (short) versionId);
     }
 

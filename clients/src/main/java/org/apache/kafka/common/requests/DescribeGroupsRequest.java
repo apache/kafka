@@ -26,16 +26,11 @@ public class DescribeGroupsRequest extends AbstractRequest {
     private static final String GROUP_IDS_KEY_NAME = "group_ids";
 
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
-        private List<String> groupIds;
+        private final List<String> groupIds;
 
         public Builder(List<String> groupIds) {
             super(ApiKeys.DESCRIBE_GROUPS);
             this.groupIds = groupIds;
-        }
-
-        public Builder setGroupIds(List<String> groupIds) {
-            this.groupIds = groupIds;
-            return this;
         }
 
         @Override
@@ -84,8 +79,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DescribeGroupsRequest(
-                ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer),
+        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer),
                 (short) versionId);
     }
 

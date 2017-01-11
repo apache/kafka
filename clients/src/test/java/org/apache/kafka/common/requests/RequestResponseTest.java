@@ -51,95 +51,90 @@ public class RequestResponseTest {
 
     @Test
     public void testSerialization() throws Exception {
-        try {
-            checkSerialization(createRequestHeader(), null);
-            checkSerialization(createResponseHeader(), null);
-            checkSerialization(createGroupCoordinatorRequest());
-            checkSerialization(createGroupCoordinatorRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createGroupCoordinatorResponse(), null);
-            checkSerialization(createControlledShutdownRequest());
-            checkSerialization(createControlledShutdownResponse(), null);
-            checkSerialization(createControlledShutdownRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createFetchRequest(3));
-            checkSerialization(createFetchRequest(3).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createFetchResponse(), null);
-            checkSerialization(createHeartBeatRequest());
-            checkSerialization(createHeartBeatRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createHeartBeatResponse(), null);
-            checkSerialization(createJoinGroupRequest(1));
-            checkSerialization(createJoinGroupRequest(0).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createJoinGroupRequest(1).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createJoinGroupResponse(), null);
-            checkSerialization(createLeaveGroupRequest());
-            checkSerialization(createLeaveGroupRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createLeaveGroupResponse(), null);
-            checkSerialization(createListGroupsRequest());
-            checkSerialization(createListGroupsRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createListGroupsResponse(), null);
-            checkSerialization(createDescribeGroupRequest());
-            checkSerialization(createDescribeGroupRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createDescribeGroupResponse(), null);
-            checkSerialization(createListOffsetRequest(1));
-            checkSerialization(createListOffsetRequest(1).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createListOffsetResponse(1), null);
-            checkSerialization(MetadataRequest.allTopics((short) 2));
-            checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")));
-            checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 1);
-            checkSerialization(createMetadataResponse(2), null);
-            checkSerialization(createMetadataRequest(2, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 2);
-            checkSerialization(createOffsetCommitRequest(2));
-            checkSerialization(createOffsetCommitRequest(2).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createOffsetCommitResponse(), null);
-            checkSerialization(createOffsetFetchRequest());
-            checkSerialization(createOffsetFetchRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createOffsetFetchResponse(), null);
-            checkSerialization(createProduceRequest());
-            checkSerialization(createProduceRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createProduceResponse(), null);
-            checkSerialization(createStopReplicaRequest(true));
-            checkSerialization(createStopReplicaRequest(false));
-            checkSerialization(createStopReplicaRequest(true).getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createStopReplicaResponse(), null);
-            checkSerialization(createUpdateMetadataRequest(2, "rack1"));
-            checkSerialization(createUpdateMetadataRequest(2, null));
-            checkSerialization(createUpdateMetadataRequest(2, "rack1").getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createUpdateMetadataResponse(), null);
-            checkSerialization(createLeaderAndIsrRequest());
-            checkSerialization(createLeaderAndIsrRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createLeaderAndIsrResponse(), null);
-            checkSerialization(createSaslHandshakeRequest());
-            checkSerialization(createSaslHandshakeRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createSaslHandshakeResponse(), null);
-            checkSerialization(createApiVersionRequest());
-            checkSerialization(createApiVersionRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createApiVersionResponse(), null);
-            checkSerialization(createCreateTopicRequest());
-            checkSerialization(createCreateTopicRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createCreateTopicResponse(), null);
-            checkSerialization(createDeleteTopicsRequest());
-            checkSerialization(createDeleteTopicsRequest().getErrorResponse(new UnknownServerException()), null);
-            checkSerialization(createDeleteTopicsResponse(), null);
-            checkOlderFetchVersions();
-            checkSerialization(createMetadataResponse(0), 0);
-            checkSerialization(createMetadataResponse(1), 1);
-            checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 1);
-            checkSerialization(createOffsetCommitRequest(0), 0);
-            checkSerialization(createOffsetCommitRequest(0).getErrorResponse(new UnknownServerException()), 0);
-            checkSerialization(createOffsetCommitRequest(1), 1);
-            checkSerialization(createOffsetCommitRequest(1).getErrorResponse(new UnknownServerException()), 1);
-            checkSerialization(createJoinGroupRequest(0), 0);
-            checkSerialization(createUpdateMetadataRequest(0, null), 0);
-            checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(new UnknownServerException()), 0);
-            checkSerialization(createUpdateMetadataRequest(1, null), 1);
-            checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
-            checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(new UnknownServerException()), 1);
-            checkSerialization(createListOffsetRequest(0), 0);
-            checkSerialization(createListOffsetRequest(0).getErrorResponse(new UnknownServerException()), 0);
-            checkSerialization(createListOffsetResponse(0), 0);
-        } catch (Exception e) {
-            log.info("STACK TRACE: cause " + e.getStackTrace(), e.getCause());
-            throw e;
-        }
+        checkSerialization(createRequestHeader(), null);
+        checkSerialization(createResponseHeader(), null);
+        checkSerialization(createGroupCoordinatorRequest());
+        checkSerialization(createGroupCoordinatorRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createGroupCoordinatorResponse(), null);
+        checkSerialization(createControlledShutdownRequest());
+        checkSerialization(createControlledShutdownResponse(), null);
+        checkSerialization(createControlledShutdownRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createFetchRequest(3));
+        checkSerialization(createFetchRequest(3).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createFetchResponse(), null);
+        checkSerialization(createHeartBeatRequest());
+        checkSerialization(createHeartBeatRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createHeartBeatResponse(), null);
+        checkSerialization(createJoinGroupRequest(1));
+        checkSerialization(createJoinGroupRequest(0).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createJoinGroupRequest(1).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createJoinGroupResponse(), null);
+        checkSerialization(createLeaveGroupRequest());
+        checkSerialization(createLeaveGroupRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createLeaveGroupResponse(), null);
+        checkSerialization(createListGroupsRequest());
+        checkSerialization(createListGroupsRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createListGroupsResponse(), null);
+        checkSerialization(createDescribeGroupRequest());
+        checkSerialization(createDescribeGroupRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createDescribeGroupResponse(), null);
+        checkSerialization(createListOffsetRequest(1));
+        checkSerialization(createListOffsetRequest(1).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createListOffsetResponse(1), null);
+        checkSerialization(MetadataRequest.allTopics((short) 2));
+        checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")));
+        checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createMetadataResponse(2), null);
+        checkSerialization(createMetadataRequest(2, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 2);
+        checkSerialization(createOffsetCommitRequest(2));
+        checkSerialization(createOffsetCommitRequest(2).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createOffsetCommitResponse(), null);
+        checkSerialization(createOffsetFetchRequest());
+        checkSerialization(createOffsetFetchRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createOffsetFetchResponse(), null);
+        checkSerialization(createProduceRequest());
+        checkSerialization(createProduceRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createProduceResponse(), null);
+        checkSerialization(createStopReplicaRequest(true));
+        checkSerialization(createStopReplicaRequest(false));
+        checkSerialization(createStopReplicaRequest(true).getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createStopReplicaResponse(), null);
+        checkSerialization(createUpdateMetadataRequest(2, "rack1"));
+        checkSerialization(createUpdateMetadataRequest(2, null));
+        checkSerialization(createUpdateMetadataRequest(2, "rack1").getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createUpdateMetadataResponse(), null);
+        checkSerialization(createLeaderAndIsrRequest());
+        checkSerialization(createLeaderAndIsrRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createLeaderAndIsrResponse(), null);
+        checkSerialization(createSaslHandshakeRequest());
+        checkSerialization(createSaslHandshakeRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createSaslHandshakeResponse(), null);
+        checkSerialization(createApiVersionRequest());
+        checkSerialization(createApiVersionRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createApiVersionResponse(), null);
+        checkSerialization(createCreateTopicRequest());
+        checkSerialization(createCreateTopicRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createCreateTopicResponse(), null);
+        checkSerialization(createDeleteTopicsRequest());
+        checkSerialization(createDeleteTopicsRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createDeleteTopicsResponse(), null);
+        checkOlderFetchVersions();
+        checkSerialization(createMetadataResponse(0), 0);
+        checkSerialization(createMetadataResponse(1), 1);
+        checkSerialization(createMetadataRequest(1, Arrays.asList("topic1")).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createOffsetCommitRequest(0), 0);
+        checkSerialization(createOffsetCommitRequest(0).getErrorResponse(new UnknownServerException()), 0);
+        checkSerialization(createOffsetCommitRequest(1), 1);
+        checkSerialization(createOffsetCommitRequest(1).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createJoinGroupRequest(0), 0);
+        checkSerialization(createUpdateMetadataRequest(0, null), 0);
+        checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(new UnknownServerException()), 0);
+        checkSerialization(createUpdateMetadataRequest(1, null), 1);
+        checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
+        checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createListOffsetRequest(0), 0);
+        checkSerialization(createListOffsetRequest(0).getErrorResponse(new UnknownServerException()), 0);
+        checkSerialization(createListOffsetResponse(0), 0);
     }
 
     private void checkOlderFetchVersions() throws Exception {
@@ -209,8 +204,7 @@ public class RequestResponseTest {
     @Test
     public void verifyFetchResponseFullWrite() throws Exception {
         FetchResponse fetchResponse = createFetchResponse();
-        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id,
-                ProtoUtils.latestVersion(ApiKeys.FETCH.id),
+        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ProtoUtils.latestVersion(ApiKeys.FETCH.id),
                 "client", 15);
 
         Send send = fetchResponse.toSend("1", header);
@@ -355,16 +349,14 @@ public class RequestResponseTest {
     @SuppressWarnings("deprecation")
     private ListOffsetRequest createListOffsetRequest(int version) {
         if (version == 0) {
-            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
-            offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
-            return new ListOffsetRequest.Builder().setOffsetData(offsetData).
-                    setVersion((short) version).build();
+            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
+                    new TopicPartition("test", 0),
+                    new ListOffsetRequest.PartitionData(1000000L, 10));
+            return new ListOffsetRequest.Builder().setOffsetData(offsetData).setVersion((short) version).build();
         } else if (version == 1) {
-            Map<TopicPartition, Long> offsetData = new HashMap<>();
-            offsetData.put(new TopicPartition("test", 0), 1000000L);
-            return new ListOffsetRequest.Builder().setTargetTimes(offsetData).
-                    setReplicaId(ListOffsetRequest.CONSUMER_REPLICA_ID).
-                    setVersion((short) version).build();
+            Map<TopicPartition, Long> offsetData = Collections.singletonMap(
+                    new TopicPartition("test", 0), 1000000L);
+            return new ListOffsetRequest.Builder().setTargetTimes(offsetData).setVersion((short) version).build();
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }

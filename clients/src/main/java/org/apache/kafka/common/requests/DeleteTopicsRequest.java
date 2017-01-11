@@ -36,8 +36,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
     private final Integer timeout;
 
     public static class Builder extends AbstractRequest.Builder<DeleteTopicsRequest> {
-        private Set<String> topics;
-        private Integer timeout;
+        private final Set<String> topics;
+        private final Integer timeout;
 
         public Builder(Set<String> topics, Integer timeout) {
             super(ApiKeys.DELETE_TOPICS);
@@ -106,8 +106,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     public static DeleteTopicsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DeleteTopicsRequest(
-                ProtoUtils.parseRequest(ApiKeys.DELETE_TOPICS.id, versionId, buffer),
+        return new DeleteTopicsRequest(ProtoUtils.parseRequest(ApiKeys.DELETE_TOPICS.id, versionId, buffer),
                 (short) versionId);
     }
 

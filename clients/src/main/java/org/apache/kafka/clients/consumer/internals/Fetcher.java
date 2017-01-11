@@ -134,7 +134,7 @@ public class Fetcher<K, V> {
     }
 
     private boolean matchesRequestedPartitions(FetchRequest.Builder request, FetchResponse response) {
-        Set<TopicPartition> requestedPartitions = request.getFetchData().keySet();
+        Set<TopicPartition> requestedPartitions = request.fetchData().keySet();
         Set<TopicPartition> fetchedPartitions = response.responseData().keySet();
         return fetchedPartitions.equals(requestedPartitions);
     }
@@ -160,7 +160,7 @@ public class Fetcher<K, V> {
                                 // is mainly for test cases where mock fetch responses must be manually crafted.
                                 log.warn("Ignoring fetch response containing partitions {} since it does not match " +
                                         "the requested partitions {}", response.responseData().keySet(),
-                                        request.getFetchData().keySet());
+                                        request.fetchData().keySet());
                                 return;
                             }
 
@@ -169,7 +169,7 @@ public class Fetcher<K, V> {
 
                             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
-                                long fetchOffset = request.getFetchData().get(partition).offset;
+                                long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator));
                             }
@@ -240,8 +240,7 @@ public class Fetcher<K, V> {
      * @param timeout time for which getting topic metadata is attempted
      * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(
-            MetadataRequest.Builder request, long timeout) {
+    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, long timeout) {
         // Save the round trip if no topics are requested.
         if (!request.isAllTopics() && request.topics().isEmpty())
             return Collections.emptyMap();
@@ -376,8 +375,7 @@ public class Fetcher<K, V> {
     }
 
     private Map<TopicPartition, OffsetAndTimestamp> retrieveOffsetsByTimes(
-            Map<TopicPartition, Long> timestampsToSearch,
-            long timeout, boolean requireTimestamps) {
+            Map<TopicPartition, Long> timestampsToSearch, long timeout, boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty())
             return Collections.emptyMap();
 
@@ -588,9 +586,7 @@ public class Fetcher<K, V> {
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(final Node node,
                                                                                          final Map<TopicPartition, Long> timestampsToSearch,
                                                                                          boolean requireTimestamp) {
-        ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().
-                setTargetTimes(timestampsToSearch).
-                setReplicaId(ListOffsetRequest.CONSUMER_REPLICA_ID);
+        ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().setTargetTimes(timestampsToSearch);
 
         // If we need a timestamp in the response, the minimum RPC version we can send is v1.
         // Otherwise, v0 is OK.
@@ -639,7 +635,7 @@ public class Fetcher<K, V> {
                     } else {
                         offset = partitionData.offsets.get(0);
                     }
-                    log.debug("handling v0 ListOffsetResponse response for {}.  Fetched offset {]",
+                    log.debug("Handling v0 ListOffsetResponse response for {}.  Fetched offset {]",
                             topicPartition, offset);
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetAndTimestamp offsetAndTimestamp = new OffsetAndTimestamp(offset, -1);
@@ -647,7 +643,7 @@ public class Fetcher<K, V> {
                     }
                 } else {
                     // Handle v1 and later response
-                    log.debug("handling ListOffsetResponse response for {}.  Fetched offset {}, timestamp {}",
+                    log.debug("Handling ListOffsetResponse response for {}.  Fetched offset {}, timestamp {}",
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetAndTimestamp offsetAndTimestamp =
@@ -669,8 +665,7 @@ public class Fetcher<K, V> {
                         "may not exist or the user may not have Describe access to it", topicPartition);
                 future.raise(error);
             } else {
-                log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
-                        topicPartition, error.message());
+                log.warn("Attempt to fetch offsets for partition {} failed due to: {}", topicPartition, error.message());
                 future.raise(new StaleMetadataException());
             }
         }
@@ -723,8 +718,7 @@ public class Fetcher<K, V> {
         Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest.Builder fetch = new FetchRequest.Builder(
-                    this.maxWaitMs, this.minBytes, entry.getValue()).
+            FetchRequest.Builder fetch = new FetchRequest.Builder(this.maxWaitMs, this.minBytes, entry.getValue()).
                     setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }

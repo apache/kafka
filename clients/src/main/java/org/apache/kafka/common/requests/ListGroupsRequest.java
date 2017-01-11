@@ -60,8 +60,7 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public static ListGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListGroupsRequest(
-                ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer),
+        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer),
                 (short) versionId);
     }
 

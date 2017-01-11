@@ -94,7 +94,7 @@ public class FetchRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
         private int replicaId = CONSUMER_REPLICA_ID;
         private int maxWait;
-        private int minBytes;
+        private final int minBytes;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private LinkedHashMap<TopicPartition, PartitionData> fetchData;
 
@@ -115,17 +115,12 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder setMinBytes(int minBytes) {
-            this.minBytes = minBytes;
-            return this;
-        }
-
         public Builder setMaxBytes(int maxBytes) {
             this.maxBytes = maxBytes;
             return this;
         }
 
-        public LinkedHashMap<TopicPartition, PartitionData> getFetchData() {
+        public LinkedHashMap<TopicPartition, PartitionData> fetchData() {
             return this.fetchData;
         }
 
@@ -133,7 +128,7 @@ public class FetchRequest extends AbstractRequest {
         public FetchRequest build() {
             short version = version();
             if (version < 3) {
-                maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
+                maxBytes = -1;
             }
 
             return new FetchRequest(version, replicaId, maxWait, minBytes,
@@ -250,9 +245,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public static FetchRequest parse(ByteBuffer buffer, int versionId) {
-        return new FetchRequest(
-                ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer),
-                (short) versionId);
+        return new FetchRequest(ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer), (short) versionId);
     }
 
     public static FetchRequest parse(ByteBuffer buffer) {

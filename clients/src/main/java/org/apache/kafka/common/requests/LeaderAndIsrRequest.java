@@ -54,10 +54,10 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String PORT_KEY_NAME = "port";
 
     public static class Builder extends AbstractRequest.Builder<LeaderAndIsrRequest> {
-        private int controllerId;
-        private int controllerEpoch;
-        private Map<TopicPartition, PartitionState> partitionStates;
-        private Set<Node> liveLeaders;
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final Map<TopicPartition, PartitionState> partitionStates;
+        private final Set<Node> liveLeaders;
 
         public Builder(int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Node> liveLeaders) {
@@ -210,8 +210,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, int versionId) {
-        return new LeaderAndIsrRequest(
-                ProtoUtils.parseRequest(ApiKeys.LEADER_AND_ISR.id, versionId, buffer),
+        return new LeaderAndIsrRequest(ProtoUtils.parseRequest(ApiKeys.LEADER_AND_ISR.id, versionId, buffer),
                 (short) versionId);
     }
 
