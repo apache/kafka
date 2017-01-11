@@ -104,11 +104,35 @@ public class KStreamBuilderTest {
         final KStream<String, String> source1 = builder.stream(topic1);
         final KStream<String, String> source2 = builder.stream(topic2);
         final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> processedSource1 =
+                source1.mapValues(new ValueMapper<String, String>() {
+                    @Override
+                    public String apply(final String value) {
+                        return value;
+                    }
+                }).filter(new Predicate<String, String>() {
+                    @Override
+                    public boolean test(final String key, final String value) {
+                        return true;
+                    }
+                });
+        final KStream<String, String> processedSource2 = source2.filter(new Predicate<String, String>() {
+            @Override
+            public boolean test(final String key, final String value) {
+                return true;
+            }
+        });
 
-        final KStream<String, String> merged = builder.merge(source1, source2, source3);
+        final KStream<String, String> merged = builder.merge(processedSource1, processedSource2, source3);
         merged.groupByKey().count("my-table");
         final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
         assertEquals(Utils.mkSet("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
+
+
+        final KStream<String, String> merged = builder.merge(processedSource1, processedSource2);
+        merged.groupByKey().count("my-table");
+        final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
+        assertEquals(Utils.mkSet("topic-1", "topic-2"), actual.get("my-table"));
     }
 
     @Test
