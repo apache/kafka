@@ -52,10 +52,10 @@ public class KStreamTransformTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
-            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
-                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+                public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
+                    return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
                         private int total = 0;
 
@@ -64,9 +64,9 @@ public class KStreamTransformTest {
                         }
 
                         @Override
-                        public KeyValue<Integer, Integer> transform(Integer key, Integer value) {
-                            total += value;
-                            return KeyValue.pair(key * 2, total);
+                        public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                            total += value.intValue();
+                            return KeyValue.pair(key.intValue() * 2, total);
                         }
 
                         @Override

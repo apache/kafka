@@ -80,7 +80,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
@@ -101,7 +100,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         });
 
-        data.process(SmokeTestUtil.<Integer>printProcessorSupplier("data"));
+        data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
         KGroupedStream<String, Integer>
@@ -127,7 +126,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, intSerde, "min");
 
         KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min", "minStoreName");
-        minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
+        minTable.toStream().process(SmokeTestUtil.printProcessorSupplier("min"));
 
         // max
         groupedData.aggregate(
@@ -149,7 +148,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, intSerde, "max");
 
         KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max", "maxStoreName");
-        maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
+        maxTable.toStream().process(SmokeTestUtil.printProcessorSupplier("max"));
 
         // sum
         groupedData.aggregate(
@@ -172,7 +171,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
 
         KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum", "sumStoreName");
-        sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
+        sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
 
         // cnt
         groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
@@ -181,7 +180,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, longSerde, "cnt");
 
         KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt", "cntStoreName");
-        cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
+        cntTable.toStream().process(SmokeTestUtil.printProcessorSupplier("cnt"));
 
         // dif
         maxTable.join(minTable,

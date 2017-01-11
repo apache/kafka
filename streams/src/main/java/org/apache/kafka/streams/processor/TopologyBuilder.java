@@ -507,7 +507,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
-    public synchronized final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
+    public synchronized final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<? super K, ? super V> partitioner, String... parentNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
         if (nodeFactories.containsKey(name))

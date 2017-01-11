@@ -60,7 +60,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                            StreamPartitioner<K, V> partitioner) {
+                            StreamPartitioner<? super K, ? super V> partitioner) {
         checkForException();
         byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
         byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());

@@ -17,9 +17,11 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
@@ -36,7 +38,7 @@ public class MergedSortedCacheWindowStoreIteratorTest {
     @Test
     public void shouldIterateOverValueFromBothIterators() throws Exception {
         final List<KeyValue<Bytes, byte[]>> storeValues = new ArrayList<>();
-        final ThreadCache cache = new ThreadCache(1000000L);
+        final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         final String namespace = "one";
         final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
         final List<KeyValue<Long, byte[]>> expectedKvPairs = new ArrayList<>();

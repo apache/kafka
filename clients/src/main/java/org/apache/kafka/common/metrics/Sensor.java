@@ -12,17 +12,18 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -41,7 +42,63 @@ public final class Sensor {
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
 
-    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time, long inactiveSensorExpirationTimeSeconds) {
+    public enum RecordingLevel {
+        INFO(0, "INFO"), DEBUG(1, "DEBUG");
+
+        private static final RecordingLevel[] ID_TO_TYPE;
+        private static final int MIN_RECORDING_LEVEL_KEY = 0;
+        public static final int MAX_RECORDING_LEVEL_KEY;
+
+        static {
+            int maxRL = -1;
+            for (RecordingLevel level : RecordingLevel.values()) {
+                maxRL = Math.max(maxRL, level.id);
+            }
+            RecordingLevel[] idToName = new RecordingLevel[maxRL + 1];
+            for (RecordingLevel level : RecordingLevel.values()) {
+                idToName[level.id] = level;
+            }
+            ID_TO_TYPE = idToName;
+            MAX_RECORDING_LEVEL_KEY = maxRL;
+        }
+
+        /** an english description of the api--this is for debugging and can change */
+        public final String name;
+
+        /** the permanent and immutable id of an API--this can't change ever */
+        public final short id;
+
+        RecordingLevel(int id, String name) {
+            this.id = (short) id;
+            this.name = name;
+        }
+
+        public static RecordingLevel forId(int id) {
+            if (id < MIN_RECORDING_LEVEL_KEY || id > MAX_RECORDING_LEVEL_KEY)
+                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%s`, it should be between `%s` " +
+                    "and `%s` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
+            return ID_TO_TYPE[id];
+        }
+
+        /** Case insensitive lookup by protocol name */
+        public static RecordingLevel forName(String name) {
+            return RecordingLevel.valueOf(name.toUpperCase(Locale.ROOT));
+        }
+
+        public boolean shouldRecord(final int configId) {
+            if (configId == DEBUG.id) {
+                return true;
+            } else {
+                return configId == this.id;
+            }
+        }
+
+    }
+
+    private final RecordingLevel recordingLevel;
+
+    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
+           long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
@@ -52,6 +109,7 @@ public final class Sensor {
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
+        this.recordingLevel = recordingLevel;
         checkForest(new HashSet<Sensor>());
     }
 
@@ -74,9 +132,17 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        record(1.0);
+        if (shouldRecord()) {
+            record(1.0);
+        }
     }
 
+    /**
+     * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
+     */
+    public boolean shouldRecord() {
+        return this.recordingLevel.shouldRecord(config.recordLevel().id);
+    }
     /**
      * Record a value with this sensor
      * @param value The value to record
@@ -84,7 +150,9 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        record(value, time.milliseconds());
+        if (shouldRecord()) {
+            record(value, time.milliseconds());
+        }
     }
 
     /**
@@ -96,15 +164,17 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        this.lastRecordTime = timeMs;
-        synchronized (this) {
-            // increment all the stats
-            for (int i = 0; i < this.stats.size(); i++)
-                this.stats.get(i).record(config, value, timeMs);
-            checkQuotas(timeMs);
+        if (shouldRecord()) {
+            this.lastRecordTime = timeMs;
+            synchronized (this) {
+                // increment all the stats
+                for (int i = 0; i < this.stats.size(); i++)
+                    this.stats.get(i).record(config, value, timeMs);
+                checkQuotas(timeMs);
+            }
+            for (int i = 0; i < parents.length; i++)
+                parents[i].record(value, timeMs);
         }
-        for (int i = 0; i < parents.length; i++)
-            parents[i].record(value, timeMs);
     }
 
     /**

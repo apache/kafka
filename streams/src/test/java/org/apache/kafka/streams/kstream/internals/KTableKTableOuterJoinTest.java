@@ -82,7 +82,7 @@ public class KTableKTableOuterJoinTest {
         processor = new MockProcessorSupplier<>();
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
         joined.toStream().process(processor);
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
@@ -182,7 +182,7 @@ public class KTableKTableOuterJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
@@ -270,7 +270,7 @@ public class KTableKTableOuterJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 

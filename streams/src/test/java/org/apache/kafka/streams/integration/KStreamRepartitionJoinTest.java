@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -58,10 +59,12 @@ import static org.hamcrest.core.Is.is;
 
 @RunWith(Parameterized.class)
 public class KStreamRepartitionJoinTest {
+
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final ValueJoiner<Object, Object, String> TOSTRING_JOINER = MockValueJoiner.instance(":");
     private final MockTime mockTime = CLUSTER.time;
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
@@ -70,7 +73,6 @@ public class KStreamRepartitionJoinTest {
     private KStream<Long, Integer> streamOne;
     private KStream<Integer, String> streamTwo;
     private KStream<Integer, String> streamFour;
-    private ValueJoiner<Integer, String, String> valueJoiner;
     private KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>> keyMapper;
 
     private final List<String>
@@ -99,7 +101,6 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
@@ -108,13 +109,6 @@ public class KStreamRepartitionJoinTest {
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
         streamFour = builder.stream(Serdes.Integer(), Serdes.String(), streamFourInput);
-
-        valueJoiner = new ValueJoiner<Integer, String, String>() {
-            @Override
-            public String apply(final Integer value1, final String value2) {
-                return value1 + ":" + value2;
-            }
-        };
 
         keyMapper = MockKeyValueMapper.SelectValueKeyValueMapper();
     }
@@ -213,18 +207,11 @@ public class KStreamRepartitionJoinTest {
 
     private ExpectedOutputOnTopic joinMappedRhsStream() throws Exception {
 
-        final ValueJoiner<String, Integer, String> joiner = new ValueJoiner<String, Integer, String>() {
-            @Override
-            public String apply(final String value1, final Integer value2) {
-                return value1 + ":" + value2;
-            }
-        };
-
         final String output = "join-rhs-stream-mapped-" + testNo;
         CLUSTER.createTopic(output);
         streamTwo
             .join(streamOne.map(keyMapper),
-                joiner,
+                TOSTRING_JOINER,
                 getJoinWindow(),
                 Serdes.Integer(),
                 Serdes.String(),
@@ -243,7 +230,7 @@ public class KStreamRepartitionJoinTest {
         final String outputTopic = "left-join-" + testNo;
         CLUSTER.createTopic(outputTopic);
         map1.leftJoin(map2,
-            valueJoiner,
+            TOSTRING_JOINER,
             getJoinWindow(),
             Serdes.Integer(),
             Serdes.Integer(),
@@ -262,24 +249,17 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, String> map2 = streamTwo.map(kvMapper);
 
         final KStream<Integer, String> join = map1.join(map2,
-            valueJoiner,
+            TOSTRING_JOINER,
             getJoinWindow(),
             Serdes.Integer(),
             Serdes.Integer(),
             Serdes.String());
 
-        final ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
-            @Override
-            public String apply(final String value1, final String value2) {
-                return value1 + ":" + value2;
-            }
-        };
-
         final String topic = "map-join-join-" + testNo;
         CLUSTER.createTopic(topic);
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
-                joiner,
+                TOSTRING_JOINER,
                 getJoinWindow(),
                 Serdes.Integer(),
                 Serdes.String(),
@@ -418,7 +398,7 @@ public class KStreamRepartitionJoinTest {
                         final String outputTopic) {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
-            valueJoiner,
+            TOSTRING_JOINER,
             getJoinWindow(),
             Serdes.Integer(),
             Serdes.Integer(),

@@ -167,7 +167,7 @@ public class KStreamBuilderTest {
         assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
 
         final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
-        mapped.leftJoin(table, MockValueJoiner.STRING_JOINER).groupByKey().count("count");
+        mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count("count");
         assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
         assertEquals(Collections.singleton("app-id-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
     }

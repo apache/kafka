@@ -76,7 +76,7 @@ public class KStreamKTableJoinTest {
         processor = new MockProcessorSupplier<>();
         stream = builder.stream(intSerde, stringSerde, topic1);
         table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
-        stream.join(table, MockValueJoiner.STRING_JOINER).process(processor);
+        stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
         final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 

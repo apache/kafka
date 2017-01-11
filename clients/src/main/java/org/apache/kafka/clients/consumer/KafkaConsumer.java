@@ -39,7 +39,6 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -519,7 +518,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             ApiKeys.OFFSET_COMMIT,
             ApiKeys.OFFSET_FETCH,
             ApiKeys.SYNC_GROUP);
-    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(CONSUMER_APIS);
 
     private final String clientId;
     private final ConsumerCoordinator coordinator;
@@ -673,7 +671,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     time,
-                    EXPECTED_API_VERSIONS);
+                    true);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -1351,7 +1349,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (parts != null)
                 return parts;
 
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topic)), requestTimeoutMs);
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                    new MetadataRequest.Builder(Collections.singletonList(topic)), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();
