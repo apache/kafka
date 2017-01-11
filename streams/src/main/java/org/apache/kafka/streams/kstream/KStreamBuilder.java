@@ -65,7 +65,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      * @param topics    the topic names; must contain at least one topic name
      * @return a {@link KStream} for the specified topics
      */
@@ -95,7 +95,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If multiple topics are matched by the specified pattern, the created stream will read data from all of them,
      * and there is no ordering guarantee between records from different topics
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      * @param topicPattern    the Pattern to match for topic names
      * @return a {@link KStream} for topics matching the regex pattern.
      */
@@ -127,7 +127,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      *
      * @param keySerde  key serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used
@@ -139,7 +139,7 @@ public class KStreamBuilder extends TopologyBuilder {
     public <K, V> KStream<K, V> stream(AutoOffsetReset offsetReset, Serde<K> keySerde, Serde<V> valSerde, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
-        addSource(name, offsetReset, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
+        addSource(offsetReset, name,  keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
@@ -168,7 +168,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If multiple topics are matched by the specified pattern, the created stream will read data from all of them,
      * and there is no ordering guarantee between records from different topics.
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      * @param keySerde  key serde used to read this source {@link KStream},
      *                  if not specified the default serde defined in the configs will be used
      * @param valSerde  value serde used to read this source {@link KStream},
@@ -179,7 +179,7 @@ public class KStreamBuilder extends TopologyBuilder {
     public <K, V> KStream<K, V> stream(AutoOffsetReset offsetReset, Serde<K> keySerde, Serde<V> valSerde, Pattern topicPattern) {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
-        addSource(name, offsetReset, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
+        addSource(offsetReset, name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
@@ -191,7 +191,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The resulting {@link KTable} will be materialized in a local state store with the given store name.
      * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      * @param topic     the topic name; cannot be null
      * @param storeName the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
@@ -240,7 +240,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The resulting {@link KTable} will be materialized in a local state store with the given store name.
      * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
-     * @param offsetReset the offset reset to use for this stream if no committed offsets available; acceptable values are earliest or latest
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets available; acceptable values are earliest or latest
      * @param keySerde   key serde used to send key-value pairs,
      *                   if not specified the default key serde defined in the configuration will be used
      * @param valSerde   value serde used to send key-value pairs,
@@ -254,7 +254,7 @@ public class KStreamBuilder extends TopologyBuilder {
         final String name = newName(KTableImpl.SOURCE_NAME);
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
 
-        addSource(source, offsetReset, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
+        addSource(offsetReset, source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
         addProcessor(name, processorSupplier, source);
 
         final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), storeName);
@@ -271,12 +271,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return kTable;
     }
 
-    /**
-     * Enum used to define auto offset reset for KStream instances.
-     */
-    public enum AutoOffsetReset {
-        EARLIEST , LATEST
-    }
 
     /**
      * Create a new instance of {@link KStream} by merging the given streams.

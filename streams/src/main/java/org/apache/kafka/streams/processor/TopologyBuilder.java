@@ -21,7 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -290,6 +291,13 @@ public class TopologyBuilder {
     }
 
     /**
+     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
+     */
+    public enum AutoOffsetReset {
+        EARLIEST , LATEST
+    }
+
+    /**
      * Create a new builder.
      */
     public TopologyBuilder() {}
@@ -322,7 +330,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addSource(String name, String... topics) {
-        return addSource(name, null, (Deserializer) null, (Deserializer) null, topics);
+        return addSource(null, name, (Deserializer) null, (Deserializer) null, topics);
     }
 
     /**
@@ -331,14 +339,14 @@ public class TopologyBuilder {
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
+     * @param offsetReset the auto offset reset policy to use for this source if no committed offsets found; acceptable values earliest or latest
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     * @param offsetReset the offset reset to use for this source if no committed offsets found; acceptable values earliest or latest
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      */
-    public synchronized final TopologyBuilder addSource(String name, KStreamBuilder.AutoOffsetReset offsetReset, String... topics) {
-        return addSource(name, offsetReset, (Deserializer) null, (Deserializer) null, topics);
+    public synchronized final TopologyBuilder addSource(AutoOffsetReset offsetReset, String name,  String... topics) {
+        return addSource(offsetReset, name, (Deserializer) null, (Deserializer) null, topics);
     }
 
 
@@ -355,7 +363,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addSource(String name, Pattern topicPattern) {
-        return addSource(name, null, (Deserializer) null, (Deserializer) null, topicPattern);
+        return addSource(null, name, (Deserializer) null, (Deserializer) null, topicPattern);
     }
 
     /**
@@ -365,14 +373,14 @@ public class TopologyBuilder {
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
+     * @param offsetReset the auto offset reset policy value for this source if no committed offsets found; acceptable values earliest or latest.
      * @param name the unique name of the source used to reference this node when
-     * @param offsetReset the offset reset value for this source if no committed offsets found; acceptable values earliest or latest.
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      */
-    public synchronized final TopologyBuilder addSource(String name, KStreamBuilder.AutoOffsetReset offsetReset, Pattern topicPattern) {
-        return addSource(name, offsetReset, (Deserializer) null, (Deserializer) null, topicPattern);
+    public synchronized final TopologyBuilder addSource(AutoOffsetReset offsetReset, String name,  Pattern topicPattern) {
+        return addSource(offsetReset, name, (Deserializer) null, (Deserializer) null, topicPattern);
     }
 
 
@@ -388,11 +396,12 @@ public class TopologyBuilder {
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
-     * @param topics the name of one or more Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
+     * @param topics the name of one or more Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
-        return addSource(name, null, keyDeserializer, valDeserializer, topics);
+        return addSource(null, name, keyDeserializer, valDeserializer, topics);
 
     }
 
@@ -400,19 +409,20 @@ public class TopologyBuilder {
      * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
      * The source will use the specified key and value deserializers.
      *
+     * @param offsetReset the auto offset reset policy to use for this stream if no committed offsets found; acceptable values are earliest or latest.
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     * @param offsetReset the offset reset to use for this stream if no committed offsets found; acceptable values are earliest or latest.
      * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
-     * @param topics the name of one or more Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
+     * @param topics the name of one or more Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
-    public synchronized final TopologyBuilder addSource(String name, KStreamBuilder.AutoOffsetReset offsetReset, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
+    public synchronized final TopologyBuilder addSource(AutoOffsetReset offsetReset, String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (topics.length == 0) {
             throw new TopologyBuilderException("You must provide at least one topic");
         }
@@ -459,12 +469,13 @@ public class TopologyBuilder {
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
-     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
 
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
-        return addSource(name, null, keyDeserializer, valDeserializer, topicPattern);
+        return addSource(null, name,  keyDeserializer, valDeserializer, topicPattern);
 
     }
 
@@ -475,20 +486,21 @@ public class TopologyBuilder {
      * de-/serializers will be used for all matched topics, so care should be taken to specify patterns for
      * topics that share the same key-value data format.
      *
+     * @param offsetReset  the auto offset reset policy to use for this stream if no committed offsets found; acceptable values are earliest or latest
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     * @param offsetReset  the offset reset to use for this stream if no committed offsets found; acceptable values are earliest or latest
      * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
-     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
 
-    public synchronized final TopologyBuilder addSource(String name, KStreamBuilder.AutoOffsetReset offsetReset, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
+    public synchronized final TopologyBuilder addSource(AutoOffsetReset offsetReset, String name,  Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
         Objects.requireNonNull(topicPattern, "topicPattern can't be null");
         Objects.requireNonNull(name, "name can't be null");
 
@@ -817,14 +829,17 @@ public class TopologyBuilder {
     }
 
 
-    private <T> void maybeAddToResetList(Collection<T> earliestResets, Collection<T> latestResets, KStreamBuilder.AutoOffsetReset offsetReset, T item) {
+    private <T> void maybeAddToResetList(Collection<T> earliestResets, Collection<T> latestResets, AutoOffsetReset offsetReset, T item) {
         if (offsetReset != null) {
-            if (offsetReset == KStreamBuilder.AutoOffsetReset.EARLIEST) {
-                earliestResets.add(item);
-            } else if (offsetReset == KStreamBuilder.AutoOffsetReset.LATEST) {
-                latestResets.add(item);
-            } else {
-                throw new TopologyBuilderException(String.format("Unrecognized reset format %s", offsetReset));
+            switch (offsetReset) {
+                case EARLIEST:
+                    earliestResets.add(item);
+                    break;
+                case LATEST:
+                    latestResets.add(item);
+                    break;
+                default:
+                    throw new TopologyBuilderException(String.format("Unrecognized reset format %s", offsetReset));
             }
         }
     }
@@ -957,7 +972,7 @@ public class TopologyBuilder {
 
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic, storeToProcessorNodeMap);
     }
-    
+
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
@@ -1098,13 +1113,13 @@ public class TopologyBuilder {
 
         for (Pattern otherPattern : otherPatterns) {
             if (builtPattern.pattern().contains(otherPattern.pattern())) {
-                throw new TopologyBuilderException("Found overlapping regex and or topic for a KStream with auto offset resets");
+                throw new TopologyBuilderException(String.format("Found overlapping regex [%s] against [%s] for a KStream with auto offset resets", otherPattern.pattern(), builtPattern.pattern()));
             }
         }
 
         for (String otherTopic : otherTopics) {
             if (builtPattern.matcher(otherTopic).matches()) {
-                throw new TopologyBuilderException("Found overlapping regex and or topic for a KStream with auto offset resets");
+                throw new TopologyBuilderException(String.format("Found overlapping regex [%s] matching topic [%s] for a KStream with auto offset resets", builtPattern.pattern(), otherTopic));
             }
         }
 
@@ -1119,7 +1134,7 @@ public class TopologyBuilder {
      * @param sourcePatterns Patterns for matching source topics to add to a composite pattern
      * @return a Pattern that is composed of the literal source topic names and any Patterns for matching source topics
      */
-    private synchronized Pattern buildPatternForOffsetResetTopics(String[] sourceTopics, Pattern[] sourcePatterns) {
+    private static synchronized Pattern buildPatternForOffsetResetTopics(String[] sourceTopics, Pattern[] sourcePatterns) {
         StringBuilder builder = new StringBuilder();
 
         for (String topic : sourceTopics) {
@@ -1198,20 +1213,21 @@ public class TopologyBuilder {
 
     public synchronized Pattern sourceTopicPattern() {
         if (this.topicPattern == null && !nodeToSourcePatterns.isEmpty()) {
-            StringBuilder builder = new StringBuilder();
-            for (Pattern pattern : nodeToSourcePatterns.values()) {
-                builder.append(pattern.pattern()).append("|");
-            }
+
+            List<String> allNodeToSourceTopics = new ArrayList<>();
             if (!nodeToSourceTopics.isEmpty()) {
                 for (String[] topics : nodeToSourceTopics.values()) {
-                    for (String topic : topics) {
-                        builder.append(topic).append("|");
-                    }
+                    allNodeToSourceTopics.addAll(Arrays.asList(topics));
+
                 }
             }
+            int numPatterns = nodeToSourcePatterns.values().size();
+            int numTopics = allNodeToSourceTopics.size();
 
-            builder.setLength(builder.length() - 1);
-            this.topicPattern = Pattern.compile(builder.toString());
+            Pattern[] patterns = nodeToSourcePatterns.values().toArray(new Pattern[numPatterns]);
+            String[] allTopics = allNodeToSourceTopics.toArray(new String[numTopics]);
+
+            this.topicPattern = buildPatternForOffsetResetTopics(allTopics, patterns);
         }
         return this.topicPattern;
     }
