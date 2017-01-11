@@ -190,6 +190,8 @@ class RequestSendThread(val controllerId: Int,
               val clientRequest = networkClient.newClientRequest(
                   brokerNode.idString, requestBuilder, time.milliseconds(), true, null)
               val abstractRequest = clientRequest.requestBuilder().build()
+              val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
+                time.milliseconds(), true)
               clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
               isSendSuccessful = true
             }

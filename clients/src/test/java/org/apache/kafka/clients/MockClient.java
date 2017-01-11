@@ -282,10 +282,16 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder requestBuilder,
-                                          long createdTimeMs, boolean expectResponse, RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId",
-                createdTimeMs, expectResponse, callback);
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse) {
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback) {
+        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
+                expectResponse, callback);
     }
 
     @Override

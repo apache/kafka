@@ -265,7 +265,7 @@ public class NetworkClient implements KafkaClient {
 
     private void sendInternalMetadataRequest(MetadataRequest.Builder builder,
                                              String nodeConnectionId, long now) {
-        ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true, null);
+        ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true);
         doSend(clientRequest, true, now);
     }
 
@@ -590,7 +590,7 @@ public class NetworkClient implements KafkaClient {
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 log.debug("Initiating API versions fetch from node {}.", node);
                 ApiVersionsRequest.Builder apiVersionRequest = new ApiVersionsRequest.Builder();
-                ClientRequest clientRequest = newClientRequest(node, apiVersionRequest, now, true, null);
+                ClientRequest clientRequest = newClientRequest(node, apiVersionRequest, now, true);
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
@@ -766,11 +766,16 @@ public class NetworkClient implements KafkaClient {
     }
 
     @Override
-    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder requestBuilder,
-                                          long createdTimeMs, boolean expectResponse,
-                                          RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId,
-                createdTimeMs, expectResponse, callback);
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse) {
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback) {
+        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
+                callback);
     }
 
     static class InFlightRequest {
