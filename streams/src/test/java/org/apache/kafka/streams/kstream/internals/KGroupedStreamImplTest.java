@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -40,9 +41,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KGroupedStreamImplTest {
@@ -336,5 +342,39 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreStoreSupplierNameWhenCountingSessionWindows() throws Exception {
         groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
+    }
+
+    @Test
+    public void shouldCountWindowed() throws Exception {
+        final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
+        groupedStream.count(
+                TimeWindows.of(500L),
+                "aggregate-by-key-windowed")
+                .foreach(new ForeachAction<Windowed<String>, Long>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final Long value) {
+                        results.add(KeyValue.pair(key, value));
+                    }
+                });
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
+        driver.setTime(0);
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "2", "B");
+        driver.process(TOPIC, "3", "C");
+        driver.setTime(500);
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "2", "B");
+        driver.process(TOPIC, "2", "B");
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
+        )));
     }
 }

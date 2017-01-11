@@ -94,26 +94,27 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private boolean loggingEnabled = false;
 
-    private StoreChangeLogger<Bytes, byte[]> changeLogger;
-
     protected volatile boolean open = false;
 
-    public KeyValueStore<K, V> enableLogging() {
-        loggingEnabled = true;
 
-        return this;
+    public RocksDBStore(final String name,
+                        final Serde<K> keySerde,
+                        final Serde<V> valueSerde,
+                        final boolean logged) {
+        this(name, DB_FILE_DIR, keySerde, valueSerde, logged);
     }
 
-    public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, DB_FILE_DIR, keySerde, valueSerde);
-    }
 
-
-    public RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde) {
+    public RocksDBStore(final String name,
+                        final String parentDir,
+                        final Serde<K> keySerde,
+                        final Serde<V> valueSerde,
+                        final boolean logged) {
         this.name = name;
         this.parentDir = parentDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+        this.loggingEnabled = logged;
 
         // initialize the default rocksdb options
         BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -159,7 +160,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // open the DB dir
         openDB(context);
 
-        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, loggingEnabled, new StateRestoreCallback() {
@@ -235,10 +235,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         byte[] rawKey = serdes.rawKey(key);
         byte[] rawValue = serdes.rawValue(value);
         putInternal(rawKey, rawValue);
-
-        if (loggingEnabled) {
-            changeLogger.logChange(Bytes.wrap(rawKey), rawValue);
-        }
     }
 
     @Override
@@ -278,9 +274,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 } else {
                     final byte[] value = serdes.rawValue(entry.value);
                     batch.put(rawKey, value);
-                    if (loggingEnabled) {
-                        changeLogger.logChange(Bytes.wrap(rawKey), value);
-                    }
                 }
             }
             db.write(wOptions, batch);

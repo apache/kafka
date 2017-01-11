@@ -58,8 +58,9 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema());
-        cachingStore = new CachingSessionStore<>(underlying,
+        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema(), false);
+        final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
+        cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
                                                  Serdes.Long());
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
