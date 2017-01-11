@@ -146,7 +146,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
       val requestBuilder = new LeaderAndIsrRequest.Builder(
           controllerId, staleControllerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
-      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, requestBuilder,
+      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
         staleControllerEpochCallback)
       TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)

@@ -57,12 +57,13 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     }
   }
 
-  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest.Builder[_ <: AbstractRequest], callback: AbstractResponse => Unit = null) {
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                  callback: AbstractResponse => Unit = null) {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
-          stateInfo.messageQueue.put(QueueItem(apiKey, apiVersion, request, callback))
+          stateInfo.messageQueue.put(QueueItem(apiKey, request, callback))
         case None =>
           warn("Not sending request %s to broker %d, since it is offline.".format(request, brokerId))
       }
@@ -150,8 +151,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   }
 }
 
-case class QueueItem(apiKey: ApiKeys, apiVersion: Option[Short],
-                     request: AbstractRequest.Builder[_ <: AbstractRequest], callback: AbstractResponse => Unit)
+case class QueueItem(apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                     callback: AbstractResponse => Unit)
 
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
@@ -171,7 +172,7 @@ class RequestSendThread(val controllerId: Int,
 
     def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(100))
 
-    val QueueItem(apiKey, apiVersion, requestBuilder, callback) = queue.take()
+    val QueueItem(apiKey, requestBuilder, callback) = queue.take()
     import NetworkClientBlockingOps._
     var clientResponse: ClientResponse = null
     try {
@@ -186,10 +187,6 @@ class RequestSendThread(val controllerId: Int,
               backoff()
             }
             else {
-              val version: Short = apiVersion.getOrElse(ProtoUtils.latestVersion(apiKey.id))
-              val clientRequest = networkClient.newClientRequest(
-                  brokerNode.idString, requestBuilder, time.milliseconds(), true, null)
-              val abstractRequest = clientRequest.requestBuilder().build()
               val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
                 time.milliseconds(), true)
               clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
@@ -367,7 +364,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
         val leaderAndIsrRequest = new LeaderAndIsrRequest.
             Builder(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
-        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest, null)
+        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequest, null)
       }
       leaderAndIsrRequestMap.clear()
 
@@ -407,8 +404,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
             setVersion(version)
       }
 
-      updateMetadataRequestBrokerSet.foreach {broker =>
-        controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
+      updateMetadataRequestBrokerSet.foreach { broker =>
+        controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, updateMetadataRequest, null)
       }
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
@@ -427,18 +424,18 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         // changes the order in which the requests are sent for the same partitions, but that's OK.
         val stopReplicaRequest = new StopReplicaRequest.Builder(controllerId, controllerEpoch, false,
           replicasToGroup.map(r => new TopicPartition(r.replica.topic, r.replica.partition)).toSet.asJava)
-        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
 
         replicasToNotGroup.foreach { r =>
           val stopReplicaRequest = new StopReplicaRequest.Builder(
               controllerId, controllerEpoch, r.deletePartition,
               Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
-          controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest, r.callback)
+          controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
         }
       }
       stopReplicaRequestMap.clear()
     } catch {
-      case e : Throwable => {
+      case e: Throwable =>
         if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
               s"the map is $leaderAndIsrRequestMap. Exception message: $e")
@@ -452,7 +449,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
         throw new IllegalStateException(e)
-      }
     }
   }
 }
