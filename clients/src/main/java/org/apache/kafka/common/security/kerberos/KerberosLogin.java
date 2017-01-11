@@ -140,7 +140,7 @@ public class KerberosLogin extends AbstractLogin {
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = Utils.newThread("kafka-kerberos-refresh-thread-" + principal, new Runnable() {
+        t = Utils.newThread(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
             public void run() {
                 log.info("Principal={} - TGT refresh thread started.", principal);
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -229,8 +229,9 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("Principal={} - Could not renew TGT due to problem running shell command: '" + kinitCmd
-                                            + " " + kinitArgs + "'" + "; exception was: " + e + ". Exiting refresh thread.", principal, e);
+                                    log.warn(String.format("Principal=%s - Could not renew TGT due to problem running shell command: '%s %s'; " +
+                                            "exception was: %s. Exiting refresh thread.", 
+                                            principal, kinitCmd, kinitArgs, e), e);
                                     return;
                                 }
                             }
@@ -249,16 +250,16 @@ public class KerberosLogin extends AbstractLogin {
                                     try {
                                         Thread.sleep(10 * 1000);
                                     } catch (InterruptedException e) {
-                                        log.error("Principal={} - Interrupted during login retry after LoginException:", principal, le);
+                                        log.error(String.format("Principal=%s - Interrupted during login retry after LoginException:", principal), le);
                                         throw le;
                                     }
                                 } else {
-                                    log.error("Principal={} - Could not refresh TGT for principal: " + principal + ".", principal, le);
+                                    log.error(String.format("Principal=%s - Could not refresh TGT.", principal), le);
                                 }
                             }
                         }
                     } catch (LoginException le) {
-                        log.error("Principal={} - Failed to refresh TGT: refresh thread exiting now.", principal, le);
+                        log.error(String.format("Principal=%s - Failed to refresh TGT: refresh thread exiting now.", principal), le);
                         return;
                     }
                 }
@@ -275,7 +276,7 @@ public class KerberosLogin extends AbstractLogin {
             try {
                 t.join();
             } catch (InterruptedException e) {
-                log.warn("Principal={} - Error while waiting for Login thread to shutdown: " + e, principal, e);
+                log.warn(String.format("Principal=%s - Error while waiting for Login thread to shutdown: %s", principal, e), e);
                 Thread.currentThread().interrupt();
             }
         }
@@ -300,8 +301,8 @@ public class KerberosLogin extends AbstractLogin {
         }
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
-            String message = "Conflicting serviceName values found in JAAS and Kafka configs " +
-                "value in JAAS file " + jaasServiceName + ", value in Kafka config " + configServiceName;
+            String message = String.format("Conflicting serviceName values found in JAAS and Kafka configs " +
+                "value in JAAS file %s, value in Kafka config %s", jaasServiceName, configServiceName);
             throw new IllegalArgumentException(message);
         }
 

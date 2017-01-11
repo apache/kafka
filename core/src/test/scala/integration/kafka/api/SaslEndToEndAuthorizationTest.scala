@@ -33,8 +33,8 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
   protected var clientKeytabFile: Option[File] = None
   
-  protected def kafkaClientSaslMechanism : String
-  protected def kafkaServerSaslMechanisms : List[String]
+  protected def kafkaClientSaslMechanism: String
+  protected def kafkaServerSaslMechanisms: List[String]
 
   
   @Before
@@ -60,8 +60,8 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * The first consumer succeeds because it is allowed by the ACL, 
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
-  @Test(timeout=20000L)
-  def testTwoConsumersWithDifferentSASLCredentials {
+  @Test(timeout=5000L)
+  def testTwoConsumersWithDifferentSaslCredentials {
     setAclsAndProduce()
     val consumer1 = consumers.head
 

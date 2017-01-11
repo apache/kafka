@@ -333,7 +333,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(group, e.groupId())
     }
   }
-  
 
   private def sendRecords(numRecords: Int, tp: TopicPartition) {
     val futures = (0 until numRecords).map { i =>

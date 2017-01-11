@@ -19,8 +19,6 @@ package kafka.api
 
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.Ignore
-import org.junit.Test
 import org.junit.Before
 
 
