@@ -406,14 +406,14 @@ class SocketServerTest extends JUnitSuite {
     val sum = KafkaMetricsGroup.registry.getMetrics.asScala
       .filterKeys(k => {
         val name = KafkaMetricsName.fromString(k)
-        name.name.endsWith("IdlePercent") || name.name.endsWith("NetworkProcessorAvgIdlePercent")
+        name.name.contains("IdlePercent") || name.name.contains("NetworkProcessorAvgIdlePercent")
       })
       .collect { case (_, metric: Gauge[_]) =>
         metric.getValue.asInstanceOf[Double]
       }
       .sum
 
-    assertEquals(0, sum)
+    assertEquals(0, sum, 0)
   }
 
 }

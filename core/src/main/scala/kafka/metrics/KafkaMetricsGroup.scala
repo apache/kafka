@@ -86,9 +86,8 @@ trait KafkaMetricsGroup extends Logging {
       KafkaMetricsGroup.registry.register(metricName(name, tags).toString, metric)
     } catch {
       case _: IllegalArgumentException => KafkaMetricsGroup.registry.getGauges.get(metricName(name, tags).toString).asInstanceOf[Gauge[T]]
-      case _ => null
+      case exception: Throwable => throw exception
     }
-
   }
 
   def newMeter(name: String, tags: scala.collection.Map[String, String] = Map.empty): Meter =
