@@ -50,10 +50,10 @@ public class KStreamMapValuesTest {
     public void testFlatMapValues() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueMapper<String, Integer> mapper =
-            new ValueMapper<String, Integer>() {
+        ValueMapper<CharSequence, Integer> mapper =
+            new ValueMapper<CharSequence, Integer>() {
                 @Override
-                public Integer apply(String value) {
+                public Integer apply(CharSequence value) {
                     return value.length();
                 }
             };

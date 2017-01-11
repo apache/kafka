@@ -28,12 +28,12 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private final String storeName;
     private final Initializer<T> initializer;
-    private final Aggregator<K, V, T> aggregator;
+    private final Aggregator<? super K, ? super V, T> aggregator;
 
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
