@@ -105,7 +105,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.requestObj.handleError(e, requestChannel, request)
           error("Error when handling request %s".format(request.requestObj), e)
         } else {
-          val response = request.body.getErrorResponse(request.header.apiVersion, e)
+          val response = request.body.getErrorResponse(e)
 
           /* If request doesn't have a default error response, we just close the connection.
              For example, when produce request has acks set to 0 */

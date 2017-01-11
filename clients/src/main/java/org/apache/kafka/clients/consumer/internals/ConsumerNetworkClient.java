@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
@@ -86,25 +85,17 @@ public class ConsumerNetworkClient implements Closeable {
      * Use the returned future to obtain the result of the send. Note that there is no
      * need to check for disconnects explicitly on the {@link ClientResponse} object;
      * instead, the future will be failed with a {@link DisconnectException}.
+     *
      * @param node The destination of the request
-     * @param api The Kafka API call
-     * @param request The request payload
+     * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
     public RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              AbstractRequest request) {
-        return send(node, api, ProtoUtils.latestVersion(api.id), request);
-    }
-
-    private RequestFuture<ClientResponse> send(Node node,
-                                               ApiKeys api,
-                                               short version,
-                                               AbstractRequest request) {
+                                              AbstractRequest.Builder<?> requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
-        RequestHeader header = client.nextRequestHeader(api, version);
-        ClientRequest clientRequest = new ClientRequest(node.idString(), now, true, header, request, completionHandler);
+        ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                completionHandler);
         put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -343,8 +334,8 @@ public class ConsumerNetworkClient implements Closeable {
                 iterator.remove();
                 for (ClientRequest request : requestEntry.getValue()) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.header(), request.callback(), request.destination(),
-                            request.createdTimeMs(), now, true, null));
+                    handler.onComplete(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                            request.createdTimeMs(), now, true, null, null));
                 }
             }
         }
@@ -486,6 +477,8 @@ public class ConsumerNetworkClient implements Closeable {
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
                         api, requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
+            } else if (response.versionMismatch() != null) {
+                future.raise(response.versionMismatch());
             } else {
                 future.complete(response);
             }
