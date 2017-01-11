@@ -77,7 +77,7 @@ public class ProcessorTopology {
         return stateStores;
     }
 
-    public Map<String, String> sourceStoreToSourceTopic() {
+    public Map<String, String> storeToChangelogTopic() {
         return storeToChangelogTopic;
     }
 

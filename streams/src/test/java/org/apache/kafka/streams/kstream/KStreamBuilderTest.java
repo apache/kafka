@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -127,44 +128,6 @@ public class KStreamBuilderTest {
         merged.groupByKey().count("my-table");
         final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
         assertEquals(Utils.mkSet("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
-
-
-        final KStream<String, String> merged = builder.merge(processedSource1, processedSource2);
-        merged.groupByKey().count("my-table");
-        final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
-        assertEquals(Utils.mkSet("topic-1", "topic-2"), actual.get("my-table"));
-    }
-
-    @Test
-    public void shouldHaveCorrectSourceTopicsForTableFromMergedStreamWithProcessors() throws Exception {
-        final String topic1 = "topic-1";
-        final String topic2 = "topic-2";
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<String, String> source1 = builder.stream(topic1);
-        final KStream<String, String> source2 = builder.stream(topic2);
-        final KStream<String, String> processedSource1 =
-                source1.mapValues(new ValueMapper<String, String>() {
-                    @Override
-                    public String apply(final String value) {
-                        return value;
-                    }
-                }).filter(new Predicate<String, String>() {
-                    @Override
-                    public boolean test(final String key, final String value) {
-                        return true;
-                    }
-                });
-        final KStream<String, String> processedSource2 = source2.filter(new Predicate<String, String>() {
-            @Override
-            public boolean test(final String key, final String value) {
-                return true;
-            }
-        });
-
-        final KStream<String, String> merged = builder.merge(processedSource1, processedSource2);
-        merged.groupByKey().count("my-table");
-        final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
-        assertEquals(Utils.mkSet("topic-1", "topic-2"), actual.get("my-table"));
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -175,6 +138,22 @@ public class KStreamBuilderTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
         new KStreamBuilder().stream(Serdes.String(), Serdes.String(), null, null);
+    }
+
+    @Test
+    public void shouldNotMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("app-id");
+
+        builder.table("topic1", "table1");
+        builder.table("topic2", null);
+
+        ProcessorTopology topology = builder.build(null);
+
+        assertEquals(1, topology.stateStores().size());
+        assertEquals("table1", topology.stateStores().get(0).name());
+        assertEquals(1, topology.storeToChangelogTopic().size());
+        assertEquals("topic1", topology.storeToChangelogTopic().get("table1"));
     }
 
     @Test
