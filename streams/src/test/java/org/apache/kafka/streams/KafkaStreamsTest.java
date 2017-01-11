@@ -17,6 +17,10 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -38,6 +42,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -140,6 +145,41 @@ public class KafkaStreamsTest {
         } finally {
             streams.close();
         }
+    }
+
+    @Test
+    public void testNumberDefaultMetrics() {
+        final KafkaStreams streams = createKafkaStreams();
+        final Map<MetricName, ? extends Metric> metrics = streams.metrics();
+        // all 15 default StreamThread metrics + 1 metric that keeps track of number of metrics
+        assertEquals(metrics.size(), 16);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testIllegalMetricsConfig() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+    }
+
+    @Test
+    public void testLegalMetricsConfig() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+        final KStreamBuilder builder1 = new KStreamBuilder();
+        final KafkaStreams streams1 = new KafkaStreams(builder1, props);
+        streams1.close();
+
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
+        final KStreamBuilder builder2 = new KStreamBuilder();
+        final KafkaStreams streams2 = new KafkaStreams(builder2, props);
+
     }
 
     @Test(expected = IllegalStateException.class)

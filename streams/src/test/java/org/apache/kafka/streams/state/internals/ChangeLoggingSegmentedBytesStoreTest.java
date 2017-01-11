@@ -18,9 +18,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.SegmentedBytesStoreStub;
@@ -55,7 +57,7 @@ public class ChangeLoggingSegmentedBytesStoreTest {
                                                                       Serdes.String(),
                                                                       Serdes.Long(),
                                                                       collector,
-                                                                      new ThreadCache(0));
+                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         context.setTime(0);
         store.init(context, store);
     }
