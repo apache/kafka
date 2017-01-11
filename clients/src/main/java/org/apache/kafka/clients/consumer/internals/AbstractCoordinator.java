@@ -95,7 +95,7 @@ public abstract class AbstractCoordinator implements Closeable {
         STABLE,      // the client has joined and is sending heartbeats
     }
 
-    private final int rebalanceTimeoutMs;
+    protected final int rebalanceTimeoutMs;
     private final int sessionTimeoutMs;
     private final GroupCoordinatorMetrics sensors;
     private final Heartbeat heartbeat;
@@ -188,14 +188,22 @@ public abstract class AbstractCoordinator implements Closeable {
      * Block until the coordinator for this group is known and is ready to receive requests.
      */
     public synchronized void ensureCoordinatorReady() {
+        // Using zero as current time since timeout is effectively infinite
+        ensureCoordinatorReady(0, Long.MAX_VALUE);
+    }
+
+    protected synchronized long ensureCoordinatorReady(long now, long timeoutMs) {
+        long remainingMs = timeoutMs;
+        long startTimeMs = now;
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future);
+            client.poll(future, remainingMs);
 
             if (future.failed()) {
-                if (future.isRetriable())
-                    client.awaitMetadataUpdate();
-                else
+                if (future.isRetriable()) {
+                    remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
+                    client.awaitMetadataUpdate(remainingMs);
+                } else
                     throw future.exception();
             } else if (coordinator != null && client.connectionFailed(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
@@ -203,7 +211,11 @@ public abstract class AbstractCoordinator implements Closeable {
                 coordinatorDead();
                 time.sleep(retryBackoffMs);
             }
+            remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
+            if (remainingMs <= 0)
+                break;
         }
+        return remainingMs;
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {
@@ -623,9 +635,33 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public synchronized void close() {
+        close(0);
+    }
+
+    protected synchronized void close(long timeoutMs) {
         if (heartbeatThread != null)
             heartbeatThread.close();
         maybeLeaveGroup();
+
+        // At this point, there may be pending commits (async commits or sync commits that were
+        // interrupted using wakeup) and the leave group request which have been queued, but not
+        // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
+        // If coordinator is not known, requests are aborted.
+        long now = time.milliseconds();
+        long endTimeMs = now + timeoutMs;
+        Node coordinator = coordinator();
+        while (coordinator != null && client.pendingRequestCount(coordinator) > 0) {
+            if (Thread.currentThread().isInterrupted())
+                throw new InterruptException("Consumer close was interrupted");
+            long remainingTimeMs = endTimeMs - now;
+            client.poll(remainingTimeMs > 0 ? remainingTimeMs : 0);
+            now = time.milliseconds();
+            if (client.pendingRequestCount(coordinator) > 0 && now >= endTimeMs) {
+                log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
+                        client.pendingRequestCount(coordinator), groupId);
+                break;
+            }
+        }
     }
 
     /**
