@@ -634,9 +634,33 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public synchronized void close() {
+        close(0);
+    }
+
+    protected void close(long timeoutMs) {
         if (heartbeatThread != null)
             heartbeatThread.close();
         maybeLeaveGroup();
+
+        // At this point, there may be pending commits (async commits or sync commits that were
+        // interrupted using wakeup) and the leave group request which have been queued, but not
+        // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
+        // If coordinator is not known, requests are aborted.
+        long now = time.milliseconds();
+        long endTimeMs = now + timeoutMs;
+        Node coordinator;
+        while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+            if (Thread.currentThread().isInterrupted())
+                throw new InterruptException("Consumer close was interrupted");
+            long remainingTimeMs = endTimeMs - now;
+            client.poll(remainingTimeMs > 0 ? remainingTimeMs : 0);
+            now = time.milliseconds();
+            if (client.pendingRequestCount(coordinator) > 0 && now >= endTimeMs) {
+                log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
+                        client.pendingRequestCount(coordinator), groupId);
+                break;
+            }
+        }
     }
 
     /**
