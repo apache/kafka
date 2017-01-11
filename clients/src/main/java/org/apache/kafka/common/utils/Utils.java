@@ -234,6 +234,10 @@ public class Utils {
         return min;
     }
 
+    public static short min(short first, short second) {
+        return (short) Math.min(first, second);
+    }
+
     /**
      * Get the length for UTF8-encoding a string without encoding it first
      *
