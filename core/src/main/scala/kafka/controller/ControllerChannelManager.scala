@@ -402,7 +402,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
         new UpdateMetadataRequest.Builder(
             controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
-            setVersion(0)
+            setVersion(version)
       }
 
       updateMetadataRequestBrokerSet.foreach {broker =>
