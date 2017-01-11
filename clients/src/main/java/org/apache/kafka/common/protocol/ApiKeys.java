@@ -43,7 +43,7 @@ public enum ApiKeys {
     DELETE_TOPICS(20, "DeleteTopics");
 
     private static final ApiKeys[] ID_TO_TYPE;
-    public static final int MIN_API_KEY = 0;
+    private static final int MIN_API_KEY = 0;
     public static final int MAX_API_KEY;
 
     static {
@@ -69,10 +69,14 @@ public enum ApiKeys {
     }
 
     public static ApiKeys forId(int id) {
-        if (id < MIN_API_KEY || id > MAX_API_KEY)
+        if (!hasId(id))
             throw new IllegalArgumentException(String.format("Unexpected ApiKeys id `%s`, it should be between `%s` " +
                     "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
         return ID_TO_TYPE[id];
+    }
+
+    public static boolean hasId(int id) {
+        return id >= MIN_API_KEY && id <= MAX_API_KEY;
     }
 
     private static String toHtml() {
