@@ -78,7 +78,7 @@ public class RocksDBSessionStoreTest {
         final List<KeyValue<Windowed<String>, Long>> expected
                 = Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
 
-        final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessionsToMerge(key, 0, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(key, 0, 1000L);
         assertEquals(expected, toList(values));
     }
 
@@ -107,7 +107,7 @@ public class RocksDBSessionStoreTest {
         final String key = "a";
         sessionStore.put(new Windowed<>(key, new TimeWindow(0L, 0L)), 1L);
         sessionStore.put(new Windowed<>(key, new TimeWindow(1000L, 1000L)), 2L);
-        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessionsToMerge(key, -1, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions(key, -1, 1000L);
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
                 KeyValue.pair(new Windowed<>(key, new TimeWindow(0L, 0L)), 1L),
@@ -121,9 +121,9 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(new Windowed<>("a", new TimeWindow(1500, 2500)), 2L);
 
         sessionStore.remove(new Windowed<>("a", new TimeWindow(0, 1000)));
-        assertFalse(sessionStore.findSessionsToMerge("a", 0, 1000L).hasNext());
+        assertFalse(sessionStore.findSessions("a", 0, 1000L).hasNext());
 
-        assertTrue(sessionStore.findSessionsToMerge("a", 1500, 2500).hasNext());
+        assertTrue(sessionStore.findSessions("a", 1500, 2500).hasNext());
     }
 
     @Test
@@ -138,7 +138,7 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(session3, 3L);
         sessionStore.put(session4, 4L);
         sessionStore.put(session5, 5L);
-        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessionsToMerge("a", 150, 300);
+        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions("a", 150, 300);
         assertEquals(session2, results.next().key);
         assertEquals(session3, results.next().key);
         assertFalse(results.hasNext());

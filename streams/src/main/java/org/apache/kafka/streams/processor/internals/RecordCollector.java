@@ -27,7 +27,7 @@ public interface RecordCollector {
     <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer);
 
     <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                     StreamPartitioner<K, V> partitioner);
+                     StreamPartitioner<? super K, ? super V> partitioner);
 
     void flush();
 

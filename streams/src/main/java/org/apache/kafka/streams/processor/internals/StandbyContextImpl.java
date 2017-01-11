@@ -38,7 +38,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         }
 
         @Override
-        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<K, V> partitioner) {
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<? super K, ? super V> partitioner) {
 
         }
 

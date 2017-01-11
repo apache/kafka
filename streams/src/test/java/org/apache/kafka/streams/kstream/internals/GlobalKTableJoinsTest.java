@@ -69,7 +69,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() throws Exception {
-        stream.leftJoin(global, keyValueMapper, MockValueJoiner.STRING_JOINER)
+        stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
@@ -83,7 +83,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldInnerJoinWithStream() throws Exception {
-        stream.join(global, keyValueMapper, MockValueJoiner.STRING_JOINER)
+        stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();

@@ -165,7 +165,7 @@ public class StreamsMetadataState {
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
-                                                               final StreamPartitioner<K, ?> partitioner) {
+                                                               final StreamPartitioner<? super K, ?> partitioner) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
@@ -237,7 +237,7 @@ public class StreamsMetadataState {
 
     private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
                                                          final K key,
-                                                         final StreamPartitioner<K, ?> partitioner,
+                                                         final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
         final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);

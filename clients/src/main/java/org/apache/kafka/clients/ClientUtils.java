@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.SecurityProtocol;
@@ -86,7 +85,7 @@ public class ClientUtils {
         if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
             throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
         String clientSaslMechanism = (String) configs.get(SaslConfigs.SASL_MECHANISM);
-        return ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, configs, clientSaslMechanism, true);
+        return ChannelBuilders.clientChannelBuilder(securityProtocol, LoginType.CLIENT, configs, clientSaslMechanism, true);
     }
 
     public static Collection<ApiVersionsResponse.ApiVersion> buildExpectedApiVersions(Collection<ApiKeys> apiKeys) {

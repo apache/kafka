@@ -56,9 +56,9 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         this.keySchema = new SessionKeySchema();
     }
 
-    public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
+                                                           final long earliestSessionEndTime,
+                                                           final long latestSessionStartTime) {
         validateStoreOpen();
         final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(name, key));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name,
@@ -89,7 +89,7 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-        return findSessionsToMerge(key, 0, Long.MAX_VALUE);
+        return findSessions(key, 0, Long.MAX_VALUE);
     }
 
 

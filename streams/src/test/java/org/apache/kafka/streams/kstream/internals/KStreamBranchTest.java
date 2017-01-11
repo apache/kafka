@@ -87,12 +87,34 @@ public class KStreamBranchTest {
         }
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(3, processors[0].processed.size());
         assertEquals(1, processors[1].processed.size());
         assertEquals(2, processors[2].processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() > 0;
+            }
+        };
+
+        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() < 0;
+            }
+        };
+
+        @SuppressWarnings("unchecked")
+        final KStream<Integer, String>[] branches = new KStreamBuilder()
+            .<Integer, String>stream("empty")
+            .branch(positive, negative);
     }
 }

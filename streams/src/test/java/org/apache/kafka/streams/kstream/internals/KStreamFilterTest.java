@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-
 import org.junit.After;
 import org.junit.Test;
 
@@ -63,8 +62,8 @@ public class KStreamFilterTest {
         stream.filter(isMultipleOfThree).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(2, processor.processed.size());
@@ -83,10 +82,26 @@ public class KStreamFilterTest {
         stream.filterNot(isMultipleOfThree).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(5, processor.processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return false;
+            }
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>stream("empty")
+            .filter(numberKeyPredicate)
+            .filterNot(numberKeyPredicate)
+            .to("nirvana");
     }
 }

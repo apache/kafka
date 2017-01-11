@@ -399,15 +399,12 @@ public class StreamThread extends Thread {
         } catch (Throwable e) {
             log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
-
-        // TODO remove this
-        // hotfix to improve ZK behavior als long as KAFKA-4060 is not fixed (c.f. KAFKA-4369)
-        // when removing this, make StreamPartitionAssignor#internalTopicManager "private" again
-        if (partitionAssignor != null && partitionAssignor.internalTopicManager != null) {
-            partitionAssignor.internalTopicManager.zkClient.close();
+        try {
+            partitionAssignor.close();
+        } catch (Throwable e) {
+            log.error("stream-thread [{}] Failed to close KafkaStreamClient: ", this.getName(), e);
         }
 
-        // remove all tasks
         removeStreamTasks();
         removeStandbyTasks();
 

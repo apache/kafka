@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
@@ -90,9 +90,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
     val networkClient = {
-      val channelBuilder = ChannelBuilders.create(
+      val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
-        Mode.CLIENT,
         LoginType.SERVER,
         config.values,
         config.saslMechanismInterBrokerProtocol,

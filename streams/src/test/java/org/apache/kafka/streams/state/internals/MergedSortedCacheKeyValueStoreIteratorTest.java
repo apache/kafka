@@ -99,9 +99,9 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldNotHaveNextIfAllCachedItemsDeleted() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}};
-        for (int i = 0; i < bytes.length; i++) {
-            store.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i], new LRUCacheEntry(null));
+        for (byte[] aByte : bytes) {
+            store.put(Bytes.wrap(aByte), aByte);
+            cache.put(namespace, aByte, new LRUCacheEntry(null));
         }
         assertFalse(createIterator().hasNext());
     }
@@ -109,8 +109,8 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}};
-        for (int i = 0; i < bytes.length; i++) {
-            cache.put(namespace, bytes[i], new LRUCacheEntry(null));
+        for (byte[] aByte : bytes) {
+            cache.put(namespace, aByte, new LRUCacheEntry(null));
         }
         assertFalse(createIterator().hasNext());
     }
@@ -118,9 +118,9 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldSkipAllDeletedFromCache() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
-        for (int i = 0; i < bytes.length; i++) {
-            store.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(namespace, bytes[i], new LRUCacheEntry(bytes[i]));
+        for (byte[] aByte : bytes) {
+            store.put(Bytes.wrap(aByte), aByte);
+            cache.put(namespace, aByte, new LRUCacheEntry(aByte));
         }
         cache.put(namespace, bytes[1], new LRUCacheEntry(null));
         cache.put(namespace, bytes[2], new LRUCacheEntry(null));

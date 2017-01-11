@@ -170,7 +170,7 @@ public class KStreamBuilderTest {
                 return value;
             }
         };
-        stream.leftJoin(globalTable, kvMapper, MockValueJoiner.STRING_JOINER);
+        stream.leftJoin(globalTable, kvMapper, MockValueJoiner.TOSTRING_JOINER);
         builder.stream("t2");
         builder.setApplicationId("app-id");
         final Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
@@ -218,9 +218,9 @@ public class KStreamBuilderTest {
         };
 
         final KStream<String, String> stream = builder.stream("t1");
-        stream.leftJoin(globalTable, kvMapper, MockValueJoiner.STRING_JOINER);
+        stream.leftJoin(globalTable, kvMapper, MockValueJoiner.TOSTRING_JOINER);
         final KStream<String, String> stream2 = builder.stream("t2");
-        stream2.leftJoin(globalTable2, kvMapper, MockValueJoiner.STRING_JOINER);
+        stream2.leftJoin(globalTable2, kvMapper, MockValueJoiner.TOSTRING_JOINER);
         builder.setApplicationId("app-id");
         final Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
         for (Integer groupId : nodeGroups.keySet()) {
@@ -247,7 +247,7 @@ public class KStreamBuilderTest {
         assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
 
         final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
-        mapped.leftJoin(table, MockValueJoiner.STRING_JOINER).groupByKey().count("count");
+        mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count("count");
         assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
         assertEquals(Collections.singleton("app-id-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
     }

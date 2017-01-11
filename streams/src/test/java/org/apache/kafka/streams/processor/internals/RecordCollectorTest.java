@@ -60,9 +60,9 @@ public class RecordCollectorTest {
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
     private final StringSerializer stringSerializer = new StringSerializer();
 
-    private final StreamPartitioner<String, String> streamPartitioner = new StreamPartitioner<String, String>() {
+    private final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
         @Override
-        public Integer partition(String key, String value, int numPartitions) {
+        public Integer partition(String key, Object value, int numPartitions) {
             return Integer.parseInt(key) % numPartitions;
         }
     };

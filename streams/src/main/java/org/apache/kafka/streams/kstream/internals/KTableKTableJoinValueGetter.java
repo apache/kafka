@@ -24,12 +24,12 @@ class KTableKTableJoinValueGetter<K1, V1, K2, V2, R> implements KTableValueGette
 
     private final KTableValueGetter<K1, V1> valueGetter1;
     private final KTableValueGetter<K2, V2> valueGetter2;
-    private final ValueJoiner<V1, V2, R> joiner;
+    private final ValueJoiner<? super V1, ? super V2, ? extends R>  joiner;
     private final KeyValueMapper<K1, V1, K2> keyValueMapper;
 
     public KTableKTableJoinValueGetter(final KTableValueGetter<K1, V1> valueGetter1,
                                        final KTableValueGetter<K2, V2> valueGetter2,
-                                       final ValueJoiner<V1, V2, R> joiner,
+                                       final ValueJoiner<? super V1, ? super V2, ? extends R>  joiner,
                                        final KeyValueMapper<K1, V1, K2> keyValueMapper) {
         this.valueGetter1 = valueGetter1;
         this.valueGetter2 = valueGetter2;
