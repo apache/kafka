@@ -776,6 +776,10 @@ public class Fetcher<K, V> {
                     log.trace("Received {} records in fetch response for partition {} with offset {}", parsed.size(), tp, position);
                     Long partitionLag = subscriptions.partitionLag(tp);
                     subscriptions.updateHighWatermark(tp, partition.highWatermark);
+                    // If the partition lag is null, that means this is the first fetch response for this partition.
+                    // We update the lag here to create the lag metric. This is to handle the case that there is no
+                    // message consumed by the end user from this partition. If there are messages returned from the
+                    // partition, the lag will be updated when those messages are consumed by the end user.
                     if (partitionLag == null) {
                         partitionLag = subscriptions.partitionLag(tp);
                         this.sensors.recordsFetchLag.record(partitionLag);

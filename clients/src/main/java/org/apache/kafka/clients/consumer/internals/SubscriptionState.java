@@ -83,6 +83,7 @@ public class SubscriptionState {
 
     private final Metrics metrics;
 
+    // The constructor is only intended to be used by unit tests.
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this(defaultResetStrategy, new Metrics());
     }
@@ -164,7 +165,7 @@ public class SubscriptionState {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         if (!this.assignment.partitionSet().equals(partitions)) {
-            removeAllLagSensors();
+            removeAllLagSensors(partitions);
             Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
             for (TopicPartition partition : partitions) {
                 TopicPartitionState state = assignment.stateValue(partition);
@@ -184,8 +185,8 @@ public class SubscriptionState {
     public void assignFromSubscribed(Collection<TopicPartition> assignments) {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
-
-        removeAllLagSensors();
+        Set<TopicPartition> newAssignment = new HashSet<>(assignments);
+        removeAllLagSensors(newAssignment);
 
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
@@ -196,9 +197,11 @@ public class SubscriptionState {
         this.needsFetchCommittedOffsets = true;
     }
 
-    private void removeAllLagSensors() {
-        for (TopicPartition tp : assignment.partitionSet())
-            metrics.removeSensor(tp + ".records-lag");
+    private void removeAllLagSensors(Set<TopicPartition> preservedPartitions) {
+        for (TopicPartition tp : assignment.partitionSet()) {
+            if (!preservedPartitions.contains(tp))
+                metrics.removeSensor(tp + ".records-lag");
+        }
     }
 
     private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
@@ -440,10 +443,6 @@ public class SubscriptionState {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = offset;
-        }
-
-        private void updateHighWatermark(long highWatermark) {
-            this.highWatermark = highWatermark;
         }
 
         private void committed(OffsetAndMetadata offset) {
