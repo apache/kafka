@@ -14,49 +14,30 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.TreeMap;
 
 public class NodeApiVersions {
     private final Collection<ApiVersion> apiVersions;
 
-    private final static ApiKeys[] ID_TO_APIKEY;
-
-    static {
-        ID_TO_APIKEY = new ApiKeys[ApiKeys.MAX_API_KEY + 1];
-        for (ApiKeys key : ApiKeys.values())
-            ID_TO_APIKEY[key.id] = key;
-    }
-
     // An array of the usable versions of each API, indexed by ApiKeys ID.
-    private final short[] usableVersions;
+    private final Map<ApiKeys, Short> usableVersions = new EnumMap<>(ApiKeys.class);
 
     public NodeApiVersions(Collection<ApiVersion> apiVersions) {
         this.apiVersions = apiVersions;
-        this.usableVersions = new short[ID_TO_APIKEY.length];
-        Arrays.fill(usableVersions, (short) -1);
-        for (ApiVersion apiVersion: apiVersions) {
-            int index = apiVersion.apiKey;
-            if ((index < 0) || (index >= usableVersions.length)) {
-                continue;
-            }
-            if (Protocol.CURR_VERSION[index] < apiVersion.minVersion) {
-                usableVersions[index] = -1;
-                continue;
-            }
-            if (Protocol.MIN_VERSIONS[index] > apiVersion.maxVersion) {
-                usableVersions[index] = -1;
-                continue;
-            }
-            if (Protocol.CURR_VERSION[index] < apiVersion.maxVersion) {
-                usableVersions[index] = Protocol.CURR_VERSION[index];
-            } else {
-                usableVersions[index] = apiVersion.maxVersion;
+        for (ApiVersion apiVersion : apiVersions) {
+            int apiKeyId = apiVersion.apiKey;
+            // Newer brokers may support ApiKeys we don't know about, ignore them
+            if (ApiKeys.hasId(apiKeyId)) {
+                short version = Utils.min(ProtoUtils.latestVersion(apiKeyId), apiVersion.maxVersion);
+                if (version >= apiVersion.minVersion && version >= ProtoUtils.oldestVersion(apiKeyId))
+                    usableVersions.put(ApiKeys.forId(apiKeyId), version);
             }
         }
     }
@@ -64,33 +45,36 @@ public class NodeApiVersions {
     /**
      * Return the most recent version supported by both the client and the server.
      */
-    public short getUsableVersion(ApiKeys apiKey) {
-        if (usableVersions[apiKey.id] < 0) {
+    public short usableVersion(ApiKeys apiKey) {
+        Short usableVersion = usableVersions.get(apiKey);
+        if (usableVersion == null) {
             throw new UnsupportedVersionException("The client cannot send an " +
                     "API request of type " + apiKey + ", because the " +
                     "server does not understand any of the versions this client supports.");
         }
-        return usableVersions[apiKey.id];
+        return usableVersion;
     }
 
+    /**
+     * This toString method is relatively expensive, so avoid calling it unless debug logging is turned on.
+     */
     @Override
     public String toString() {
         // The apiVersion collection may not be in sorted order.  We put it into
         // a TreeMap before printing it out to ensure that we always print in
-        // ascending order.  We also handle the case where some apiKey types are
+        // ascending order.
+        TreeMap<Short, String> apiKeysText = new TreeMap<>();
+        for (ApiVersion apiVersion : this.apiVersions)
+            apiKeysText.put(apiVersion.apiKey, apiVersionToText(apiVersion));
+
+        // Also handle the case where some apiKey types are
         // unknown, which may happen when either the client or server is newer.
-        //
-        // This toString method is relatively expensive, so you probably want to avoid
-        // calling it unless debug logging is turned on.
-        TreeMap<Integer, String> apiKeysText = new TreeMap<>();
-        for (ApiVersion apiVersion: this.apiVersions)
-            apiKeysText.put(Integer.valueOf(apiVersion.apiKey), apiVersionToText(apiVersion));
-        for (int apiKey = ApiKeys.MIN_API_KEY; apiKey <= ApiKeys.MAX_API_KEY; apiKey++) {
-            if (!apiKeysText.containsKey(apiKey)) {
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            if (!apiKeysText.containsKey(apiKey.id)) {
                 StringBuilder bld = new StringBuilder();
-                bld.append(ID_TO_APIKEY[apiKey].name).append("(").
-                    append(apiKey).append("): ").append("UNSUPPORTED");
-                apiKeysText.put(Integer.valueOf(apiKey), bld.toString());
+                bld.append(apiKey.name).append("(").
+                    append(apiKey.id).append("): ").append("UNSUPPORTED");
+                apiKeysText.put(apiKey.id, bld.toString());
             }
         }
         return "{" + Utils.join(apiKeysText.values(), ", ") + "}";
@@ -98,23 +82,23 @@ public class NodeApiVersions {
 
     private String apiVersionToText(ApiVersion apiVersion) {
         StringBuilder bld = new StringBuilder();
-        int apiKey = apiVersion.apiKey;
-        if ((apiKey < 0) || (apiKey >= ID_TO_APIKEY.length)) {
-            bld.append("UNKNOWN(").append(apiKey).append("): ");
+        ApiKeys apiKey = null;
+        if (ApiKeys.hasId(apiVersion.apiKey)) {
+            apiKey = ApiKeys.forId(apiVersion.apiKey);
+        }
+        if (apiKey != null) {
+            bld.append(apiKey.name).append("(").append(apiKey.id).append("): ");
         } else {
-            bld.append(ID_TO_APIKEY[apiKey].name).
-                    append("(").append(apiKey).append("): ");
+            bld.append("UNKNOWN(").append(apiKey.id).append("): ");
         }
         if (apiVersion.minVersion == apiVersion.maxVersion) {
-            bld.append((int) apiVersion.minVersion);
+            bld.append(apiVersion.minVersion);
         } else {
-            bld.append((int) apiVersion.minVersion).
-                    append(" to ").
-                    append(apiVersion.maxVersion);
+            bld.append(apiVersion.minVersion).append(" to ").append(apiVersion.maxVersion);
         }
-        if ((apiKey >= 0) && (apiKey < ID_TO_APIKEY.length)) {
-            int usableVersion = usableVersions[apiKey];
-            if (usableVersion < 0) {
+        if (apiKey != null) {
+            Short usableVersion = usableVersions.get(apiKey);
+            if (usableVersion == null) {
                 bld.append(" [usable: NONE]");
             } else {
                 bld.append(" [usable: ").append(usableVersion).append("]");

@@ -18,7 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.junit.Assert;
 import org.junit.Test;
@@ -30,15 +30,16 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 
 public class NodeApiVersionsTest {
+
     @Test
-    public void testNoSupportedVersionsToString() {
+    public void testUnsupportedVersionsToString() {
         NodeApiVersions versions = new NodeApiVersions(
                 Collections.<ApiVersion>emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "{";
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix).append(apiKey.name).
-                    append("(").append((int) apiKey.id).append("): UNSUPPORTED");
+                    append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
         }
         bld.append("}");
@@ -53,7 +54,7 @@ public class NodeApiVersionsTest {
                 versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
             } else {
                 versionList.add(new ApiVersion(apiKey.id,
-                        Protocol.MIN_VERSIONS[apiKey.id], Protocol.CURR_VERSION[apiKey.id]));
+                        ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
             }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
@@ -65,16 +66,16 @@ public class NodeApiVersionsTest {
                 bld.append("ControlledShutdown(7): 0 [usable: NONE]");
             } else {
                 bld.append(apiKey.name).append("(").
-                        append((int) apiKey.id).append("): ");
-                if (Protocol.MIN_VERSIONS[apiKey.id] ==
-                        Protocol.CURR_VERSION[apiKey.id]) {
-                    bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]);
+                        append(apiKey.id).append("): ");
+                if (ProtoUtils.oldestVersion(apiKey.id) ==
+                        ProtoUtils.latestVersion(apiKey.id)) {
+                    bld.append(ProtoUtils.oldestVersion(apiKey.id));
                 } else {
-                    bld.append((int) Protocol.MIN_VERSIONS[apiKey.id]).
+                    bld.append(ProtoUtils.oldestVersion(apiKey.id)).
                             append(" to ").
-                            append(Protocol.CURR_VERSION[apiKey.id]);
+                            append(ProtoUtils.latestVersion(apiKey.id));
                 }
-                bld.append(" [usable: ").append(Protocol.CURR_VERSION[apiKey.id]).
+                bld.append(" [usable: ").append(ProtoUtils.latestVersion(apiKey.id)).
                         append("]");
             }
             prefix = ", ";
@@ -90,11 +91,11 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         try {
-            versions.getUsableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            versions.usableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
             Assert.fail("expected UnsupportedVersionException");
         } catch (UnsupportedVersionException e) {
             // pass
         }
-        assertEquals(2, versions.getUsableVersion(ApiKeys.FETCH));
+        assertEquals(2, versions.usableVersion(ApiKeys.FETCH));
     }
 }

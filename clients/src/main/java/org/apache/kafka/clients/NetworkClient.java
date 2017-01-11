@@ -293,7 +293,7 @@ public class NetworkClient implements KafkaClient {
                     log.trace("No version information found when sending message of type {} to node {}",
                             clientRequest.apiKey(), nodeId);
             } else {
-                short version = versionInfo.getUsableVersion(clientRequest.apiKey());
+                short version = versionInfo.usableVersion(clientRequest.apiKey());
                 if (log.isTraceEnabled())
                     log.trace("When sending message of type {} to node {}, the best usable " +
                             "version is {}", clientRequest.apiKey(), nodeId, version);
