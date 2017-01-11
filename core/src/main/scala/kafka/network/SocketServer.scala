@@ -124,8 +124,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   def shutdown(): Unit = {
     info("Shutting down")
     this.synchronized {
-      acceptors.values.foreach(_.shutdown)
-      processors.foreach(_.shutdown)
+      acceptors.values.foreach(_.shutdown())
+      processors.foreach(_.shutdown())
     }
     info("Shutdown completed")
   }

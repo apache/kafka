@@ -20,7 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.util.{HashMap, Random}
+import java.util.{HashMap, Properties, Random}
 import javax.net.ssl._
 
 import com.codahale.metrics.Gauge
@@ -44,7 +44,7 @@ import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
-  val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+  val props: Properties = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
   props.put("listeners", "PLAINTEXT://localhost:0,TRACE://localhost:0")
   props.put("num.network.threads", "1")
   props.put("socket.send.buffer.bytes", "300000")
@@ -53,7 +53,7 @@ class SocketServerTest extends JUnitSuite {
   props.put("socket.request.max.bytes", "50")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
-  val config = KafkaConfig.fromProps(props)
+  val config: KafkaConfig = KafkaConfig.fromProps(props)
   val metrics = new Metrics
   val credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
@@ -402,11 +402,11 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
-
-    val sum = KafkaMetricsGroup.registry.getMetrics.asScala
+    val sum = KafkaMetricsGroup.registry.getMetrics
+      .asScala
       .filterKeys(k => {
-        val name = KafkaMetricsName.fromString(k)
-        name.name.contains("IdlePercent") || name.name.contains("NetworkProcessorAvgIdlePercent")
+        val metricsName = KafkaMetricsName.fromString(k)
+        metricsName.name.contains("IdlePercent") || metricsName.name.contains("NetworkProcessorAvgIdlePercent")
       })
       .collect { case (_, metric: Gauge[_]) =>
         metric.getValue.asInstanceOf[Double]
