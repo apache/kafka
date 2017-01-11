@@ -21,10 +21,10 @@ import java.security.Principal;
 public class KafkaPrincipal implements Principal {
     public static final String SEPARATOR = ":";
     public static final String USER_TYPE = "User";
-    public static final KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
+    public final static KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
 
-    private final String principalType;
-    private final String name;
+    private String principalType;
+    private String name;
 
     public KafkaPrincipal(String principalType, String name) {
         if (principalType == null || name == null) {
@@ -41,7 +41,7 @@ public class KafkaPrincipal implements Principal {
 
         String[] split = str.split(SEPARATOR, 2);
 
-        if (split.length != 2) {
+        if (split == null || split.length != 2) {
             throw new IllegalArgumentException("expected a string in format principalType:principalName but got " + str);
         }
 
