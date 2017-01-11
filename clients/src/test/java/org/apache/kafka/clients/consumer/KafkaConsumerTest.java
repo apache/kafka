@@ -944,7 +944,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req: client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         // subscription change
         consumer.unsubscribe();
@@ -955,7 +955,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req: client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
         consumer.close();
@@ -1084,7 +1084,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req : client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
         consumer.close();

@@ -16,9 +16,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -26,12 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * This wrapper supports both v0 and v1 of OffsetFetchRequest.
- */
 public class OffsetFetchRequest extends AbstractRequest {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_FETCH.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String TOPICS_KEY_NAME = "topics";
 
@@ -42,12 +37,38 @@ public class OffsetFetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
 
+    public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
+        private final String groupId;
+        private final List<TopicPartition> partitions;
+
+        public Builder(String groupId, List<TopicPartition> partitions) {
+            super(ApiKeys.OFFSET_FETCH);
+            this.groupId = groupId;
+            this.partitions = partitions;
+        }
+
+        @Override
+        public OffsetFetchRequest build() {
+            return new OffsetFetchRequest(groupId, partitions, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=OffsetFetchRequest, ").
+                    append("groupId=").append(groupId).
+                    append(", partitions=").append(Utils.join(partitions, ",")).
+                    append(")");
+            return bld.toString();
+        }
+    }
+
     private final String groupId;
     private final List<TopicPartition> partitions;
 
-    public OffsetFetchRequest(String groupId, List<TopicPartition> partitions) {
-        super(new Struct(CURRENT_SCHEMA));
-
+    // v0 and v1 have the same fields.
+    private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version)), version);
         Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
@@ -69,8 +90,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         this.partitions = partitions;
     }
 
-    public OffsetFetchRequest(Struct struct) {
-        super(struct);
+    public OffsetFetchRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         partitions = new ArrayList<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -85,7 +106,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
 
         for (TopicPartition partition: partitions) {
@@ -94,8 +115,8 @@ public class OffsetFetchRequest extends AbstractRequest {
                     Errors.forException(e).code()));
         }
 
+        short versionId = version();
         switch (versionId) {
-            // OffsetFetchResponseV0 == OffsetFetchResponseV1
             case 0:
             case 1:
                 return new OffsetFetchResponse(responseData);
@@ -114,10 +135,11 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer, int versionId) {
-        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer));
+        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return new OffsetFetchRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id));
     }
 }

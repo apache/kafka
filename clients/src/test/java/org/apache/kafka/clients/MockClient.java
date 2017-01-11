@@ -18,10 +18,8 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.ArrayDeque;
@@ -129,8 +127,8 @@ public class MockClient implements KafkaClient {
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
-                        request.createdTimeMs(), now, true, null));
+                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                        request.createdTimeMs(), now, true, null, null));
                 iter.remove();
             }
         }
@@ -145,11 +143,12 @@ public class MockClient implements KafkaClient {
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
 
-            if (!futureResp.requestMatcher.matches(request.body()))
+            AbstractRequest abstractRequest = request.requestBuilder().build();
+            if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Next in line response did not match expected request");
 
-            ClientResponse resp = new ClientResponse(request.header(), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
+            ClientResponse resp = new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
@@ -188,8 +187,8 @@ public class MockClient implements KafkaClient {
 
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
-                request.createdTimeMs(), time.milliseconds(), disconnected, response));
+        responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
@@ -202,8 +201,8 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
-                        request.createdTimeMs(), time.milliseconds(), disconnected, response));
+                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                        request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;
             }
         }
@@ -283,13 +282,16 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public RequestHeader nextRequestHeader(ApiKeys key) {
-        return new RequestHeader(key.id, "mock", correlation++);
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse) {
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);
     }
 
     @Override
-    public RequestHeader nextRequestHeader(ApiKeys key, short version) {
-        return new RequestHeader(key.id, version, "mock", correlation++);
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback) {
+        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
+                expectResponse, callback);
     }
 
     @Override

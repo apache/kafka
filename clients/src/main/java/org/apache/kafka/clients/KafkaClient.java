@@ -16,8 +16,7 @@ import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.AbstractRequest;
 
 /**
  * The interface for {@link NetworkClient}
@@ -31,7 +30,7 @@ public interface KafkaClient extends Closeable {
      * @param node The node to check
      * @param now The current timestamp
      */
-    public boolean isReady(Node node, long now);
+    boolean isReady(Node node, long now);
 
     /**
      * Initiate a connection to the given node (if necessary), and return true if already connected. The readiness of a
@@ -41,7 +40,7 @@ public interface KafkaClient extends Closeable {
      * @param now The current time
      * @return true iff we are ready to immediately initiate the sending of another request to the given node.
      */
-    public boolean ready(Node node, long now);
+    boolean ready(Node node, long now);
 
     /**
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
@@ -52,7 +51,7 @@ public interface KafkaClient extends Closeable {
      * @param now The current timestamp
      * @return The number of milliseconds to wait.
      */
-    public long connectionDelay(Node node, long now);
+    long connectionDelay(Node node, long now);
 
     /**
      * Check if the connection of the node has failed, based on the connection state. Such connection failure are
@@ -62,14 +61,14 @@ public interface KafkaClient extends Closeable {
      * @param node the node to check
      * @return true iff the connection has failed and the node is disconnected
      */
-    public boolean connectionFailed(Node node);
+    boolean connectionFailed(Node node);
 
     /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * @param request The request
      * @param now The current timestamp
      */
-    public void send(ClientRequest request, long now);
+    void send(ClientRequest request, long now);
 
     /**
      * Do actual reads and writes from sockets.
@@ -80,14 +79,14 @@ public interface KafkaClient extends Closeable {
      * @param now The current time in ms
      * @throws IllegalStateException If a request is sent to an unready node
      */
-    public List<ClientResponse> poll(long timeout, long now);
+    List<ClientResponse> poll(long timeout, long now);
 
     /**
      * Closes the connection to a particular node (if there is one).
      *
      * @param nodeId The id of the node
      */
-    public void close(String nodeId);
+    void close(String nodeId);
 
     /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
@@ -97,39 +96,46 @@ public interface KafkaClient extends Closeable {
      * @param now The current time in ms
      * @return The node with the fewest in-flight requests.
      */
-    public Node leastLoadedNode(long now);
+    Node leastLoadedNode(long now);
 
     /**
      * The number of currently in-flight requests for which we have not yet returned a response
      */
-    public int inFlightRequestCount();
+    int inFlightRequestCount();
 
     /**
      * Get the total in-flight requests for a particular node
      * 
      * @param nodeId The id of the node
      */
-    public int inFlightRequestCount(String nodeId);
-
-    /**
-     * Generate a request header for the next request
-     * 
-     * @param key The API key of the request
-     */
-    public RequestHeader nextRequestHeader(ApiKeys key);
-
-    /**
-     * Generate a request header for the given API key
-     *
-     * @param key The api key
-     * @param version The api version
-     * @return A request header with the appropriate client id and correlation id
-     */
-    public RequestHeader nextRequestHeader(ApiKeys key, short version);
+    int inFlightRequestCount(String nodeId);
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O
      */
-    public void wakeup();
+    void wakeup();
 
+    /**
+     * Create a new ClientRequest.
+     *
+     * @param nodeId the node to send to
+     * @param requestBuilder the request builder to use
+     * @param createdTimeMs the time in milliseconds to use as the creation time of the request
+     * @param expectResponse true iff we expect a response
+     */
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
+                                   long createdTimeMs, boolean expectResponse);
+
+    /**
+     * Create a new ClientRequest.
+     *
+     * @param nodeId the node to send to
+     * @param requestBuilder the request builder to use
+     * @param createdTimeMs the time in milliseconds to use as the creation time of the request
+     * @param expectResponse true iff we expect a response
+     * @param callback the callback to invoke when we get a response
+     */
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
+                                          long createdTimeMs, boolean expectResponse,
+                                          RequestCompletionHandler callback);
 }
