@@ -631,7 +631,7 @@ public class Fetcher<K, V> {
                     } else {
                         offset = partitionData.offsets.get(0);
                     }
-                    log.debug("Handling v0 ListOffsetResponse response for {}.  Fetched offset {]",
+                    log.debug("Handling v0 ListOffsetResponse response for {}.  Fetched offset {}",
                             topicPartition, offset);
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetAndTimestamp offsetAndTimestamp = new OffsetAndTimestamp(offset, -1);
