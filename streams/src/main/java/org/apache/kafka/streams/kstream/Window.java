@@ -22,16 +22,27 @@ package org.apache.kafka.streams.kstream;
  */
 public abstract class Window {
 
-    protected long start;
-    protected long end;
+    protected final long start;
+    protected final long end;
 
     /**
      * Create a new window for the given start time (inclusive) and end time (exclusive).
      *
      * @param start  the start timestamp of the window (inclusive)
      * @param end    the end timestamp of the window (exclusive)
+     * @throws IllegalArgumentException if {@code start} or {@code end} is negative or if {@code end} is smaller than
+     * {@code start}
      */
-    public Window(long start, long end) {
+    public Window(long start, long end) throws IllegalArgumentException{
+        if (start < 0) {
+            throw new IllegalArgumentException("Window start time cannot be negative.");
+        }
+        if (end < 0) {
+            throw new IllegalArgumentException("Window end time cannot be negative.");
+        }
+        if (end < start) {
+            throw new IllegalArgumentException("Window end time cannot be smaller than window start time.");
+        }
         this.start = start;
         this.end = end;
     }

@@ -34,13 +34,9 @@ public final class SessionWindow extends Window {
      *
      * @param start  the start timestamp of the window
      * @param end    the end timestamp of the window
-     * @throws IllegalArgumentException if {@code end} is smaller than {@code start}
      */
     public SessionWindow(final long start, final long end) {
         super(start, end);
-        if (end < start) {
-            throw new IllegalArgumentException("Window end time cannot be smaller than window start time.");
-        }
     }
 
     /**
