@@ -22,8 +22,8 @@ package org.apache.kafka.streams.kstream;
  */
 public abstract class Window {
 
-    private long start;
-    private long end;
+    protected long start;
+    protected long end;
 
     /**
      * Create a new window for the given start time (inclusive) and end time (exclusive).
@@ -56,9 +56,7 @@ public abstract class Window {
      * @param other  another window
      * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      */
-    public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
-    }
+    public abstract boolean overlap(Window other);
 
     @Override
     public boolean equals(Object obj) {
