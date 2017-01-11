@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,7 +32,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertTrue;
@@ -39,6 +43,7 @@ public class MeteredSegmentedBytesStoreTest {
     private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
     private final MeteredSegmentedBytesStore store = new MeteredSegmentedBytesStore(bytesStore, "scope", new MockTime());
     private final Set<String> latencyRecorded = new HashSet<>();
+    private final Set<String> throughputRecorded = new HashSet<>();
 
     @SuppressWarnings("unchecked")
     @Before
@@ -47,7 +52,12 @@ public class MeteredSegmentedBytesStoreTest {
         final StreamsMetrics streamsMetrics = new StreamsMetrics() {
 
             @Override
-            public Sensor addLatencySensor(final String scopeName, final String entityName, final String operationName, final String... tags) {
+            public Map<MetricName, ? extends Metric> metrics() {
+                return Collections.unmodifiableMap(metrics.metrics());
+            }
+
+            @Override
+            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
                 return metrics.sensor(operationName);
             }
 
@@ -55,6 +65,32 @@ public class MeteredSegmentedBytesStoreTest {
             public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
                 latencyRecorded.add(sensor.name());
             }
+
+            @Override
+            public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
+                return metrics.sensor(operationName);
+            }
+
+            @Override
+            public void recordThroughput(Sensor sensor, long value) {
+                throughputRecorded.add(sensor.name());
+            }
+
+            @Override
+            public void removeSensor(Sensor sensor) {
+                metrics.removeSensor(sensor.name());
+            }
+
+            @Override
+            public Sensor addSensor(String name, Sensor.RecordingLevel recordLevel) {
+                return metrics.sensor(name);
+            }
+
+            @Override
+            public Sensor addSensor(String name, Sensor.RecordingLevel recordLevel, Sensor... parents) {
+                return metrics.sensor(name);
+            }
+
         };
 
         final MockProcessorContext context = new MockProcessorContext(null,
@@ -62,7 +98,7 @@ public class MeteredSegmentedBytesStoreTest {
                                                                       Serdes.String(),
                                                                       Serdes.Long(),
                                                                       new NoOpRecordCollector(),
-                                                                      new ThreadCache(0)) {
+                                                                      new ThreadCache("testCache", 0, streamsMetrics)) {
             @Override
             public StreamsMetrics metrics() {
                 return streamsMetrics;

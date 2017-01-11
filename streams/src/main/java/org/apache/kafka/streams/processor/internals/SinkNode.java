@@ -53,6 +53,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
+        super.init(context);
         this.context = context;
 
         // if serializers are null, get the default ones from the context
@@ -63,7 +64,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (this.valSerializer instanceof ChangedSerializer &&
                 ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
-
     }
 
 
@@ -89,11 +89,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
                                     value.getClass().getName()),
                     e);
         }
-    }
-
-    @Override
-    public void close() {
-        // do nothing
     }
 
     /**
