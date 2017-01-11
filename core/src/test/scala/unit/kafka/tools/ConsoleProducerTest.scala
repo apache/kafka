@@ -38,7 +38,7 @@ class ConsoleProducerTest {
 
     //Then
     assertTrue(config.useOldProducer)
-    assertEquals("localhost:1001,localhost:1002", config.brokerList)
+    assertEquals("localhost:1001,localhost:1002", config.bootstrapServer)
     assertEquals("test", config.topic)
   }
 

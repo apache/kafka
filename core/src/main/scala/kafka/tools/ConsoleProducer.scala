@@ -82,7 +82,7 @@ object ConsoleProducer {
   def getOldProducerProps(config: ProducerConfig): Properties = {
     val props = producerProps(config)
 
-    props.put("metadata.broker.list", config.brokerList)
+    props.put("metadata.broker.list", config.bootstrapServer)
     props.put("compression.codec", config.compressionCodec)
     props.put("producer.type", if(config.sync) "sync" else "async")
     props.put("batch.num.messages", config.batchSize.toString)
@@ -259,14 +259,13 @@ object ConsoleProducer {
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
 
     val useOldProducer = options.has(useOldProducerOpt)
-    val bootstrapServer = options.valueOf(bootstrapServerOpt)
-    val brokerList = options.valueOf(brokerListOpt)
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
 
     if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
-      ToolsUtils.validatePortOrDie(parser, brokerList)
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
       ToolsUtils.validatePortOrDie(parser, bootstrapServer)

@@ -25,10 +25,10 @@ import kafka.message.CompressionCodec
 import kafka.serializer._
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
-import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
+import java.util.{Properties, Random}
 
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
@@ -72,11 +72,11 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (only when using new producer): The bootstrap server list string.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The list of bootstrap server host and port")
       .withRequiredArg()
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED (use bootstrap-server instead): broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
@@ -148,24 +148,16 @@ object ProducerPerformance extends Logging {
 
     val options = parser.parse(args: _*)
 
-    val brokerList = options.valueOf(brokerListOpt)
-    val bootstrapServer = options.valueOf(bootstrapServerOpt)
-    val useNewProducer = options.has(useNewProducerOpt)
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
 
-    if (useNewProducer){
-      if (options.has(brokerListOpt)){
-        CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $useNewProducerOpt.")
-      } else {
-        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
-        ToolsUtils.validatePortOrDie(parser, bootstrapServer)
-      }
+    if (options.has(brokerListOpt) && options.has(bootstrapServer))
+      CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $bootstrapServerOpt.")
+    else if (options.has(brokerListOpt)) {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
-      if (options.has(bootstrapServerOpt)){
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid without $useNewProducerOpt.")
-      } else {
-        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
-        ToolsUtils.validatePortOrDie(parser, brokerList)
-      }
+      CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     }
 
 
@@ -189,6 +181,7 @@ object ProducerPerformance extends Logging {
     val producerRequestRequiredAcks = options.valueOf(producerRequestRequiredAcksOpt).intValue()
     val producerNumRetries = options.valueOf(producerNumRetriesOpt).intValue()
     val producerRetryBackoffMs = options.valueOf(producerRetryBackOffMsOpt).intValue()
+    val useNewProducer = options.has(useNewProducerOpt)
 
     val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
 
@@ -240,7 +233,7 @@ object ProducerPerformance extends Logging {
         new NewShinyProducer(props)
       } else {
         props ++= config.producerProps
-        props.put("metadata.broker.list", config.brokerList)
+        props.put("metadata.broker.list", config.bootstrapServer)
         props.put("compression.codec", config.compressionCodec.codec.toString)
         props.put("send.buffer.bytes", (64 * 1024).toString)
         if (!config.isSync) {

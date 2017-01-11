@@ -108,14 +108,13 @@ object ReplayLogProducer extends Logging {
 
     val options = parser.parse(args : _*)
 
-    val brokerList = options.valueOf(brokerListOpt)
-    val bootstrapServer = options.valueOf(bootstrapServerOpt)
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
 
     if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
-      ToolsUtils.validatePortOrDie(parser, brokerList)
+      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, inputTopicOpt)
       ToolsUtils.validatePortOrDie(parser, bootstrapServer)
@@ -129,10 +128,7 @@ object ReplayLogProducer extends Logging {
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val isSync = options.has(syncOpt)
     val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
-    if(options.has(brokerListOpt))
-      producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    else if (options.has(bootstrapServerOpt))
-      producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
   }
