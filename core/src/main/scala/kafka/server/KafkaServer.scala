@@ -427,8 +427,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
               // send the controlled shutdown request
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(config.brokerId)
-              val request = networkClient.newClientRequest(
-                  node(prevController).idString, controlledShutdownRequest, time.milliseconds(), true, null)
+              val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
+                time.milliseconds(), true)
               val clientResponse = networkClient.blockingSendAndReceive(request)(time)
 
               val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]

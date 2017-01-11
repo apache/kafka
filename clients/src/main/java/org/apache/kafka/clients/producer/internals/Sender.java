@@ -356,9 +356,7 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
-        ClientRequest clientRequest = client.
-                newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
-
+        ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

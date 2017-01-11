@@ -86,7 +86,7 @@ public class NetworkClientTest {
         MetadataRequest.Builder builder =
                 new MetadataRequest.Builder(Arrays.asList("test"));
         long now = time.milliseconds();
-        ClientRequest request = client.newClientRequest("5", builder, now, false, null);
+        ClientRequest request = client.newClientRequest("5", builder, now, false);
         client.send(request, now);
         client.poll(1, time.milliseconds());
     }
@@ -114,8 +114,7 @@ public class NetworkClientTest {
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
         ProduceRequest.Builder builder = new ProduceRequest.Builder((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
-        ClientRequest request = client.newClientRequest(
-                node.idString(), builder, time.milliseconds(), true, null);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1,
                 client.inFlightRequestCount(node.idString()));
@@ -247,8 +246,7 @@ public class NetworkClientTest {
         MetadataRequest.Builder builder =
                 new MetadataRequest.Builder(Collections.<String>emptyList());
         long now = time.milliseconds();
-        ClientRequest request = client.newClientRequest(
-                node.idString(), builder, now, true, null);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, now, true);
         client.send(request, now);
         client.poll(requestTimeoutMs, now);
         assertEquals(1, client.inFlightRequestCount(node.idString()));

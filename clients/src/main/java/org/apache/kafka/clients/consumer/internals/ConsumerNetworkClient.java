@@ -94,8 +94,8 @@ public class ConsumerNetworkClient implements Closeable {
                                               AbstractRequest.Builder requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
-        ClientRequest clientRequest = client.newClientRequest(node.idString(),
-                requestBuilder, now, true, completionHandler);
+        ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                completionHandler);
         put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
