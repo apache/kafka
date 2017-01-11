@@ -62,53 +62,53 @@ do
   if [ -z "$CLASSPATH" ] ; then
     CLASSPATH="$dir/*"
   else
-    CLASSPATH="$CLASSPATH:$dir/*"
+    CLASSPATH="$dir/*":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/clients/build/libs/kafka-clients*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/streams/build/libs/kafka-streams*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
 do
-  CLASSPATH="$CLASSPATH":"$file"
+  CLASSPATH="$file":$CLASSPATH
 done
 
 for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH="$CLASSPATH:$dir/*"
+  CLASSPATH="$dir/*":$CLASSPATH
 done
 
 for cc_pkg in "api" "runtime" "file" "json" "tools"
@@ -116,11 +116,11 @@ do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
     if should_include_file "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
+      CLASSPATH="$file":$CLASSPATH
     fi
   done
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH="$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*"
+    CLASSPATH="$base_dir/connect/${cc_pkg}/build/dependant-libs/*":$CLASSPATH
   fi
 done
 
@@ -128,14 +128,14 @@ done
 for file in "$base_dir"/libs/*;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+    CLASSPATH="$file":$CLASSPATH
   fi
 done
 shopt -u nullglob

@@ -285,8 +285,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
             ReflectionsUtil.registerUrlTypes();
             ConfigurationBuilder builder = new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath());
-            Reflections reflections = new Reflections(builder);
 
+            Reflections reflections = new Reflections(builder);
             Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
             connectorClasses.removeAll(EXCLUDES);
             List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
