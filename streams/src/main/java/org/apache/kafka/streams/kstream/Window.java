@@ -33,7 +33,7 @@ public abstract class Window {
      * @throws IllegalArgumentException if {@code start} or {@code end} is negative or if {@code end} is smaller than
      * {@code start}
      */
-    public Window(long start, long end) throws IllegalArgumentException{
+    public Window(long start, long end) throws IllegalArgumentException {
         if (start < 0) {
             throw new IllegalArgumentException("Window start time cannot be negative.");
         }
