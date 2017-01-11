@@ -85,8 +85,8 @@ public interface KGroupedTable<K, V> {
      *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> subtractor,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
                                Serde<T> aggValueSerde,
                                String storeName);
 
@@ -107,8 +107,8 @@ public interface KGroupedTable<K, V> {
      *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> subtractor,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
                                String storeName);
 
     /**
@@ -126,8 +126,8 @@ public interface KGroupedTable<K, V> {
      *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> subtractor,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
                                final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**

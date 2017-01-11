@@ -236,7 +236,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherStreamOnJoin() throws Exception {
-        testStream.join(null, MockValueJoiner.STRING_JOINER, JoinWindows.of(10));
+        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
@@ -246,12 +246,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinWindowsOnJoin() throws Exception {
-        testStream.join(testStream, MockValueJoiner.STRING_JOINER, null);
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTableOnTableJoin() throws Exception {
-        testStream.leftJoin((KTable) null, MockValueJoiner.STRING_JOINER);
+        testStream.leftJoin((KTable) null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)

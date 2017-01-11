@@ -81,7 +81,7 @@ public class KTableKTableLeftJoinTest {
 
         KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
         MockProcessorSupplier<Integer, String> processor;
         processor = new MockProcessorSupplier<>();
         joined.toStream().process(processor);
@@ -176,7 +176,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
@@ -257,7 +257,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
@@ -368,14 +368,14 @@ public class KTableKTableLeftJoinTest {
         final KTable<Long, String> seven = one.mapValues(mapper);
 
 
-        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.STRING_JOINER);
+        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
-        aggTable.leftJoin(one, MockValueJoiner.STRING_JOINER)
-                .leftJoin(two, MockValueJoiner.STRING_JOINER)
-                .leftJoin(three, MockValueJoiner.STRING_JOINER)
-                .leftJoin(four, MockValueJoiner.STRING_JOINER)
-                .leftJoin(five, MockValueJoiner.STRING_JOINER)
-                .leftJoin(eight, MockValueJoiner.STRING_JOINER)
+        aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(two, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(three, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(four, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(five, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
                 .mapValues(mapper);
 
         final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 250);

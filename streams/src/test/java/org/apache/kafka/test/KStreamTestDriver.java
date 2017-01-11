@@ -253,7 +253,7 @@ public class KStreamTestDriver {
 
         @Override
         public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                                StreamPartitioner<K, V> partitioner) {
+                                StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
             process(record.topic(), record.key(), record.value());
         }
