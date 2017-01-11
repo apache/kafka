@@ -144,9 +144,9 @@ public final class Sensor {
         return this.recordingLevel.shouldRecord(config.recordLevel().id);
     }
     /**
-     * Record a name with this sensor
-     * @param value The name to record
-     * @throws QuotaViolationException if recording this name moves a metric beyond its configured maximum or minimum
+     * Record a value with this sensor
+     * @param value The value to record
+     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
      *         bound
      */
     public void record(double value) {
@@ -156,11 +156,11 @@ public final class Sensor {
     }
 
     /**
-     * Record a name at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
+     * Record a value at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
      * the time stamp.
-     * @param value The name we are recording
+     * @param value The value we are recording
      * @param timeMs The current POSIX time in milliseconds
-     * @throws QuotaViolationException if recording this name moves a metric beyond its configured maximum or minimum
+     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
      *         bound
      */
     public void record(double value, long timeMs) {
