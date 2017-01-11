@@ -23,12 +23,12 @@ public class SensorTest {
     @Test
     public void testRecordLevelEnum() {
         Sensor.RecordingLevel configLevel = Sensor.RecordingLevel.INFO;
-        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel));
-        assertFalse(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel));
+        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel.id));
+        assertFalse(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
 
         configLevel = Sensor.RecordingLevel.DEBUG;
-        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel));
-        assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel));
+        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel.id));
+        assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
 
         assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()),
             Sensor.RecordingLevel.DEBUG);

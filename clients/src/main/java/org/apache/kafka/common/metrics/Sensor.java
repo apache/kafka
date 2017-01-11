@@ -14,6 +14,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -21,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -42,36 +44,53 @@ public final class Sensor {
     private final long inactiveSensorExpirationTimeMs;
 
     public enum RecordingLevel {
-        INFO("INFO"), DEBUG("DEBUG");
-        private String value;
+        INFO(0, "INFO"), DEBUG(1, "DEBUG");
 
-        RecordingLevel(String value) {
-            this.value = value;
-        }
+        private static final RecordingLevel[] ID_TO_TYPE;
+        private static final int MIN_RECORDING_LEVEL_KEY = 0;
+        public static final int MAX_RECORDING_LEVEL_KEY;
 
-        public String getValue() {
-            return value;
-        }
-
-        @Override
-        public String toString() {
-            return this.getValue();
-        }
-
-        public static RecordingLevel fromString(String value) {
-            for (RecordingLevel v : values()) {
-                if (v.getValue().equalsIgnoreCase(value)) {
-                    return v;
-                }
+        static {
+            int maxRL = -1;
+            for (RecordingLevel level : RecordingLevel.values()) {
+                maxRL = Math.max(maxRL, level.id);
             }
-            throw new IllegalArgumentException("record Level " + value + " type not defined");
+            RecordingLevel[] idToName = new RecordingLevel[maxRL + 1];
+            for (RecordingLevel level : RecordingLevel.values()) {
+                idToName[level.id] = level;
+            }
+            ID_TO_TYPE = idToName;
+            MAX_RECORDING_LEVEL_KEY = maxRL;
         }
 
-        public boolean shouldRecord(final RecordingLevel configLevel) {
-            if (configLevel.equals(DEBUG)) {
+        /** an english description of the api--this is for debugging and can change */
+        public final String name;
+
+        /** the permanent and immutable id of an API--this can't change ever */
+        public final short id;
+
+        RecordingLevel(int id, String name) {
+            this.id = (short) id;
+            this.name = name;
+        }
+
+        public static RecordingLevel forId(int id) {
+            if (id < MIN_RECORDING_LEVEL_KEY || id > MAX_RECORDING_LEVEL_KEY)
+                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%s`, it should be between `%s` " +
+                    "and `%s` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
+            return ID_TO_TYPE[id];
+        }
+
+        /** Case insensitive lookup by protocol name */
+        public static RecordingLevel forName(String name) {
+            return RecordingLevel.valueOf(name.toUpperCase(Locale.ROOT));
+        }
+
+        public boolean shouldRecord(final int configId) {
+            if (configId == DEBUG.id) {
                 return true;
             } else {
-                return configLevel.equals(this);
+                return configId == this.id;
             }
         }
 
@@ -123,12 +142,12 @@ public final class Sensor {
      * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
      */
     public boolean shouldRecord() {
-        return this.recordingLevel.shouldRecord(config.recordLevel());
+        return this.recordingLevel.shouldRecord(config.recordLevel().id);
     }
     /**
-     * Record a value with this sensor
-     * @param value The value to record
-     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
+     * Record a name with this sensor
+     * @param value The name to record
+     * @throws QuotaViolationException if recording this name moves a metric beyond its configured maximum or minimum
      *         bound
      */
     public void record(double value) {
@@ -138,11 +157,11 @@ public final class Sensor {
     }
 
     /**
-     * Record a value at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
+     * Record a name at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
      * the time stamp.
-     * @param value The value we are recording
+     * @param value The name we are recording
      * @param timeMs The current POSIX time in milliseconds
-     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
+     * @throws QuotaViolationException if recording this name moves a metric beyond its configured maximum or minimum
      *         bound
      */
     public void record(double value, long timeMs) {
