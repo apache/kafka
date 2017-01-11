@@ -465,13 +465,8 @@ public class StreamThread extends Thread {
 
 
     /**
-<<<<<<< HEAD
      * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
      * soon the tasks will be assigned again
-=======
-     * Similar to shutdownTasksAndState, however does not close the task managers,
-     * in the hope that soon the tasks will be assigned again
->>>>>>> apache-kafka/trunk
      */
     private void suspendTasksAndState()  {
         log.debug("{} suspendTasksAndState: suspending all active tasks [{}] and standby tasks [{}]", logPrefix,
