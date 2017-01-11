@@ -25,7 +25,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
     private static final String BROKER_ID_KEY_NAME = "broker_id";
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
-        private int brokerId;
+        private final int brokerId;
 
         public Builder(int brokerId) {
             super(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
@@ -81,8 +81,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, int versionId) {
         return new ControlledShutdownRequest(
-                ProtoUtils.parseRequest(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, versionId, buffer),
-                (short) versionId);
+                ProtoUtils.parseRequest(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, versionId, buffer), (short) versionId);
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer) {

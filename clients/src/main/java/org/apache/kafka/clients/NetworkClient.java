@@ -295,8 +295,8 @@ public class NetworkClient implements KafkaClient {
             } else {
                 short version = versionInfo.usableVersion(clientRequest.apiKey());
                 if (log.isTraceEnabled())
-                    log.trace("When sending message of type {} to node {}, the best usable " +
-                            "version is {}", clientRequest.apiKey(), nodeId, version);
+                    log.trace("When sending message of type {} to node {}, the best usable version is {}",
+                            clientRequest.apiKey(), nodeId, version);
                 builder.setVersion(version);
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
@@ -482,7 +482,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         // we disconnected, so we should probably refresh our metadata
-        if (nodeIds.size() > 0)
+        if (!nodeIds.isEmpty())
             metadataUpdater.requestUpdate();
     }
 
@@ -539,9 +539,8 @@ public class NetworkClient implements KafkaClient {
             processDisconnection(responses, node, now);
             return;
         }
-        int nodeId = Integer.parseInt(node);
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
-        nodeApiVersions.put(String.valueOf(nodeId), nodeVersionInfo);
+        nodeApiVersions.put(node, nodeVersionInfo);
         this.connectionStates.ready(node);
         if (log.isDebugEnabled()) {
             log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);

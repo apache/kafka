@@ -60,13 +60,18 @@ public class ListOffsetRequest extends AbstractRequest {
     private final Set<TopicPartition> duplicatePartitions;
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
-        private int replicaId = CONSUMER_REPLICA_ID;
+        private final int replicaId;
         private Map<TopicPartition, PartitionData> offsetData = null;
         private Map<TopicPartition, Long> partitionTimestamps = null;
         private short minVersion = (short) 0;
 
         public Builder() {
+            this(CONSUMER_REPLICA_ID);
+        }
+
+        public Builder(int replicaId) {
             super(ApiKeys.LIST_OFFSETS);
+            this.replicaId = replicaId;
         }
 
         public Builder setOffsetData(Map<TopicPartition, PartitionData> offsetData) {
@@ -79,11 +84,6 @@ public class ListOffsetRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder setReplicaId(int replicaId) {
-            this.replicaId = replicaId;
-            return this;
-        }
-
         @Override
         public ListOffsetRequest build() {
             short version = version();
@@ -93,8 +93,7 @@ public class ListOffsetRequest extends AbstractRequest {
             if (version == 0) {
                 if (offsetData == null) {
                     if (partitionTimestamps == null) {
-                        throw new RuntimeException("Must set partitionTimestamps " +
-                            "or offsetData when creating a v0 " +
+                        throw new RuntimeException("Must set partitionTimestamps or offsetData when creating a v0 " +
                             "ListOffsetRequest");
                     } else {
                         offsetData = new HashMap<>();
@@ -107,12 +106,11 @@ public class ListOffsetRequest extends AbstractRequest {
                 }
             } else {
                 if (offsetData != null) {
-                    throw new UnsupportedVersionException("Cannot create " +
-                        "a v" + version + " ListOffsetRequest with v0 " +
+                    throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest with v0 " +
                         "PartitionData.");
                 } else if (partitionTimestamps == null) {
-                    throw new RuntimeException("Must set partitionTimestamps " +
-                        "when creating a v" + version + " ListOffsetRequest");
+                    throw new RuntimeException("Must set partitionTimestamps when creating a v" +
+                            version + " ListOffsetRequest");
                 }
             }
             Map<TopicPartition, ?> m = (version == 0) ?  offsetData : partitionTimestamps;
@@ -181,7 +179,7 @@ public class ListOffsetRequest extends AbstractRequest {
         for (Map.Entry<String, Map<Integer, Object>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, Object> partitionEntry : topicEntry.getValue().entrySet()) {
                 if (version == 0) {
                     PartitionData offsetPartitionData = (PartitionData) partitionEntry.getValue();
@@ -210,7 +208,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public ListOffsetRequest(Struct struct, short versionId) {
         super(struct, versionId);
-        Set<TopicPartition> duplicatePatitions = new HashSet<>();
+        Set<TopicPartition> duplicatePartitions = new HashSet<>();
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         offsetData = new HashMap<>();
         partitionTimestamps = new HashMap<>();
@@ -228,11 +226,11 @@ public class ListOffsetRequest extends AbstractRequest {
                     offsetData.put(tp, partitionData);
                 } else {
                     if (partitionTimestamps.put(tp, timestamp) != null)
-                        duplicatePatitions.add(tp);
+                        duplicatePartitions.add(tp);
                 }
             }
         }
-        this.duplicatePartitions = duplicatePatitions;
+        this.duplicatePartitions = duplicatePartitions;
     }
 
     @Override
@@ -281,8 +279,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListOffsetRequest(
-                ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer),
+        return new ListOffsetRequest(ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer),
                 (short) versionId);
     }
 

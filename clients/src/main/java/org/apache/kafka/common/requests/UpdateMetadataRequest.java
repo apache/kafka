@@ -32,10 +32,10 @@ import java.util.Set;
 
 public class UpdateMetadataRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
-        private int controllerId;
-        private int controllerEpoch;
-        private Map<TopicPartition, PartitionState> partitionStates;
-        private Set<Broker> liveBrokers;
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final Map<TopicPartition, PartitionState> partitionStates;
+        private final Set<Broker> liveBrokers;
 
         public Builder(int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates,
@@ -294,8 +294,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new UpdateMetadataRequest(
-                ProtoUtils.parseRequest(ApiKeys.UPDATE_METADATA_KEY.id, versionId, buffer),
+        return new UpdateMetadataRequest(ProtoUtils.parseRequest(ApiKeys.UPDATE_METADATA_KEY.id, versionId, buffer),
                 (short) versionId);
     }
 

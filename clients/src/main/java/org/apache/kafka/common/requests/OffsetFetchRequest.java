@@ -38,23 +38,13 @@ public class OffsetFetchRequest extends AbstractRequest {
     private static final String PARTITION_KEY_NAME = "partition";
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
-        private String groupId;
-        private List<TopicPartition> partitions;
+        private final String groupId;
+        private final List<TopicPartition> partitions;
 
         public Builder(String groupId, List<TopicPartition> partitions) {
             super(ApiKeys.OFFSET_FETCH);
             this.groupId = groupId;
             this.partitions = partitions;
-        }
-
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
-
-        public Builder setPartitions(List<TopicPartition> partitions) {
-            this.partitions = partitions;
-            return this;
         }
 
         @Override
@@ -78,8 +68,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     // v0 and v1 have the same fields.
     private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version)),
-                version);
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version)), version);
         Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
@@ -128,7 +117,6 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         short versionId = version();
         switch (versionId) {
-            // OffsetFetchResponseV0 == OffsetFetchResponseV1
             case 0:
             case 1:
                 return new OffsetFetchResponse(responseData);
@@ -147,8 +135,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer, int versionId) {
-        return new OffsetFetchRequest(
-                ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer),
+        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer),
                 (short) versionId);
     }
 

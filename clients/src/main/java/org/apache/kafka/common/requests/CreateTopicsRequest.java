@@ -95,8 +95,8 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
-        private Map<String, TopicDetails> topics;
-        private Integer timeout;
+        private final Map<String, TopicDetails> topics;
+        private final Integer timeout;
 
         public Builder(Map<String, TopicDetails> topics, Integer timeout) {
             super(ApiKeys.CREATE_TOPICS);

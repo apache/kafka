@@ -74,8 +74,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer, int versionId) {
-        return new SaslHandshakeRequest(
-                ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer),
+        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer),
                 (short) versionId);
     }
 

@@ -25,18 +25,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class MetadataRequest extends AbstractRequest {
-    private static final Logger log = LoggerFactory.getLogger(MetadataRequest.class);
 
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
         private static final List<String> ALL_TOPICS = null;
 
-        // The list of topics, or null if we want to request metadata about all
-        // topics.
-        private List<String> topics;
+        // The list of topics, or null if we want to request metadata about all topics.
+        private final List<String> topics;
 
         public static Builder allTopics() {
             return new Builder(ALL_TOPICS);
@@ -128,14 +123,14 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         short versionId = version();
-        switch (version()) {
+        switch (versionId) {
             case 0:
             case 1:
             case 2:
                 return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
         }
     }
 

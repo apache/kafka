@@ -97,12 +97,12 @@ public class ListOffsetResponse extends AbstractResponse {
             bld.append("PartitionData{").
                 append("errorCode: ").append((int) errorCode).
                 append(", timestamp: ").append(timestamp).
-                append(", offset: ").append(offset);
+                append(", offset: ").append(offset).
+                append(", offsets: ");
             if (offsets == null) {
-                bld.append(", offsets: null");
+                bld.append(offsets);
             } else {
-                bld.append(", offsets: [").
-                    append(Utils.join(this.offsets, ",")).append("]");
+                bld.append("[").append(Utils.join(this.offsets, ",")).append("]");
             }
             bld.append("}");
             return bld.toString();

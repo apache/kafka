@@ -24,16 +24,11 @@ public class GroupCoordinatorRequest extends AbstractRequest {
     private static final String GROUP_ID_KEY_NAME = "group_id";
 
     public static class Builder extends AbstractRequest.Builder<GroupCoordinatorRequest> {
-        private String groupId;
+        private final String groupId;
 
         public Builder(String groupId) {
             super(ApiKeys.GROUP_COORDINATOR);
             this.groupId = groupId;
-        }
-
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
         }
 
         @Override
@@ -82,8 +77,7 @@ public class GroupCoordinatorRequest extends AbstractRequest {
     }
 
     public static GroupCoordinatorRequest parse(ByteBuffer buffer, int versionId) {
-        return new GroupCoordinatorRequest(
-                ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer),
+        return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer),
                 (short) versionId);
     }
 

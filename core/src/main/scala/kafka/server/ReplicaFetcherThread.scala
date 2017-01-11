@@ -260,14 +260,13 @@ class ReplicaFetcherThread(name: String,
   private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
     val requestBuilder = if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
         val partitions = Map(topicPartition -> (earliestOrLatest: java.lang.Long))
-        new ListOffsetRequest.Builder().
-            setReplicaId(consumerId).
+        new ListOffsetRequest.Builder(consumerId).
             setTargetTimes(partitions.asJava).
             setVersion(1)
       } else {
         val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        new ListOffsetRequest.Builder().
-            setReplicaId(consumerId).setOffsetData(partitions.asJava).
+        new ListOffsetRequest.Builder(consumerId).
+            setOffsetData(partitions.asJava).
             setVersion(0)
       }
     val clientResponse = sendRequest(requestBuilder)
@@ -311,9 +310,9 @@ class ReplicaFetcherThread(name: String,
 object ReplicaFetcherThread {
 
   private[server] class FetchRequest(val underlying: JFetchRequest.Builder) extends AbstractFetcherThread.FetchRequest {
-    def isEmpty: Boolean = underlying.getFetchData().isEmpty
+    def isEmpty: Boolean = underlying.fetchData().isEmpty
     def offset(topicPartition: TopicPartition): Long =
-      underlying.getFetchData().asScala(topicPartition).offset
+      underlying.fetchData().asScala(topicPartition).offset
   }
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {

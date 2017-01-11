@@ -36,10 +36,10 @@ public class SyncGroupRequest extends AbstractRequest {
     public static final String GROUP_ASSIGNMENT_KEY_NAME = "group_assignment";
 
     public static class Builder extends AbstractRequest.Builder<SyncGroupRequest> {
-        private String groupId;
-        private int generationId;
-        private String memberId;
-        private Map<String, ByteBuffer> groupAssignment;
+        private final String groupId;
+        private final int generationId;
+        private final String memberId;
+        private final Map<String, ByteBuffer> groupAssignment;
 
         public Builder(String groupId, int generationId, String memberId,
                        Map<String, ByteBuffer> groupAssignment) {
@@ -50,30 +50,9 @@ public class SyncGroupRequest extends AbstractRequest {
             this.groupAssignment = groupAssignment;
         }
 
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
-
-        public Builder setGenerationId(int generationId) {
-            this.generationId = generationId;
-            return this;
-        }
-
-        public Builder setMemberId(String memberId) {
-            this.memberId = memberId;
-            return this;
-        }
-
-        public Builder setGroupAssignment(Map<String, ByteBuffer> groupAssignment) {
-            this.groupAssignment = groupAssignment;
-            return this;
-        }
-
         @Override
         public SyncGroupRequest build() {
-            return new SyncGroupRequest(groupId, generationId, memberId,
-                    groupAssignment, version());
+            return new SyncGroupRequest(groupId, generationId, memberId, groupAssignment, version());
         }
 
         @Override
@@ -85,7 +64,7 @@ public class SyncGroupRequest extends AbstractRequest {
                     append(", memberId=").append(memberId).
                     append(", groupAssignment=").
                     append(Utils.join(groupAssignment.keySet(), ",")).
-                    append(")"); // should we print groupAssignment values as well?  If so, as hex?
+                    append(")");
             return bld.toString();
         }
     }
@@ -96,8 +75,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
     private SyncGroupRequest(String groupId, int generationId, String memberId,
                              Map<String, ByteBuffer> groupAssignment, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.SYNC_GROUP.id, version)),
-                version);
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.SYNC_GROUP.id, version)), version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
@@ -164,8 +142,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public static SyncGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new SyncGroupRequest(
-                ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer),
+        return new SyncGroupRequest(ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer),
                 (short) versionId);
     }
 

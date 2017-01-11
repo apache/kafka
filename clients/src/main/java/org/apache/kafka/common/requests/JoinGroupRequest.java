@@ -61,12 +61,12 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static class Builder extends AbstractRequest.Builder<JoinGroupRequest> {
-        private String groupId = null;
-        private int sessionTimeout = 0;
+        private final String groupId;
+        private final int sessionTimeout;
+        private final String memberId;
+        private final String protocolType;
+        private final List<ProtocolMetadata> groupProtocols;
         private int rebalanceTimeout = 0;
-        private String memberId = null;
-        private String protocolType = null;
-        private List<ProtocolMetadata> groupProtocols = null;
 
         public Builder(String groupId, int sessionTimeout, String memberId,
                        String protocolType, List<ProtocolMetadata> groupProtocols) {
@@ -79,38 +79,9 @@ public class JoinGroupRequest extends AbstractRequest {
             this.groupProtocols = groupProtocols;
         }
 
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
-
-        public Builder setSessionTimeout(int sessionTimeout) {
-            this.sessionTimeout = sessionTimeout;
-            return this;
-        }
-
         public Builder setRebalanceTimeout(int rebalanceTimeout) {
             this.rebalanceTimeout = rebalanceTimeout;
             return this;
-        }
-
-        public Builder setMemberId(String memberId) {
-            this.memberId = memberId;
-            return this;
-        }
-
-        public Builder setProtocolType(String protocolType) {
-            this.protocolType = protocolType;
-            return this;
-        }
-
-        public Builder setGroupProtocols(List<ProtocolMetadata> groupProtocols) {
-            this.groupProtocols = groupProtocols;
-            return this;
-        }
-
-        public List<ProtocolMetadata> getGroupProtocols() {
-            return groupProtocols;
         }
 
         @Override
@@ -237,8 +208,7 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new JoinGroupRequest(
-                ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer),
+        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer),
                 (short) versionId);
     }
 
