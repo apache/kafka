@@ -153,7 +153,7 @@ public class ConnectorConfig extends AbstractConfig {
 
         for (String alias : new LinkedHashSet<>(transformAliases)) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
-            final String groupPrefix = TRANSFORMS_GROUP + ": " + alias;
+            final String group = TRANSFORMS_GROUP + ": " + alias;
             int orderInGroup = 0;
 
             final String transformationTypeConfig = prefix + "type";
@@ -164,7 +164,7 @@ public class ConnectorConfig extends AbstractConfig {
                 }
             };
             newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
-                    "Class for the '" + alias + "' transformation.", groupPrefix, orderInGroup++, Width.LONG, "Transformation type for " + alias,
+                    "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
                     Collections.<String>emptyList(), new TransformationClassRecommender());
 
             final ConfigDef transformationConfigDef;
@@ -180,7 +180,7 @@ public class ConnectorConfig extends AbstractConfig {
                 }
             }
 
-            newDef.embed(prefix, groupPrefix, orderInGroup, transformationConfigDef);
+            newDef.embed(prefix, group, orderInGroup, transformationConfigDef);
         }
 
         return newDef;
