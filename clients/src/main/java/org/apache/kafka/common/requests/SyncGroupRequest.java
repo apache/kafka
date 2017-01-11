@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -29,24 +29,53 @@ import java.util.List;
 import java.util.Map;
 
 public class SyncGroupRequest extends AbstractRequest {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.SYNC_GROUP.id);
     public static final String GROUP_ID_KEY_NAME = "group_id";
     public static final String GENERATION_ID_KEY_NAME = "generation_id";
     public static final String MEMBER_ID_KEY_NAME = "member_id";
     public static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
     public static final String GROUP_ASSIGNMENT_KEY_NAME = "group_assignment";
 
+    public static class Builder extends AbstractRequest.Builder<SyncGroupRequest> {
+        private final String groupId;
+        private final int generationId;
+        private final String memberId;
+        private final Map<String, ByteBuffer> groupAssignment;
+
+        public Builder(String groupId, int generationId, String memberId,
+                       Map<String, ByteBuffer> groupAssignment) {
+            super(ApiKeys.SYNC_GROUP);
+            this.groupId = groupId;
+            this.generationId = generationId;
+            this.memberId = memberId;
+            this.groupAssignment = groupAssignment;
+        }
+
+        @Override
+        public SyncGroupRequest build() {
+            return new SyncGroupRequest(groupId, generationId, memberId, groupAssignment, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=SyncGroupRequest").
+                    append(", groupId=").append(groupId).
+                    append(", generationId=").append(generationId).
+                    append(", memberId=").append(memberId).
+                    append(", groupAssignment=").
+                    append(Utils.join(groupAssignment.keySet(), ",")).
+                    append(")");
+            return bld.toString();
+        }
+    }
     private final String groupId;
     private final int generationId;
     private final String memberId;
     private final Map<String, ByteBuffer> groupAssignment;
 
-    public SyncGroupRequest(String groupId,
-                            int generationId,
-                            String memberId,
-                            Map<String, ByteBuffer> groupAssignment) {
-        super(new Struct(CURRENT_SCHEMA));
+    private SyncGroupRequest(String groupId, int generationId, String memberId,
+                             Map<String, ByteBuffer> groupAssignment, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.SYNC_GROUP.id, version)), version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
@@ -66,8 +95,8 @@ public class SyncGroupRequest extends AbstractRequest {
         this.groupAssignment = groupAssignment;
     }
 
-    public SyncGroupRequest(Struct struct) {
-        super(struct);
+    public SyncGroupRequest(Struct struct, short version) {
+        super(struct, version);
         this.groupId = struct.getString(GROUP_ID_KEY_NAME);
         this.generationId = struct.getInt(GENERATION_ID_KEY_NAME);
         this.memberId = struct.getString(MEMBER_ID_KEY_NAME);
@@ -83,7 +112,8 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new SyncGroupResponse(
@@ -91,7 +121,7 @@ public class SyncGroupRequest extends AbstractRequest {
                         ByteBuffer.wrap(new byte[]{}));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.SYNC_GROUP.id)));
         }
     }
 
@@ -112,7 +142,11 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public static SyncGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new SyncGroupRequest(ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer));
+        return new SyncGroupRequest(ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer),
+                (short) versionId);
     }
 
+    public static SyncGroupRequest parse(ByteBuffer buffer) {
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.SYNC_GROUP.id));
+    }
 }

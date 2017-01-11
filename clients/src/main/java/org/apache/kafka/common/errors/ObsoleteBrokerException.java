@@ -10,16 +10,22 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.errors;
 
 /**
- * The states of a node connection
- *
- * DISCONNECTED: connection has not been successfully established yet
- * CONNECTING: connection is under progress
- * CHECKING_API_VERSIONS: connection has been established and api versions check is in progress. Failure of this check will cause connection to close
- * READY: connection is ready to send requests
+ * Indicates that a request cannot be completed because an obsolete broker
+ * does not support the required functionality.
  */
-public enum ConnectionState {
-    DISCONNECTED, CONNECTING, CHECKING_API_VERSIONS, READY
+public class ObsoleteBrokerException extends ApiException {
+
+    private static final long serialVersionUID = 1L;
+
+    public ObsoleteBrokerException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public ObsoleteBrokerException(String message) {
+        super(message);
+    }
+
 }

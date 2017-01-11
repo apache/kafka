@@ -16,33 +16,53 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ControlledShutdownRequest extends AbstractRequest {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
-
     private static final String BROKER_ID_KEY_NAME = "broker_id";
 
+    public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
+        private final int brokerId;
+
+        public Builder(int brokerId) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            this.brokerId = brokerId;
+        }
+
+        @Override
+        public ControlledShutdownRequest build() {
+            return new ControlledShutdownRequest(brokerId, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=ControlledShutdownRequest").
+                append(", brokerId=").append(brokerId).
+                append(")");
+            return bld.toString();
+        }
+    }
     private int brokerId;
 
-    public ControlledShutdownRequest(int brokerId) {
-        super(new Struct(CURRENT_SCHEMA));
+    private ControlledShutdownRequest(int brokerId, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, version)),
+                version);
         struct.set(BROKER_ID_KEY_NAME, brokerId);
         this.brokerId = brokerId;
     }
 
-    public ControlledShutdownRequest(Struct struct) {
-        super(struct);
+    public ControlledShutdownRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         brokerId = struct.getInt(BROKER_ID_KEY_NAME);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 throw new IllegalArgumentException("Version 0 is not supported. It is only supported by " +
@@ -60,10 +80,11 @@ public class ControlledShutdownRequest extends AbstractRequest {
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, int versionId) {
-        return new ControlledShutdownRequest(ProtoUtils.parseRequest(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, versionId, buffer));
+        return new ControlledShutdownRequest(
+                ProtoUtils.parseRequest(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, versionId, buffer), (short) versionId);
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer) {
-        return new ControlledShutdownRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id));
     }
 }

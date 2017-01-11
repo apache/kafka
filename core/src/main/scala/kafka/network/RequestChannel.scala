@@ -42,8 +42,8 @@ object RequestChannel extends Logging {
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   def getShutdownReceive() = {
-    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
-    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, MemoryRecords]())
+    val emptyProduceRequest = new ProduceRequest.Builder(0, 0, new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version(), "", 0)
     AbstractRequestResponse.serialize(emptyRequestHeader, emptyProduceRequest)
   }
 
@@ -86,7 +86,7 @@ object RequestChannel extends Logging {
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
           if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion))
-            new ApiVersionsRequest
+            new ApiVersionsRequest.Builder().build()
           else
             AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
         } catch {
