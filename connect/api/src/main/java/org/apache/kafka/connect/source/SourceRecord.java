@@ -86,8 +86,8 @@ public class SourceRecord extends ConnectRecord<SourceRecord> {
     }
 
     @Override
-    public SourceRecord newRecord(String topic, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
-        return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition(), keySchema, key, valueSchema, value, timestamp);
+    public SourceRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp);
     }
 
     @Override

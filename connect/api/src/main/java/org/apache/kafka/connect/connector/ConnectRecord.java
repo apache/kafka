@@ -80,7 +80,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     }
 
     /** Generate a new record of the same type as itself, with the specified parameter values. **/
-    public abstract R newRecord(String topic, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
 
     @Override
     public String toString() {

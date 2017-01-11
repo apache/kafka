@@ -17,27 +17,17 @@
 
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.common.config.ConfigDef;
 
-/**
- * Wraps the record key in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
- */
-public class HoistKeyToStruct<R extends ConnectRecord<R>> extends HoistToStruct<R> {
+public class SetSchemaMetadata {
 
-    @Override
-    protected Schema operatingSchema(R record) {
-        return record.keySchema();
+    public interface Keys {
+        String SCHEMA_NAME = "schema.name";
+        String SCHEMA_VERSION = "schema.version";
     }
 
-    @Override
-    protected Object operatingValue(R record) {
-        return record.key();
-    }
-
-    @Override
-    protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
-        return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
-    }
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(Keys.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
+            .define(Keys.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
 
 }

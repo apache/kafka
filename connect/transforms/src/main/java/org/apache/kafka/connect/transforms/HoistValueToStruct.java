@@ -37,7 +37,7 @@ public class HoistValueToStruct<R extends ConnectRecord<R>> extends HoistToStruc
 
     @Override
     protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
-        return record.newRecord(record.topic(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
+        return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
     }
 
 }

@@ -75,7 +75,7 @@ public class TimestampRouter<R extends ConnectRecord<R>> implements Transformati
         final String formattedTimestamp = timestampFormat.get().format(new Date(timestamp));
         final String updatedTopic = topicFormat.replace("${topic}", record.topic()).replace("${timestamp}", formattedTimestamp);
         return record.newRecord(
-                updatedTopic,
+                updatedTopic, record.kafkaPartition(),
                 record.keySchema(), record.key(),
                 record.valueSchema(), record.value(),
                 record.timestamp()

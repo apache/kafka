@@ -38,7 +38,7 @@ public class InsertInKey<R extends ConnectRecord<R>> extends Insert<R> {
 
     @Override
     protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
-        return record.newRecord(record.topic(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
+        return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
     }
 
 }
