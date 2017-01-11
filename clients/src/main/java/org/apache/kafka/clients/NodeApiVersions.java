@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
@@ -64,6 +65,11 @@ public class NodeApiVersions {
      * Return the most recent version supported by both the client and the server.
      */
     public short getUsableVersion(ApiKeys apiKey) {
+        if (usableVersions[apiKey.id] < 0) {
+            throw new UnsupportedVersionException("The client cannot send an " +
+                    "API request of type " + apiKey + ", because the " +
+                    "server does not understand any of the versions this client supports.");
+        }
         return usableVersions[apiKey.id];
     }
 
