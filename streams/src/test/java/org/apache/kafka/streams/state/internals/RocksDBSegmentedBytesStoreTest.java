@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -65,7 +67,7 @@ public class RocksDBSegmentedBytesStoreTest {
                                                                       Serdes.String(),
                                                                       Serdes.Long(),
                                                                       new NoOpRecordCollector(),
-                                                                      new ThreadCache(0));
+                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         bytesStore.init(context, bytesStore);
     }
 
