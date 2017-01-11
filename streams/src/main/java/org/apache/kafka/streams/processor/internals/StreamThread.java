@@ -161,7 +161,7 @@ public class StreamThread extends Thread {
     private synchronized void setState(State newState) {
         State oldState = state;
         if (!state.isValidTransition(newState)) {
-            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+            log.warn("Unexpected state transition from " + state + " to " + newState);
         }
         state = newState;
         if (stateListener != null) {
