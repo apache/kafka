@@ -402,12 +402,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    public void close(long timeoutMs, long requestTimeoutMs) {
+    public void close(long timeoutMs) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
 
         long now = time.milliseconds();
-        timeoutMs = Math.min(timeoutMs, requestTimeoutMs);
         long endTimeMs = now + timeoutMs;
         try {
             maybeAutoCommitOffsetsSync(timeoutMs);

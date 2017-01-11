@@ -488,7 +488,7 @@ public class ConsumerCoordinatorTest {
                         leaveRequest.groupId().equals(groupId);
             }
         }, new LeaveGroupResponse(Errors.NONE.code()));
-        coordinator.close(0, 1000);
+        coordinator.close(0);
         assertTrue(received.get());
     }
 
@@ -1354,7 +1354,7 @@ public class ConsumerCoordinatorTest {
             Future<?> future = executor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    coordinator.close(closeTimeoutMs, requestTimeoutMs);
+                    coordinator.close(Math.min(closeTimeoutMs, requestTimeoutMs));
                 }
             });
             Thread.sleep(100);

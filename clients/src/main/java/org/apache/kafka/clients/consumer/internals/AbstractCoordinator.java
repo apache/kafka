@@ -188,6 +188,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Block until the coordinator for this group is known and is ready to receive requests.
      */
     public synchronized void ensureCoordinatorReady() {
+        // Using zero as current time since timeout is effectively infinite
         ensureCoordinatorReady(0, Long.MAX_VALUE);
     }
 
@@ -637,7 +638,7 @@ public abstract class AbstractCoordinator implements Closeable {
         close(0);
     }
 
-    protected void close(long timeoutMs) {
+    protected synchronized void close(long timeoutMs) {
         if (heartbeatThread != null)
             heartbeatThread.close();
         maybeLeaveGroup();
@@ -648,8 +649,8 @@ public abstract class AbstractCoordinator implements Closeable {
         // If coordinator is not known, requests are aborted.
         long now = time.milliseconds();
         long endTimeMs = now + timeoutMs;
-        Node coordinator;
-        while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+        Node coordinator = coordinator();
+        while (coordinator != null && client.pendingRequestCount(coordinator) > 0) {
             if (Thread.currentThread().isInterrupted())
                 throw new InterruptException("Consumer close was interrupted");
             long remainingTimeMs = endTimeMs - now;

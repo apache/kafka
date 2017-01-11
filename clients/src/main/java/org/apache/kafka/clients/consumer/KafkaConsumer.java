@@ -1561,7 +1561,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
         try {
-            coordinator.close(timeoutMs, requestTimeoutMs);
+            coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
         } catch (Throwable t) {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);

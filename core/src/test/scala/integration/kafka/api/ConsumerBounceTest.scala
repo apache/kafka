@@ -254,15 +254,16 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
             }
             def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
               revokeSemaphore.foreach(s => s.release())
-          }})
+            }
+          })
           consumer.poll(0)
         }, 0)
     }
 
     def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
-      val startMs1 = System.currentTimeMillis
-      while (System.currentTimeMillis < startMs1 + timeoutMs && !future.isDone)
-          otherConsumers.foreach(consumer => consumer.poll(1000))
+      val startMs = System.currentTimeMillis
+      while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
+          otherConsumers.foreach(consumer => consumer.poll(100))
       assertTrue("Rebalance did not complete in time", future.isDone)
     }
 
