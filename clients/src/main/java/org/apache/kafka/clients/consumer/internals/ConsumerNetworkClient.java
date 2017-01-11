@@ -477,6 +477,8 @@ public class ConsumerNetworkClient implements Closeable {
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
                         api, requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
+            } else if (response.versionMismatch() != null) {
+                future.raise(response.versionMismatch());
             } else {
                 future.complete(response);
             }

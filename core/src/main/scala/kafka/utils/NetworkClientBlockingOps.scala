@@ -112,6 +112,8 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
       response.foreach { r =>
         if (r.wasDisconnected)
           throw new IOException(s"Connection to ${request.destination} was disconnected before the response was read")
+        else if (r.versionMismatch() != null)
+          throw r.versionMismatch();
       }
       response
     }
