@@ -101,12 +101,16 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
    */
   def killRandomBroker(): Int = {
     val index = TestUtils.random.nextInt(servers.length)
+    killBroker(index)
+    index
+  }
+
+  def killBroker(index: Int) {
     if(alive(index)) {
       servers(index).shutdown()
       servers(index).awaitShutdown()
       alive(index) = false
     }
-    index
   }
   
   /**
