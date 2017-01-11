@@ -30,7 +30,12 @@ import java.io.Closeable;
  */
 public interface Transformation<R extends ConnectRecord<R>> extends Configurable, Closeable {
 
-    /** Apply transformation to the {@code record} and return another record object (which may be {@code record} itself). Must be thread-safe. **/
+    /**
+     * Apply transformation to the {@code record} and return another record object (which may be {@code record} itself) or {@code null},
+     * corresponding to a map or filter operation respectively.
+     *
+     * The implementation must be thread-safe.
+     */
     R apply(R record);
 
     /** Configuration specification for this transformation. **/
