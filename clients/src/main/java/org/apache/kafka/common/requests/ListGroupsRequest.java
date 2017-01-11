@@ -15,26 +15,40 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ListGroupsRequest extends AbstractRequest {
+    public static class Builder extends AbstractRequest.Builder<ListGroupsRequest> {
+        public Builder() {
+            super(ApiKeys.LIST_GROUPS);
+        }
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_GROUPS.id);
+        @Override
+        public ListGroupsRequest build() {
+            return new ListGroupsRequest(version());
+        }
 
-    public ListGroupsRequest() {
-        super(new Struct(CURRENT_SCHEMA));
+        @Override
+        public String toString() {
+            return "(type=ListGroupsRequest)";
+        }
     }
 
-    public ListGroupsRequest(Struct struct) {
-        super(struct);
+    public ListGroupsRequest(short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_GROUPS.id, version)),
+                version);
+    }
+
+    public ListGroupsRequest(Struct struct, short versionId) {
+        super(struct, versionId);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 short errorCode = Errors.forException(e).code();
@@ -46,12 +60,11 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public static ListGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer));
+        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static ListGroupsRequest parse(ByteBuffer buffer) {
-        return new ListGroupsRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.LIST_GROUPS.id));
     }
-
-
 }

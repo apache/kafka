@@ -143,10 +143,10 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
           Set(0, 1).map(Integer.valueOf).asJava)
       )
-      val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
-        nodes.toSet.asJava)
+      val requestBuilder = new LeaderAndIsrRequest.Builder(
+          controllerId, staleControllerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
-      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
+      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
         staleControllerEpochCallback)
       TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
