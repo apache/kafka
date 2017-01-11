@@ -51,10 +51,10 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueTransformerSupplier<Integer, Integer> valueTransformerSupplier =
-            new ValueTransformerSupplier<Integer, Integer>() {
-                public ValueTransformer<Integer, Integer> get() {
-                    return new ValueTransformer<Integer, Integer>() {
+        ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            new ValueTransformerSupplier<Number, Integer>() {
+                public ValueTransformer<Number, Integer> get() {
+                    return new ValueTransformer<Number, Integer>() {
 
                         private int total = 0;
 
@@ -63,8 +63,8 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public Integer transform(Integer value) {
-                            total += value;
+                        public Integer transform(Number value) {
+                            total += value.intValue();
                             return total;
                         }
 

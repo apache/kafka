@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-
 import org.junit.After;
 import org.junit.Test;
 
@@ -88,5 +87,21 @@ public class KStreamFilterTest {
         }
 
         assertEquals(5, processor.processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return false;
+            }
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>stream("empty")
+            .filter(numberKeyPredicate)
+            .filterNot(numberKeyPredicate)
+            .to("nirvana");
     }
 }
