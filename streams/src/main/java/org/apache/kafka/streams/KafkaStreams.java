@@ -524,7 +524,7 @@ public class KafkaStreams {
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
-                                              final StreamPartitioner<K, ?> partitioner) {
+                                              final StreamPartitioner<? super K, ?> partitioner) {
         validateIsRunning();
         return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }

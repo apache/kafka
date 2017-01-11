@@ -582,7 +582,7 @@ public interface KGroupedStream<K, V> {
      * (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<K, V, VR> aggregator,
+                                 final Aggregator<? super K, ? super V, VR> aggregator,
                                  final Serde<VR> aggValueSerde,
                                  final String storeName);
 
@@ -622,7 +622,7 @@ public interface KGroupedStream<K, V> {
      * (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<K, V, VR> aggregator,
+                                 final Aggregator<? super K, ? super V, VR> aggregator,
                                  final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -685,10 +685,10 @@ public interface KGroupedStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                            final Aggregator<K, V, VR> aggregator,
-                                                            final Windows<W> windows,
-                                                            final Serde<VR> aggValueSerde,
-                                                            final String storeName);
+                                                             final Aggregator<? super K, ? super V, VR> aggregator,
+                                                             final Windows<W> windows,
+                                                             final Serde<VR> aggValueSerde,
+                                                             final String storeName);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -734,7 +734,7 @@ public interface KGroupedStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                             final Aggregator<K, V, VR> aggregator,
+                                                             final Aggregator<? super K, ? super V, VR> aggregator,
                                                              final Windows<W> windows,
                                                              final StateStoreSupplier<WindowStore> storeSupplier);
 

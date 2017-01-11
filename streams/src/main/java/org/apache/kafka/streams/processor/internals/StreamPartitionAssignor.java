@@ -205,16 +205,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
-            internalTopicManager = new InternalTopicManager(
-                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
-                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
-                    configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
-                            (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
-        } else {
-            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        }
+        internalTopicManager = new InternalTopicManager(
+                new StreamsKafkaClient(this.streamThread.config),
+                configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
+                configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
+                        (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
     }
 
     @Override
@@ -340,7 +336,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                 }
                             }
                         }
-
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
                         if (numPartitions == UNKNOWN)
@@ -535,7 +530,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-
                 i++;
             }
         }
@@ -682,7 +676,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
             }
         }
-
         // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
         for (Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
             if (copartitionGroup.contains(entry.getKey())) {
@@ -752,4 +745,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
+    public void close() {
+        internalTopicManager.close();
+    }
 }

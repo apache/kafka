@@ -214,7 +214,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
-                                      StreamPartitioner<K1, V1> partitioner) {
+                                    StreamPartitioner<? super K1, ? super V1> partitioner) {
                 // ignore partitioner
                 send(record, keySerializer, valueSerializer);
             }
