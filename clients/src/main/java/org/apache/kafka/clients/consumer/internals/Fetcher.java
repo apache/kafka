@@ -624,8 +624,9 @@ public class Fetcher<K, V> {
                     // Handle v0 response
                     long offset;
                     if (partitionData.offsets.size() > 1) {
-                        throw new IllegalStateException("Unexpected partitionData response of length " +
-                                partitionData.offsets.size());
+                        future.raise(new IllegalStateException("Unexpected partitionData response of length " +
+                                partitionData.offsets.size()));
+                        return;
                     } else if (partitionData.offsets.isEmpty()) {
                         offset = ListOffsetResponse.UNKNOWN_OFFSET;
                     } else {
