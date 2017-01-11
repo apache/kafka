@@ -19,10 +19,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -36,7 +36,38 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     private Sensor fetchTime;
     private Sensor flushTime;
     private Sensor restoreTime;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
+
+    private ProcessorContext context;
+    private StateStore root;
+    private Runnable initDelegate = new Runnable() {
+        @Override
+        public void run() {
+            inner.init(context, root);
+        }
+    };
+
+    private K key;
+    private V value;
+    private long timestamp;
+    private Runnable putDelegate = new Runnable() {
+        @Override
+        public void run() {
+            inner.put(key, value);
+        }
+    };
+    private Runnable putTsDelegate = new Runnable() {
+        @Override
+        public void run() {
+            inner.put(key, value, timestamp);
+        }
+    };
+    private Runnable flushDelegate = new Runnable() {
+        @Override
+        public void run() {
+            inner.flush();
+        }
+    };
 
     // always wrap the store with the metered store
     public MeteredWindowStore(final WindowStore<K, V> inner, String metricScope, Time time) {
@@ -53,19 +84,16 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
-        this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
-        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch");
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
+        this.context = context;
+        this.root = root;
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
+        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
 
         // register and possibly restore the state from the logs
-        long startNs = time.nanoseconds();
-        try {
-            inner.init(context, root);
-        } finally {
-            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
-        }
+        metrics.measureLatencyNs(time, initDelegate, this.restoreTime);
     }
 
     @Override
@@ -85,22 +113,17 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void put(K key, V value) {
-        long startNs = time.nanoseconds();
-        try {
-            this.inner.put(key, value);
-        } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
-        }
+        this.key = key;
+        this.value = value;
+        metrics.measureLatencyNs(time, putDelegate, this.putTime);
     }
 
     @Override
     public void put(K key, V value, long timestamp) {
-        long startNs = time.nanoseconds();
-        try {
-            this.inner.put(key, value, timestamp);
-        } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
-        }
+        this.key = key;
+        this.value = value;
+        this.timestamp = timestamp;
+        metrics.measureLatencyNs(time, putTsDelegate, this.putTime);
     }
 
     @Override
@@ -110,12 +133,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void flush() {
-        long startNs = time.nanoseconds();
-        try {
-            this.inner.flush();
-        } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
-        }
+        metrics.measureLatencyNs(time, flushDelegate, this.flushTime);
     }
 
     private class MeteredWindowStoreIterator<E> implements WindowStoreIterator<E> {

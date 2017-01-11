@@ -69,7 +69,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
-    private final ThreadCache zeroSizedCache = new ThreadCache(0);
+    private final ThreadCache zeroSizedCache;
 
     private boolean initialized;
 
@@ -86,7 +86,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
         this.config = config;
         this.keySerde = config.keySerde();
         this.valSerde = config.valueSerde();
-
+        this.zeroSizedCache = new ThreadCache("zeroCache", 0, this.metrics);
         this.initialized = false;
     }
 
