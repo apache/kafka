@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -21,41 +22,47 @@ import org.apache.kafka.common.requests.RequestHeader;
 public final class ClientRequest {
 
     private final String destination;
-    private final RequestHeader header;
-    private final AbstractRequest body;
+    private final AbstractRequest.Builder<?> requestBuilder;
+    private final int correlationId;
+    private final String clientId;
     private final long createdTimeMs;
     private final boolean expectResponse;
     private final RequestCompletionHandler callback;
 
     /**
      * @param destination The brokerId to send the request to
+     * @param requestBuilder The builder for the request to make
+     * @param correlationId The correlation id for this client request
+     * @param clientId The client ID to use for the header
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param header The request's header
-     * @param body The request's body
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,
+                         AbstractRequest.Builder<?> requestBuilder,
+                         int correlationId,
+                         String clientId,
                          long createdTimeMs,
                          boolean expectResponse,
-                         RequestHeader header,
-                         AbstractRequest body,
                          RequestCompletionHandler callback) {
         this.destination = destination;
+        this.requestBuilder = requestBuilder;
+        this.correlationId = correlationId;
+        this.clientId = clientId;
         this.createdTimeMs = createdTimeMs;
-        this.callback = callback;
-        this.header = header;
-        this.body = body;
         this.expectResponse = expectResponse;
+        this.callback = callback;
     }
 
     @Override
     public String toString() {
         return "ClientRequest(expectResponse=" + expectResponse +
             ", callback=" + callback +
-            ", header=" + header +
-            ", body=" + body +
+            ", destination=" + destination +
+            ", correlationId=" + correlationId +
+            ", clientId=" + clientId +
             ", createdTimeMs=" + createdTimeMs +
+            ", requestBuilder=" + requestBuilder +
             ")";
     }
 
@@ -63,12 +70,17 @@ public final class ClientRequest {
         return expectResponse;
     }
 
-    public RequestHeader header() {
-        return header;
+    public ApiKeys apiKey() {
+        return requestBuilder.apiKey();
     }
 
-    public AbstractRequest body() {
-        return body;
+    public RequestHeader makeHeader() {
+        return new RequestHeader(requestBuilder.apiKey().id,
+                requestBuilder.version(), clientId, correlationId);
+    }
+
+    public AbstractRequest.Builder<?> requestBuilder() {
+        return requestBuilder;
     }
 
     public String destination() {
@@ -83,4 +95,7 @@ public final class ClientRequest {
         return createdTimeMs;
     }
 
+    public int correlationId() {
+        return correlationId;
+    }
 }
