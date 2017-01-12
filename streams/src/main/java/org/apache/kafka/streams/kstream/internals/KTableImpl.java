@@ -67,7 +67,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
-    public final ProcessorSupplier<?, ?> processorSupplier;
+    private final ProcessorSupplier<?, ?> processorSupplier;
 
     private final String storeName;
 
@@ -262,6 +262,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <V1, R> KTable<K, R> join(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, false, false);
     }
+
+
 
     @Override
     public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {

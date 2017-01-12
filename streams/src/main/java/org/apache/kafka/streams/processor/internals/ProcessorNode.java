@@ -37,7 +37,7 @@ public class ProcessorNode<K, V> {
 
     private final String name;
     private final Processor<K, V> processor;
-    protected NodeMetrics nodeMetrics;
+    NodeMetrics nodeMetrics;
     private Time time;
 
     private K key;

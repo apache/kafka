@@ -132,6 +132,9 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     @Override
     public synchronized V get(final K key) {
         validateStoreOpen();
+        if (key == null) {
+            return null;
+        }
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
     }

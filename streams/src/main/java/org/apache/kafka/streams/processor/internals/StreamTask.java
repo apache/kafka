@@ -114,15 +114,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // to corresponding source nodes in the processor topology
         partitionQueues = new HashMap<>();
 
+        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+
         for (TopicPartition partition : partitions) {
             SourceNode source = topology.source(partition.topic());
-            RecordQueue queue = createRecordQueue(partition, source);
+            RecordQueue queue = createRecordQueue(partition, source, timestampExtractor);
             partitionQueues.put(partition, queue);
         }
 
         this.logPrefix = String.format("task [%s]", id);
 
-        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache
@@ -137,8 +139,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
+        stateMgr.registerGlobalStateStores(topology.globalStateStores());
         initTopology();
-        ((ProcessorContextImpl) this.processorContext).initialized();
+        this.processorContext.initialized();
     }
 
     /**
@@ -379,8 +382,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return recordCollector.offsets();
     }
 
-    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
-        return new RecordQueue(partition, source);
+    @SuppressWarnings("unchecked")
+    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source, final TimestampExtractor timestampExtractor) {
+        return new RecordQueue(partition, source, timestampExtractor);
     }
 
     private ProcessorRecordContext createRecordContext(final StampedRecord currRecord) {
