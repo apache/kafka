@@ -22,13 +22,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
 
-class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
     private final String storeName;
     private final KeyValueIterator<K, V> underlying;
     private KeyValue<K, V> next;
     private volatile boolean open = true;
 
-    DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
+    public DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
         this.storeName = storeName;
         this.underlying = underlying;
     }

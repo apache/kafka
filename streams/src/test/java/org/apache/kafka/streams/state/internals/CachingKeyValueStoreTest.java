@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
@@ -207,6 +208,11 @@ public class CachingKeyValueStoreTest {
     public void shouldThrowIfTryingToDeleteFromClosedCachingStore() throws Exception {
         store.close();
         store.delete("key");
+    }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(store.get(null));
     }
 
     private int addItemsToCache() throws IOException {

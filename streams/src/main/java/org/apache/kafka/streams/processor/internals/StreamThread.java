@@ -202,7 +202,6 @@ public class StreamThread extends Thread {
     private final StreamsMetricsThreadImpl streamsMetrics;
     final StateDirectory stateDirectory;
     private String originalReset;
-
     private StreamPartitionAssignor partitionAssignor = null;
     private boolean cleanRun = false;
     private long timerStartedMs;
@@ -285,7 +284,8 @@ public class StreamThread extends Thread {
                         UUID processId,
                         Metrics metrics,
                         Time time,
-                        StreamsMetadataState streamsMetadataState) {
+                        StreamsMetadataState streamsMetadataState,
+                        final long cacheSizeBytes) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
         String threadName = getName();
@@ -303,8 +303,6 @@ public class StreamThread extends Thread {
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
-        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.streamsMetrics);
 
 
@@ -424,6 +422,8 @@ public class StreamThread extends Thread {
 
         removeStreamTasks();
         removeStandbyTasks();
+
+        // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
         setState(State.NOT_RUNNING);
@@ -1108,7 +1108,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * This class extends {@link #StreamsMetricsImpl(Metrics, String, String, Map)} and
+     * This class extends {@link StreamsMetricsImpl(Metrics, String, String, Map)} and
      * overrides one of its functions for efficiency
      */
     private class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
