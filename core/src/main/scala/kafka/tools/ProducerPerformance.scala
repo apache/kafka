@@ -154,11 +154,10 @@ object ProducerPerformance extends Logging {
       CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $bootstrapServerOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     }
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
 
     val topicsStr = options.valueOf(topicsOpt)

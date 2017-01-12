@@ -265,11 +265,10 @@ object ConsoleProducer {
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     }
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val topic = options.valueOf(topicOpt)
     val sync = options.has(syncOpt)

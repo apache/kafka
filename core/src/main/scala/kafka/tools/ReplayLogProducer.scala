@@ -114,11 +114,10 @@ object ReplayLogProducer extends Logging {
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, inputTopicOpt)
-      ToolsUtils.validatePortOrDie(parser, bootstrapServer)
     }
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val zkConnect = options.valueOf(zkConnectOpt)
     val numMessages = options.valueOf(numMessagesOpt).intValue
