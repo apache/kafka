@@ -79,7 +79,7 @@ public class CreateTopicsResponse extends AbstractResponse {
     }
 
     public CreateTopicsResponse(Map<String, Error> errors, short version) {
-        super(new Struct(CURRENT_SCHEMA)); //FIXME Change this
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version)));
 
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Error> topicError : errors.entrySet()) {
