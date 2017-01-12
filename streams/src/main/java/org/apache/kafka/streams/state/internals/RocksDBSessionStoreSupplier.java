@@ -52,7 +52,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
         final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     new SessionKeySchema());
+                                                                                     new SessionKeySchema(), logged);
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
                                                                                           : bytesStore, "rocksdb-session-store", time);
         if (enableCaching) {

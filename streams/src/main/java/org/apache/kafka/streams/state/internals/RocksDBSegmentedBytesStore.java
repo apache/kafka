@@ -29,6 +29,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private final String name;
     private final Segments segments;
     private final KeySchema keySchema;
+    private final boolean logged;
     private ProcessorContext context;
     private volatile boolean open;
 
@@ -36,9 +37,11 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
                                final int numSegments,
-                               final KeySchema keySchema) {
+                               final KeySchema keySchema,
+                               final boolean logged) {
         this.name = name;
         this.keySchema = keySchema;
+        this.logged = logged;
         this.segments = new Segments(name, retention, numSegments);
     }
 
@@ -98,7 +101,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         segments.openExisting(context);
 
         // register and possibly restore the state from the logs
-        context.register(root, false, new StateRestoreCallback() {
+        context.register(root, logged, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 put(Bytes.wrap(key), value);

@@ -58,7 +58,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     }
 
     public WindowStore get() {
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name, retentionPeriod, numSegments, new WindowStoreKeySchema());
+        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name, retentionPeriod, numSegments, new WindowStoreKeySchema(), logged);
         if (!enableCaching) {
             final RocksDBWindowStore<K, V> segmentedStore = new RocksDBWindowStore<>(name, retainDuplicates, keySerde, valueSerde,
                                                                                      logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
