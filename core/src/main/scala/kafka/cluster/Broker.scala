@@ -85,7 +85,7 @@ object Broker {
               Seq(endPoint)
             }
             else {
-              val securityProtocolMap = brokerInfo.get("listener.security.protocol.map").map(
+              val securityProtocolMap = brokerInfo.get("listener_security_protocol_map").map(
                 _.asInstanceOf[Map[String, String]]).map(_.map { case (listenerName, securityProtocol) =>
                 new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
               })
