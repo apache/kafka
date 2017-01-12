@@ -102,6 +102,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private val metricConfig: MetricConfig = new MetricConfig()
     .samples(config.metricNumSamples)
+    .recordLevel(Sensor.RecordingLevel.forName(config.metricRecordingLevel))
     .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
 
   val brokerState: BrokerState = new BrokerState
