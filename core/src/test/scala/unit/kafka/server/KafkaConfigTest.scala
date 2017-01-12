@@ -20,9 +20,11 @@ package kafka.server
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
+import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -149,7 +151,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.PortProp, port)
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
     assertEquals(endpoint.port, port.toInt)
   }
@@ -165,7 +167,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
@@ -182,7 +184,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, port.toInt)
@@ -199,7 +201,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, hostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
@@ -213,15 +215,15 @@ class KafkaConfigTest {
 
     // listeners with duplicate port
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
 
     // listeners with duplicate protocol
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
 
     // advertised listeners with duplicate port
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
   }
 
   @Test
@@ -231,7 +233,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     props.put(KafkaConfig.ListenersProp, "BAD://localhost:9091")
 
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
   }
 
   @Test
@@ -240,9 +242,14 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     props.put(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
-
-    assert(isValidKafkaConfig(props))
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(_.connectionString))
+    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(_.connectionString))
   }
+
+  def listenerListToEndPoints(listenerList: String,
+                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = EndPoint.DefaultSecurityProtocolMap) =
+    CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
   def testListenerDefaults() {
@@ -255,22 +262,22 @@ class KafkaConfigTest {
     props.put(KafkaConfig.PortProp, "1111")
 
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
 
     // configuration with null host
     props.remove(KafkaConfig.HostNameProp)
 
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertEquals(null, conf2.listeners(SecurityProtocol.PLAINTEXT).host)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
+    assertEquals(null, conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
 
     // configuration with advertised host and port, and no advertised listeners
     props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
     props.put(KafkaConfig.AdvertisedPortProp, "2222")
 
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(conf3.advertisedListeners, CoreUtils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+    assertEquals(conf3.advertisedListeners, listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
   }
 
   @Test
@@ -295,7 +302,7 @@ class KafkaConfigTest {
     assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assert(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
+    assertTrue(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {

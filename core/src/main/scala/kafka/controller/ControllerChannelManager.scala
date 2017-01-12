@@ -24,10 +24,10 @@ import kafka.cluster.Broker
 import kafka.common.{KafkaException, TopicAndPartition}
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
+import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, LoginType, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
@@ -89,7 +89,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
-    val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
+    val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -353,7 +353,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
         val leaderIds = partitionStateInfos.map(_._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
-          _.getNode(controller.config.interBrokerSecurityProtocol)
+          _.getNode(controller.config.interBrokerListenerName)
         }
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -379,29 +379,33 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         topicPartition -> partitionState
       }
 
-      val version: Short = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
-                    else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1: Short
-                    else 0: Short
+      val version: Short =
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+        else 0
 
       val updateMetadataRequest = {
         val liveBrokers = if (version == 0) {
           // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val node = broker.getNode(SecurityProtocol.PLAINTEXT)
-            val endPoints = Map(SecurityProtocol.PLAINTEXT -> new EndPoint(node.host(), node.port()))
+            val securityProtocol = SecurityProtocol.PLAINTEXT
+            val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+            val node = broker.getNode(listenerName)
+            val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
         } else {
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
-              securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
+            val endPoints = broker.endPoints.map { endPoint =>
+              new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
             }
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
         }
         new UpdateMetadataRequest.Builder(
-            controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
-            setVersion(version)
+          controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
+          setVersion(version)
       }
 
       updateMetadataRequestBrokerSet.foreach { broker =>

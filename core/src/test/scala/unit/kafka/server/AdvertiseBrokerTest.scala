@@ -18,10 +18,10 @@
 package kafka.server
 
 import org.junit.Assert._
-import kafka.utils.{TestUtils, CoreUtils, ZkUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   var server : KafkaServer = null
@@ -50,7 +50,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   @Test
   def testBrokerAdvertiseToZK {
     val brokerInfo = zkUtils.getBrokerInfo(brokerId)
-    val endpoint = brokerInfo.get.endPoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = brokerInfo.get.endPoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(advertisedHostName, endpoint.host)
     assertEquals(advertisedPort, endpoint.port)
   }
