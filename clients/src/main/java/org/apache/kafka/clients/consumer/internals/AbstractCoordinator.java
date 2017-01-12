@@ -659,10 +659,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
         // If coordinator is not known, requests are aborted.
         Node coordinator = coordinator();
-        if (coordinator == null)
-            return;
-
-        if (!client.awaitPendingRequests(coordinator, timeoutMs))
+        if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs))
             log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
                     client.pendingRequestCount(coordinator), groupId);
     }
