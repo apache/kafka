@@ -83,11 +83,6 @@ public class SubscriptionState {
 
     private final Metrics metrics;
 
-    // The constructor is only intended to be used by unit tests.
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
-        this(defaultResetStrategy, new Metrics());
-    }
-
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy, Metrics metrics) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();

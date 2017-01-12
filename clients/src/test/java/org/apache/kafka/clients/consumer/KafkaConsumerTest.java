@@ -108,7 +108,7 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
-    
+
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
 
@@ -692,7 +692,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
     }
-    
+
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
         int rebalanceTimeoutMs = 60000;
@@ -712,7 +712,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
-        
+
         consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
@@ -1430,7 +1430,7 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
-        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
+        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy, metrics);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 consumerClient,

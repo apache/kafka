@@ -13,6 +13,7 @@
 package kafka.api
 
 import java.util
+import java.util.Collections
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -22,7 +23,6 @@ import org.apache.kafka.common.{MetricName, PartitionInfo, TopicPartition}
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import kafka.common.Topic
 import kafka.server.KafkaConfig
-
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -133,13 +133,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     try {
       val listener0 = new TestConsumerReassignmentListener
       consumer.subscribe(List(topic, topic2).asJava, listener0)
-      var records: ConsumerRecords[Array[Byte], Array[Byte]] = null
-      while (records == null || records.records(tp).size() == 0)
-        records = consumer.poll(100)
+      var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
+      TestUtils.waitUntilTrue(() => {
+          records = consumer.poll(100)
+          !records.records(tp).isEmpty
+        }, "Consumer did not consume any message before timeout.")
       assertEquals("should be assigned once", 1, listener0.callsToAssigned)
       // Verify the metric exist.
-      val tags = new util.HashMap[String, String]
-      tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
+      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
       val fetchLag0 = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag0)
       val expectedLag = numMessages - records.count()
@@ -147,8 +148,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
       // Remove topic from subscription
       consumer.subscribe(List(topic2).asJava, listener0)
-      while (listener0.callsToAssigned < 2)
+      TestUtils.waitUntilTrue(() => {
         consumer.poll(100)
+        listener0.callsToAssigned >= 2
+      }, "Expected rebalance did not occur.")
       // Verify the metric has gone
       assertNull(consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
       assertNull(consumer.metrics().get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
@@ -170,19 +173,19 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     try {
       consumer.assign(List(tp).asJava)
       var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-      while (records.records(tp).size() == 0)
-        records = consumer.poll(100)
+      TestUtils.waitUntilTrue(() => {
+          records = consumer.poll(100)
+          !records.records(tp).isEmpty
+        }, "Consumer did not consume any message before timeout.")
       // Verify the metric exist.
-      val tags = new util.HashMap[String, String]
-      tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-      val fetchLag1 = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertNotNull(fetchLag1)
+      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+      val fetchLag = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      assertNotNull(fetchLag)
       val expectedLag = numMessages - records.count()
-      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag1.value(), EPSILON)
+      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value(), EPSILON)
 
       consumer.assign(List(tp2).asJava)
-      while (records.records(tp2).size() == 0)
-        records = consumer.poll(100)
+      TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
       assertNull(consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
@@ -201,10 +204,11 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     consumer.assign(List(tp).asJava)
     try {
       var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-      while (records.isEmpty)
-        records = consumer.poll(100)
-      val tags = new util.HashMap[String, String]
-      tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
+      TestUtils.waitUntilTrue(() => {
+          records = consumer.poll(100)
+          !records.isEmpty
+        }, "Consumer did not consume any message before timeout.")
+      val tags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
       val lag = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertEquals(s"The lag should be ${numMessages - records.count()}", numMessages - records.count(), lag.value(), EPSILON)
     } finally {

@@ -31,14 +31,13 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
@@ -1081,19 +1080,8 @@ public class Fetcher<K, V> {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(this.metrics.metricName(tp + ".records-lag", this.metricGrpName, "The latest lag of the partition"),
-                    new MeasurableStat() {
-                        private double lag = 0;
-                        @Override
-                        public double measure(MetricConfig config, long now) {
-                            return lag;
-                        }
-
-                        @Override
-                        public void record(MetricConfig config, double value, long timeMs) {
-                            lag = value;
-                        }
-                    });
+                recordsLag.add(this.metrics.metricName(name, this.metricGrpName, "The latest lag of the partition"),
+                               new Value());
                 recordsLag.add(this.metrics.metricName(tp + ".records-lag-max",
                         this.metricGrpName,
                         "The max lag of the partition"), new Max());
