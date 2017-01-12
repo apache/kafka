@@ -68,7 +68,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
-
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                       Aggregator<? super K, ? super V, T> adder,
