@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -70,12 +70,12 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldPutAndFindSessionsInRange() throws Exception {
         final String key = "a";
-        final Windowed<String> a1 = new Windowed<>(key, new TimeWindow(10, 10L));
-        final Windowed<String> a2 = new Windowed<>(key, new TimeWindow(500L, 1000L));
+        final Windowed<String> a1 = new Windowed<>(key, new SessionWindow(10, 10L));
+        final Windowed<String> a2 = new Windowed<>(key, new SessionWindow(500L, 1000L));
         sessionStore.put(a1, 1L);
         sessionStore.put(a2, 2L);
-        sessionStore.put(new Windowed<>(key, new TimeWindow(1500L, 2000L)), 1L);
-        sessionStore.put(new Windowed<>(key, new TimeWindow(2500L, 3000L)), 2L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(1500L, 2000L)), 1L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(2500L, 3000L)), 2L);
 
         final List<KeyValue<Windowed<String>, Long>> expected
                 = Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
@@ -87,16 +87,16 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldFetchAllSessionsWithSameRecordKey() throws Exception {
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), 1L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(10, 10)), 2L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(100, 100)), 3L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(1000, 1000)), 4L));
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
         for (KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
 
         // add one that shouldn't appear in the results
-        sessionStore.put(new Windowed<>("aa", new TimeWindow(0, 0)), 5L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(sessionStore.fetch("a"));
         assertEquals(expected, results);
@@ -107,22 +107,22 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldFindValuesWithinMergingSessionWindowRange() throws Exception {
         final String key = "a";
-        sessionStore.put(new Windowed<>(key, new TimeWindow(0L, 0L)), 1L);
-        sessionStore.put(new Windowed<>(key, new TimeWindow(1000L, 1000L)), 2L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L);
         final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions(key, -1, 1000L);
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-                KeyValue.pair(new Windowed<>(key, new TimeWindow(0L, 0L)), 1L),
-                KeyValue.pair(new Windowed<>(key, new TimeWindow(1000L, 1000L)), 2L));
+                KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L),
+                KeyValue.pair(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L));
         assertEquals(expected, toList(results));
     }
 
     @Test
     public void shouldRemove() throws Exception {
-        sessionStore.put(new Windowed<>("a", new TimeWindow(0, 1000)), 1L);
-        sessionStore.put(new Windowed<>("a", new TimeWindow(1500, 2500)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), 1L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(1500, 2500)), 2L);
 
-        sessionStore.remove(new Windowed<>("a", new TimeWindow(0, 1000)));
+        sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1000)));
         assertFalse(sessionStore.findSessions("a", 0, 1000L).hasNext());
 
         assertTrue(sessionStore.findSessions("a", 1500, 2500).hasNext());
@@ -130,11 +130,11 @@ public class RocksDBSessionStoreTest {
 
     @Test
     public void shouldFindSessionsToMerge() throws Exception {
-        final Windowed<String> session1 = new Windowed<>("a", new TimeWindow(0, 100));
-        final Windowed<String> session2 = new Windowed<>("a", new TimeWindow(101, 200));
-        final Windowed<String> session3 = new Windowed<>("a", new TimeWindow(201, 300));
-        final Windowed<String> session4 = new Windowed<>("a", new TimeWindow(301, 400));
-        final Windowed<String> session5 = new Windowed<>("a", new TimeWindow(401, 500));
+        final Windowed<String> session1 = new Windowed<>("a", new SessionWindow(0, 100));
+        final Windowed<String> session2 = new Windowed<>("a", new SessionWindow(101, 200));
+        final Windowed<String> session3 = new Windowed<>("a", new SessionWindow(201, 300));
+        final Windowed<String> session4 = new Windowed<>("a", new SessionWindow(301, 400));
+        final Windowed<String> session5 = new Windowed<>("a", new SessionWindow(401, 500));
         sessionStore.put(session1, 1L);
         sessionStore.put(session2, 2L);
         sessionStore.put(session3, 3L);
