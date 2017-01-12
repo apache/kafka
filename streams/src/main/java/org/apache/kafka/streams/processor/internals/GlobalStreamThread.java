@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -67,8 +68,8 @@ public class GlobalStreamThread extends Thread {
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
         final String threadClientId = clientId + "-" + getName();
-        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, new ThreadCache.NullThreadCacheMetrics());
-        this.streamsMetrics = new StreamThread.StreamsMetricsImpl(metrics, threadClientId);
+        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
+        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
     }
 
     static class StateConsumer {

@@ -117,7 +117,8 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, 2, null, correlationId)
       val messageBytes = "message".getBytes
       val records = MemoryRecords.readableRecords(ByteBuffer.wrap(messageBytes))
-      val request = new ProduceRequest(1, 10000, Map(topicPartition -> records).asJava)
+      val request = new ProduceRequest.Builder(
+          1, 10000, Map(topicPartition -> records).asJava).build()
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.sizeOf)
       byteBuffer.put(headerBytes)
       request.writeTo(byteBuffer)

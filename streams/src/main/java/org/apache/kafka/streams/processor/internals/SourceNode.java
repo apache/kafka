@@ -46,6 +46,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
+        super.init(context);
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
@@ -64,11 +65,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-    }
-
-    @Override
-    public void close() {
-        // do nothing
+        nodeMetrics.nodeThroughputSensor.record();
     }
 
     /**

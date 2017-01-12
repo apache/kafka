@@ -18,11 +18,13 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -77,7 +79,7 @@ public class KStreamTestDriver {
         this.topology = builder.build(null);
         this.globalTopology = builder.buildGlobalStateTopology();
         this.stateDir = stateDir;
-        this.cache = new ThreadCache(cacheSize);
+        this.cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the

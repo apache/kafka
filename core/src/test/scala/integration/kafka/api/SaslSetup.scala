@@ -54,8 +54,8 @@ trait SaslSetup {
       setJaasConfiguration(mode, kafkaServerSaslMechanisms, kafkaClientSaslMechanisms, Some(serverKeytabFile), Some(clientKeytabFile))
       kdc = new MiniKdc(kdcConf, workDir)
       kdc.start()
-      kdc.createPrincipal(serverKeytabFile, "kafka/localhost")
-      kdc.createPrincipal(clientKeytabFile, "client")
+      kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
+      kdc.createPrincipal(clientKeytabFile, JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
     } else {
       setJaasConfiguration(mode, kafkaServerSaslMechanisms, kafkaClientSaslMechanisms)
     }

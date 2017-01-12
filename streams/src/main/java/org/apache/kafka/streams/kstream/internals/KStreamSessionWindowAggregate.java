@@ -88,8 +88,8 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
             final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, T>> merged = new ArrayList<>();
-            final TimeWindow newTimeWindow = new TimeWindow(timestamp, timestamp);
-            TimeWindow mergedWindow = newTimeWindow;
+            final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
+            SessionWindow mergedWindow = newSessionWindow;
             T agg = initializer.apply();
 
             try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(key, timestamp - windows.inactivityGap(),
@@ -98,13 +98,13 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                     final KeyValue<Windowed<K>, T> next = iterator.next();
                     merged.add(next);
                     agg = sessionMerger.apply(key, agg, next.value);
-                    mergedWindow = mergeTimeWindow(mergedWindow, (TimeWindow) next.key.window());
+                    mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
                 }
             }
 
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
-            if (!mergedWindow.equals(newTimeWindow)) {
+            if (!mergedWindow.equals(newSessionWindow)) {
                 for (final KeyValue<Windowed<K>, T> session : merged) {
                     store.remove(session.key);
                     tupleForwarder.maybeForward(session.key, null, session.value);
@@ -117,10 +117,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
     }
 
 
-    private TimeWindow mergeTimeWindow(final TimeWindow one, final TimeWindow two) {
+    private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
         final long start = one.start() < two.start() ? one.start() : two.start();
         final long end = one.end() > two.end() ? one.end() : two.end();
-        return new TimeWindow(start, end);
+        return new SessionWindow(start, end);
     }
 
     @Override

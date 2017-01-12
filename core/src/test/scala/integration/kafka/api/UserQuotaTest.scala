@@ -19,6 +19,7 @@ import java.util.Properties
 
 import kafka.admin.AdminUtils
 import kafka.server.{KafkaConfig, ConfigEntityName, QuotaId}
+import kafka.utils.JaasTestUtils
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Before
@@ -30,7 +31,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslTestHarness {
   override protected val zkSaslEnabled = false
   override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
-  override val userPrincipal = "client"
+  override val userPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName2
   override val producerQuotaId = QuotaId(Some(userPrincipal), None)
   override val consumerQuotaId = QuotaId(Some(userPrincipal), None)
 

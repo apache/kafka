@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +33,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map forwardedValues = new HashMap();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), "appId", streamsConfig(), null, null, null);
+        super(new TaskId(1, 1), "appId", streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
     }
 
     static StreamsConfig streamsConfig() {

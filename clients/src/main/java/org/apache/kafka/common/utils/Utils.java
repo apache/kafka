@@ -234,6 +234,10 @@ public class Utils {
         return min;
     }
 
+    public static short min(short first, short second) {
+        return (short) Math.min(first, second);
+    }
+
     /**
      * Get the length for UTF8-encoding a string without encoding it first
      *
@@ -454,6 +458,24 @@ public class Utils {
                 sb.append(seperator);
         }
         return sb.toString();
+    }
+
+    public static <K, V> String mkString(Map<K, V> map) {
+        return mkString(map, "{", "}", "=", " ,");
+    }
+
+    public static <K, V> String mkString(Map<K, V> map, String begin, String end,
+                                         String keyValueSeparator, String elementSeperator) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(begin);
+        String prefix = "";
+        for (Map.Entry<K, V> entry : map.entrySet()) {
+            bld.append(prefix).append(entry.getKey()).
+                    append(keyValueSeparator).append(entry.getValue());
+            prefix = elementSeperator;
+        }
+        bld.append(end);
+        return bld.toString();
     }
 
     /**

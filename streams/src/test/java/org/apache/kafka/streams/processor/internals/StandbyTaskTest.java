@@ -24,13 +24,12 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -323,17 +322,8 @@ public class StandbyTaskTest {
         builder.stream("topic").groupByKey().count("my-store");
         final ProcessorTopology topology = builder.build(0);
         StreamsConfig config = createConfig(baseDir);
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config, new StreamsMetrics() {
-            @Override
-            public Sensor addLatencySensor(final String scopeName, final String entityName, final String operationName, final String... tags) {
-                return null;
-            }
-
-            @Override
-            public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-            }
-        }, stateDirectory);
+        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config,
+            new MockStreamsMetrics(new Metrics()), stateDirectory);
 
     }
     private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

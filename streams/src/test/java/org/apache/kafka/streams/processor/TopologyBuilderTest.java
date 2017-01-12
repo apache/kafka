@@ -184,7 +184,7 @@ public class TopologyBuilderTest {
     @Test
     public void testSubscribeTopicNameAndPattern() {
         final TopologyBuilder builder = new TopologyBuilder();
-        Pattern expectedPattern = Pattern.compile(".*-\\d|topic-foo|topic-bar");
+        Pattern expectedPattern = Pattern.compile("topic-foo|topic-bar|.*-\\d");
         builder.addSource("source-1", "topic-foo", "topic-bar");
         builder.addSource("source-2", Pattern.compile(".*-\\d"));
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());

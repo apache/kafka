@@ -16,32 +16,53 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public class GroupCoordinatorRequest extends AbstractRequest {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.GROUP_COORDINATOR.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
+
+    public static class Builder extends AbstractRequest.Builder<GroupCoordinatorRequest> {
+        private final String groupId;
+
+        public Builder(String groupId) {
+            super(ApiKeys.GROUP_COORDINATOR);
+            this.groupId = groupId;
+        }
+
+        @Override
+        public GroupCoordinatorRequest build() {
+            short version = version();
+            return new GroupCoordinatorRequest(this.groupId, version);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=GroupCoordinatorRequest, groupId=");
+            bld.append(groupId).append(")");
+            return bld.toString();
+        }
+    }
 
     private final String groupId;
 
-    public GroupCoordinatorRequest(String groupId) {
-        super(new Struct(CURRENT_SCHEMA));
-
+    private GroupCoordinatorRequest(String groupId, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.GROUP_COORDINATOR.id, version)),
+                version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         this.groupId = groupId;
     }
 
-    public GroupCoordinatorRequest(Struct struct) {
-        super(struct);
+    public GroupCoordinatorRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
@@ -56,10 +77,11 @@ public class GroupCoordinatorRequest extends AbstractRequest {
     }
 
     public static GroupCoordinatorRequest parse(ByteBuffer buffer, int versionId) {
-        return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer));
+        return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static GroupCoordinatorRequest parse(ByteBuffer buffer) {
-        return new GroupCoordinatorRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.GROUP_COORDINATOR.id));
     }
 }
