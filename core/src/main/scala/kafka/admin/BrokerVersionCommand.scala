@@ -36,7 +36,7 @@ object BrokerVersionCommand extends Config {
     val adminClient = createAdminClient(opts)
     val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfo) =>
-      print(s"${broker.toString} -> ${versionInfo.toString()}\n")
+      print(s"${broker.toString} -> ${versionInfo.toString(true)}\n")
     }
   }
 
