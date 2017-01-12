@@ -15,6 +15,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -62,6 +63,7 @@ import java.util.Random;
 import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -659,6 +661,17 @@ public class SaslAuthenticatorTest {
         // Check that another user 'user2' can also connect with a Jaas config override without any changes to static configuration
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
         createAndCheckClientConnection(securityProtocol, "4");
+
+        // Check that clients specifying multiple login modules fail even if the credentials are valid
+        String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
+        String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
+        try {
+            createClientConnection(securityProtocol, "1");
+            fail("Connection created with multiple login modules in sasl.jaas.config");
+        } catch (KafkaException e) {
+            assertTrue("Unexpected exception " + e, e.getCause() instanceof IllegalArgumentException);
+        }
     }
 
     /**
