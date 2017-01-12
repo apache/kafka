@@ -24,13 +24,13 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
 
     private final KTableValueGetter<K2, V2> valueGetter;
-    private final KeyValueMapper<K1, V1, K2> keyMapper;
-    private final ValueJoiner<? super V1, ? super V2, R> joiner;
+    private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
+    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
-                               final KeyValueMapper<K1, V1, K2> keyMapper,
-                               final ValueJoiner<? super V1, ? super V2, R> joiner,
+                               final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
+                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
                                final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
