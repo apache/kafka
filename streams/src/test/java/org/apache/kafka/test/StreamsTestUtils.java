@@ -16,8 +16,12 @@ package org.apache.kafka.test;
 
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -53,4 +57,13 @@ public class StreamsTestUtils {
                 new Properties());
     }
 
+
+    public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
+        final List<KeyValue<K, V>> results = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            results.add(iterator.next());
+        }
+        return results;
+    }
 }
