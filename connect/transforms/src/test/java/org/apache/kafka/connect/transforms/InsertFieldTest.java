@@ -32,11 +32,11 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
-public class InsertInValueTest {
+public class InsertFieldTest {
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
-        final InsertInValue<SourceRecord> xform = new InsertInValue<>();
+        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(Collections.singletonMap("topic.field", "topic_field"));
         xform.apply(new SourceRecord(null, null,
                 "", 0,
@@ -52,7 +52,7 @@ public class InsertInValueTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertInValue<SourceRecord> xform = new InsertInValue<>();
+        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
@@ -95,7 +95,7 @@ public class InsertInValueTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertInValue<SourceRecord> xform = new InsertInValue<>();
+        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,

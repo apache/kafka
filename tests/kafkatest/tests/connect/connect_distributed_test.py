@@ -457,9 +457,9 @@ class ConnectDistributedTest(Test):
             'file': self.INPUT_FILE,
             'topic': self.TOPIC,
             'transforms': 'hoistToStruct,insertTimestampField',
-            'transforms.hoistToStruct.type': 'org.apache.kafka.connect.transforms.HoistValueToStruct',
+            'transforms.hoistToStruct.type': 'org.apache.kafka.connect.transforms.HoistToStruct$Value',
             'transforms.hoistToStruct.field': 'content',
-            'transforms.insertTimestampField.type': 'org.apache.kafka.connect.transforms.InsertInValue',
+            'transforms.insertTimestampField.type': 'org.apache.kafka.connect.transforms.InsertField$Value',
             'transforms.insertTimestampField.timestamp.field': ts_fieldname,
         })
 

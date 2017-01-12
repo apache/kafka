@@ -35,7 +35,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class InsertField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public interface Keys {
         String TOPIC_FIELD = "topic.field";
@@ -246,5 +246,51 @@ abstract class Insert<R extends ConnectRecord<R>> implements Transformation<R> {
     protected abstract Object operatingValue(R record);
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
+
+    /**
+     * This transformation allows inserting configured attributes of the record metadata as fields in the record key.
+     * It also allows adding a static data field.
+     */
+    public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
+
+        @Override
+        protected Schema operatingSchema(R record) {
+            return record.keySchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.key();
+        }
+
+        @Override
+        protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
+            return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
+        }
+
+    }
+
+    /**
+     * This transformation allows inserting configured attributes of the record metadata as fields in the record value.
+     * It also allows adding a static data field.
+     */
+    public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
+
+        @Override
+        protected Schema operatingSchema(R record) {
+            return record.valueSchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.value();
+        }
+
+        @Override
+        protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
+            return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
+        }
+
+    }
 
 }

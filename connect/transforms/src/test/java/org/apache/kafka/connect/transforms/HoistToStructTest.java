@@ -17,27 +17,28 @@
 
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.Test;
 
-/**
- * Wraps the record key in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
- */
-public class HoistKeyToStruct<R extends ConnectRecord<R>> extends HoistToStruct<R> {
+import java.util.Collections;
 
-    @Override
-    protected Schema operatingSchema(R record) {
-        return record.keySchema();
-    }
+import static org.junit.Assert.assertEquals;
 
-    @Override
-    protected Object operatingValue(R record) {
-        return record.key();
-    }
+public class HoistToStructTest {
 
-    @Override
-    protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
-        return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
+    @Test
+    public void sanityCheck() {
+        final HoistToStruct<SinkRecord> xform = new HoistToStruct.Key<>();
+        xform.configure(Collections.singletonMap("field", "magic"));
+
+        final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertEquals(Schema.Type.STRUCT, transformedRecord.keySchema().type());
+        assertEquals(record.keySchema(),  transformedRecord.keySchema().field("magic").schema());
+        assertEquals(42, ((Struct) transformedRecord.key()).get("magic"));
     }
 
 }

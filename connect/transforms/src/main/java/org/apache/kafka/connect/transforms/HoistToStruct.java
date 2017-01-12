@@ -29,7 +29,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 
-abstract class HoistToStruct<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String FIELD_CONFIG = "field";
 
@@ -79,5 +79,49 @@ abstract class HoistToStruct<R extends ConnectRecord<R>> implements Transformati
     protected abstract Object operatingValue(R record);
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
+
+    /**
+     * Wraps the record key in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
+     */
+    public static class Key<R extends ConnectRecord<R>> extends HoistToStruct<R> {
+
+        @Override
+        protected Schema operatingSchema(R record) {
+            return record.keySchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.key();
+        }
+
+        @Override
+        protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
+            return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
+        }
+
+    }
+
+    /**
+     * Wraps the record value in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
+     */
+    public static class Value<R extends ConnectRecord<R>> extends HoistToStruct<R> {
+
+        @Override
+        protected Schema operatingSchema(R record) {
+            return record.valueSchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.value();
+        }
+
+        @Override
+        protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
+            return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
+        }
+
+    }
 
 }
