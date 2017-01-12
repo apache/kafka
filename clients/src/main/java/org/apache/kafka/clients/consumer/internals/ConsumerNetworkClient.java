@@ -275,6 +275,25 @@ public class ConsumerNetworkClient implements Closeable {
             poll(retryBackoffMs);
     }
 
+
+    /**
+     * Block until pending requests from the given node have finished.
+     * @param node The note to await requests from
+     * @param timeoutMs The maximum time in milliseconds to block
+     * @return true If all requests finished, false if the timeout expired first
+     */
+    public boolean awaitPendingRequests(Node node, long timeoutMs) {
+        long startMs = time.milliseconds();
+        long remainingMs = timeoutMs;
+
+        while (pendingRequestCount(node) > 0 && remainingMs > 0) {
+            poll(remainingMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+        }
+
+        return pendingRequestCount(node) == 0;
+    }
+
     /**
      * Get the count of pending requests to the given node. This includes both request that
      * have been transmitted (i.e. in-flight requests) and those which are awaiting transmission.
