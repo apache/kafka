@@ -485,7 +485,7 @@ object ConsumerGroupCommand extends Logging {
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
                              .describedAs("urls")
