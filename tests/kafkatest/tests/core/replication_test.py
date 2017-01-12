@@ -16,6 +16,7 @@
 from ducktape.utils.util import wait_until
 
 from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -129,6 +130,9 @@ class ReplicationTest(ProduceConsumeValidateTest):
     @matrix(failure_mode=["hard_bounce"],
             broker_type=["leader"],
             security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"])
+    @parametrize(failure_mode="hard_bounce",
+            broker_type="leader",
+            security_protocol="SASL_SSL", client_sasl_mechanism="SCRAM-SHA-256", interbroker_sasl_mechanism="SCRAM-SHA-512")
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type, client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI"):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
