@@ -50,7 +50,7 @@ class LRUCacheEntry implements RecordContext {
                 8 + // timestamp
                 8 + // offset
                 4 + // partition
-                topic.length();
+                (topic == null ? 0 : topic.length());
 
     }
 

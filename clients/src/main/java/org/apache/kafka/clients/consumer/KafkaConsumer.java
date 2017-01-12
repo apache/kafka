@@ -31,6 +31,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,7 +40,6 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -65,7 +65,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -519,7 +518,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             ApiKeys.OFFSET_COMMIT,
             ApiKeys.OFFSET_FETCH,
             ApiKeys.SYNC_GROUP);
-    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(CONSUMER_APIS);
+    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final String clientId;
     private final ConsumerCoordinator coordinator;
@@ -673,7 +672,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     time,
-                    EXPECTED_API_VERSIONS);
+                    true);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -721,7 +720,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
-            close(true);
+            close(0, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -1131,7 +1130,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         acquire();
         try {
-            coordinator.commitOffsetsSync(offsets);
+            coordinator.commitOffsetsSync(offsets, Long.MAX_VALUE);
         } finally {
             release();
         }
@@ -1351,7 +1350,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (parts != null)
                 return parts;
 
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topic)), requestTimeoutMs);
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                    new MetadataRequest.Builder(Collections.singletonList(topic)), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1497,17 +1497,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
-     * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
+     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the default
+     * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
+     * cannot be used to interrupt close.
      * 
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      * before or while this function is called
      */
     @Override
     public void close() {
+        close(DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
+     * <code>timeout</code> for the consumer to complete pending commits and leave the group.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the
+     * timeout. If rebalance is in progress, auto-commits and pending asynchronous commits may
+     * be aborted if the coordinator is not known within the timeout. If the consumer is unable
+     * to complete commit and leave group requests before the timeout expires, the consumer is
+     * force closed. Note that {@link #wakeup()} cannot be used to interrupt close.
+     *
+     * @param timeout The maximum time to wait for consumer to close gracefully. The value should be
+     *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
+     * @param timeUnit The time unit for the <code>timeout</code>
+     * @throws InterruptException If the thread is interrupted before or while this function is called
+     * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     */
+    public void close(long timeout, TimeUnit timeUnit) {
+        if (timeout < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
         try {
-            close(false);
+            close(timeUnit.toMillis(timeout), false);
         } finally {
             release();
         }
@@ -1533,11 +1556,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return clusterResourceListeners;
     }
 
-    private void close(boolean swallowException) {
+    private void close(long timeoutMs, boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
-        ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
+        try {
+            coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
+        } catch (Throwable t) {
+            firstException.compareAndSet(null, t);
+            log.error("Failed to close coordinator", t);
+        }
         ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);

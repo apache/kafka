@@ -13,18 +13,17 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -32,6 +31,49 @@ import java.util.Map;
 import java.util.Set;
 
 public class UpdateMetadataRequest extends AbstractRequest {
+    public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final Map<TopicPartition, PartitionState> partitionStates;
+        private final Set<Broker> liveBrokers;
+
+        public Builder(int controllerId, int controllerEpoch,
+                       Map<TopicPartition, PartitionState> partitionStates,
+                       Set<Broker> liveBrokers) {
+            super(ApiKeys.UPDATE_METADATA_KEY);
+            this.controllerId = controllerId;
+            this.controllerEpoch = controllerEpoch;
+            this.partitionStates = partitionStates;
+            this.liveBrokers = liveBrokers;
+        }
+
+        @Override
+        public UpdateMetadataRequest build() {
+            short version = version();
+            if (version == 0) {
+                for (Broker broker : liveBrokers) {
+                    if ((broker.endPoints.get(SecurityProtocol.PLAINTEXT) == null)
+                            || (broker.endPoints.size() != 1)) {
+                        throw new UnsupportedVersionException("UpdateMetadataRequest v0 only " +
+                                "handles PLAINTEXT endpoints");
+                    }
+                }
+            }
+            return new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates, liveBrokers);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type: UpdateMetadataRequest=").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", partitionStates=").append(Utils.mkString(partitionStates)).
+                append(", liveBrokers=").append(Utils.join(liveBrokers, " ,")).
+                append(")");
+            return bld.toString();
+        }
+    }
 
     public static final class Broker {
         public final int id;
@@ -48,6 +90,16 @@ public class UpdateMetadataRequest extends AbstractRequest {
         public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints) {
             this(id, endPoints, null);
         }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(id=").append(id);
+            bld.append(", endPoints=").append(Utils.mkString(endPoints));
+            bld.append(", rack=").append(rack);
+            bld.append(")");
+            return bld.toString();
+        }
     }
 
     public static final class EndPoint {
@@ -58,9 +110,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
             this.host = host;
             this.port = port;
         }
-    }
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.UPDATE_METADATA_KEY.id);
+        @Override
+        public String toString() {
+            return "(host=" + host + ", port=" + port + ")";
+        }
+    }
 
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
@@ -91,37 +146,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private final Map<TopicPartition, PartitionState> partitionStates;
     private final Set<Broker> liveBrokers;
 
-    /**
-     * Constructor for version 0.
-     */
-    @Deprecated
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<Node> liveBrokers,
-                                 Map<TopicPartition, PartitionState> partitionStates) {
-        this(0, controllerId, controllerEpoch, partitionStates,
-             brokerEndPointsToBrokers(liveBrokers));
-    }
-
-    private static Set<Broker> brokerEndPointsToBrokers(Set<Node> brokerEndPoints) {
-        Set<Broker> brokers = new HashSet<>(brokerEndPoints.size());
-        for (Node brokerEndPoint : brokerEndPoints) {
-            Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
-                    new EndPoint(brokerEndPoint.host(), brokerEndPoint.port()));
-            brokers.add(new Broker(brokerEndPoint.id(), endPoints, null));
-        }
-        return brokers;
-    }
-
-    /**
-     * Constructor for version 2.
-     */
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Map<TopicPartition,
+    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch, Map<TopicPartition,
             PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        this(2, controllerId, controllerEpoch, partitionStates, liveBrokers);
-    }
-
-    public UpdateMetadataRequest(int version, int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.UPDATE_METADATA_KEY.id, version)));
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.UPDATE_METADATA_KEY.id, version)), version);
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
 
@@ -177,9 +204,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
         this.liveBrokers = liveBrokers;
     }
 
-    public UpdateMetadataRequest(Struct struct) {
-        super(struct);
-
+    public UpdateMetadataRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
             Struct partitionStateData = (Struct) partitionStateDataObj;
@@ -242,7 +268,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         if (versionId <= 2)
             return new UpdateMetadataResponse(Errors.forException(e).code());
         else
@@ -267,10 +294,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new UpdateMetadataRequest(ProtoUtils.parseRequest(ApiKeys.UPDATE_METADATA_KEY.id, versionId, buffer));
+        return new UpdateMetadataRequest(ProtoUtils.parseRequest(ApiKeys.UPDATE_METADATA_KEY.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer) {
-        return new UpdateMetadataRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.UPDATE_METADATA_KEY.id));
     }
 }

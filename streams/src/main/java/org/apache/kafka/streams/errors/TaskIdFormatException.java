@@ -17,14 +17,28 @@
 
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * Indicates a run time error incurred while trying parse the task id from the read string
+ * Indicates a run time error incurred while trying parse the {@link org.apache.kafka.streams.processor.TaskId task id}
+ * from the read string.
+ *
+ * @see org.apache.kafka.streams.processor.internals.StreamTask
  */
+@InterfaceStability.Unstable
 public class TaskIdFormatException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
 
-    public TaskIdFormatException(String taskString) {
-        super("Task id cannot be parsed correctly" + (taskString == null ? "" : " from " + taskString));
+    public TaskIdFormatException(final String message) {
+        super("Task id cannot be parsed correctly" + (message == null ? "" : " from " + message));
+    }
+
+    public TaskIdFormatException(final String message, final Throwable throwable) {
+        super("Task id cannot be parsed correctly" + (message == null ? "" : " from " + message), throwable);
+    }
+
+    public TaskIdFormatException(final Throwable throwable) {
+        super(throwable);
     }
 }

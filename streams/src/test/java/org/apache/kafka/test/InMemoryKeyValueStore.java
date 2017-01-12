@@ -12,13 +12,14 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
 
 import java.util.Iterator;
 import java.util.List;
@@ -26,12 +27,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
-class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final TreeMap<K, V> map = new TreeMap<>();
     private final String name;
     private boolean open = true;
 
-    InMemoryKeyValueStore(final String name) {
+    public InMemoryKeyValueStore(final String name) {
         this.name = name;
     }
 
@@ -103,12 +104,12 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new TheIterator(this.map.subMap(from, true, to, false).entrySet().iterator());
+        return new DelegatingPeekingKeyValueIterator<>(name, new TheIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new TheIterator(map.entrySet().iterator());
+        return new DelegatingPeekingKeyValueIterator<>(name(), new TheIterator(map.entrySet().iterator()));
     }
 
     private class TheIterator implements KeyValueIterator<K, V> {
@@ -122,6 +123,11 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public void close() {
 
+        }
+
+        @Override
+        public K peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey not supported");
         }
 
         @Override

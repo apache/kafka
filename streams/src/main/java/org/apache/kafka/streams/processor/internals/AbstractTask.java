@@ -85,6 +85,7 @@ public abstract class AbstractTask {
             log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
+
     }
 
     public final TaskId id() {
@@ -157,29 +158,37 @@ public abstract class AbstractTask {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamTask.
+     * Produces a string representation containing useful information about a StreamTask.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
 
         // print topology
         if (topology != null) {
-            sb.append("\t\t\t" + topology.toString());
+            sb.append(indent).append(topology.toString(indent + "\t"));
         }
 
         // print assigned partitions
         if (partitions != null && !partitions.isEmpty()) {
-            sb.append("\t\t\tPartitions [");
+            sb.append(indent).append("Partitions [");
             for (TopicPartition topicPartition : partitions) {
-                sb.append(topicPartition.toString() + ",");
+                sb.append(topicPartition.toString()).append(", ");
             }
-            sb.setLength(sb.length() - 1);
-            sb.append("]");
+            sb.setLength(sb.length() - 2);
+            sb.append("]\n");
         }
-
-        sb.append("\n");
         return sb.toString();
     }
 

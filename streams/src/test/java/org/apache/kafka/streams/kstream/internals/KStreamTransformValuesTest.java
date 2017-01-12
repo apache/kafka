@@ -51,10 +51,10 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueTransformerSupplier<Integer, Integer> valueTransformerSupplier =
-            new ValueTransformerSupplier<Integer, Integer>() {
-                public ValueTransformer<Integer, Integer> get() {
-                    return new ValueTransformer<Integer, Integer>() {
+        ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            new ValueTransformerSupplier<Number, Integer>() {
+                public ValueTransformer<Number, Integer> get() {
+                    return new ValueTransformer<Number, Integer>() {
 
                         private int total = 0;
 
@@ -63,8 +63,8 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public Integer transform(Integer value) {
-                            total += value;
+                        public Integer transform(Number value) {
+                            total += value.intValue();
                             return total;
                         }
 
@@ -88,8 +88,8 @@ public class KStreamTransformValuesTest {
         stream.transformValues(valueTransformerSupplier).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
         }
 
         assertEquals(4, processor.processed.size());

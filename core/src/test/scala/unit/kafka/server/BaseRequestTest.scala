@@ -100,17 +100,15 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     *
     * @param request
     * @param apiKey
-    * @param version An optional version to use when sending the request. If not set, the latest known version is used
     * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
     * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
     * @return
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Option[Short] = None,
+  def send(request: AbstractRequest, apiKey: ApiKeys,
            destination: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
-    val requestVersion = version.getOrElse(ProtoUtils.latestVersion(apiKey.id))
     val socket = connect(destination, protocol)
     try {
-      send(request, apiKey, requestVersion, socket)
+      send(request, apiKey, socket)
     } finally {
       socket.close()
     }
@@ -120,10 +118,10 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * Serializes and send the request to the given api.
     * A ByteBuffer containing the response is returned.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short, socket: Socket): ByteBuffer = {
+  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket): ByteBuffer = {
     correlationId += 1
     val serializedBytes = {
-      val header = new RequestHeader(apiKey.id, version, "", correlationId)
+      val header = new RequestHeader(apiKey.id, request.version, "", correlationId)
       val byteBuffer = ByteBuffer.allocate(header.sizeOf() + request.sizeOf)
       header.writeTo(byteBuffer)
       request.writeTo(byteBuffer)

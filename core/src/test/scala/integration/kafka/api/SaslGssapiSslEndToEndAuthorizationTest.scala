@@ -17,13 +17,17 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.JaasTestUtils
 
-class SaslSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
-  override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override val clientPrincipal = "client"
-  override val kafkaPrincipal = "kafka"
+import scala.collection.immutable.List
 
+class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
+  override val clientPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName
+  override val kafkaPrincipal = JaasTestUtils.KafkaServerPrincipalUnqualifiedName
+  
+  override protected def kafkaClientSaslMechanism = "GSSAPI"
+  override protected def kafkaServerSaslMechanisms = List("GSSAPI")
+  
   // Configure brokers to require SSL client authentication in order to verify that SASL_SSL works correctly even if the
   // client doesn't have a keystore. We want to cover the scenario where a broker requires either SSL client
   // authentication or SASL authentication with SSL as the transport layer (but not both).
