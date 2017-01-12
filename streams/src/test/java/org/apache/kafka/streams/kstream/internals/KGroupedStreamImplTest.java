@@ -173,9 +173,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "1");
         driver.flushState();
-        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test
@@ -202,9 +202,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "1");
         driver.flushState();
-        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test
@@ -238,9 +238,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "C");
         driver.flushState();
-        assertEquals("A:B", results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals("Z", results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals("A:B:C", results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals("A:B", results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals("Z", results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals("A:B:C", results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test(expected = NullPointerException.class)

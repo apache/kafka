@@ -30,7 +30,7 @@ public class SessionKeySerdeTest {
 
     @Test
     public void shouldSerializeDeserialize() throws Exception {
-        final Windowed<Long> key = new Windowed<>(1L, new TimeWindow(10, 100));
+        final Windowed<Long> key = new Windowed<>(1L, new SessionWindow(10, 100));
         final SessionKeySerde<Long> serde = new SessionKeySerde<>(Serdes.Long());
         final byte[] bytes = serde.serializer().serialize("t", key);
         final Windowed<Long> result = serde.deserializer().deserialize("t", bytes);
@@ -57,7 +57,7 @@ public class SessionKeySerdeTest {
 
     @Test
     public void shouldConvertToBinaryAndBack() throws Exception {
-        final Windowed<String> key = new Windowed<>("key", new TimeWindow(10, 20));
+        final Windowed<String> key = new Windowed<>("key", new SessionWindow(10, 20));
         final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
         final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer());
         assertEquals(key, result);
@@ -65,21 +65,21 @@ public class SessionKeySerdeTest {
 
     @Test
     public void shouldExtractEndTimeFromBinary() throws Exception {
-        final Windowed<String> key = new Windowed<>("key", new TimeWindow(10, 100));
+        final Windowed<String> key = new Windowed<>("key", new SessionWindow(10, 100));
         final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
         assertEquals(100, SessionKeySerde.extractEnd(serialized.get()));
     }
 
     @Test
     public void shouldExtractStartTimeFromBinary() throws Exception {
-        final Windowed<String> key = new Windowed<>("key", new TimeWindow(50, 100));
+        final Windowed<String> key = new Windowed<>("key", new SessionWindow(50, 100));
         final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
         assertEquals(50, SessionKeySerde.extractStart(serialized.get()));
     }
 
     @Test
     public void shouldExtractKeyBytesFromBinary() throws Exception {
-        final Windowed<String> key = new Windowed<>("blah", new TimeWindow(50, 100));
+        final Windowed<String> key = new Windowed<>("blah", new SessionWindow(50, 100));
         final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
         assertArrayEquals("blah".getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
