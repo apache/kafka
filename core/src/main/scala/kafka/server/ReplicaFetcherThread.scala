@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOff
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.Time
 
@@ -76,9 +76,8 @@ class ReplicaFetcherThread(name: String,
   // as the metrics tag to avoid metric name conflicts with
   // more than one fetcher thread to the same broker
   private val networkClient = {
-    val channelBuilder = ChannelBuilders.create(
+    val channelBuilder = ChannelBuilders.clientChannelBuilder(
       brokerConfig.interBrokerSecurityProtocol,
-      Mode.CLIENT,
       LoginType.SERVER,
       brokerConfig.values,
       brokerConfig.saslMechanismInterBrokerProtocol,
@@ -103,7 +102,8 @@ class ReplicaFetcherThread(name: String,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       brokerConfig.replicaSocketReceiveBufferBytes,
       brokerConfig.requestTimeoutMs,
-      time
+      time,
+      false
     )
   }
 
@@ -231,21 +231,21 @@ class ReplicaFetcherThread(name: String,
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
-    val clientResponse = sendRequest(ApiKeys.FETCH, Some(fetchRequestVersion), fetchRequest.underlying)
+    val clientResponse = sendRequest(fetchRequest.underlying)
     val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
     fetchResponse.responseData.asScala.toSeq.map { case (key, value) =>
       key -> new PartitionData(value)
     }
   }
 
-  private def sendRequest(apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest): ClientResponse = {
+  private def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse = {
     import kafka.utils.NetworkClientBlockingOps._
-    val header = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
     try {
       if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
-        val clientRequest = new ClientRequest(sourceBroker.id.toString, time.milliseconds(), true, header, request, null)
+        val clientRequest = networkClient.newClientRequest(sourceBroker.id.toString, requestBuilder,
+          time.milliseconds(), true)
         networkClient.blockingSendAndReceive(clientRequest)(time)
       }
     }
@@ -258,15 +258,18 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
-    val (request, apiVersion) =
-      if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
+    val requestBuilder = if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
         val partitions = Map(topicPartition -> (earliestOrLatest: java.lang.Long))
-        (new ListOffsetRequest(partitions.asJava, consumerId), 1)
+        new ListOffsetRequest.Builder(consumerId).
+            setTargetTimes(partitions.asJava).
+            setVersion(1)
       } else {
         val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        (new ListOffsetRequest(consumerId, partitions.asJava), 0)
+        new ListOffsetRequest.Builder(consumerId).
+            setOffsetData(partitions.asJava).
+            setVersion(0)
       }
-    val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, Some(apiVersion.toShort), request)
+    val clientResponse = sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
     val partitionData = response.responseData.get(topicPartition)
     Errors.forCode(partitionData.errorCode) match {
@@ -288,11 +291,10 @@ class ReplicaFetcherThread(name: String,
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 
-    val request =
-      if (fetchRequestVersion >= 3) JFetchRequest.fromReplica(replicaId, maxWait, minBytes, maxBytes, requestMap)
-      else JFetchRequest.fromReplica(replicaId, maxWait, minBytes, requestMap)
-
-    new FetchRequest(request)
+    val requestBuilder = new JFetchRequest.Builder(maxWait, minBytes, requestMap).
+        setReplicaId(replicaId).setMaxBytes(maxBytes)
+    requestBuilder.setVersion(fetchRequestVersion)
+    new FetchRequest(requestBuilder)
   }
 
   /**
@@ -307,10 +309,10 @@ class ReplicaFetcherThread(name: String,
 
 object ReplicaFetcherThread {
 
-  private[server] class FetchRequest(val underlying: JFetchRequest) extends AbstractFetcherThread.FetchRequest {
-    def isEmpty: Boolean = underlying.fetchData.isEmpty
+  private[server] class FetchRequest(val underlying: JFetchRequest.Builder) extends AbstractFetcherThread.FetchRequest {
+    def isEmpty: Boolean = underlying.fetchData().isEmpty
     def offset(topicPartition: TopicPartition): Long =
-      underlying.fetchData.asScala(topicPartition).offset
+      underlying.fetchData().asScala(topicPartition).offset
   }
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {

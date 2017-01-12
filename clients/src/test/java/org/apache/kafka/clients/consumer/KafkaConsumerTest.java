@@ -32,6 +32,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.Selectable;
@@ -42,12 +43,14 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchResponse.PartitionData;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -81,16 +84,17 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.apache.kafka.common.errors.InterruptException;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 
@@ -944,7 +948,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req: client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         // subscription change
         consumer.unsubscribe();
@@ -955,7 +959,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req: client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
         consumer.close();
@@ -1084,7 +1088,7 @@ public class KafkaConsumerTest {
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req : client.requests())
-            assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
+            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
         consumer.close();
@@ -1124,15 +1128,40 @@ public class KafkaConsumerTest {
 
     @Test
     public void testGracefulClose() throws Exception {
-        consumerCloseTest(true);
+        Map<TopicPartition, Short> response = new HashMap<>();
+        response.put(tp0, Errors.NONE.code());
+        OffsetCommitResponse commitResponse = offsetCommitResponse(response);
+        LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(Errors.NONE.code());
+        consumerCloseTest(5000, Arrays.asList(commitResponse, leaveGroupResponse), 0, false);
     }
 
     @Test
     public void testCloseTimeout() throws Exception {
-        consumerCloseTest(false);
+        consumerCloseTest(5000, Collections.<AbstractResponse>emptyList(), 5000, false);
     }
 
-    private void consumerCloseTest(boolean graceful) throws Exception {
+    @Test
+    public void testLeaveGroupTimeout() throws Exception {
+        Map<TopicPartition, Short> response = new HashMap<>();
+        response.put(tp0, Errors.NONE.code());
+        OffsetCommitResponse commitResponse = offsetCommitResponse(response);
+        consumerCloseTest(5000, Arrays.asList(commitResponse), 5000, false);
+    }
+
+    @Test
+    public void testCloseNoWait() throws Exception {
+        consumerCloseTest(0, Collections.<AbstractResponse>emptyList(), 0, false);
+    }
+
+    @Test
+    public void testCloseInterrupt() throws Exception {
+        consumerCloseTest(Long.MAX_VALUE, Collections.<AbstractResponse>emptyList(), 0, true);
+    }
+
+    private void consumerCloseTest(final long closeTimeoutMs,
+            List<? extends AbstractResponse> responses,
+            long waitMs,
+            boolean interrupt) throws Exception {
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 5000;
@@ -1163,32 +1192,61 @@ public class KafkaConsumerTest {
         // Kafka consumer is single-threaded, but the implementation allows calls on a
         // different thread as long as the calls are not executed concurrently. So this is safe.
         ExecutorService executor = Executors.newSingleThreadExecutor();
+        final AtomicReference<Exception> closeException = new AtomicReference<Exception>();
         try {
             Future<?> future = executor.submit(new Runnable() {
                 @Override
                 public void run() {
                     consumer.commitAsync();
-                    consumer.close();
+                    try {
+                        consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS);
+                    } catch (Exception e) {
+                        closeException.set(e);
+                    }
                 }
             });
 
             // Close task should not complete until commit succeeds or close times out
+            // if close timeout is not zero,
             try {
                 future.get(100, TimeUnit.MILLISECONDS);
-                fail("Close completed without waiting for commit response");
+                if (closeTimeoutMs != 0)
+                    fail("Close completed without waiting for commit or leave response");
             } catch (TimeoutException e) {
                 // Expected exception
             }
 
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
-            if (graceful) {
-                Map<TopicPartition, Short> response = new HashMap<>();
-                response.put(tp0, Errors.NONE.code());
-                client.respondFrom(offsetCommitResponse(response), coordinator);
+            for (int i = 0; i < responses.size(); i++) {
+                client.respondFrom(responses.get(i), coordinator);
+                if (i != responses.size() - 1) {
+                    try {
+                        future.get(100, TimeUnit.MILLISECONDS);
+                        fail("Close completed without waiting for response");
+                    } catch (TimeoutException e) {
+                        // Expected exception
+                    }
+                }
+            }
+
+            if (waitMs > 0)
+                time.sleep(waitMs);
+            if (interrupt)
+                assertTrue("Close terminated prematurely", future.cancel(true));
+
+            // Make sure that close task completes and another task can be run on the single threaded executor
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                }
+            }).get(500, TimeUnit.MILLISECONDS);
+
+            if (!interrupt) {
+                future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                assertNull("Unexpected exception during close", closeException.get());
             } else
-                time.sleep(5000);
-            future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
         } finally {
             executor.shutdownNow();
         }

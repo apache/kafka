@@ -41,7 +41,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap);
+        return new DelegatingPeekingKeyValueIterator<>(name(), new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override
@@ -84,6 +84,11 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
         @Override
         public void close() {
             // do nothing
+        }
+
+        @Override
+        public K peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey not supported");
         }
     }
 }

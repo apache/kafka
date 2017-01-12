@@ -81,7 +81,7 @@ public class KTableKTableLeftJoinTest {
 
         KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
         MockProcessorSupplier<Integer, String> processor;
         processor = new MockProcessorSupplier<>();
         joined.toStream().process(processor);
@@ -120,16 +120,16 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
         checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, "X2+null"), kv(3, "X3+null"));
 
         // push all items to the other stream. this should produce four items.
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
@@ -137,8 +137,8 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
@@ -155,8 +155,8 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
@@ -176,7 +176,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
@@ -206,23 +206,23 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)", "2:(X2+null<-null)", "3:(X3+null<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
@@ -237,8 +237,8 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(XX0+null<-null)", "1:(XX1+null<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
@@ -257,7 +257,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
         table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
-        joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
+        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
@@ -289,23 +289,23 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+Y0<-X0+Y0)", "1:(X1+Y1<-X1+Y1)", "2:(X2+null<-null)", "3:(X3+null<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-X0+Y0)", "1:(X1+YY1<-X1+Y1)", "2:(X2+YY2<-X2+null)", "3:(X3+YY3<-X3+null)");
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-X0+YY0)", "1:(X1+YY1<-X1+YY1)", "2:(X2+YY2<-X2+YY2)", "3:(X3+YY3<-X3+YY3)");
@@ -320,8 +320,8 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(XX0+null<-X0+null)", "1:(XX1+null<-X1+null)", "2:(XX2+YY2<-X2+YY2)", "3:(XX3+YY3<-X3+YY3)");
@@ -368,14 +368,14 @@ public class KTableKTableLeftJoinTest {
         final KTable<Long, String> seven = one.mapValues(mapper);
 
 
-        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.STRING_JOINER);
+        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
-        aggTable.leftJoin(one, MockValueJoiner.STRING_JOINER)
-                .leftJoin(two, MockValueJoiner.STRING_JOINER)
-                .leftJoin(three, MockValueJoiner.STRING_JOINER)
-                .leftJoin(four, MockValueJoiner.STRING_JOINER)
-                .leftJoin(five, MockValueJoiner.STRING_JOINER)
-                .leftJoin(eight, MockValueJoiner.STRING_JOINER)
+        aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(two, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(three, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(four, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(five, MockValueJoiner.TOSTRING_JOINER)
+                .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
                 .mapValues(mapper);
 
         final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 250);

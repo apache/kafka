@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -88,6 +89,23 @@ public class ListOffsetResponse extends AbstractResponse {
             this.timestamp = timestamp;
             this.offset = offset;
             this.offsets = null;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("PartitionData{").
+                append("errorCode: ").append((int) errorCode).
+                append(", timestamp: ").append(timestamp).
+                append(", offset: ").append(offset).
+                append(", offsets: ");
+            if (offsets == null) {
+                bld.append(offsets);
+            } else {
+                bld.append("[").append(Utils.join(this.offsets, ",")).append("]");
+            }
+            bld.append("}");
+            return bld.toString();
         }
     }
 

@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
@@ -60,13 +63,23 @@ public class RocksDBWindowStoreTest {
     private final Serde<byte[]> byteArraySerde = Serdes.ByteArray();
     private final String windowName = "window";
     private final int numSegments = 3;
-    private final long segmentSize = RocksDBWindowStore.MIN_SEGMENT_INTERVAL;
+    private final long segmentSize = Segments.MIN_SEGMENT_INTERVAL;
     private final long retentionPeriod = segmentSize * (numSegments - 1);
     private final long windowSize = 3;
     private final Serde<Integer> intSerde = Serdes.Integer();
     private final Serde<String> stringSerde = Serdes.String();
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", intSerde, stringSerde);
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private ThreadCache cache;
+    private final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
+
+    @Before
+    public void setUp() {
+        cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+    }
+
+
+
 
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {
@@ -89,7 +102,7 @@ public class RocksDBWindowStoreTest {
         MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
         final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         long currentTime = 0;
@@ -140,7 +153,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -214,7 +227,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -303,7 +316,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -390,7 +403,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -446,10 +459,10 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, true, false);
-            assertTrue(store instanceof CachingWindowStore);
+            assertTrue(store instanceof CachedStateStore);
         } finally {
             Utils.delete(baseDir);
         }
@@ -474,36 +487,42 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
             try {
+                // to validate segments
+                final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
                 long startTime = segmentSize * 2;
                 long incr = segmentSize / 2;
                 context.setRecordContext(createRecordContext(startTime));
                 store.put(0, "zero");
-                assertEquals(Utils.mkSet(2L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
 
                 context.setRecordContext(createRecordContext(startTime + incr));
                 store.put(1, "one");
-                assertEquals(Utils.mkSet(2L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
 
                 context.setRecordContext(createRecordContext(startTime + incr * 2));
                 store.put(2, "two");
-                assertEquals(Utils.mkSet(2L, 3L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3)), segmentDirs(baseDir));
 
-                // (3, "three") is not put
-                assertEquals(Utils.mkSet(2L, 3L), inner.segmentIds());
 
                 context.setRecordContext(createRecordContext(startTime + incr * 4));
                 store.put(4, "four");
-                assertEquals(Utils.mkSet(2L, 3L, 4L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3),
+                                         segments.segmentName(4)), segmentDirs(baseDir));
+
 
                 context.setRecordContext(createRecordContext(startTime + incr * 5));
                 store.put(5, "five");
-                assertEquals(Utils.mkSet(2L, 3L, 4L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3),
+                                         segments.segmentName(4)), segmentDirs(baseDir));
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -514,7 +533,10 @@ public class RocksDBWindowStoreTest {
 
                 context.setRecordContext(createRecordContext(startTime + incr * 6));
                 store.put(6, "six");
-                assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(3),
+                                         segments.segmentName(4),
+                                         segments.segmentName(5)), segmentDirs(baseDir));
+
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -527,7 +549,9 @@ public class RocksDBWindowStoreTest {
 
                 context.setRecordContext(createRecordContext(startTime + incr * 7));
                 store.put(7, "seven");
-                assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(3),
+                                         segments.segmentName(4),
+                                         segments.segmentName(5)), segmentDirs(baseDir));
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -540,7 +564,10 @@ public class RocksDBWindowStoreTest {
 
                 context.setRecordContext(createRecordContext(startTime + incr * 8));
                 store.put(8, "eight");
-                assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(4),
+                                         segments.segmentName(5),
+                                         segments.segmentName(6)), segmentDirs(baseDir));
+
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -554,10 +581,10 @@ public class RocksDBWindowStoreTest {
 
                 // check segment directories
                 store.flush();
-                assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
-                        segmentDirs(baseDir)
-                );
+                assertEquals(Utils.mkSet(segments.segmentName(4),
+                                         segments.segmentName(5),
+                                         segments.segmentName(6)), segmentDirs(baseDir));
+
             } finally {
                 store.close();
             }
@@ -566,6 +593,7 @@ public class RocksDBWindowStoreTest {
             Utils.delete(baseDir);
         }
     }
+
 
     @Test
     public void testRestore() throws IOException {
@@ -589,7 +617,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
@@ -638,16 +666,12 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
             try {
                 context.restore(windowName, changeLog);
-
-                assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -662,7 +686,7 @@ public class RocksDBWindowStoreTest {
                 // check segment directories
                 store.flush();
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
             } finally {
@@ -690,19 +714,16 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
-
             try {
 
                 context.setTime(0L);
                 context.setRecordContext(createRecordContext(0));
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L)),
+                        Utils.mkSet(segments.segmentName(0L)),
                         segmentDirs(baseDir)
                 );
 
@@ -710,14 +731,14 @@ public class RocksDBWindowStoreTest {
                 store.put(0, "v");
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L)),
+                        Utils.mkSet(segments.segmentName(0L)),
                         segmentDirs(baseDir)
                 );
 
                 context.setRecordContext(createRecordContext(60000));
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
                         segmentDirs(baseDir)
                 );
 
@@ -733,7 +754,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(4, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
                         segmentDirs(baseDir)
                 );
 
@@ -749,7 +770,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(2, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(3L)),
+                        Utils.mkSet(segments.segmentName(1L), segments.segmentName(3L)),
                         segmentDirs(baseDir)
                 );
 
@@ -765,7 +786,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(1, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(5L)),
+                        Utils.mkSet(segments.segmentName(3L), segments.segmentName(5L)),
                         segmentDirs(baseDir)
                 );
 
@@ -793,32 +814,30 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                    recordCollector, cache);
 
             File storeDir = new File(baseDir, windowName);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
 
             try {
-                new File(storeDir, inner.segmentName(0L)).mkdir();
-                new File(storeDir, inner.segmentName(1L)).mkdir();
-                new File(storeDir, inner.segmentName(2L)).mkdir();
-                new File(storeDir, inner.segmentName(3L)).mkdir();
-                new File(storeDir, inner.segmentName(4L)).mkdir();
-                new File(storeDir, inner.segmentName(5L)).mkdir();
-                new File(storeDir, inner.segmentName(6L)).mkdir();
+                new File(storeDir, segments.segmentName(0L)).mkdir();
+                new File(storeDir, segments.segmentName(1L)).mkdir();
+                new File(storeDir, segments.segmentName(2L)).mkdir();
+                new File(storeDir, segments.segmentName(3L)).mkdir();
+                new File(storeDir, segments.segmentName(4L)).mkdir();
+                new File(storeDir, segments.segmentName(5L)).mkdir();
+                new File(storeDir, segments.segmentName(6L)).mkdir();
             } finally {
                 store.close();
             }
 
             store = createWindowStore(context, false, true);
-            inner = (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
             try {
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
 
@@ -829,7 +848,7 @@ public class RocksDBWindowStoreTest {
                 }
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
 
@@ -855,7 +874,7 @@ public class RocksDBWindowStoreTest {
         MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+                recordCollector, cache);
 
         final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         context.setRecordContext(createRecordContext(0));

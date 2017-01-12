@@ -57,7 +57,7 @@ public interface KStream<K, V> {
      * @return a {@link KStream} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
-    KStream<K, V> filter(final Predicate<K, V> predicate);
+    KStream<K, V> filter(Predicate<? super K, ? super V> predicate);
 
     /**
      * Create a new {@link KStream} that consists all records of this stream which do <em>not</em> satisfy a predicate.
@@ -67,7 +67,7 @@ public interface KStream<K, V> {
      * @return a {@link KStream} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
-    KStream<K, V> filterNot(final Predicate<K, V> predicate);
+    KStream<K, V> filterNot(Predicate<? super K, ? super V> predicate);
 
     /**
      * Set a new key (with possibly new type) for each input record.
@@ -98,7 +98,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #flatMapValues(ValueMapper)
      */
-    <KR> KStream<KR, V> selectKey(final KeyValueMapper<K, V, KR> mapper);
+    <KR> KStream<KR, V> selectKey(KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
      * Transform each record of the input stream into a new record in the output stream
@@ -131,7 +131,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #flatMapValues(ValueMapper)
      */
-    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<K, V, KeyValue<KR, VR>> mapper);
+    <KR, VR> KStream<KR, VR> map(KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -162,7 +162,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #transformValues(ValueTransformerSupplier, String...)
      */
-    <VR> KStream<K, VR> mapValues(final ValueMapper<V, VR> mapper);
+    <VR> KStream<K, VR> mapValues(ValueMapper<? super V, ? extends VR> mapper);
 
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
@@ -205,7 +205,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #transform(TransformerSupplier, String...)
      */
-    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<K, V, Iterable<KeyValue<KR, VR>>> mapper);
+    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper);
 
     /**
      * Create a new instance of {@link KStream} by transforming the value of each element in this stream into zero or
@@ -241,7 +241,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapper<V, Iterable<VR>> processor);
+    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> processor);
 
     /**
      * Print the elements of this stream to {@code System.out}.
@@ -370,7 +370,7 @@ public interface KStream<K, V> {
      * @param action an action to perform on each record
      * @see #process(ProcessorSupplier, String...)
      */
-    void foreach(final ForeachAction<K, V> action);
+    void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
      * Creates an array of {@link KStream} from this stream by branching the elements in the original stream based on
@@ -386,7 +386,7 @@ public interface KStream<K, V> {
      * @return multiple distinct substreams of this {@link KStream}
      */
     @SuppressWarnings("unchecked")
-    KStream<K, V>[] branch(final Predicate<K, V>... predicates);
+    KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
 
     /**
      * Materialize this stream to a topic and creates a new instance of {@link KStream} from the topic using default
@@ -420,7 +420,7 @@ public interface KStream<K, V> {
      * @param topic       the topic name
      * @return a {@link KStream} that contains the exact same records as this {@link KStream}
      */
-    KStream<K, V> through(final StreamPartitioner<K, V> partitioner,
+    KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                           final String topic);
 
     /**
@@ -475,7 +475,7 @@ public interface KStream<K, V> {
      */
     KStream<K, V> through(final Serde<K> keySerde,
                           final Serde<V> valSerde,
-                          final StreamPartitioner<K, V> partitioner,
+                          final StreamPartitioner<? super K, ? super V> partitioner,
                           final String topic);
 
     /**
@@ -500,7 +500,7 @@ public interface KStream<K, V> {
      *                    be used
      * @param topic       the topic name
      */
-    void to(final StreamPartitioner<K, V> partitioner,
+    void to(final StreamPartitioner<? super K, ? super V> partitioner,
             final String topic);
 
     /**
@@ -543,7 +543,7 @@ public interface KStream<K, V> {
      */
     void to(final Serde<K> keySerde,
             final Serde<V> valSerde,
-            final StreamPartitioner<K, V> partitioner,
+            final StreamPartitioner<? super K, ? super V> partitioner,
             final String topic);
 
     /**
@@ -623,7 +623,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier,
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier,
                                        final String... stateStoreNames);
 
     /**
@@ -698,7 +698,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #transform(TransformerSupplier, String...)
      */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<V, VR> valueTransformerSupplier,
+    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
 
     /**
@@ -761,7 +761,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<K, V> processorSupplier,
+    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 
     /**
@@ -792,7 +792,7 @@ public interface KStream<K, V> {
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
      * @see #groupByKey()
      */
-    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<K, V, KR> selector,
+    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                        final Serde<KR> keySerde,
                                        final Serde<V> valSerde);
 
@@ -821,7 +821,7 @@ public interface KStream<K, V> {
      * @param <KR>     the key type of the result {@link KGroupedStream}
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
      */
-    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<K, V, KR> selector);
+    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector);
 
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
@@ -949,7 +949,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                 final ValueJoiner<V, VO, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows);
 
     /**
@@ -1026,7 +1026,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                 final ValueJoiner<V, VO, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
                                  final Serde<K> keySerde,
                                  final Serde<V> thisValueSerde,
@@ -1106,7 +1106,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<V, VO, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows);
 
     /**
@@ -1188,7 +1188,7 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<V, VO, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows,
                                      final Serde<K> keySerde,
                                      final Serde<V> thisValSerde,
@@ -1269,7 +1269,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<V, VO, VR> joiner,
+                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows);
 
     /**
@@ -1352,7 +1352,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<V, VO, VR> joiner,
+                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
                                       final Serde<K> keySerde,
                                       final Serde<V> thisValueSerde,
@@ -1424,7 +1424,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KTable, ValueJoiner)
      */
     <VT, VR> KStream<K, VR> join(final KTable<K, VT> table,
-                                 final ValueJoiner<V, VT, VR> joiner);
+                                 final ValueJoiner<? super V, ? super VT, ? extends VR> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi join.
@@ -1495,7 +1495,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KTable, ValueJoiner, Serde, Serde)
      */
     <VT, VR> KStream<K, VR> join(final KTable<K, VT> table,
-                                 final ValueJoiner<V, VT, VR> joiner,
+                                 final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
                                  final Serde<K> keySerde,
                                  final Serde<V> valSerde);
 
@@ -1511,7 +1511,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1568,7 +1568,7 @@ public interface KStream<K, V> {
      * @see #join(KTable, ValueJoiner)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
-                                     final ValueJoiner<V, VT, VR> joiner);
+                                     final ValueJoiner<? super V, ? super VT, ? extends VR> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed left equi join.
@@ -1581,7 +1581,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1642,8 +1642,72 @@ public interface KStream<K, V> {
      * @see #join(KTable, ValueJoiner, Serde, Serde)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
-                                     final ValueJoiner<V, VT, VR> joiner,
+                                     final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde);
 
+
+    /**
+     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
+     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)} inner-join}, all records from this stream will produce an
+     * output record (cf. below).
+     * The join is a primary key table lookup join with join attribute {@code keyValueMapper.map(stream.keyValue) == table.key}.
+     * "Table lookup join" means, that results are only computed if {@link KStream} records are processed.
+     * This is done by performing a lookup for matching records in the <em>current</em> internal
+     * {@link GlobalKTable} state.
+     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
+     * will not produce any result records.
+     * <p>
+     * For each {@link KStream} record whether or not it finds an corresponding record in {@link GlobalKTable} the provided
+     * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
+     * The key of the result record is the same as this {@link KStream}
+     * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@link KStream}.
+     **
+     * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
+     * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
+     *                          to the key of the {@link GlobalKTable}
+     * @param valueJoiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one output for each input {@link KStream} record
+     * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
+     */
+    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
+                                         final KeyValueMapper<K, V, GK> keyValueMapper,
+                                         final ValueJoiner<? super V, ? super GV, ? super RV> valueJoiner);
+
+    /**
+     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi join
+     * The join is a primary key table lookup join with join attribute {@code keyValueMapper.map(stream.keyValue) == table.key}.
+     * "Table lookup join" means, that results are only computed if {@link KStream} records are processed.
+     * This is done by performing a lookup for matching records in the <em>current</em> internal
+     * {@link GlobalKTable} state.
+     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
+     * will not produce any result records.
+     * <p>
+     * For each {@link KStream} record that finds an corresponding record in {@link GlobalKTable} the provided
+     * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as the key of this {@link KStream}
+     * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@link KStream}.
+     * <p>
+
+     * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
+     * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
+     *                          to the key of the {@link GlobalKTable}
+     * @param joiner            a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one output for each input {@link KStream} record
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
+     */
+    <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
+                                     final KeyValueMapper<K, V, GK> keyValueMapper,
+                                     final ValueJoiner<? super V, ? super GV, ? super RV> joiner);
 }

@@ -31,7 +31,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -41,7 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +65,6 @@ public class WorkerGroupMember {
             ApiKeys.JOIN_GROUP,
             ApiKeys.LEAVE_GROUP,
             ApiKeys.SYNC_GROUP);
-    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(WORKER_GROUP_MEMBER_APIS);
 
     private final Time time;
     private final String clientId;
@@ -113,7 +110,7 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     time,
-                    EXPECTED_API_VERSIONS);
+                    true);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG));
             this.coordinator = new WorkerCoordinator(this.client,

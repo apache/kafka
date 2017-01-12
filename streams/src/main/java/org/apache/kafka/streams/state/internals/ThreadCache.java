@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +41,7 @@ public class ThreadCache {
     private final String name;
     private final long maxCacheSizeBytes;
     private final Map<String, NamedCache> caches = new HashMap<>();
-    private final ThreadCacheMetrics metrics;
+    private final StreamsMetrics metrics;
 
     // internal stats
     private long numPuts = 0;
@@ -55,14 +55,10 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(long maxCacheSizeBytes) {
-        this(null, maxCacheSizeBytes, null);
-    }
-
-    public ThreadCache(final String name, long maxCacheSizeBytes, final ThreadCacheMetrics metrics) {
+    public ThreadCache(final String name, long maxCacheSizeBytes, final StreamsMetrics metrics) {
         this.name = name;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.metrics = metrics != null ? metrics : new NullThreadCacheMetrics();
+        this.metrics = metrics;
     }
 
     public long puts() {
@@ -108,6 +104,10 @@ public class ThreadCache {
     public LRUCacheEntry get(final String namespace, byte[] key) {
         numGets++;
 
+        if (key == null) {
+            return null;
+        }
+
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return null;
@@ -152,7 +152,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final byte[] from, final byte[] to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(cacheKey(from), cacheKey(to)), cache);
     }
@@ -160,7 +160,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
@@ -234,24 +234,25 @@ public class ThreadCache {
     }
 
 
-    static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], LRUCacheEntry> {
+    static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
         private final Iterator<Bytes> keys;
         private final NamedCache cache;
-        private KeyValue<byte[], LRUCacheEntry> nextEntry;
+        private KeyValue<Bytes, LRUCacheEntry> nextEntry;
 
         MemoryLRUCacheBytesIterator(final Iterator<Bytes> keys, final NamedCache cache) {
             this.keys = keys;
             this.cache = cache;
         }
 
-        public byte[] peekNextKey() {
+        public Bytes peekNextKey() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
             return nextEntry.key;
         }
 
-        KeyValue<byte[], LRUCacheEntry> peekNext() {
+
+        public KeyValue<Bytes, LRUCacheEntry> peekNext() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
@@ -272,11 +273,11 @@ public class ThreadCache {
         }
 
         @Override
-        public KeyValue<byte[], LRUCacheEntry> next() {
+        public KeyValue<Bytes, LRUCacheEntry> next() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            final KeyValue<byte[], LRUCacheEntry> result = nextEntry;
+            final KeyValue<Bytes, LRUCacheEntry> result = nextEntry;
             nextEntry = null;
             return result;
         }
@@ -288,7 +289,7 @@ public class ThreadCache {
                 return;
             }
 
-            nextEntry = new KeyValue<>(cacheKey.get(), entry);
+            nextEntry = new KeyValue<>(cacheKey, entry);
         }
 
         @Override
@@ -324,19 +325,6 @@ public class ThreadCache {
         public RecordContext recordContext() {
             return recordContext;
         }
-    }
-
-    public static class NullThreadCacheMetrics implements ThreadCacheMetrics {
-        @Override
-        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordCacheSensor(Sensor sensor, double value) {
-            // do nothing
-        }
-
     }
 
 }

@@ -97,7 +97,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     protected volatile boolean open = false;
-    private ProcessorContext context;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -130,6 +129,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setCreateIfMissing(true);
         options.setErrorIfExists(false);
 
+
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
@@ -139,7 +139,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
-        this.context = context;
         final Map<String, Object> configs = context.appConfigs();
         final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
         if (configSetterClass != null) {
@@ -240,11 +239,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (loggingEnabled) {
             changeLogger.logChange(Bytes.wrap(rawKey), rawValue);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    synchronized void writeToStore(K key, V value) {
-        putInternal(serdes.rawKey(key), serdes.rawValue(value));
     }
 
     @Override
@@ -451,6 +445,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             open = false;
             openIterators.remove(this);
             iter.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return serdes.keyFrom(iter.key());
+
         }
 
     }

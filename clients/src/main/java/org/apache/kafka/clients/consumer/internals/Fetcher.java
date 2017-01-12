@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
@@ -134,7 +133,7 @@ public class Fetcher<K, V> {
         return !completedFetches.isEmpty();
     }
 
-    private boolean matchesRequestedPartitions(FetchRequest request, FetchResponse response) {
+    private boolean matchesRequestedPartitions(FetchRequest.Builder request, FetchResponse response) {
         Set<TopicPartition> requestedPartitions = request.fetchData().keySet();
         Set<TopicPartition> fetchedPartitions = response.responseData().keySet();
         return fetchedPartitions.equals(requestedPartitions);
@@ -146,12 +145,12 @@ public class Fetcher<K, V> {
      * @return number of fetches sent
      */
     public int sendFetches() {
-        Map<Node, FetchRequest> fetchRequestMap = createFetchRequests();
-        for (Map.Entry<Node, FetchRequest> fetchEntry : fetchRequestMap.entrySet()) {
-            final FetchRequest request = fetchEntry.getValue();
+        Map<Node, FetchRequest.Builder> fetchRequestMap = createFetchRequests();
+        for (Map.Entry<Node, FetchRequest.Builder> fetchEntry : fetchRequestMap.entrySet()) {
+            final FetchRequest.Builder request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
-            client.send(fetchTarget, ApiKeys.FETCH, request)
+            client.send(fetchTarget, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
@@ -231,7 +230,7 @@ public class Fetcher<K, V> {
      * @return The map of topics with their partition information
      */
     public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
-        return getTopicMetadata(MetadataRequest.allTopics(), timeout);
+        return getTopicMetadata(MetadataRequest.Builder.allTopics(), timeout);
     }
 
     /**
@@ -241,7 +240,7 @@ public class Fetcher<K, V> {
      * @param timeout time for which getting topic metadata is attempted
      * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest request, long timeout) {
+    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, long timeout) {
         // Save the round trip if no topics are requested.
         if (!request.isAllTopics() && request.topics().isEmpty())
             return Collections.emptyMap();
@@ -315,12 +314,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    private RequestFuture<ClientResponse> sendMetadataRequest(MetadataRequest request) {
+    private RequestFuture<ClientResponse> sendMetadataRequest(MetadataRequest.Builder request) {
         final Node node = client.leastLoadedNode();
         if (node == null)
             return RequestFuture.noBrokersAvailable();
         else
-            return client.send(node, ApiKeys.METADATA, request);
+            return client.send(node, request);
     }
 
     /**
@@ -331,31 +330,60 @@ public class Fetcher<K, V> {
      */
     private void resetOffset(TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        final long timestamp;
-        if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
-        else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
-        else
-            throw new NoOffsetForPartitionException(partition);
-
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
-        long offset = getOffsetsByTimes(Collections.singletonMap(partition, timestamp), Long.MAX_VALUE).get(partition).offset();
-
+        long offset = listOffset(partition, strategy);
         // we might lose the assignment while fetching the offset, so check it is still active
         if (subscriptions.isAssigned(partition))
             this.subscriptions.seek(partition, offset);
     }
 
+    private long listOffset(TopicPartition partition, OffsetResetStrategy strategy) {
+        final long timestamp;
+        switch (strategy) {
+            case EARLIEST:
+                timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
+                break;
+            case LATEST:
+                timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
+                break;
+            default:
+                throw new NoOffsetForPartitionException(partition);
+        }
+        while (true) {
+            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                    sendListOffsetRequests(false, Collections.singletonMap(partition, timestamp));
+            client.poll(future);
+            if (future.succeeded()) {
+                OffsetAndTimestamp offsetAndTimestamp = future.value().get(partition);
+                if (offsetAndTimestamp == null)
+                    throw new NoOffsetForPartitionException(partition);
+                return offsetAndTimestamp.offset();
+            }
+            if (!future.isRetriable())
+                throw future.exception();
+            if (future.exception() instanceof InvalidMetadataException)
+                client.awaitMetadataUpdate();
+            else
+                time.sleep(retryBackoffMs);
+        }
+    }
+
+
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
+        return retrieveOffsetsByTimes(timestampsToSearch, timeout, true);
+    }
+
+    private Map<TopicPartition, OffsetAndTimestamp> retrieveOffsetsByTimes(
+            Map<TopicPartition, Long> timestampsToSearch, long timeout, boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty())
             return Collections.emptyMap();
 
         long startMs = time.milliseconds();
         long remaining = timeout;
         do {
-            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
+            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                    sendListOffsetRequests(requireTimestamps, timestampsToSearch);
             client.poll(future, remaining);
 
             if (!future.isDone())
@@ -398,9 +426,10 @@ public class Fetcher<K, V> {
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> result = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry : getOffsetsByTimes(timestampsToSearch, timeout).entrySet())
+        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry :
+                retrieveOffsetsByTimes(timestampsToSearch, timeout, false).entrySet()) {
             result.put(entry.getKey(), entry.getValue().offset());
-
+        }
         return result;
     }
 
@@ -487,10 +516,14 @@ public class Fetcher<K, V> {
     /**
      * Search the offsets by target times for the specified partitions.
      *
+     * @param requireTimestamps true if we should fail with an ObsoleteBrokerException if the broker does not support
+     *                         fetching precise timestamps for offsets
      * @param timestampsToSearch the mapping between partitions and target time
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(final Map<TopicPartition, Long> timestampsToSearch) {
+    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(
+            final boolean requireTimestamps,
+            final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
@@ -518,7 +551,7 @@ public class Fetcher<K, V> {
         final Map<TopicPartition, OffsetAndTimestamp> fetchedTimestampOffsets = new HashMap<>();
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
-            sendListOffsetRequest(entry.getKey(), entry.getValue())
+            sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps)
                     .addListener(new RequestFutureListener<Map<TopicPartition, OffsetAndTimestamp>>() {
                         @Override
                         public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
@@ -547,13 +580,20 @@ public class Fetcher<K, V> {
      *
      * @param node The node to send the ListOffsetRequest to.
      * @param timestampsToSearch The mapping from partitions to the target timestamps.
+     * @param requireTimestamp  True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(final Node node,
-                                                                                         final Map<TopicPartition, Long> timestampsToSearch) {
-        ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, ListOffsetRequest.CONSUMER_REPLICA_ID);
-        log.trace("Sending ListOffsetRequest {} to broker {}", request, node);
-        return client.send(node, ApiKeys.LIST_OFFSETS, request)
+                                                                                         final Map<TopicPartition, Long> timestampsToSearch,
+                                                                                         boolean requireTimestamp) {
+        ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().setTargetTimes(timestampsToSearch);
+
+        // If we need a timestamp in the response, the minimum RPC version we can send is v1.
+        // Otherwise, v0 is OK.
+        builder.setMinVersion(requireTimestamp ? (short) 1 : (short) 0);
+
+        log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);
+        return client.send(node, builder)
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
@@ -570,6 +610,7 @@ public class Fetcher<K, V> {
      * @param listOffsetResponse The response from the server.
      * @param future The future to be completed by the response.
      */
+    @SuppressWarnings("deprecation")
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
                                           ListOffsetResponse listOffsetResponse,
                                           RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
@@ -579,11 +620,34 @@ public class Fetcher<K, V> {
             ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
             Errors error = Errors.forCode(partitionData.errorCode);
             if (error == Errors.NONE) {
-                OffsetAndTimestamp offsetAndTimestamp = null;
-                if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET)
-                    offsetAndTimestamp = new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
-                log.debug("Fetched {} for partition {}", offsetAndTimestamp, topicPartition);
-                timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
+                if (partitionData.offsets != null) {
+                    // Handle v0 response
+                    long offset;
+                    if (partitionData.offsets.size() > 1) {
+                        future.raise(new IllegalStateException("Unexpected partitionData response of length " +
+                                partitionData.offsets.size()));
+                        return;
+                    } else if (partitionData.offsets.isEmpty()) {
+                        offset = ListOffsetResponse.UNKNOWN_OFFSET;
+                    } else {
+                        offset = partitionData.offsets.get(0);
+                    }
+                    log.debug("Handling v0 ListOffsetResponse response for {}.  Fetched offset {}",
+                            topicPartition, offset);
+                    if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
+                        OffsetAndTimestamp offsetAndTimestamp = new OffsetAndTimestamp(offset, -1);
+                        timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
+                    }
+                } else {
+                    // Handle v1 and later response
+                    log.debug("Handling ListOffsetResponse response for {}.  Fetched offset {}, timestamp {}",
+                            topicPartition, partitionData.offset, partitionData.timestamp);
+                    if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
+                        OffsetAndTimestamp offsetAndTimestamp =
+                                new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
+                        timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
+                    }
+                }
             } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
@@ -598,8 +662,7 @@ public class Fetcher<K, V> {
                         "may not exist or the user may not have Describe access to it", topicPartition);
                 future.raise(error);
             } else {
-                log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
-                        topicPartition, error.message());
+                log.warn("Attempt to fetch offsets for partition {} failed due to: {}", topicPartition, error.message());
                 future.raise(new StaleMetadataException());
             }
         }
@@ -624,7 +687,7 @@ public class Fetcher<K, V> {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    private Map<Node, FetchRequest> createFetchRequests() {
+    private Map<Node, FetchRequest.Builder> createFetchRequests() {
         // create the fetch info
         Cluster cluster = metadata.fetch();
         Map<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> fetchable = new LinkedHashMap<>();
@@ -649,10 +712,11 @@ public class Fetcher<K, V> {
         }
 
         // create the fetches
-        Map<Node, FetchRequest> requests = new HashMap<>();
+        Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, this.maxBytes, entry.getValue());
+            FetchRequest.Builder fetch = new FetchRequest.Builder(this.maxWaitMs, this.minBytes, entry.getValue()).
+                    setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }
         return requests;

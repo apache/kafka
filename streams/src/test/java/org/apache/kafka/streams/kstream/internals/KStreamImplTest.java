@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.junit.Before;
@@ -236,7 +238,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherStreamOnJoin() throws Exception {
-        testStream.join(null, MockValueJoiner.STRING_JOINER, JoinWindows.of(10));
+        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
@@ -246,12 +248,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinWindowsOnJoin() throws Exception {
-        testStream.join(testStream, MockValueJoiner.STRING_JOINER, null);
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTableOnTableJoin() throws Exception {
-        testStream.leftJoin((KTable) null, MockValueJoiner.STRING_JOINER);
+        testStream.leftJoin((KTable) null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -267,6 +269,48 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullActionOnForEach() throws Exception {
         testStream.foreach(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTableOnJoinWithGlobalTable() throws Exception {
+        testStream.join((GlobalKTable) null,
+                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockValueJoiner.TOSTRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnJoinWithGlobalTable() throws Exception {
+        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), "global", "global"),
+                        null,
+                        MockValueJoiner.TOSTRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() throws Exception {
+        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), "global", "global"),
+                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() throws Exception {
+        testStream.leftJoin((GlobalKTable) null,
+                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockValueJoiner.TOSTRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() throws Exception {
+        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), "global", "global"),
+                        null,
+                        MockValueJoiner.TOSTRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() throws Exception {
+        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), "global", "global"),
+                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        null);
     }
 
 }

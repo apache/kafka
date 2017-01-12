@@ -21,13 +21,14 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 
 public class MockValueJoiner {
 
-    private static class StringJoin implements ValueJoiner<String, String, String> {
+    public final static ValueJoiner<Object, Object, String> TOSTRING_JOINER = instance("+");
 
-        @Override
-        public String apply(String value1, String value2) {
-            return value1 + "+" + value2;
-        }
-    };
-
-    public final static ValueJoiner<String, String, String> STRING_JOINER = new StringJoin();
+    public static <V1, V2> ValueJoiner<V1, V2, String> instance(final String separator) {
+        return new ValueJoiner<V1, V2, String>() {
+            @Override
+            public String apply(V1 value1, V2 value2) {
+                return value1 + separator + value2;
+            }
+        };
+    }
 }

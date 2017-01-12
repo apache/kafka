@@ -176,4 +176,26 @@ public class StateDirectoryTest {
         assertTrue(taskDir.exists());
     }
 
+    @Test(expected = OverlappingFileLockException.class)
+    public void shouldLockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+        channel.lock();
+    }
+
+    @Test
+    public void shouldUnlockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+
+        directory.unlockGlobalState();
+
+        // should lock without any exceptions
+        channel.lock();
+    }
+
 }
