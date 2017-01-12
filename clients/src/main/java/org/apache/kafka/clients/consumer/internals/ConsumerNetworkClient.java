@@ -267,8 +267,8 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Block until pending requests from the given node have finished.
-     * @param node The note to await requests from
+     * Block until all pending requests from the given node have finished.
+     * @param node The node to await requests from
      * @param timeoutMs The maximum time in milliseconds to block
      * @return true If all requests finished, false if the timeout expired first
      */
