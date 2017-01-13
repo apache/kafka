@@ -13,7 +13,6 @@
 
 package org.apache.kafka.server.policy;
 
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 
 import java.util.Collections;
