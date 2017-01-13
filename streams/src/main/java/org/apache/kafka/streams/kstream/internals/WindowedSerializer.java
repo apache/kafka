@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -54,11 +53,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
             String value = null;
             try {
                 value = (String) configs.get(propertyName);
-                Object o = Utils.newInstance(value, Serializer.class);
-                if (!Serializer.class.isInstance(o)) {
-                    throw new KafkaException(value + " is not an instance of Serializer");
-                }
-                inner = Serializer.class.cast(o);
+                inner = Serializer.class.cast(Utils.newInstance(value, Serializer.class));
                 inner.configure(configs, isKey);
             } catch (ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");

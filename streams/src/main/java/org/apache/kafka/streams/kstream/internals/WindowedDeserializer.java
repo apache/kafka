@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
@@ -54,11 +53,7 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
             String value = null;
             try {
                 value = (String) configs.get(propertyName);
-                Object o = Utils.newInstance(value, Deserializer.class);
-                if (!Deserializer.class.isInstance(o)) {
-                    throw new KafkaException(value + " is not an instance of Deserializer");
-                }
-                inner = Deserializer.class.cast(o);
+                inner = Deserializer.class.cast(Utils.newInstance(value, Deserializer.class));
                 inner.configure(configs, isKey);
             } catch (ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
