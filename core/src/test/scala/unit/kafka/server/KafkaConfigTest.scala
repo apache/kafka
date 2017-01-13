@@ -23,6 +23,7 @@ import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -586,6 +587,8 @@ class KafkaConfigTest {
     //For LogFlushIntervalMsProp
     defaults.put(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
     defaults.put(KafkaConfig.OffsetsTopicCompressionCodecProp, SnappyCompressionCodec.codec.toString)
+    // For MetricRecordingLevelProp
+    defaults.put(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString())
 
     val config = KafkaConfig.fromProps(defaults)
     assertEquals("127.0.0.1:2181", config.zkConnect)
@@ -603,6 +606,7 @@ class KafkaConfigTest {
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
+    assertEquals(Sensor.RecordingLevel.DEBUG.toString(), config.metricRecordingLevel)
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
