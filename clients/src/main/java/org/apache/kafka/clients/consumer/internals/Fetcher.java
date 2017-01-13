@@ -332,43 +332,19 @@ public class Fetcher<K, V> {
     private void resetOffset(TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
-        long offset = listOffset(partition, strategy);
+        final long timestamp;
+        if (strategy == OffsetResetStrategy.EARLIEST)
+            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
+        else if (strategy == OffsetResetStrategy.LATEST)
+            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
+        else
+            throw new NoOffsetForPartitionException(partition);
+        long offset = retrieveOffsetsByTimes(Collections.singletonMap(partition, timestamp),
+                Long.MAX_VALUE, false).get(partition).offset();
         // we might lose the assignment while fetching the offset, so check it is still active
         if (subscriptions.isAssigned(partition))
             this.subscriptions.seek(partition, offset);
     }
-
-    private long listOffset(TopicPartition partition, OffsetResetStrategy strategy) {
-        final long timestamp;
-        switch (strategy) {
-            case EARLIEST:
-                timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
-                break;
-            case LATEST:
-                timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
-                break;
-            default:
-                throw new NoOffsetForPartitionException(partition);
-        }
-        while (true) {
-            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                    sendListOffsetRequests(false, Collections.singletonMap(partition, timestamp));
-            client.poll(future);
-            if (future.succeeded()) {
-                OffsetAndTimestamp offsetAndTimestamp = future.value().get(partition);
-                if (offsetAndTimestamp == null)
-                    throw new NoOffsetForPartitionException(partition);
-                return offsetAndTimestamp.offset();
-            }
-            if (!future.isRetriable())
-                throw future.exception();
-            if (future.exception() instanceof InvalidMetadataException)
-                client.awaitMetadataUpdate();
-            else
-                time.sleep(retryBackoffMs);
-        }
-    }
-
 
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
