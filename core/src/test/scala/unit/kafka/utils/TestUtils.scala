@@ -156,7 +156,19 @@ object TestUtils extends Logging {
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    servers.map(s => formatAddress(s.config.hostName, boundPort(s, protocol))).mkString(",")
+    servers.map { s =>
+      val listener = s.config.advertisedListeners.find(_.securityProtocol == protocol).getOrElse(
+        sys.error(s"Could not find listener with security protocol $protocol"))
+      formatAddress(listener.host, boundPort(s, protocol))
+    }.mkString(",")
+  }
+
+  def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
+    servers.map { s =>
+      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
+        sys.error(s"Could not find listener with name $listenerName"))
+      formatAddress(listener.host, s.boundPort(listenerName))
+    }.mkString(",")
   }
 
   /**
