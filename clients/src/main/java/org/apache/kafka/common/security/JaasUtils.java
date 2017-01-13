@@ -55,8 +55,14 @@ public class JaasUtils {
         if (jaasConfigArgs != null) {
             if (loginType == LoginType.SERVER)
                 throw new IllegalArgumentException("JAAS config property not supported for server");
-            else
-                return new JaasConfig(loginType, jaasConfigArgs.value());
+            else {
+                JaasConfig jaasConfig = new JaasConfig(loginType, jaasConfigArgs.value());
+                AppConfigurationEntry[] clientModules = jaasConfig.getAppConfigurationEntry(LoginType.CLIENT.contextName());
+                int numModules = clientModules == null ? 0 : clientModules.length;
+                if (numModules != 1)
+                    throw new IllegalArgumentException("JAAS config property contains " + numModules + " login modules, should be one module");
+                return jaasConfig;
+            }
         } else
             return defaultJaasConfig(loginType);
     }
