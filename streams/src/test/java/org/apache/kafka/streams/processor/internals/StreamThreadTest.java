@@ -706,7 +706,7 @@ public class StreamThreadTest {
     @Test
     public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.setApplicationId("appId")
+        builder.setApplicationId(applicationId)
                 .addSource("name", "topic")
                 .addSink("out", "output");
 
@@ -729,7 +729,7 @@ public class StreamThreadTest {
     @Test
     public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId("appId");
+        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
         builder.stream("t2").groupByKey().count("count-two");
         final StreamsConfig config = new StreamsConfig(configProps());
@@ -780,7 +780,7 @@ public class StreamThreadTest {
     @Test
     public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId("appId");
+        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
         builder.stream("t2").groupByKey().count("count-two");
         final StreamsConfig config = new StreamsConfig(configProps());
@@ -845,7 +845,7 @@ public class StreamThreadTest {
     @Test
     public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId("appId");
+        builder.setApplicationId(applicationId);
         builder.stream(Pattern.compile("t.*")).to("out");
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -857,7 +857,7 @@ public class StreamThreadTest {
             @Override
             protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
                 final ProcessorTopology topology = builder.build(id.topicGroupId);
-                final TestStreamTask task = new TestStreamTask(id, "appId", partitions, topology, consumer,
+                final TestStreamTask task = new TestStreamTask(id, applicationId, partitions, topology, consumer,
                     producer, restoreConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
                 createdTasks.put(partitions, task);
                 return task;

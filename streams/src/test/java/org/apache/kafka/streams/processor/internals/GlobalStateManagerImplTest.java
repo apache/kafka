@@ -85,7 +85,6 @@ public class GlobalStateManagerImplTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  storeToTopic,
-                                                                 storeToProcessorNode,
                                                                  Arrays.<StateStore>asList(store1, store2));
 
         context = new NoOpProcessorContext();
