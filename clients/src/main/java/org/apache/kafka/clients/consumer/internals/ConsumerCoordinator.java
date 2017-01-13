@@ -411,12 +411,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             maybeAutoCommitOffsetsSync(timeoutMs);
             now = time.milliseconds();
-            if (pendingAsyncCommits.get() > 0) {
+            if (pendingAsyncCommits.get() > 0 && endTimeMs > now) {
                 ensureCoordinatorReady(now, endTimeMs - now);
                 now = time.milliseconds();
             }
         } finally {
-            super.close(endTimeMs - now);
+            super.close(Math.max(0, endTimeMs - now));
         }
     }
 
@@ -497,18 +497,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
      *             or to any of the specified partitions
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
+     * @return If the offset commit was successfully sent and a successful response was received from
+     *         the coordinator
      */
-    public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeoutMs) {
+    public boolean commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeoutMs) {
         invokeCompletedOffsetCommitCallbacks();
 
         if (offsets.isEmpty())
-            return;
+            return true;
 
         long now = time.milliseconds();
         long startMs = now;
         long remainingMs = timeoutMs;
         do {
-            remainingMs = ensureCoordinatorReady(now, remainingMs);
+            if (coordinatorUnknown()) {
+                if (!ensureCoordinatorReady(now, remainingMs))
+                    return false;
+
+                remainingMs = timeoutMs - (time.milliseconds() - startMs);
+            }
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future, remainingMs);
@@ -516,7 +523,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.succeeded()) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                return;
+                return true;
             }
 
             if (!future.isRetriable())
@@ -527,6 +534,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             now = time.milliseconds();
             remainingMs = timeoutMs - (now - startMs);
         } while (remainingMs > 0);
+
+        return false;
     }
 
     private void maybeAutoCommitOffsetsAsync(long now) {
@@ -563,8 +572,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void maybeAutoCommitOffsetsSync(long timeoutMs) {
         if (autoCommitEnabled) {
             try {
-                commitOffsetsSync(subscriptions.allConsumed(), timeoutMs);
+                if (!commitOffsetsSync(subscriptions.allConsumed(), timeoutMs))
+                    log.debug("Automatic commit of offsets {} for group {} timed out before completion", subscriptions.allConsumed(), groupId);
             } catch (WakeupException | InterruptException e) {
+                log.debug("Automatic commit of offsets {} for group {} was interrupted before completion", subscriptions.allConsumed(), groupId);
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {
