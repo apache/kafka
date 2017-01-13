@@ -213,6 +213,7 @@ class WorkerSourceTask extends WorkerTask {
                 }
             }
             try {
+                final String topic = producerRecord.topic();
                 producer.send(
                         producerRecord,
                         new Callback() {
@@ -224,8 +225,8 @@ class WorkerSourceTask extends WorkerTask {
                                     // timeouts, callbacks with exceptions should never be invoked in practice. If the
                                     // user overrode these settings, the best we can do is notify them of the failure via
                                     // logging.
-                                    log.error("{} failed to send record to {}: {}", id, record.topic(), e);
-                                    log.debug("Failed record: {}", record);
+                                    log.error("{} failed to send record to {}: {}", id, topic, e);
+                                    log.debug("Failed record: {}", preTransformRecord);
                                 } else {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
