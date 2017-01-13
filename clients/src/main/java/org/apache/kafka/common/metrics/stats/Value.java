@@ -19,15 +19,15 @@ import org.apache.kafka.common.metrics.MetricConfig;
  * An instantaneous value.
  */
 public class Value implements MeasurableStat {
-    private double lag = 0;
+    private double value = 0;
 
     @Override
     public double measure(MetricConfig config, long now) {
-        return lag;
+        return value;
     }
 
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
-        lag = value;
+        this.value = value;
     }
 }
