@@ -58,8 +58,9 @@ public class JaasUtils {
             else {
                 JaasConfig jaasConfig = new JaasConfig(loginType, jaasConfigArgs.value());
                 AppConfigurationEntry[] clientModules = jaasConfig.getAppConfigurationEntry(LoginType.CLIENT.contextName());
-                if (clientModules != null && clientModules.length != 1)
-                    throw new IllegalArgumentException("JAAS config property for clients must specify only one login module");
+                int numModules = clientModules == null ? 0 : clientModules.length;
+                if (numModules != 1)
+                    throw new IllegalArgumentException("JAAS config property contains " + numModules + " login modules, should be one module");
                 return jaasConfig;
             }
         } else
