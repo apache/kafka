@@ -111,7 +111,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return "(host=" + host + ", port=" + port + ")";
+            return "(host=" + host + ", port=" + port + ", listenerName=" + listenerName +
+                    ", securityProtocol=" + securityProtocol + ")";
         }
     }
 
