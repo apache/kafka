@@ -355,6 +355,7 @@ class ZkUtils(val zkClient: ZkClient,
                          rack: Option[String],
                          apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
+    // see method documentation for reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
     val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
     registerBrokerInZk(brokerIdPath, json)

@@ -164,6 +164,9 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
       aliveNodes.clear()
       aliveBrokers.clear()
       updateMetadataRequest.liveBrokers.asScala.foreach { broker =>
+        // `aliveNodes` is a hot path for metadata requests for large clusters, so we use java.util.HashMap which
+        // is a bit faster than scala.collection.mutable.HashMap. When we drop support for Scala 2.10, we could
+        // move to `AnyRefMap`, which has comparable performance.
         val nodes = new java.util.HashMap[ListenerName, Node]
         val endPoints = new mutable.ArrayBuffer[EndPoint]
         broker.endPoints.asScala.foreach { ep =>

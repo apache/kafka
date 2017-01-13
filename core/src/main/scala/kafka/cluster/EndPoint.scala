@@ -69,6 +69,6 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
         ":"+port
       else
         Utils.formatAddress(host, port)
-    listenerName.value() + "://" + hostport
+    listenerName.value + "://" + hostport
   }
 }
