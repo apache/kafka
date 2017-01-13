@@ -1082,10 +1082,10 @@ public class Fetcher<K, V> {
                 recordsLag = this.metrics.sensor(name);
                 recordsLag.add(this.metrics.metricName(name, this.metricGrpName, "The latest lag of the partition"),
                                new Value());
-                recordsLag.add(this.metrics.metricName(tp + ".records-lag-max",
+                recordsLag.add(this.metrics.metricName(name + "-max",
                         this.metricGrpName,
                         "The max lag of the partition"), new Max());
-                recordsLag.add(this.metrics.metricName(tp + ".records-lag-avg",
+                recordsLag.add(this.metrics.metricName(name + "-avg",
                         this.metricGrpName,
                         "The average lag of the partition"), new Avg());
             }

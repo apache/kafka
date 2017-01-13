@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.WakeupException
  */
 abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
-  val EPSILON = 0.1
+  val epsilon = 0.1
   val producerCount = 1
   val consumerCount = 2
   val serverCount = 3
@@ -141,10 +141,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       assertEquals("should be assigned once", 1, listener0.callsToAssigned)
       // Verify the metric exist.
       val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
-      val fetchLag0 = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val fetchLag0 = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag0)
-      val expectedLag = numMessages - records.count()
-      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value(), EPSILON)
+      val expectedLag = numMessages - records.count
+      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
 
       // Remove topic from subscription
       consumer.subscribe(List(topic2).asJava, listener0)
@@ -153,8 +153,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
         listener0.callsToAssigned >= 2
       }, "Expected rebalance did not occur.")
       // Verify the metric has gone
-      assertNull(consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-      assertNull(consumer.metrics().get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
     }
@@ -179,14 +179,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
         }, "Consumer did not consume any message before timeout.")
       // Verify the metric exist.
       val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-      val fetchLag = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val fetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag)
-      val expectedLag = numMessages - records.count()
-      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value(), EPSILON)
+      val expectedLag = numMessages - records.count
+      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
 
       consumer.assign(List(tp2).asJava)
       TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
-      assertNull(consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
     }
@@ -209,8 +209,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
           !records.isEmpty
         }, "Consumer did not consume any message before timeout.")
       val tags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
-      val lag = consumer.metrics().get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertEquals(s"The lag should be ${numMessages - records.count()}", numMessages - records.count(), lag.value(), EPSILON)
+      val lag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
     } finally {
       consumer.close()
     }
