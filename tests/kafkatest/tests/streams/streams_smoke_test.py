@@ -46,7 +46,7 @@ class StreamsSmokeTest(KafkaTest):
         self.processor3 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
         self.processor4 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=8)
     def test_streams(self):
         """
         Start a few smoke test clients, then repeat start a new one, stop (cleanly) running one a few times.
