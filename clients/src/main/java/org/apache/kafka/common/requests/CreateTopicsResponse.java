@@ -46,6 +46,10 @@ public class CreateTopicsResponse extends AbstractResponse {
             this.message = message;
         }
 
+        public boolean is(Errors error) {
+            return this.error == error;
+        }
+
         public Errors error() {
             return error;
         }
