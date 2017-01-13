@@ -37,7 +37,7 @@ import java.util.Map;
 
 public abstract class InsertField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public interface Keys {
+    public interface ConfigName {
         String TOPIC_FIELD = "topic.field";
         String PARTITION_FIELD = "partition.field";
         String OFFSET_FIELD = "offset.field";
@@ -49,17 +49,17 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(Keys.TOPIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.TOPIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka topic.\n" + OPTIONALITY_DOC)
-            .define(Keys.PARTITION_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.PARTITION_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka partition.\n" + OPTIONALITY_DOC)
-            .define(Keys.OFFSET_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.OFFSET_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
-            .define(Keys.TIMESTAMP_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.TIMESTAMP_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for record timestamp.\n" + OPTIONALITY_DOC)
-            .define(Keys.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for static data field.\n" + OPTIONALITY_DOC)
-            .define(Keys.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Static field value, if field name configured.");
 
     private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
@@ -98,12 +98,12 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        topicField = InsertionSpec.parse(config.getString(Keys.TOPIC_FIELD));
-        partitionField = InsertionSpec.parse(config.getString(Keys.PARTITION_FIELD));
-        offsetField = InsertionSpec.parse(config.getString(Keys.OFFSET_FIELD));
-        timestampField = InsertionSpec.parse(config.getString(Keys.TIMESTAMP_FIELD));
-        staticField = InsertionSpec.parse(config.getString(Keys.STATIC_FIELD));
-        staticValue = config.getString(Keys.STATIC_VALUE);
+        topicField = InsertionSpec.parse(config.getString(ConfigName.TOPIC_FIELD));
+        partitionField = InsertionSpec.parse(config.getString(ConfigName.PARTITION_FIELD));
+        offsetField = InsertionSpec.parse(config.getString(ConfigName.OFFSET_FIELD));
+        timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
+        staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
+        staticValue = config.getString(ConfigName.STATIC_VALUE);
         applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
