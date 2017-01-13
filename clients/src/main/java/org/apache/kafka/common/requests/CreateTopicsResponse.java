@@ -59,6 +59,11 @@ public class CreateTopicsResponse extends AbstractResponse {
                 return error.message();
             return message;
         }
+
+        @Override
+        public String toString() {
+            return "Error(error=" + error + ", message=" + message + ")";
+        }
     }
 
     /**
