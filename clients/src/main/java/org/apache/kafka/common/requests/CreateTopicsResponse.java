@@ -78,10 +78,6 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     private final Map<String, Error> errors;
 
-    public CreateTopicsResponse(Map<String, Error> errors) {
-        this(errors, (short) 1);
-    }
-
     public CreateTopicsResponse(Map<String, Error> errors, short version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version)));
 
