@@ -16,10 +16,9 @@
   */
 package kafka.api
 
-import java.io.File
 import java.util.Properties
 
-import kafka.utils.{JaasTestUtils,TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.GroupAuthorizationException
@@ -37,17 +36,16 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   
   @Before
   override def setUp {
-    startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
+    startSasl(Both, kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism))
     super.setUp
   }
 
   // Use JAAS configuration properties for clients so that dynamic JAAS configuration is also tested by this set of tests
-  override protected def setJaasConfiguration(mode: SaslSetupMode, serverMechanisms: List[String], clientMechanisms: List[String],
-      serverKeytabFile: Option[File] = None, clientKeytabFile: Option[File] = None) {
+  override protected def setJaasConfiguration(mode: SaslSetupMode, serverMechanisms: List[String], clientMechanism: Option[String]) {
     // create static config with client login context with credentials for JaasTestUtils 'client2'
-    super.setJaasConfiguration(mode, kafkaServerSaslMechanisms, clientMechanisms, serverKeytabFile, clientKeytabFile) 
+    super.setJaasConfiguration(mode, kafkaServerSaslMechanisms, clientMechanism)
     // set dynamic properties with credentials for JaasTestUtils 'client1'
-    val clientLoginContext = JaasTestUtils.clientLoginModule(kafkaClientSaslMechanism, clientKeytabFile)
+    val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
   }
