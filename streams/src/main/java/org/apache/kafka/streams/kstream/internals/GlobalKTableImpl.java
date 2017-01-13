@@ -26,7 +26,6 @@ public class GlobalKTableImpl<K, V> implements GlobalKTable<K, V> {
         this.valueGetterSupplier = valueGetterSupplier;
     }
 
-    @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         return valueGetterSupplier;
     }

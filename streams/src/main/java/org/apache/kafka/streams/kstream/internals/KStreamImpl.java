@@ -129,7 +129,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
@@ -520,7 +519,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return sourceName;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(
         final KStream<K, V1> other,
@@ -548,7 +546,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return leftJoin(other, joiner, windows, null, null, null);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> join(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return join(other, joiner, null, null);
@@ -571,33 +568,31 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1, R> KStream<K, R> leftJoin(final GlobalKTable<K1, V1> globalTable,
-                                              final KeyValueMapper<K, V, K1> keyMapper,
-                                              final ValueJoiner<? super V, ? super V1, ? super R> joiner) {
+                                              final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
+                                              final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return globalTableJoin(globalTable, keyMapper, joiner, true);
     }
 
     @Override
     public <K1, V1, V2> KStream<K, V2> join(final GlobalKTable<K1, V1> globalTable,
-                                            final KeyValueMapper<K, V, K1> keyMapper,
-                                            final ValueJoiner<? super V, ? super V1, ? super V2> joiner) {
+                                            final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
+                                            final ValueJoiner<? super V, ? super V1, ? extends V2> joiner) {
         return globalTableJoin(globalTable, keyMapper, joiner, false);
     }
 
-    @SuppressWarnings("unchecked")
     private <K1, V1, V2> KStream<K, V2> globalTableJoin(final GlobalKTable<K1, V1> globalTable,
-                                                        final KeyValueMapper<K, V, K1> keyMapper,
-                                                        final ValueJoiner<? super V, ? super V1, ? super V2> joiner,
+                                                        final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
+                                                        final ValueJoiner<? super V, ? super V1, ? extends V2> joiner,
                                                         final boolean leftJoin) {
         Objects.requireNonNull(globalTable, "globalTable can't be null");
         Objects.requireNonNull(keyMapper, "keyMapper can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
-        final KTableValueGetterSupplier valueGetterSupplier = ((GlobalKTableImpl) globalTable).valueGetterSupplier();
+        final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
         final String name = topology.newName(LEFTJOIN_NAME);
-        topology.addProcessor(name, new KStreamGlobalKTableJoin(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
+        topology.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
         return new KStreamImpl<>(topology, name, sourceNodes, false);
     }
 
