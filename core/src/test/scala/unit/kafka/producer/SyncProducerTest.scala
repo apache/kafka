@@ -27,7 +27,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.junit.Test
 import org.junit.Assert._
@@ -52,7 +52,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testReachableServer() {
     val server = servers.head
 
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
@@ -88,7 +88,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testEmptyProduceRequest() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
 
     val correlationId = 0
@@ -106,7 +106,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testMessageSizeTooLarge() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     TestUtils.createTopic(zkUtils, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -133,7 +133,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testMessageSizeTooLargeWithAckZero() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "0")
 
@@ -159,7 +159,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -207,7 +207,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val timeoutMs = 500
 
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -233,7 +233,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testProduceRequestWithNoResponse() {
     val server = servers.head
 
-    val port = server.socketServer.boundPort(SecurityProtocol.PLAINTEXT)
+    val port = TestUtils.boundPort(server)
     val props = TestUtils.getSyncProducerConfig(port)
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
@@ -249,7 +249,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testNotEnoughReplicas()  {
     val topicName = "minisrtest"
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "-1")
 

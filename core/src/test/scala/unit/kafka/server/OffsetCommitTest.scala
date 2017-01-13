@@ -52,7 +52,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     server = TestUtils.createServer(KafkaConfig.fromProps(config), Time.SYSTEM)
-    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "test-client")
+    simpleConsumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 1000000, 64*1024, "test-client")
     val consumerMetadataRequest = GroupCoordinatorRequest(group)
     Stream.continually {
       val consumerMetadataResponse = simpleConsumer.send(consumerMetadataRequest)
