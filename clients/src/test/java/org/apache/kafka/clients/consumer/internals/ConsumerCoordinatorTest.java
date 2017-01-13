@@ -112,9 +112,9 @@ public class ConsumerCoordinatorTest {
     @Before
     public void setup() {
         this.time = new MockTime();
+        this.client = new MockClient(time);
         this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
         this.metadata = new Metadata(0, Long.MAX_VALUE);
-        this.client = new MockClient(time, metadata);
         this.metadata.update(cluster, time.milliseconds());
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
@@ -695,7 +695,6 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(Arrays.asList(tp1, tp2), Errors.NONE.code()));
 
-        client.prepareMetadataUpdate(TestUtils.singletonCluster(topic1, 1));
         coordinator.poll(time.milliseconds());
 
         assertFalse(coordinator.needRejoin());

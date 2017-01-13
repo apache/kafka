@@ -128,7 +128,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException {
+    public void before() throws IOException, InterruptedException {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -145,6 +145,13 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
 
+        CLUSTER.waitForTopics(new StreamsConfig(streamsConfiguration), streamOne,
+                              streamTwo,
+                              streamThree,
+                              streamConcurrent,
+                              outputTopic,
+                              outputTopicConcurrent,
+                              outputTopicThree);
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
