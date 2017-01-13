@@ -37,7 +37,7 @@ EOF
 
 for K in $(seq -w 02 ${KAFKA_NUM_CONTAINERS}); do
   KNODE="knode${K}"
-  if [ $K -eq 12 ]; then
+  if [ $K -eq ${KAFKA_NUM_CONTAINERS} ]; then
     SUFFIX=""
   else
     SUFFIX=","
