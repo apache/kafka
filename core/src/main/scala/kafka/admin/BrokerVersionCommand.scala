@@ -25,6 +25,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
 
+import scala.util.{Failure, Success}
+
 
 /**
  * A command for retrieving broker version information.
@@ -35,8 +37,11 @@ object BrokerVersionCommand extends Config {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
     val brokerMap = adminClient.listAllBrokerVersionInfo()
-    brokerMap.foreach { case (broker, versionInfo) =>
-      print(s"${broker.toString} -> ${versionInfo.toString(true)}\n")
+    brokerMap.foreach { case (broker, versionInfoOrError) =>
+      versionInfoOrError match {
+        case Success(v) => print(s"${broker.toString} -> ${v.toString(true)}\n")
+        case Failure(v) => print(s"${broker.toString} -> ${v}\n")
+      }
     }
   }
 

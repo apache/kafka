@@ -16,7 +16,6 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.collection.JavaConversions._
 
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
@@ -36,6 +35,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.util.{Failure, Success, Try}
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
@@ -135,16 +135,14 @@ class AdminClient(val time: Time,
     response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
   }
 
-  def listAllBrokerVersionInfo(): Map[Node, NodeApiVersions] = {
+  def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] = {
     findAllBrokers.map {
       case broker =>
         broker -> {
           try {
-            new NodeApiVersions(getApiVersions(broker))
+            Success(new NodeApiVersions(getApiVersions(broker)))
           } catch {
-            case e: Exception =>
-              warn(s"Failed to find versions from broker $broker", e)
-              new NodeApiVersions(List())
+            case e: Exception => Failure(e)
           }
         }
     }.toMap
