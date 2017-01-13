@@ -64,18 +64,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   @volatile private var dirtiestLogCleanableRatio = 0.0
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
 
-  /* a gauge for tracking the number of logCleaner runs */
-  @volatile private var numLogCleanRuns = 0
-  newGauge("num-runs", new Gauge[Int] { def value = numLogCleanRuns })
-
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
-  @volatile private var timeSinceLastRun : Long = System.currentTimeMillis
-  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = System.currentTimeMillis - timeSinceLastRun })
-
-  /* a gauge for tracking the number of filthy logs. A non zero value indicates
-   * that the cleaner has not been successful in cleaning the logs. */
-  @volatile private var numFilthyLogs  = 0
-  newGauge("num-filthy-logs", new Gauge[Int] { def value = numFilthyLogs })
+  @volatile private var timeOfLastRun : Long = System.currentTimeMillis
+  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = System.currentTimeMillis - timeOfLastRun })
 
   /**
    * @return the position processed for all logs.
@@ -90,8 +81,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     */
   def grabFilthiestLog(): Option[LogToClean] = {
     inLock(lock) {
-      this.numLogCleanRuns = this.numLogCleanRuns + 1
-      this.timeSinceLastRun = System.currentTimeMillis
+      this.timeOfLastRun = System.currentTimeMillis
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
         case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
@@ -123,7 +113,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       } else {
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
-        incrementNumFilthyLogs()
         Some(filthiest)
       }
     }
@@ -185,7 +174,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           state match {
             case LogCleaningPaused =>
               inProgress.remove(topicAndPartition)
-              decrementNumFilthyLogs()
             case s =>
               throw new IllegalStateException("Compaction for partition %s cannot be resumed since it is in %s state."
                                               .format(topicAndPartition, s))
@@ -255,19 +243,5 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           throw new IllegalStateException("In-progress partition %s cannot be in %s state.".format(topicAndPartition, s))
       }
     }
-  }
-  /**
-   * Increment num-filthy-logs metric.
-   */
-  def incrementNumFilthyLogs() {
-    this.numFilthyLogs += 1
-
-  }
-  /**
-   * Decrement num-filthy-logs metric.
-   */
-  def decrementNumFilthyLogs() {
-    this.numFilthyLogs -= 1
-
   }
 }
