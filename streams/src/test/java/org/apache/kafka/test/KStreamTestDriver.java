@@ -240,20 +240,9 @@ public class KStreamTestDriver {
     }
 
     public void flushState() {
-        final ProcessorNode current = currNode;
-        try {
-            for (StateStore stateStore : context.allStateStores().values()) {
-                final ProcessorNode processorNode = topology.storeToProcessorNodeMap().get(stateStore);
-                if (processorNode != null) {
-                    currNode = processorNode;
-                }
-                stateStore.flush();
-            }
-        } finally {
-            currNode = current;
-
+        for (StateStore stateStore : context.allStateStores().values()) {
+            stateStore.flush();
         }
-
     }
 
     public void setCurrentNode(final ProcessorNode currentNode) {
