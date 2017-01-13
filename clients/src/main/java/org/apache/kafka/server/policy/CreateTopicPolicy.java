@@ -14,6 +14,7 @@
 package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 
 import java.util.Collections;
 import java.util.List;
@@ -54,5 +55,5 @@ public interface CreateTopicPolicy {
         }
     }
 
-    void validate(RequestMetadata requestMetadata) throws InvalidRequestException;
+    void validate(RequestMetadata requestMetadata) throws PolicyViolationException;
 }
