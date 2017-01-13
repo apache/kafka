@@ -156,12 +156,6 @@ public class MetadataTest {
         metadata.add("new-topic");
         assertEquals(0, metadata.timeToNextUpdate(now));
 
-        // Even though setTopics called, immediate update isn't necessary if the new topic set isn't
-        // containing a new topic,
-        metadata.update(Cluster.empty(), now);
-        metadata.setTopics(metadata.topics());
-        assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
-
         // If the new set of topics containing a new topic then it should allow immediate update.
         metadata.setTopics(Collections.singletonList("another-new-topic"));
         assertEquals(0, metadata.timeToNextUpdate(now));
@@ -403,6 +397,17 @@ public class MetadataTest {
         time += metadataExpireMs * 2;
         metadata.update(Cluster.empty(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
+    }
+
+    @Test
+    public void shouldRequestMetadataUpdateWhenClusterDoesntContainAllTopics() throws Exception {
+        final Set<String> topics = Collections.singleton("test-topic");
+        metadata.setTopics(topics);
+        final long now = 10000;
+        metadata.update(Cluster.empty(), now);
+        metadata.setTopics(topics);
+        assertTrue("metadata update should have been requested", metadata.updateRequested());
+        assertEquals("time till next update should be 0", 0, metadata.timeToNextUpdate(now));
     }
 
     private Thread asyncFetch(final String topic, final long maxWaitMs) {

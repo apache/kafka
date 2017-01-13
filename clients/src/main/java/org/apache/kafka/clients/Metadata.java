@@ -168,7 +168,11 @@ public final class Metadata {
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
-        if (!this.topics.keySet().containsAll(topics)) {
+        if (Thread.currentThread().getName().startsWith("StreamThread")) {
+            System.out.println("setting topics to:" + topics + " was:" + this.topics());
+        }
+
+        if (!cluster.topics().containsAll(topics)) {
             requestUpdateForNewTopics();
         }
         this.topics.clear();
@@ -229,6 +233,9 @@ public final class Metadata {
             this.needUpdate = false;
             this.cluster = getClusterForCurrentTopics(cluster);
         } else {
+            if (Thread.currentThread().getName().startsWith("StreamThread")) {
+                System.out.println("metadata update received " + cluster.topics());
+            }
             this.cluster = cluster;
         }
 
