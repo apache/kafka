@@ -21,15 +21,15 @@ import java.util.Map;
 
 public interface CreateTopicPolicy {
 
-    class TopicDetails {
+    class RequestMetadata {
         private final String topic;
         private final int numPartitions;
         private final short replicationFactor;
         private final Map<Integer, List<Integer>> replicasAssignments;
         private final Map<String, String> configs;
 
-        public TopicDetails(String topic, int numPartitions, short replicationFactor,
-                            Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+        public RequestMetadata(String topic, int numPartitions, short replicationFactor,
+                               Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
             this.topic = topic;
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
@@ -54,5 +54,5 @@ public interface CreateTopicPolicy {
         }
     }
 
-    void validate(TopicDetails topicDetails) throws InvalidRequestException;
+    void validate(RequestMetadata requestMetadata) throws InvalidRequestException;
 }

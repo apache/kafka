@@ -81,7 +81,7 @@ class AdminManager(val config: KafkaConfig,
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
           else {
-            createTopicPolicy.foreach(_.validate(new CreateTopicPolicy.TopicDetails(topic, arguments.numPartitions,
+            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, arguments.numPartitions,
               arguments.replicationFactor, arguments.replicasAssignments, arguments.configs)))
 
             if (!arguments.replicasAssignments.isEmpty) {
