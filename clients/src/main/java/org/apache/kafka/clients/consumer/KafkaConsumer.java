@@ -39,7 +39,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -48,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -507,17 +505,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
-    private static final List<ApiKeys> CONSUMER_APIS = Arrays.asList(
-            ApiKeys.METADATA,
-            ApiKeys.FETCH,
-            ApiKeys.GROUP_COORDINATOR,
-            ApiKeys.HEARTBEAT,
-            ApiKeys.JOIN_GROUP,
-            ApiKeys.LEAVE_GROUP,
-            ApiKeys.LIST_OFFSETS,
-            ApiKeys.OFFSET_COMMIT,
-            ApiKeys.OFFSET_FETCH,
-            ApiKeys.SYNC_GROUP);
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final String clientId;
