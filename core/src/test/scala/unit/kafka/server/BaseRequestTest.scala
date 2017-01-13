@@ -25,6 +25,7 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
 import org.junit.Before
@@ -73,7 +74,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   }
 
   def connect(s: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", s.boundPort(protocol))
+    new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte]) {

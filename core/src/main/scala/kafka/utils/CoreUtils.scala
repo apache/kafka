@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Utils
 
 /**
@@ -254,9 +255,26 @@ object CoreUtils extends Logging {
       .keys
   }
 
-  def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
-    val listenerList = parseCsvList(listeners)
-    listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    def validate(endPoints: Seq[EndPoint]): Unit = {
+      // filter port 0 for unit tests
+      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
+      val distinctPorts = portsExcludingZero.distinct
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+
+      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+    }
+
+    val endPoints = try {
+      val listenerList = parseCsvList(listeners)
+      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+    } catch {
+      case e: Exception =>
+        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
+    }
+    validate(endPoints)
+    endPoints
   }
 
   def generateUuidAsBase64(): String = {

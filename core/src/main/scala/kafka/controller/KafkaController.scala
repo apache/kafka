@@ -210,12 +210,12 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     }
   )
 
-  def epoch = controllerContext.epoch
+  def epoch: Int = controllerContext.epoch
 
-  def clientId = {
-    val listeners = config.listeners
-    val controllerListener = listeners.get(config.interBrokerSecurityProtocol)
-    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
+  def clientId: String = {
+    val controllerListener = config.listeners.find(_.listenerName == config.interBrokerListenerName).getOrElse(
+      throw new IllegalArgumentException(s"No listener with name ${config.interBrokerListenerName} is configured."))
+    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.host, controllerListener.port)
   }
 
   /**
@@ -226,7 +226,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def shutdownBroker(id: Int) : Set[TopicAndPartition] = {
+  def shutdownBroker(id: Int): Set[TopicAndPartition] = {
 
     if (!isActive) {
       throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")

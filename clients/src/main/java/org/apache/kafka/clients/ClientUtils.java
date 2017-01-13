@@ -35,7 +35,7 @@ public class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
-        List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
+        List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {

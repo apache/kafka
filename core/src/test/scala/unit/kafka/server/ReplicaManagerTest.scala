@@ -21,8 +21,8 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Broker
-import kafka.common.TopicAndPartition
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
+import TestUtils.createBroker
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -138,7 +138,7 @@ class ReplicaManagerTest {
         fetchCallbackFired = true
       }
 
-      val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1))
+      val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
       val metadataCache = EasyMock.createMock(classOf[MetadataCache])
       EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
       EasyMock.replay(metadataCache)
@@ -196,7 +196,7 @@ class ReplicaManagerTest {
     val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
-      val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1), new Broker(1, "host2", 2))
+      val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1), createBroker(1, "host2", 2))
       val metadataCache = EasyMock.createMock(classOf[MetadataCache])
       EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
       EasyMock.replay(metadataCache)
