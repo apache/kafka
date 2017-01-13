@@ -31,7 +31,7 @@ public class HoistTest {
 
     @Test
     public void schemaless() {
-        final Hoist<SinkRecord> xform = new Hoist.Key<>();
+        final HoistField<SinkRecord> xform = new HoistField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, 42, null, null, 0);
@@ -43,7 +43,7 @@ public class HoistTest {
 
     @Test
     public void withSchema() {
-        final Hoist<SinkRecord> xform = new Hoist.Key<>();
+        final HoistField<SinkRecord> xform = new HoistField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);

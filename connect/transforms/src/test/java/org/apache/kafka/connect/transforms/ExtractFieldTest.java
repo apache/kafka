@@ -28,11 +28,11 @@ import java.util.Collections;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-public class ExtractTest {
+public class ExtractFieldTest {
 
     @Test
     public void schemaless() {
-        final Extract<SinkRecord> xform = new Extract.Key<>();
+        final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
@@ -44,7 +44,7 @@ public class ExtractTest {
 
     @Test
     public void withSchema() {
-        final Extract<SinkRecord> xform = new Extract.Key<>();
+        final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();

@@ -30,7 +30,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import java.util.Collections;
 import java.util.Map;
 
-public abstract class Hoist<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String FIELD_CONFIG = "field";
 
@@ -88,7 +88,7 @@ public abstract class Hoist<R extends ConnectRecord<R>> implements Transformatio
     /**
      * Wraps the record key in a {@link Struct} when schema present, or a {@link Map} in schemaless mode, with the specified field name.
      */
-    public static class Key<R extends ConnectRecord<R>> extends Hoist<R> {
+    public static class Key<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -108,7 +108,7 @@ public abstract class Hoist<R extends ConnectRecord<R>> implements Transformatio
     /**
      * Wraps the record value in a {@link Struct} when schema present, or a {@link Map} in schemaless mode, with the specified field name.
      */
-    public static class Value<R extends ConnectRecord<R>> extends Hoist<R> {
+    public static class Value<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();
