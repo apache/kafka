@@ -22,6 +22,7 @@ import kafka.utils.Json
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.Time
 
 /**
  * A Kafka broker.
@@ -29,6 +30,15 @@ import org.apache.kafka.common.protocol.SecurityProtocol
  * Each end-point is (host, port, protocolType).
  */
 object Broker {
+
+  private val HostKey = "host"
+  private val PortKey = "port"
+  private val VersionKey = "version"
+  private val EndpointsKey = "endpoints"
+  private val RackKey = "rack"
+  private val JmxPortKey = "jmx_port"
+  private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
+  private val TimestampKey = "timestamp"
 
   /**
     * Create a broker object from id and JSON string.
@@ -55,7 +65,7 @@ object Broker {
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
     * }
     *
-    * Version 3 (current) JSON schema for a broker is:
+    * Version 3 JSON schema for a broker is:
     * {
     *   "version":3,
     *   "host":"localhost",
@@ -63,6 +73,18 @@ object Broker {
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
+    * }
+    *
+    * Version 4 (current) JSON schema for a broker is:
+    * {
+    *   "version":4,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"}
     *   "rack":"dc1"
     * }
     */
@@ -73,26 +95,26 @@ object Broker {
       Json.parseFull(brokerInfoString) match {
         case Some(m) =>
           val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val version = brokerInfo("version").asInstanceOf[Int]
+          val version = brokerInfo(VersionKey).asInstanceOf[Int]
           val endpoints =
             if (version < 1)
               throw new KafkaException(s"Unsupported version of broker registration: $brokerInfoString")
             else if (version == 1) {
-              val host = brokerInfo("host").asInstanceOf[String]
-              val port = brokerInfo("port").asInstanceOf[Int]
+              val host = brokerInfo(HostKey).asInstanceOf[String]
+              val port = brokerInfo(PortKey).asInstanceOf[Int]
               val securityProtocol = SecurityProtocol.PLAINTEXT
               val endPoint = new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
               Seq(endPoint)
             }
             else {
-              val securityProtocolMap = brokerInfo.get("listener_security_protocol_map").map(
-                _.asInstanceOf[Map[String, String]]).map(_.map { case (listenerName, securityProtocol) =>
+              val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
+                _.asInstanceOf[Map[String, String]].map { case (listenerName, securityProtocol) =>
                 new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
               })
-              val listeners = brokerInfo("endpoints").asInstanceOf[List[String]]
+              val listeners = brokerInfo(EndpointsKey).asInstanceOf[List[String]]
               listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
             }
-          val rack = brokerInfo.get("rack").filter(_ != null).map(_.asInstanceOf[String])
+          val rack = brokerInfo.get(RackKey).filter(_ != null).map(_.asInstanceOf[String])
 
           Broker(id, endpoints, rack)
         case None =>
@@ -102,6 +124,26 @@ object Broker {
       case t: Throwable =>
         throw new KafkaException(s"Failed to parse the broker info from zookeeper: $brokerInfoString", t)
     }
+  }
+
+  def toJson(version: Int, id: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
+             rack: Option[String]): String = {
+    val jsonMap = collection.mutable.Map(VersionKey -> version,
+      HostKey -> host,
+      PortKey -> port,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toArray,
+      JmxPortKey -> jmxPort,
+      TimestampKey -> Time.SYSTEM.milliseconds().toString
+    )
+    rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
+
+    if (version >= 4) {
+      jsonMap += (ListenerSecurityProtocolMapKey -> advertisedEndpoints.map { endPoint =>
+        endPoint.listenerName.value -> endPoint.securityProtocol.name
+      }.toMap)
+    }
+
+    Json.encode(jsonMap)
   }
 }
 

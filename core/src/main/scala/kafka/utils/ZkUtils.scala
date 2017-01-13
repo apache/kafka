@@ -355,26 +355,9 @@ class ZkUtils(val zkClient: ZkClient,
                          rack: Option[String],
                          apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
-    val timestamp = Time.SYSTEM.milliseconds.toString
-
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    var jsonMap = Map("version" -> version,
-                      "host" -> host,
-                      "port" -> port,
-                      "endpoints" -> advertisedEndpoints.map(_.connectionString).toArray,
-                      "jmx_port" -> jmxPort,
-                      "timestamp" -> timestamp
-    )
-    rack.foreach(rack => if (version >= 3) jsonMap += ("rack" -> rack))
-
-    if (version >= 4) {
-      jsonMap += ("listener_security_protocol_map" -> advertisedEndpoints.map { endPoint =>
-        endPoint.listenerName.value -> endPoint.securityProtocol.name
-      }.toMap)
-    }
-
-    val brokerInfo = Json.encode(jsonMap)
-    registerBrokerInZk(brokerIdPath, brokerInfo)
+    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    registerBrokerInZk(brokerIdPath, json)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
   }
