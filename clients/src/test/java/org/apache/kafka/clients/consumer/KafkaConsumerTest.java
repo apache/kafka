@@ -1207,7 +1207,7 @@ public class KafkaConsumerTest {
             });
 
             // Close task should not complete until commit succeeds or close times out
-            // if close timeout is not zero,
+            // if close timeout is not zero.
             try {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
@@ -1216,9 +1216,13 @@ public class KafkaConsumerTest {
                 // Expected exception
             }
 
+            // Ensure close has started and queued at least one more request after commitAsync
+            client.waitForRequests(2, 1000);
+
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             for (int i = 0; i < responses.size(); i++) {
+                client.waitForRequests(1, 1000);
                 client.respondFrom(responses.get(i), coordinator);
                 if (i != responses.size() - 1) {
                     try {
