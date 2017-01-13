@@ -107,11 +107,11 @@ class AdminManager(val config: KafkaConfig,
       }
     }
 
-    // 2. if timeout <= 0 or no topics can proceed return immediately
-    if (timeout <= 0 || !metadata.exists(_.error.is(Errors.NONE))) {
+    // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
+    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
-        if (createTopicMetadata.error.is(Errors.NONE)) {
+        if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
           (createTopicMetadata.topic, new CreateTopicsResponse.Error(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)

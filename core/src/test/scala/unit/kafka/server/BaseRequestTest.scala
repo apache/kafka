@@ -26,9 +26,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
-import org.junit.Before
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0

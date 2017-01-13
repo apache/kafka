@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.protocol.types.Struct
@@ -27,8 +29,10 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 
-
 class CreateTopicsRequestTest extends BaseRequestTest {
+
+  override def propertyOverrides(properties: Properties): Unit =
+    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
 
   @Test
   def testValidCreateTopicsRequests() {
@@ -50,6 +54,11 @@ class CreateTopicsRequestTest extends BaseRequestTest {
       "topic6" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
       "topic7" -> new CreateTopicsRequest.TopicDetails(5, 2.toShort),
       "topic8" -> new CreateTopicsRequest.TopicDetails(assignments8)).asJava, timeout).build()
+    )
+    validateValidCreateTopicsRequests(new CreateTopicsRequest.Builder(Map(
+      "topic9" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
+      "topic10" -> new CreateTopicsRequest.TopicDetails(5, 2.toShort),
+      "topic11" -> new CreateTopicsRequest.TopicDetails(assignments8)).asJava, timeout, true).build()
     )
   }
 
@@ -76,16 +85,25 @@ class CreateTopicsRequestTest extends BaseRequestTest {
         else
           details.replicationFactor
 
-        assertNotNull("The topic should be created", metadataForTopic)
-        assertEquals(Errors.NONE, metadataForTopic.error)
-        assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
-        assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+        if (request.validateOnly) {
+          assertNotNull(s"Topic $topic should be created", metadataForTopic)
+          assertEquals(s"For topic $topic", Errors.UNKNOWN_TOPIC_OR_PARTITION, metadataForTopic.error)
+          assertTrue("The topic should have no partitions", metadataForTopic.partitionMetadata.isEmpty)
+        }
+        else {
+          assertNotNull("The topic should be created", metadataForTopic)
+          assertEquals(Errors.NONE, metadataForTopic.error)
+          assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
+          assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+        }
       }
 
       // Verify controller broker has the correct metadata
       verifyMetadata(controllerSocketServer)
-      // Wait until metadata is propagated and validate non-controller broker has the correct metadata
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+      if (!request.validateOnly) {
+        // Wait until metadata is propagated and validate non-controller broker has the correct metadata
+        TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+      }
       verifyMetadata(notControllerSocketServer)
     }
   }
@@ -158,12 +176,22 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     assertFalse("Request doesn't have duplicate topics", duplicateRequest.duplicateTopics().isEmpty)
     validateErrorCreateTopicsRequests(duplicateRequest, Map("duplicate-topic" -> error(Errors.INVALID_REQUEST)))
 
+    // Duplicate Partial with validateOnly
+    val doubleRequestValidateOnly = new CreateTopicsRequest.Builder(Map(
+      "duplicate-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
+      "other-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000, true).build()
+    val duplicateDoubleRequestValidateOnly = duplicateFirstTopic(doubleRequestValidateOnly)
+    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequestValidateOnly.duplicateTopics.isEmpty)
+    validateErrorCreateTopicsRequests(duplicateDoubleRequestValidateOnly, Map(
+      "duplicate-topic" -> error(Errors.INVALID_REQUEST),
+      "other-topic" -> error(Errors.NONE)), validateOnly = true)
+
     // Duplicate Partial
     val doubleRequest = new CreateTopicsRequest.Builder(Map(
       "duplicate-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
       "other-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
     val duplicateDoubleRequest = duplicateFirstTopic(doubleRequest)
-    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequest.duplicateTopics().isEmpty)
+    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequest.duplicateTopics.isEmpty)
     validateErrorCreateTopicsRequests(duplicateDoubleRequest, Map(
       "duplicate-topic" -> error(Errors.INVALID_REQUEST),
       "other-topic" -> error(Errors.NONE)))
@@ -174,6 +202,13 @@ class CreateTopicsRequestTest extends BaseRequestTest {
         new CreateTopicsRequest.TopicDetails(assignments)).asJava, 1000).build()
     val badArgumentsRequest = addPartitionsAndReplicationFactorToFirstTopic(assignmentRequest)
     validateErrorCreateTopicsRequests(badArgumentsRequest, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)))
+
+    // Partitions/ReplicationFactor and ReplicaAssignment with validateOnly
+    val assignmentRequestValidateOnly = new CreateTopicsRequest.Builder(Map("bad-args-topic" ->
+      new CreateTopicsRequest.TopicDetails(assignments)).asJava, 1000, true).build()
+    val badArgumentsRequestValidateOnly = addPartitionsAndReplicationFactorToFirstTopic(assignmentRequestValidateOnly)
+    validateErrorCreateTopicsRequests(badArgumentsRequestValidateOnly, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)),
+      validateOnly = true)
   }
 
   private def duplicateFirstTopic(request: CreateTopicsRequest) = {
@@ -195,7 +230,8 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
-                                                expectedResponse: Map[String, CreateTopicsResponse.Error]): Unit = {
+                                                expectedResponse: Map[String, CreateTopicsResponse.Error],
+                                                validateOnly: Boolean = false): Unit = {
     val response = sendCreateTopicRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
@@ -206,7 +242,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
       assertEquals("The response error should match", expected.error, actual.error)
       assertEquals(expected.message, actual.message)
       // If no error validate topic exists
-      if (expectedError.is(Errors.NONE)) {
+      if (expectedError.is(Errors.NONE) && !validateOnly) {
         validateTopicExists(topic)
       }
     }
