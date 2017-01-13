@@ -263,6 +263,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
