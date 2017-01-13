@@ -18,15 +18,13 @@ package kafka.admin
 
 import java.util.Properties
 
-import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
 import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
-import kafka.utils.{CoreUtils, Logging, ZkUtils}
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
 import org.junit.{Before, Test}
@@ -381,7 +379,7 @@ class ReassignPartitionsCommandTest extends Logging {
              brokers: Seq[Int] = Seq[Int]()): ZkUtils = {
     val zk = createMock(classOf[ZkUtils])
     expect(zk.getReplicaAssignmentForTopics(anyObject().asInstanceOf[Seq[String]])).andStubReturn(existingAssignment)
-    expect(zk.getAllBrokersInCluster()).andStubReturn(brokers.map { id => new Broker(id, "", 1, SecurityProtocol.PLAINTEXT) })
+    expect(zk.getAllBrokersInCluster()).andStubReturn(brokers.map(TestUtils.createBroker(_, "", 1)))
     replay(zk)
     zk
   }

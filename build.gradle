@@ -361,7 +361,7 @@ for ( sv in ['2_10', '2_11', '2_12'] ) {
   }
 }
 
-def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
@@ -533,6 +533,8 @@ project(':core') {
     from(project(':connect:api').configurations.runtime) { into("libs/") }
     from(project(':connect:runtime').jar) { into("libs/") }
     from(project(':connect:runtime').configurations.runtime) { into("libs/") }
+    from(project(':connect:transforms').jar) { into("libs/") }
+    from(project(':connect:transforms').configurations.runtime) { into("libs/") }
     from(project(':connect:json').jar) { into("libs/") }
     from(project(':connect:json').configurations.runtime) { into("libs/") }
     from(project(':connect:file').jar) { into("libs/") }
@@ -816,6 +818,42 @@ project(':connect:api') {
   }
 }
 
+project(':connect:transforms') {
+  archivesBaseName = "connect-transforms"
+
+  dependencies {
+    compile project(':connect:api')
+    compile libs.slf4jApi
+
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
 project(':connect:json') {
   archivesBaseName = "connect-json"
 
@@ -858,6 +896,7 @@ project(':connect:runtime') {
 
   dependencies {
     compile project(':connect:api')
+    compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
     compile libs.slf4jApi
@@ -877,6 +916,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
+
     testCompile project(":connect:json")
 
     testRuntime libs.slf4jlog4j

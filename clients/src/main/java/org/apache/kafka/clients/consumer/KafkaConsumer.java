@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,7 +39,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -48,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -507,17 +505,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
-    private static final List<ApiKeys> CONSUMER_APIS = Arrays.asList(
-            ApiKeys.METADATA,
-            ApiKeys.FETCH,
-            ApiKeys.GROUP_COORDINATOR,
-            ApiKeys.HEARTBEAT,
-            ApiKeys.JOIN_GROUP,
-            ApiKeys.LEAVE_GROUP,
-            ApiKeys.LIST_OFFSETS,
-            ApiKeys.OFFSET_COMMIT,
-            ApiKeys.OFFSET_FETCH,
-            ApiKeys.SYNC_GROUP);
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final String clientId;
@@ -1514,12 +1501,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Tries to close the consumer cleanly within the specified timeout. This method waits up to
      * <code>timeout</code> for the consumer to complete pending commits and leave the group.
      * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If rebalance is in progress, auto-commits and pending asynchronous commits may
-     * be aborted if the coordinator is not known within the timeout. If the consumer is unable
-     * to complete commit and leave group requests before the timeout expires, the consumer is
-     * force closed. Note that {@link #wakeup()} cannot be used to interrupt close.
+     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
+     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
+     * used to interrupt close.
      *
-     * @param timeout The maximum time to wait for consumer to close gracefully. The value should be
+     * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      * @param timeUnit The time unit for the <code>timeout</code>
      * @throws InterruptException If the thread is interrupted before or while this function is called

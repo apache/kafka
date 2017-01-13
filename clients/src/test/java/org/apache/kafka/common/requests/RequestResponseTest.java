@@ -16,6 +16,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -99,10 +100,6 @@ public class RequestResponseTest {
         checkSerialization(createStopReplicaRequest(false));
         checkSerialization(createStopReplicaRequest(true).getErrorResponse(new UnknownServerException()), null);
         checkSerialization(createStopReplicaResponse(), null);
-        checkSerialization(createUpdateMetadataRequest(2, "rack1"));
-        checkSerialization(createUpdateMetadataRequest(2, null));
-        checkSerialization(createUpdateMetadataRequest(2, "rack1").getErrorResponse(new UnknownServerException()), null);
-        checkSerialization(createUpdateMetadataResponse(), null);
         checkSerialization(createLeaderAndIsrRequest());
         checkSerialization(createLeaderAndIsrRequest().getErrorResponse(new UnknownServerException()), null);
         checkSerialization(createLeaderAndIsrResponse(), null);
@@ -132,6 +129,13 @@ public class RequestResponseTest {
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
         checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
         checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createUpdateMetadataRequest(2, "rack1"));
+        checkSerialization(createUpdateMetadataRequest(2, null));
+        checkSerialization(createUpdateMetadataRequest(2, "rack1").getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createUpdateMetadataRequest(3, "rack1"));
+        checkSerialization(createUpdateMetadataRequest(3, null));
+        checkSerialization(createUpdateMetadataRequest(3, "rack1").getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createUpdateMetadataResponse(), null);
         checkSerialization(createListOffsetRequest(0), 0);
         checkSerialization(createListOffsetRequest(0).getErrorResponse(new UnknownServerException()), 0);
         checkSerialization(createListOffsetResponse(0), 0);
@@ -498,16 +502,24 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
-        endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
+        SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
+        List<UpdateMetadataRequest.EndPoint> endPoints1 = new ArrayList<>();
+        endPoints1.add(new UpdateMetadataRequest.EndPoint("host1", 1223, plaintext,
+                ListenerName.forSecurityProtocol(plaintext)));
 
-        Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints2 = new HashMap<>();
-        endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
+        List<UpdateMetadataRequest.EndPoint> endPoints2 = new ArrayList<>();
+        endPoints2.add(new UpdateMetadataRequest.EndPoint("host1", 1244, plaintext,
+                ListenerName.forSecurityProtocol(plaintext)));
         if (version > 0) {
-            endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
+            SecurityProtocol ssl = SecurityProtocol.SSL;
+            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1234, ssl,
+                    ListenerName.forSecurityProtocol(ssl)));
+            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1334, ssl,
+                    new ListenerName("CLIENT")));
         }
 
-        Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1, rack),
+        Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(
+                new UpdateMetadataRequest.Broker(0, endPoints1, rack),
                 new UpdateMetadataRequest.Broker(1, endPoints2, rack)
         ));
         return new UpdateMetadataRequest.Builder(1, 10, partitionStates, liveBrokers).
