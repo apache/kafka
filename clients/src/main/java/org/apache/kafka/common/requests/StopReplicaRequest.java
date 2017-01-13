@@ -17,8 +17,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -29,23 +29,55 @@ import java.util.Map;
 import java.util.Set;
 
 public class StopReplicaRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.STOP_REPLICA.id);
-
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
     private static final String DELETE_PARTITIONS_KEY_NAME = "delete_partitions";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";
+
+    public static class Builder extends AbstractRequest.Builder<StopReplicaRequest> {
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final boolean deletePartitions;
+        private final Set<TopicPartition> partitions;
+
+        public Builder(int controllerId, int controllerEpoch, boolean deletePartitions,
+                       Set<TopicPartition> partitions) {
+            super(ApiKeys.STOP_REPLICA);
+            this.controllerId = controllerId;
+            this.controllerEpoch = controllerEpoch;
+            this.deletePartitions = deletePartitions;
+            this.partitions = partitions;
+        }
+
+        @Override
+        public StopReplicaRequest build() {
+            return new StopReplicaRequest(controllerId, controllerEpoch,
+                    deletePartitions, partitions, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=StopReplicaRequest").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", deletePartitions=").append(deletePartitions).
+                append(", partitions=").append(Utils.join(partitions, ",")).
+                append(")");
+            return bld.toString();
+        }
+    }
 
     private final int controllerId;
     private final int controllerEpoch;
     private final boolean deletePartitions;
     private final Set<TopicPartition> partitions;
 
-    public StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions, Set<TopicPartition> partitions) {
-        super(new Struct(CURRENT_SCHEMA));
+    private StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions,
+                               Set<TopicPartition> partitions, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version)), version);
 
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
@@ -67,8 +99,8 @@ public class StopReplicaRequest extends AbstractRequest {
         this.partitions = partitions;
     }
 
-    public StopReplicaRequest(Struct struct) {
-        super(struct);
+    public StopReplicaRequest(Struct struct, short versionId) {
+        super(struct, versionId);
 
         partitions = new HashSet<>();
         for (Object partitionDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {
@@ -84,12 +116,13 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
         Map<TopicPartition, Short> responses = new HashMap<>(partitions.size());
         for (TopicPartition partition : partitions) {
             responses.put(partition, Errors.forException(e).code());
         }
 
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new StopReplicaResponse(Errors.NONE.code(), responses);
@@ -116,10 +149,11 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, int versionId) {
-        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer));
+        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer) {
-        return new StopReplicaRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id));
     }
 }

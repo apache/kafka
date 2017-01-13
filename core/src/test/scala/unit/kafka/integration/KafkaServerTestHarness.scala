@@ -46,7 +46,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   def generateConfigs(): Seq[KafkaConfig]
 
   /**
-   * Override this in case ACLs must be set before `servers` are started.
+   * Override this in case ACLs or security credentials must be set before `servers` are started.
    *
    * This is required in some cases because of the topic creation in the setup of `IntegrationTestHarness`. If the ACLs
    * are only set later, tests may fail. The failure could manifest itself as a cluster action
@@ -56,7 +56,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
    *
    * The default implementation of this method is a no-op.
    */
-  def setAclsBeforeServersStart() {}
+  def configureSecurityBeforeServersStart() {}
 
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
@@ -78,7 +78,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
       throw new KafkaException("Must supply at least one server config.")
 
     // default implementation is a no-op, it is overridden by subclasses if required
-    setAclsBeforeServersStart()
+    configureSecurityBeforeServersStart()
 
     servers = configs.map(TestUtils.createServer(_)).toBuffer
     brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
@@ -101,12 +101,16 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
    */
   def killRandomBroker(): Int = {
     val index = TestUtils.random.nextInt(servers.length)
+    killBroker(index)
+    index
+  }
+
+  def killBroker(index: Int) {
     if(alive(index)) {
       servers(index).shutdown()
       servers(index).awaitShutdown()
       alive(index) = false
     }
-    index
   }
   
   /**

@@ -17,15 +17,18 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,7 +62,7 @@ public class CachingKeyValueStoreTest {
         cacheFlushListener = new CacheFlushListenerStub<>();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
         store.setFlushListener(cacheFlushListener);
-        cache = new ThreadCache(maxCacheSizeBytes);
+        cache = new ThreadCache("testCache", maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         final MockProcessorContext context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
@@ -205,6 +208,11 @@ public class CachingKeyValueStoreTest {
     public void shouldThrowIfTryingToDeleteFromClosedCachingStore() throws Exception {
         store.close();
         store.delete("key");
+    }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(store.get(null));
     }
 
     private int addItemsToCache() throws IOException {

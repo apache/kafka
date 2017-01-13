@@ -48,7 +48,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KTable} that contains only those records that satisfy the given predicate
      */
-    KTable<K, V> filter(Predicate<K, V> predicate);
+    KTable<K, V> filter(Predicate<? super K, ? super V> predicate);
 
     /**
      * Create a new instance of {@link KTable} that consists all elements of this stream which do not satisfy a predicate.
@@ -57,7 +57,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KTable} that contains only those records that do not satisfy the given predicate
      */
-    KTable<K, V> filterNot(Predicate<K, V> predicate);
+    KTable<K, V> filterNot(Predicate<? super K, ? super V> predicate);
 
     /**
      * Create a new instance of {@link KTable} by transforming the value of each element in this stream into a new value in the new stream.
@@ -67,7 +67,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KTable} that contains records with unmodified keys and new values of different type
      */
-    <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper);
+    <V1> KTable<K, V1> mapValues(ValueMapper<? super V, ? extends V1> mapper);
 
 
     /**
@@ -195,7 +195,7 @@ public interface KTable<K, V> {
      * @param storeName    the state store name used for this KTable
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
-    KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic, String storeName);
+    KTable<K, V> through(StreamPartitioner<? super K, ? super V> partitioner, String topic, String storeName);
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic.
@@ -241,7 +241,7 @@ public interface KTable<K, V> {
      * @param storeName    the state store name used for this KTable
      * @return a new {@link KTable} that contains the exact same records as this {@link KTable}
      */
-    KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic, String storeName);
+    KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic, String storeName);
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config
@@ -259,7 +259,7 @@ public interface KTable<K, V> {
      *                     if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      */
-    void to(StreamPartitioner<K, V> partitioner, String topic);
+    void to(StreamPartitioner<? super K, ? super V> partitioner, String topic);
 
     /**
      * Materialize this stream to a topic. If {@code keySerde} provides a
@@ -288,7 +288,7 @@ public interface KTable<K, V> {
      *                     &mdash; otherwise {@link DefaultPartitioner} will be used
      * @param topic        the topic name
      */
-    void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic);
+    void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic);
 
     /**
      * Convert this stream to a new instance of {@link KStream}.
@@ -310,7 +310,7 @@ public interface KTable<K, V> {
      *         the records are no longer treated as updates on a primary-keyed table,
      *         but rather as normal key-value pairs in a record stream
      */
-    <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper);
+    <K1> KStream<K1, V> toStream(KeyValueMapper<? super K, ? super V, ? extends K1> mapper);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Inner Join.
@@ -323,7 +323,7 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
+    <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Outer Join.
@@ -336,7 +336,7 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
+    <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
     /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Left Join.
@@ -349,7 +349,8 @@ public interface KTable<K, V> {
      * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key
      */
-    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
+    <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
+
 
     /**
      * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.
@@ -364,7 +365,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KGroupedTable} that contains the re-partitioned records of this {@link KTable}
      */
-    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde);
 
     /**
      * Group the records of this {@link KTable} using the provided {@link KeyValueMapper} and default serializers and deserializers.
@@ -375,7 +376,7 @@ public interface KTable<K, V> {
      *
      * @return a {@link KGroupedTable} that contains the re-partitioned records of this {@link KTable}
      */
-    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector);
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector);
 
     /**
      * Perform an action on each element of {@link KTable}.
@@ -383,7 +384,7 @@ public interface KTable<K, V> {
      *
      * @param action an action to perform on each element
      */
-    void foreach(ForeachAction<K, V> action);
+    void foreach(ForeachAction<? super K, ? super V> action);
 
     /**
      * Get the name of the local state store used for materializing this {@link KTable}

@@ -17,13 +17,15 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -60,7 +62,7 @@ public class CachingSessionStoreTest {
         cachingStore = new CachingSessionStore<>(underlying,
                                                  Serdes.String(),
                                                  Serdes.Long());
-        cache = new ThreadCache(MAX_CACHE_SIZE_BYTES);
+        cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final MockProcessorContext context = new MockProcessorContext(null, TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         cachingStore.init(context, cachingStore);
@@ -68,15 +70,15 @@ public class CachingSessionStoreTest {
 
     @Test
     public void shouldPutFetchFromCache() throws Exception {
-        cachingStore.put(new Windowed<>("a", new TimeWindow(0, 0)), 1L);
-        cachingStore.put(new Windowed<>("aa", new TimeWindow(0, 0)), 1L);
-        cachingStore.put(new Windowed<>("b", new TimeWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
 
-        final KeyValueIterator<Windowed<String>, Long> a = cachingStore.findSessionsToMerge("a", 0, 0);
-        final KeyValueIterator<Windowed<String>, Long> b = cachingStore.findSessionsToMerge("b", 0, 0);
+        final KeyValueIterator<Windowed<String>, Long> a = cachingStore.findSessions("a", 0, 0);
+        final KeyValueIterator<Windowed<String>, Long> b = cachingStore.findSessions("b", 0, 0);
 
-        assertEquals(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), 1L), a.next());
-        assertEquals(KeyValue.pair(new Windowed<>("b", new TimeWindow(0, 0)), 1L), b.next());
+        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), b.next());
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
         assertEquals(3, cache.size());
@@ -85,16 +87,16 @@ public class CachingSessionStoreTest {
     @Test
     public void shouldFetchAllSessionsWithSameRecordKey() throws Exception {
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), 1L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(10, 10)), 2L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(100, 100)), 3L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new TimeWindow(1000, 1000)), 4L));
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
+                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
         for (KeyValue<Windowed<String>, Long> kv : expected) {
             cachingStore.put(kv.key, kv.value);
         }
 
         // add one that shouldn't appear in the results
-        cachingStore.put(new Windowed<>("aa", new TimeWindow(0, 0)), 5L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
 
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(cachingStore.fetch("a"));
@@ -115,34 +117,34 @@ public class CachingSessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() throws Exception {
         final List<KeyValue<Windowed<String>, Long>> added = addSessionsUntilOverflow("a");
-        final KeyValueIterator<Windowed<String>, Long> iterator = cachingStore.findSessionsToMerge("a", 0, added.size() * 10);
+        final KeyValueIterator<Windowed<String>, Long> iterator = cachingStore.findSessions("a", 0, added.size() * 10);
         final List<KeyValue<Windowed<String>, Long>> actual = toList(iterator);
         assertEquals(added, actual);
     }
 
     @Test
     public void shouldRemove() throws Exception {
-        final Windowed<String> a = new Windowed<>("a", new TimeWindow(0, 0));
-        final Windowed<String> b = new Windowed<>("b", new TimeWindow(0, 0));
+        final Windowed<String> a = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<String> b = new Windowed<>("b", new SessionWindow(0, 0));
         cachingStore.put(a, 2L);
         cachingStore.put(b, 2L);
         cachingStore.flush();
         cachingStore.remove(a);
         cachingStore.flush();
-        final KeyValueIterator<Windowed<String>, Long> rangeIter = cachingStore.findSessionsToMerge("a", 0, 0);
+        final KeyValueIterator<Windowed<String>, Long> rangeIter = cachingStore.findSessions("a", 0, 0);
         assertFalse(rangeIter.hasNext());
     }
 
     @Test
     public void shouldFetchCorrectlyAcrossSegments() throws Exception {
-        final Windowed<String> a1 = new Windowed<>("a", new TimeWindow(0, 0));
-        final Windowed<String> a2 = new Windowed<>("a", new TimeWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
-        final Windowed<String> a3 = new Windowed<>("a", new TimeWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
+        final Windowed<String> a3 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
         cachingStore.put(a1, 1L);
         cachingStore.put(a2, 2L);
         cachingStore.put(a3, 3L);
         cachingStore.flush();
-        final KeyValueIterator<Windowed<String>, Long> results = cachingStore.findSessionsToMerge("a", 0, Segments.MIN_SEGMENT_INTERVAL * 2);
+        final KeyValueIterator<Windowed<String>, Long> results = cachingStore.findSessions("a", 0, Segments.MIN_SEGMENT_INTERVAL * 2);
         assertEquals(a1, results.next().key);
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
@@ -151,7 +153,7 @@ public class CachingSessionStoreTest {
 
     @Test
     public void shouldClearNamespaceCacheOnClose() throws Exception {
-        final Windowed<String> a1 = new Windowed<>("a", new TimeWindow(0, 0));
+        final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
         cachingStore.put(a1, 1L);
         assertEquals(1, cache.size());
         cachingStore.close();
@@ -167,19 +169,19 @@ public class CachingSessionStoreTest {
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() throws Exception {
         cachingStore.close();
-        cachingStore.findSessionsToMerge("a", 0, Long.MAX_VALUE);
+        cachingStore.findSessions("a", 0, Long.MAX_VALUE);
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowIfTryingToRemoveFromClosedCachingStore() throws Exception {
         cachingStore.close();
-        cachingStore.remove(new Windowed<>("a", new TimeWindow(0, 0)));
+        cachingStore.remove(new Windowed<>("a", new SessionWindow(0, 0)));
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowIfTryingToPutIntoClosedCachingStore() throws Exception {
         cachingStore.close();
-        cachingStore.put(new Windowed<>("a", new TimeWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
     }
 
     private List<KeyValue<Windowed<String>, Long>> addSessionsUntilOverflow(final String...sessionIds) {
@@ -194,7 +196,7 @@ public class CachingSessionStoreTest {
 
     private void addSingleSession(final String sessionId, final List<KeyValue<Windowed<String>, Long>> allSessions) {
         final int timestamp = allSessions.size() * 10;
-        final Windowed<String> key = new Windowed<>(sessionId, new TimeWindow(timestamp, timestamp));
+        final Windowed<String> key = new Windowed<>(sessionId, new SessionWindow(timestamp, timestamp));
         final Long value = 1L;
         cachingStore.put(key, value);
         allSessions.add(KeyValue.pair(key, value));

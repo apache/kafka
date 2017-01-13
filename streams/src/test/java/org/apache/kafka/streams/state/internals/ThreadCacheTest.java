@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -45,8 +48,9 @@ public class ThreadCacheTest {
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final String name = "name";
-        ThreadCache cache = new ThreadCache(
-                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
+        ThreadCache cache = new ThreadCache("testCache",
+                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""),
+            new MockStreamsMetrics(new Metrics()));
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -77,7 +81,7 @@ public class ThreadCacheTest {
         System.gc();
         long prevRuntimeMemory = runtime.totalMemory() - runtime.freeMemory();
 
-        ThreadCache cache = new ThreadCache(desiredCacheSize);
+        ThreadCache cache = new ThreadCache("testCache", desiredCacheSize, new MockStreamsMetrics(new Metrics()));
         long size = cache.sizeBytes();
         assertEquals(size, 0);
         for (int i = 0; i < numElements; i++) {
@@ -151,8 +155,9 @@ public class ThreadCacheTest {
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "kafka";
-        ThreadCache cache = new ThreadCache(
-                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
+        ThreadCache cache = new ThreadCache("testCache",
+                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""),
+            new MockStreamsMetrics(new Metrics()));
         cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> dirty) {
@@ -180,7 +185,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldDelete() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[] key = new byte[]{0};
 
         cache.put("name", key, dirtyEntry(key));
@@ -191,7 +196,7 @@ public class ThreadCacheTest {
     @Test
     public void shouldNotFlushAfterDelete() throws Exception {
         final byte[] key = new byte[]{0};
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
         final String namespace = "namespace";
         cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
@@ -211,7 +216,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldNotBlowUpOnNonExistentKeyWhenDeleting() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[] key = new byte[]{0};
 
         cache.put("name", key, dirtyEntry(key));
@@ -220,13 +225,13 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldNotBlowUpOnNonExistentNamespaceWhenDeleting() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         assertNull(cache.delete("name", new byte[]{1}));
     }
 
     @Test
     public void shouldNotClashWithOverlappingNames() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[] nameByte = new byte[]{0};
         final byte[] name1Byte = new byte[]{1};
         cache.put("name", nameByte, dirtyEntry(nameByte));
@@ -238,7 +243,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldPeekNextKey() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[] theByte = {0};
         final String namespace = "streams";
         cache.put(namespace, theByte, dirtyEntry(theByte));
@@ -249,7 +254,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldGetSameKeyAsPeekNext() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[] theByte = {0};
         final String namespace = "streams";
         cache.put(namespace, theByte, dirtyEntry(theByte));
@@ -259,21 +264,21 @@ public class ThreadCacheTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowIfNoPeekNextKey() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
         iterator.peekNextKey();
     }
 
     @Test
     public void shouldReturnFalseIfNoNextKey() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
         assertFalse(iterator.hasNext());
     }
 
     @Test
     public void shouldPeekAndIterateOverRange() throws Exception {
-        final ThreadCache cache = new ThreadCache(10000L);
+        final ThreadCache cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         final String namespace = "streams";
         for (final byte[] aByte : bytes) {
@@ -295,7 +300,7 @@ public class ThreadCacheTest {
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() throws Exception {
         final String namespace = "streams";
         final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
-        final ThreadCache cache = new ThreadCache(entrySize * 5);
+        final ThreadCache cache = new ThreadCache("testCache", entrySize * 5, new MockStreamsMetrics(new Metrics()));
         cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> dirty) {
@@ -317,7 +322,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldFlushDirtyEntriesForNamespace() throws Exception {
-        final ThreadCache cache = new ThreadCache(100000);
+        final ThreadCache cache = new ThreadCache("testCache", 100000, new MockStreamsMetrics(new Metrics()));
         final List<byte[]> received = new ArrayList<>();
         cache.addDirtyEntryFlushListener("1", new ThreadCache.DirtyEntryFlushListener() {
             @Override
@@ -339,7 +344,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldNotFlushCleanEntriesForNamespace() throws Exception {
-        final ThreadCache cache = new ThreadCache(100000);
+        final ThreadCache cache = new ThreadCache("testCache", 100000, new MockStreamsMetrics(new Metrics()));
         final List<byte[]> received = new ArrayList<>();
         cache.addDirtyEntryFlushListener("1", new ThreadCache.DirtyEntryFlushListener() {
             @Override
@@ -379,13 +384,13 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldEvictImmediatelyIfCacheSizeIsVerySmall() throws Exception {
-        final ThreadCache cache = new ThreadCache(1);
+        final ThreadCache cache = new ThreadCache("testCache", 1, new MockStreamsMetrics(new Metrics()));
         shouldEvictImmediatelyIfCacheSizeIsZeroOrVerySmall(cache);
     }
 
     @Test
     public void shouldEvictImmediatelyIfCacheSizeIsZero() throws Exception {
-        final ThreadCache cache = new ThreadCache(0);
+        final ThreadCache cache = new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()));
         shouldEvictImmediatelyIfCacheSizeIsZeroOrVerySmall(cache);
     }
 
@@ -393,7 +398,7 @@ public class ThreadCacheTest {
     public void shouldEvictAfterPutAll() throws Exception {
         final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
         final String namespace = "namespace";
-        final ThreadCache cache = new ThreadCache(1);
+        final ThreadCache cache = new ThreadCache("testCache", 1, new MockStreamsMetrics(new Metrics()));
         cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> dirty) {
@@ -409,7 +414,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldPutAll() throws Exception {
-        final ThreadCache cache = new ThreadCache(100000);
+        final ThreadCache cache = new ThreadCache("testCache", 100000, new MockStreamsMetrics(new Metrics()));
 
         cache.putAll("name", Arrays.asList(KeyValue.pair(new byte[]{0}, dirtyEntry(new byte[]{5})),
                                            KeyValue.pair(new byte[]{1}, dirtyEntry(new byte[]{6}))));
@@ -420,7 +425,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldNotForwardCleanEntryOnEviction() throws Exception {
-        final ThreadCache cache = new ThreadCache(0);
+        final ThreadCache cache = new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()));
         final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
         cache.addDirtyEntryFlushListener("name", new ThreadCache.DirtyEntryFlushListener() {
             @Override
@@ -433,7 +438,7 @@ public class ThreadCacheTest {
     }
     @Test
     public void shouldPutIfAbsent() throws Exception {
-        final ThreadCache cache = new ThreadCache(100000);
+        final ThreadCache cache = new ThreadCache("testCache", 100000, new MockStreamsMetrics(new Metrics()));
         final byte[] key = {10};
         final byte[] value = {30};
         assertNull(cache.putIfAbsent("n", key, dirtyEntry(value)));
@@ -445,7 +450,7 @@ public class ThreadCacheTest {
     public void shouldEvictAfterPutIfAbsent() throws Exception {
         final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
         final String namespace = "namespace";
-        final ThreadCache cache = new ThreadCache(1);
+        final ThreadCache cache = new ThreadCache("testCache", 1, new MockStreamsMetrics(new Metrics()));
         cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> dirty) {
@@ -463,7 +468,7 @@ public class ThreadCacheTest {
     @Test
     public void shouldNotLoopForEverWhenEvictingAndCurrentCacheIsEmpty() throws Exception {
         final int maxCacheSizeInBytes = 100;
-        final ThreadCache threadCache = new ThreadCache(maxCacheSizeInBytes);
+        final ThreadCache threadCache = new ThreadCache("testCache", maxCacheSizeInBytes, new MockStreamsMetrics(new Metrics()));
         // trigger a put into another cache on eviction from "name"
         threadCache.addDirtyEntryFlushListener("name", new ThreadCache.DirtyEntryFlushListener() {
             @Override
@@ -496,13 +501,20 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldCleanupNamedCacheOnClose() throws Exception {
-        final ThreadCache cache = new ThreadCache(100000);
+        final ThreadCache cache = new ThreadCache("testCache", 100000, new MockStreamsMetrics(new Metrics()));
         cache.put("one", new byte[]{1}, cleanEntry(new byte[] {1}));
         cache.put("two", new byte[]{1}, cleanEntry(new byte[] {1}));
         assertEquals(cache.size(), 2);
         cache.close("two");
         assertEquals(cache.size(), 1);
         assertNull(cache.get("two", new byte[] {1}));
+    }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        final ThreadCache threadCache = new ThreadCache("testCache", 10, new MockStreamsMetrics(new Metrics()));
+        threadCache.put("one", new byte[]{1}, cleanEntry(new byte[] {1}));
+        assertNull(threadCache.get("one", null));
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {

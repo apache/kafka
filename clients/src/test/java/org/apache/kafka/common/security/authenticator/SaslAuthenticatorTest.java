@@ -19,7 +19,6 @@ import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
@@ -27,7 +26,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -40,6 +39,10 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramFormatter;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,6 +50,8 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -209,8 +214,9 @@ public class SaslAuthenticatorTest {
     @Test
     public void testMultipleServerMechanisms() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN"));
+        configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN", "SCRAM-SHA-256"));
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
         String node1 = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
@@ -222,6 +228,125 @@ public class SaslAuthenticatorTest {
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+        selector.close();
+
+        String node3 = "3";
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
+        createSelector(securityProtocol, saslClientConfigs);
+        selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
+        selector.close();
+        selector = null;
+    }
+
+    /**
+     * Tests good path SASL/SCRAM-SHA-256 client and server channels.
+     */
+    @Test
+    public void testValidSaslScramSha256() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        createAndCheckClientConnection(securityProtocol, "0");
+    }
+
+    /**
+     * Tests all supported SCRAM client and server channels. Also tests that all
+     * supported SCRAM mechanisms can be supported simultaneously on a server.
+     */
+    @Test
+    public void testValidSaslScramMechanisms() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", new ArrayList<>(ScramMechanism.mechanismNames()));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+
+        for (String mechanism : ScramMechanism.mechanismNames()) {
+            saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, mechanism);
+            createAndCheckClientConnection(securityProtocol, "node-" + mechanism);
+        }
+    }
+
+    /**
+     * Tests that SASL/SCRAM clients fail authentication if password is invalid.
+     */
+    @Test
+    public void testInvalidPasswordSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+        Map<String, Object> options = new HashMap<>();
+        options.put("username", TestJaasConfig.USERNAME);
+        options.put("password", "invalidpassword");
+        jaasConfig.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
+
+        String node = "0";
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        createClientConnection(securityProtocol, node);
+        NetworkTestUtils.waitForChannelClose(selector, node);
+    }
+
+    /**
+     * Tests that SASL/SCRAM clients without valid username fail authentication.
+     */
+    @Test
+    public void testUnknownUserSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+        Map<String, Object> options = new HashMap<>();
+        options.put("username", "unknownUser");
+        options.put("password", TestJaasConfig.PASSWORD);
+        jaasConfig.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
+
+        String node = "0";
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        createClientConnection(securityProtocol, node);
+        NetworkTestUtils.waitForChannelClose(selector, node);
+    }
+
+    /**
+     * Tests that SASL/SCRAM clients fail authentication if credentials are not available for
+     * the specific SCRAM mechanism.
+     */
+    @Test
+    public void testUserCredentialsUnavailableForScramMechanism() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", new ArrayList<>(ScramMechanism.mechanismNames()));
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+
+        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
+        String node = "1";
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
+        createClientConnection(securityProtocol, node);
+        NetworkTestUtils.waitForChannelClose(selector, node);
+        selector.close();
+
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
+        createAndCheckClientConnection(securityProtocol, "2");
+    }
+
+    /**
+     * Tests SASL/SCRAM with username containing characters that need
+     * to be encoded.
+     */
+    @Test
+    public void testScramUsernameWithSpecialCharacters() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        String username = "special user= test,scram";
+        String password = username + "-password";
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+        Map<String, Object> options = new HashMap<>();
+        options.put("username", username);
+        options.put("password", password);
+        jaasConfig.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
+
+        server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
+        updateScramCredentialCache(username, password);
+        createAndCheckClientConnection(securityProtocol, "0");
     }
 
     /**
@@ -265,7 +390,7 @@ public class SaslAuthenticatorTest {
         String node = "1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS.id, Short.MAX_VALUE, "someclient", 1);
-        ApiVersionsRequest request = new ApiVersionsRequest();
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer);
@@ -361,8 +486,9 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         sendHandshakeRequestReceiveResponse(node1);
 
-        ApiVersionsRequest request = new ApiVersionsRequest();
-        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id, "someclient", 2);
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id,
+                request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -425,8 +551,10 @@ public class SaslAuthenticatorTest {
         // Send metadata request before Kafka SASL handshake request
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 1);
-        MetadataRequest metadataRequest1 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest1 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest1.version(), "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -438,8 +566,10 @@ public class SaslAuthenticatorTest {
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         sendHandshakeRequestReceiveResponse(node2);
-        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 2);
-        MetadataRequest metadataRequest2 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest2 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
         NetworkTestUtils.waitForChannelClose(selector, node2);
         selector.close();
@@ -577,8 +707,8 @@ public class SaslAuthenticatorTest {
 
         // Send ApiVersionsRequest and check response
         ApiVersionsResponse versionsResponse = sendVersionRequestReceiveResponse(node);
-        assertEquals(Protocol.MIN_VERSIONS[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
-        assertEquals(Protocol.CURR_VERSION[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
+        assertEquals(ProtoUtils.oldestVersion(ApiKeys.SASL_HANDSHAKE.id), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
+        assertEquals(ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
 
         // Send SaslHandshakeRequest and check response
         SaslHandshakeResponse handshakeResponse = sendHandshakeRequestReceiveResponse(node);
@@ -606,7 +736,7 @@ public class SaslAuthenticatorTest {
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
-        this.channelBuilder = ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, clientConfigs, saslMechanism, true);
+        this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, LoginType.CLIENT, clientConfigs, saslMechanism, true);
         this.selector = NetworkTestUtils.createSelector(channelBuilder);
     }
 
@@ -631,7 +761,8 @@ public class SaslAuthenticatorTest {
     }
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
-        RequestHeader header = new RequestHeader(apiKey.id, "someclient", 1);
+        RequestHeader header =
+                new RequestHeader(apiKey.id, request.version(), "someclient", 1);
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
@@ -646,7 +777,7 @@ public class SaslAuthenticatorTest {
     }
 
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
-        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest();
+        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
         assertEquals(Errors.NONE.code(), response.errorCode());
         return response;
@@ -659,5 +790,17 @@ public class SaslAuthenticatorTest {
         } while (selector.completedReceives().isEmpty() && waitSeconds-- > 0);
         assertEquals(1, selector.completedReceives().size());
         return selector.completedReceives().get(0).payload();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void updateScramCredentialCache(String username, String password) throws NoSuchAlgorithmException {
+        for (String mechanism : (List<String>) saslServerConfigs.get(SaslConfigs.SASL_ENABLED_MECHANISMS)) {
+            ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
+            if (scramMechanism != null) {
+                ScramFormatter formatter = new ScramFormatter(scramMechanism);
+                ScramCredential credential = formatter.generateCredential(password, 4096);
+                server.credentialCache().cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
+            }
+        }
     }
 }

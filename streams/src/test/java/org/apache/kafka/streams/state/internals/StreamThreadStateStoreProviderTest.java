@@ -18,11 +18,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -31,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -112,7 +112,8 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  Time.SYSTEM, new StreamsMetadataState(builder)) {
+                                  Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                                  0) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
@@ -187,7 +188,7 @@ public class StreamThreadStateStoreProviderTest {
                 .singletonList(new TopicPartition("topic", taskId.partition)), topology,
                               clientSupplier.consumer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory, null, new NoOpRecordCollector()) {
+                              streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
             protected void initializeOffsetLimits() {
 
@@ -221,21 +222,4 @@ public class StreamThreadStateStoreProviderTest {
         clientSupplier.restoreConsumer
             .updateEndOffsets(offsets);
     }
-
-    private static class TheStreamMetrics implements StreamsMetrics {
-
-        @Override
-        public Sensor addLatencySensor(final String scopeName,
-                                       final String entityName,
-                                       final String operationName,
-                                       final String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-        }
-    }
-
 }

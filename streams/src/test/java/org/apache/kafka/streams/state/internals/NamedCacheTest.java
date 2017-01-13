@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,7 +28,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -38,10 +42,12 @@ import static org.junit.Assert.assertSame;
 public class NamedCacheTest {
 
     private NamedCache cache;
+    private MockStreamsMetrics streamMetrics;
 
     @Before
     public void setUp() throws Exception {
-        cache = new NamedCache("name");
+        streamMetrics = new MockStreamsMetrics(new Metrics());
+        cache = new NamedCache("name", streamMetrics);
     }
 
     @Test
@@ -65,6 +71,30 @@ public class NamedCacheTest {
             assertEquals(cache.misses(), 0);
             assertEquals(cache.overwrites(), 0);
         }
+    }
+
+    @Test
+    public void testMetrics() throws Exception {
+        final String scope = "record-cache";
+        final String entityName = cache.name();
+        final String opName = "hitRatio";
+        final String tagKey = "record-cache-id";
+        final String tagValue = cache.name();
+        final String groupName = "stream-" + scope + "-metrics";
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put(tagKey, tagValue);
+
+        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-min", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-max", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+
     }
 
     @Test
@@ -276,4 +306,8 @@ public class NamedCacheTest {
         cache.evict();
     }
 
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(cache.get(null));
+    }
 }

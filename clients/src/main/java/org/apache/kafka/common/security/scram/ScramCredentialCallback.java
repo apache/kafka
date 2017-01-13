@@ -15,26 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.common.metrics.Sensor;
+import javax.security.auth.callback.Callback;
 
-/**
- * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
- */
-public interface ThreadCacheMetrics {
+public class ScramCredentialCallback implements Callback {
+    private ScramCredential scramCredential;
 
-    /**
-     * Add the hit ratio sensor.
-     * @param entityName Name of the entity, could be the name of the cache instance, etc.
-     * @param operationName Name of the operation, could be "hit ratio".
-     * @param tags Additional tags of the sensor.
-     * @return The added sensor.
-     */
-    Sensor addCacheSensor(String entityName, String operationName, String... tags);
+    public ScramCredential scramCredential() {
+        return scramCredential;
+    }
 
-    /**
-     * Record the given value of the sensor.
-     */
-    void recordCacheSensor(Sensor sensor, double value);
+    public void scramCredential(ScramCredential scramCredential) {
+        this.scramCredential = scramCredential;
+    }
 }

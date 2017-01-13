@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public int numReceived = 0;
     public final ArrayList<K> keys = new ArrayList<>();
     public final ArrayList<V> values = new ArrayList<>();
+    public boolean initialized;
 
     public MockSourceNode(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(NAME + INDEX.getAndIncrement(), topics, keyDeserializer, valDeserializer);
@@ -42,5 +44,11 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
         this.numReceived++;
         this.keys.add(key);
         this.values.add(value);
+    }
+
+    @Override
+    public void init(final ProcessorContext context) {
+        super.init(context);
+        initialized = true;
     }
 }

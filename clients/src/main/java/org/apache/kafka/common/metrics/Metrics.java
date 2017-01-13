@@ -12,6 +12,12 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,12 +30,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A registry of sensors and metrics.
@@ -236,35 +236,74 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Get or create a sensor with the given unique name and no parent sensors.
+     * Get or create a sensor with the given unique name and no parent sensors. This uses
+     * a default recording level of INFO.
      * @param name The sensor name
      * @return The sensor
      */
     public Sensor sensor(String name) {
-        return sensor(name, null, (Sensor[]) null);
+        return this.sensor(name, Sensor.RecordingLevel.INFO);
     }
 
     /**
+     * Get or create a sensor with the given unique name and no parent sensors and with a given
+     * recording level.
+     * @param name The sensor name.
+     * @param recordingLevel The recording level.
+     * @return The sensor
+     */
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel) {
+        return sensor(name, null, recordingLevel, (Sensor[]) null);
+    }
+
+
+    /**
      * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
-     * receive every value recorded with this sensor.
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param parents The parent sensors
      * @return The sensor that is created
      */
     public Sensor sensor(String name, Sensor... parents) {
-        return sensor(name, null, parents);
+        return this.sensor(name, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**
      * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
      * receive every value recorded with this sensor.
+     * @param name The name of the sensor.
+     * @param parents The parent sensors.
+     * @param recordingLevel The recording level.
+     * @return The sensor that is created
+     */
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, null, recordingLevel, parents);
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
      * @param parents The parent sensors
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return sensor(name, config, Long.MAX_VALUE, parents);
+        return this.sensor(name, config, Sensor.RecordingLevel.INFO, parents);
+    }
+
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param recordingLevel The recording level.
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
     }
 
     /**
@@ -275,12 +314,13 @@ public class Metrics implements Closeable {
      * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
+     * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -295,6 +335,20 @@ public class Metrics implements Closeable {
             log.debug("Added sensor with name {}", name);
         }
         return s;
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     *                                        it is eligible for removal
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**

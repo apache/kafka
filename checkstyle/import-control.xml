@@ -77,6 +77,11 @@
         <allow pkg="org.apache.kafka.common.errors" />
         <allow pkg="org.apache.kafka.clients" />
       </subpackage>
+      <subpackage name="scram">
+        <allow pkg="javax.crypto" />
+        <allow pkg="javax.xml.bind" />
+        <allow pkg="org.apache.kafka.common.errors" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">

@@ -38,7 +38,7 @@ versions += [
   metrics: "2.2.0",
   powermock: "1.6.4",
   reflections: "0.9.10",
-  rocksDB: "4.11.2",
+  rocksDB: "5.0.1",
   scalaTest: "3.0.1",
   scalaParserCombinators: "1.0.4",
   scoverage: "1.3.0",
@@ -46,6 +46,7 @@ versions += [
   snappy: "1.1.2.6",
   zkclient: "0.10",
   zookeeper: "3.4.9",
+  jfreechart: "1.0.0",
 ]
 
 // Add Scala version
@@ -107,5 +108,6 @@ libs += [
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zkclient: "com.101tec:zkclient:$versions.zkclient",
-  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper"
+  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
+  jfreechart: "jfreechart:jfreechart:$versions.jfreechart"
 ]

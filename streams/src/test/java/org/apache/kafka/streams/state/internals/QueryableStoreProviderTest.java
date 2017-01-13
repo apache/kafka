@@ -16,13 +16,16 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
 
 import static org.junit.Assert.assertNotNull;
 
@@ -31,15 +34,17 @@ public class QueryableStoreProviderTest {
     private final String keyValueStore = "key-value";
     private final String windowStore = "window-store";
     private QueryableStoreProvider storeProvider;
+    private HashMap<String, StateStore> globalStateStores;
 
     @Before
     public void before() {
         final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub(false);
-        theStoreProvider.addStore(keyValueStore, new StateStoreTestUtils.NoOpReadOnlyStore<>());
+        theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
+        globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                Collections.<StateStoreProvider>singletonList(theStoreProvider));
+                    Collections.<StateStoreProvider>singletonList(theStoreProvider), new GlobalStateStoreProvider(globalStateStores));
     }
 
     @Test(expected = InvalidStateStoreException.class)
@@ -70,6 +75,12 @@ public class QueryableStoreProviderTest {
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() throws Exception {
         storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
+    }
+
+    @Test
+    public void shouldFindGlobalStores() throws Exception {
+        globalStateStores.put("global", new NoOpReadOnlyStore<>());
+        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore()));
     }
 
 

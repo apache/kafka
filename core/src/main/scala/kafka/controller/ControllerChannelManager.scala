@@ -27,9 +27,10 @@ import kafka.utils._
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
+import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 
@@ -56,12 +57,13 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     }
   }
 
-  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractResponse => Unit = null) {
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                  callback: AbstractResponse => Unit = null) {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
-          stateInfo.messageQueue.put(QueueItem(apiKey, apiVersion, request, callback))
+          stateInfo.messageQueue.put(QueueItem(apiKey, request, callback))
         case None =>
           warn("Not sending request %s to broker %d, since it is offline.".format(request, brokerId))
       }
@@ -90,9 +92,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
     val networkClient = {
-      val channelBuilder = ChannelBuilders.create(
+      val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
-        Mode.CLIENT,
         LoginType.SERVER,
         config.values,
         config.saslMechanismInterBrokerProtocol,
@@ -117,7 +118,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
-        time
+        time,
+        false
       )
     }
     val threadName = threadNamePrefix match {
@@ -149,7 +151,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   }
 }
 
-case class QueueItem(apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractResponse => Unit)
+case class QueueItem(apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                     callback: AbstractResponse => Unit)
 
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
@@ -169,7 +172,7 @@ class RequestSendThread(val controllerId: Int,
 
     def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(100))
 
-    val QueueItem(apiKey, apiVersion, request, callback) = queue.take()
+    val QueueItem(apiKey, requestBuilder, callback) = queue.take()
     import NetworkClientBlockingOps._
     var clientResponse: ClientResponse = null
     try {
@@ -184,8 +187,8 @@ class RequestSendThread(val controllerId: Int,
               backoff()
             }
             else {
-              val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
-              val clientRequest = new ClientRequest(brokerNode.idString, time.milliseconds(), true, requestHeader, request, null)
+              val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
+                time.milliseconds(), true)
               clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
               isSendSuccessful = true
             }
@@ -193,7 +196,7 @@ class RequestSendThread(val controllerId: Int,
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                  request.toString, brokerNode.toString), e)
+                  requestBuilder.toString, brokerNode.toString), e)
               networkClient.close(brokerNode.idString)
               isSendSuccessful = false
               backoff()
@@ -359,8 +362,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
             partitionStateInfo.allReplicas.map(Integer.valueOf).asJava)
           topicPartition -> partitionState
         }
-        val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
-        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest, null)
+        val leaderAndIsrRequest = new LeaderAndIsrRequest.
+            Builder(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
+        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequest, null)
       }
       leaderAndIsrRequestMap.clear()
 
@@ -375,27 +379,33 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         topicPartition -> partitionState
       }
 
-      val version = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
+      val version: Short = if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2: Short
                     else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1: Short
                     else 0: Short
 
-      val updateMetadataRequest =
-        if (version == 0) {
-          val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map(_.getNode(SecurityProtocol.PLAINTEXT))
-          new UpdateMetadataRequest(controllerId, controllerEpoch, liveBrokers.asJava, partitionStates.asJava)
-        }
-        else {
-          val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+      val updateMetadataRequest = {
+        val liveBrokers = if (version == 0) {
+          // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
+          controllerContext.liveOrShuttingDownBrokers.map { broker =>
+            val node = broker.getNode(SecurityProtocol.PLAINTEXT)
+            val endPoints = Map(SecurityProtocol.PLAINTEXT -> new EndPoint(node.host(), node.port()))
+            new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
+          }
+        } else {
+          controllerContext.liveOrShuttingDownBrokers.map { broker =>
             val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
               securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
             }
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
-          new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
         }
+        new UpdateMetadataRequest.Builder(
+            controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).
+            setVersion(version)
+      }
 
-      updateMetadataRequestBrokerSet.foreach {broker =>
-        controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
+      updateMetadataRequestBrokerSet.foreach { broker =>
+        controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, updateMetadataRequest, null)
       }
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
@@ -412,19 +422,20 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
         // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
         // changes the order in which the requests are sent for the same partitions, but that's OK.
-        val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, false,
+        val stopReplicaRequest = new StopReplicaRequest.Builder(controllerId, controllerEpoch, false,
           replicasToGroup.map(r => new TopicPartition(r.replica.topic, r.replica.partition)).toSet.asJava)
-        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
 
         replicasToNotGroup.foreach { r =>
-          val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, r.deletePartition,
-            Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
-          controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest, r.callback)
+          val stopReplicaRequest = new StopReplicaRequest.Builder(
+              controllerId, controllerEpoch, r.deletePartition,
+              Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
+          controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
         }
       }
       stopReplicaRequestMap.clear()
     } catch {
-      case e : Throwable => {
+      case e: Throwable =>
         if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
               s"the map is $leaderAndIsrRequestMap. Exception message: $e")
@@ -438,7 +449,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
         throw new IllegalStateException(e)
-      }
     }
   }
 }

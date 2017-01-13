@@ -92,7 +92,7 @@ public class PlainSaslServer implements SaslServer {
             authorizationID = username;
 
         try {
-            String expectedPassword = JaasUtils.defaultServerJaasConfigOption(JAAS_USER_PREFIX + username);
+            String expectedPassword = JaasUtils.defaultServerJaasConfigOption(JAAS_USER_PREFIX + username, PlainLoginModule.class.getName());
             if (!password.equals(expectedPassword)) {
                 throw new SaslException("Authentication failed: Invalid username or password");
             }

@@ -19,9 +19,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -68,8 +68,8 @@ public class KStreamMapTest {
         stream.map(mapper).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(4, processor.processed.size());
@@ -79,5 +79,20 @@ public class KStreamMapTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
+            @Override
+            public KeyValue<Number, String> apply(Number key, Object value) {
+                return KeyValue.pair(key, key + ":" + value);
+            }
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>stream("numbers")
+            .map(stringify)
+            .to("strings");
     }
 }

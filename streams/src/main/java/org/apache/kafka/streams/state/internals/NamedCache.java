@@ -17,15 +17,22 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -39,8 +46,7 @@ class NamedCache {
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
-    private ThreadCacheMetrics metrics;
-
+    private NamedCacheMetrics namedCacheMetrics;
     // JMX stats
     private Sensor hitRatio = null;
 
@@ -51,15 +57,13 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name) {
-        this(name, null);
+    NamedCache(final String name, final StreamsMetrics metrics) {
+        this.name = name;
+        this.namedCacheMetrics = new NamedCacheMetrics(metrics);
     }
 
-    NamedCache(final String name, final ThreadCacheMetrics metrics) {
-        this.name = name;
-        this.metrics = metrics != null ? metrics : new ThreadCache.NullThreadCacheMetrics();
-
-        this.hitRatio = this.metrics.addCacheSensor(name, "hitRatio");
+    synchronized final String name() {
+        return name;
     }
 
     synchronized long hits() {
@@ -79,6 +83,10 @@ class NamedCache {
     }
 
     synchronized LRUCacheEntry get(final Bytes key) {
+        if (key == null) {
+            return null;
+        }
+
         final LRUNode node = getInternal(key);
         if (node == null) {
             return null;
@@ -181,7 +189,7 @@ class NamedCache {
             return null;
         } else {
             numReadHits++;
-            metrics.recordCacheSensor(hitRatio, (double) numReadHits / (double) (numReadHits + numReadMisses));
+            namedCacheMetrics.hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
         }
         return node;
     }
@@ -308,6 +316,7 @@ class NamedCache {
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();
+        namedCacheMetrics.removeAllSensors();
     }
 
     /**
@@ -353,4 +362,38 @@ class NamedCache {
         }
     }
 
+    class NamedCacheMetrics  {
+        final StreamsMetricsImpl metrics;
+        final String groupName;
+        final Map<String, String> metricTags;
+        final Sensor hitRatioSensor;
+
+
+        public NamedCacheMetrics(StreamsMetrics metrics) {
+            final String scope = "record-cache";
+            final String entityName = name;
+            final String opName = "hitRatio";
+            final String tagKey = "record-cache-id";
+            final String tagValue = name;
+            this.groupName = "stream-" + scope + "-metrics";
+            this.metrics = (StreamsMetricsImpl) metrics;
+            this.metricTags = new LinkedHashMap<>();
+            this.metricTags.put(tagKey, tagValue);
+
+
+            hitRatioSensor = this.metrics.registry().sensor(entityName + "-" + opName, Sensor.RecordingLevel.DEBUG);
+
+            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-avg", groupName,
+                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Avg());
+            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-min", groupName,
+                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Min());
+            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-max", groupName,
+                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Max());
+
+        }
+
+        public void removeAllSensors() {
+            metrics.removeSensor(hitRatioSensor);
+        }
+    }
 }

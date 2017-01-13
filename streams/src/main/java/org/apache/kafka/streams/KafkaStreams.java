@@ -17,22 +17,30 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
@@ -42,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +60,9 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.utils.Utils.getHost;
+import static org.apache.kafka.common.utils.Utils.getPort;
 
 /**
  * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
@@ -95,7 +107,9 @@ public class KafkaStreams {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
-    public static final int DEFAULT_CLOSE_TIMEOUT = 0;
+    private static final int DEFAULT_CLOSE_TIMEOUT = 0;
+    private GlobalStreamThread globalStreamThread;
+
     private final StreamThread[] threads;
     private final Map<Long, StreamThread.State> threadState;
     private final Metrics metrics;
@@ -189,7 +203,7 @@ public class KafkaStreams {
     private synchronized void setState(State newState) {
         State oldState = state;
         if (!state.isValidTransition(newState)) {
-            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+            log.warn("Unexpected state transition from " + state + " to " + newState);
         }
         state = newState;
         if (stateListener != null) {
@@ -203,6 +217,14 @@ public class KafkaStreams {
      */
     public synchronized State state() {
         return state;
+    }
+
+    /**
+     * Get read-only handle on global metrics registry
+     * @return Map of all metrics.
+     */
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
     private class StreamStateListener implements StreamThread.StateListener {
@@ -272,6 +294,7 @@ public class KafkaStreams {
         reporters.add(new JmxReporter(JMX_PREFIX));
 
         final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
+            .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
@@ -280,23 +303,61 @@ public class KafkaStreams {
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
-        streamsMetadataState = new StreamsMetadataState(builder);
+        streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+
+        final ProcessorTopology globalTaskTopology = builder.buildGlobalStateTopology();
+
+        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
+            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
+        }
+
+        final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
+                (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + (globalTaskTopology == null ? 0 : 1)));
+
+
+        if (globalTaskTopology != null) {
+            globalStreamThread = new GlobalStreamThread(globalTaskTopology,
+                                                        config,
+                                                        clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
+                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG)),
+                                                        metrics,
+                                                        time,
+                                                        clientId);
+        }
+
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new StreamThread(builder,
-                config,
-                clientSupplier,
-                applicationId,
-                clientId,
-                processId,
-                metrics,
-                time,
-                streamsMetadataState);
+                                          config,
+                                          clientSupplier,
+                                          applicationId,
+                                          clientId,
+                                          processId,
+                                          metrics,
+                                          time,
+                                          streamsMetadataState,
+                                          cacheSizeBytes);
             threads[i].setStateListener(streamStateListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders);
+        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
+        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
     }
+
+    private static HostInfo parseHostInfo(final String endPoint) {
+        if (endPoint == null || endPoint.trim().isEmpty()) {
+            return StreamsMetadataState.UNKNOWN_HOST;
+        }
+        final String host = getHost(endPoint);
+        final Integer port = getPort(endPoint);
+
+        if (host == null || port == null) {
+            throw new ConfigException(String.format("Error parsing host address %s. Expected format host:port.", endPoint));
+        }
+
+        return new HostInfo(host, port);
+    }
+
 
     /**
      * Start the stream instance by starting all its threads.
@@ -308,6 +369,10 @@ public class KafkaStreams {
 
         if (state == KafkaStreams.State.CREATED) {
             setState(KafkaStreams.State.RUNNING);
+
+            if (globalStreamThread != null) {
+                globalStreamThread.start();
+            }
 
             for (final StreamThread thread : threads) {
                 thread.start();
@@ -355,7 +420,16 @@ public class KafkaStreams {
                             thread.setStateListener(null);
                             thread.close();
                         }
-
+                        if (globalStreamThread != null) {
+                            globalStreamThread.close();
+                            if (!globalStreamThread.stillRunning()) {
+                                try {
+                                    globalStreamThread.join();
+                                } catch (InterruptedException e) {
+                                    Thread.interrupted();
+                                }
+                            }
+                        }
                         for (final StreamThread thread : threads) {
                             try {
                                 if (!thread.stillRunning()) {
@@ -384,15 +458,26 @@ public class KafkaStreams {
     }
 
     /**
-     * Produces a string representation contain useful information about Kafka Streams
+     * Produces a string representation containing useful information about Kafka Streams
      * Such as thread IDs, task IDs and a representation of the topology. This is useful
      * in debugging scenarios.
      * @return A string representation of the Kafka Streams instance.
      */
+    @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("KafkaStreams processID:" + processId + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about Kafka Streams
+     * such as thread IDs, task IDs and a representation of the topology starting with the given indent. This is useful
+     * in debugging scenarios.
+     * @return A string representation of the Kafka Streams instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "KafkaStreams processID:" + processId + "\n");
         for (final StreamThread thread : threads) {
-            sb.append("\t").append(thread.toString());
+            sb.append(thread.toString(indent + "\t"));
         }
         sb.append("\n");
 
@@ -429,8 +514,13 @@ public class KafkaStreams {
      * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
-        for (final StreamThread thread : threads)
+        for (final StreamThread thread : threads) {
             thread.setUncaughtExceptionHandler(eh);
+        }
+
+        if (globalStreamThread != null) {
+            globalStreamThread.setUncaughtExceptionHandler(eh);
+        }
     }
 
 
@@ -500,7 +590,7 @@ public class KafkaStreams {
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
-                                              final StreamPartitioner<K, ?> partitioner) {
+                                              final StreamPartitioner<? super K, ?> partitioner) {
         validateIsRunning();
         return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }

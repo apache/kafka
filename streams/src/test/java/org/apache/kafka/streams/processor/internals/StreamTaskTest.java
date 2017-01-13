@@ -23,14 +23,17 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -58,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -87,7 +91,8 @@ public class StreamTaskTest {
             Collections.<String, SinkNode>emptyMap(),
             Collections.<StateStore>emptyList(),
             Collections.<String, String>emptyMap(),
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            Collections.<StateStore, ProcessorNode>emptyMap(),
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
     private RecordCollectorImpl recordCollector;
@@ -131,7 +136,8 @@ public class StreamTaskTest {
     public void testProcessOrder() throws Exception {
         StreamsConfig config = createConfig(baseDir);
         recordCollector = new RecordCollectorImpl(producer, "taskId");
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -171,14 +177,41 @@ public class StreamTaskTest {
 
         task.close();
 
+    }
 
+    @Test
+    public void testMetrics() throws Exception {
+        StreamsConfig config = createConfig(baseDir);
+        recordCollector = new RecordCollectorImpl(producer, "taskId");
+        Metrics metrics = new Metrics();
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(metrics), stateDirectory, null, new MockTime(), recordCollector);
+        String name = task.id().toString();
+        String[] entities = {"all", name};
+        String operation = "commit";
+
+        String groupName = "stream-task-metrics";
+        Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
+
+        assertNotNull(metrics.getSensor(operation));
+        assertNotNull(metrics.getSensor(name + "-" + operation));
+
+        for (String entity : entities) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,
+                "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
+                "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+                "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+        }
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
+        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -237,7 +270,8 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, null, recordCollector);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -310,13 +344,16 @@ public class StreamTaskTest {
         final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
         final Map<String, SourceNode> sourceNodes
                 = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0), recordCollector);
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory,  new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -363,8 +400,12 @@ public class StreamTaskTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0), recordCollector);
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+                                                     restoreStateConsumer, config, streamsMetrics, stateDirectory,
+                                                     new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
 
         try {
             streamTask.punctuate(punctuator, 1);
@@ -383,7 +424,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
         final AtomicBoolean flushed = new AtomicBoolean(false);
         final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
             @Override
@@ -391,7 +433,9 @@ public class StreamTaskTest {
                 flushed.set(true);
             }
         };
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "appId", partitions, topology, consumer, restoreStateConsumer, createConfig(baseDir), null, stateDirectory, new ThreadCache(0), recordCollector);
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "appId", partitions, topology, consumer,
+            restoreStateConsumer, createConfig(baseDir), streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
         streamTask.flushState();
         assertTrue(flushed.get());
     }
