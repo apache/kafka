@@ -52,6 +52,15 @@ public interface CreateTopicPolicy {
         public Map<String, String> configs() {
             return configs;
         }
+
+        @Override
+        public String toString() {
+            return "RequestMetadata(topic=" + topic +
+                    ", numPartitions=" + numPartitions +
+                    ", replicationFactor=" + replicationFactor +
+                    ", replicasAssignments=" + replicasAssignments +
+                    ", configs=" + configs + ")";
+        }
     }
 
     void validate(RequestMetadata requestMetadata) throws PolicyViolationException;
