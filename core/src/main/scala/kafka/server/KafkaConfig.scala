@@ -974,7 +974,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val compressionType = getString(KafkaConfig.CompressionTypeProp)
   val listeners: Seq[EndPoint] = getListeners
   val advertisedListeners: Seq[EndPoint] = getAdvertisedListeners
-  private lazy val listenerSecurityProtocolMap = getListenerSecurityProtocolMap
+  private[kafka] lazy val listenerSecurityProtocolMap = getListenerSecurityProtocolMap
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
@@ -1028,7 +1028,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       case (Some(name), None) =>
         val listenerName = ListenerName.normalised(name)
         val securityProtocol = listenerSecurityProtocolMap.getOrElse(listenerName,
-          throw new ConfigException(""))
+          throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
+            s"${KafkaConfig.InterBrokerListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
         (listenerName, securityProtocol)
       case (None, Some(securityProtocolName)) =>
         val securityProtocol = getSecurityProtocol(securityProtocolName, KafkaConfig.InterBrokerSecurityProtocolProp)

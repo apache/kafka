@@ -237,6 +237,83 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testListenerNamesWithAdvertisedListenerUnset(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "CLIENT://localhost:9091,REPLICATION://localhost:9092,INTERNAL://localhost:9093")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CLIENT:SSL,REPLICATION:SSL,INTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    val config = KafkaConfig.fromProps(props)
+    val expectedListeners = Seq(
+      EndPoint("localhost", 9091, new ListenerName("CLIENT"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
+    assertEquals(expectedListeners, config.listeners)
+    assertEquals(expectedListeners, config.advertisedListeners)
+    val expectedSecurityProtocolMap = Map(
+      new ListenerName("CLIENT") -> SecurityProtocol.SSL,
+      new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+    )
+    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+  }
+
+  @Test
+  def testListenerAndAdvertisedListenerNames(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:9091,INTERNAL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://lb1.example.com:9000,INTERNAL://host1:9093")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:SSL,INTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
+    val config = KafkaConfig.fromProps(props)
+
+    val expectedListeners = Seq(
+      EndPoint("localhost", 9091, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+    )
+    assertEquals(expectedListeners, config.listeners)
+
+    val expectedAdvertisedListeners = Seq(
+      EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
+      EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+    )
+    assertEquals(expectedAdvertisedListeners, config.advertisedListeners)
+
+    val expectedSecurityProtocolMap = Map(
+      new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+    )
+    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+  }
+
+  @Test
+  def testListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091,REPLICATION://localhost:9092")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "SSL")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testInterBrokerListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testCaseInsensitiveListenerProtocol() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -310,7 +387,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
       true
     } catch {
-      case _: IllegalArgumentException => false
+      case _: IllegalArgumentException | _: ConfigException => false
     }
   }
 
