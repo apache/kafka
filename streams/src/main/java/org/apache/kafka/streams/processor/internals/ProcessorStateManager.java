@@ -44,7 +44,7 @@ import java.util.Map;
 
 import static java.util.Collections.singleton;
 
-public class ProcessorStateManager {
+public class ProcessorStateManager implements StateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
 
@@ -55,9 +55,9 @@ public class ProcessorStateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final boolean isStandby;
-    private final String applicationId;
     private final StateDirectory stateDirectory;
     private final Map<String, StateStore> stores;
+    private final Map<String, StateStore> globalStores;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> offsetLimits;
     private final Map<TopicPartition, Long> restoredOffsets;
@@ -81,7 +81,6 @@ public class ProcessorStateManager {
                                  final boolean isStandby,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic) throws LockException, IOException {
-        this.applicationId = applicationId;
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
         this.baseDir  = stateDirectory.directoryForTask(taskId);
@@ -90,6 +89,7 @@ public class ProcessorStateManager {
             this.partitionForTopic.put(source.topic(), source);
         }
         this.stores = new LinkedHashMap<>();
+        this.globalStores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
         this.offsetLimits = new HashMap<>();
         this.restoredOffsets = new HashMap<>();
@@ -314,6 +314,7 @@ public class ProcessorStateManager {
         return stores.get(name);
     }
 
+    @Override
     public void flush(final InternalProcessorContext context) {
         if (!this.stores.isEmpty()) {
             log.debug("{} Flushing all stores registered in the state manager", logPrefix);
@@ -331,6 +332,7 @@ public class ProcessorStateManager {
     /**
      * @throws IOException if any error happens when closing the state stores
      */
+    @Override
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
             // attempting to close the stores, just in case they
@@ -384,5 +386,15 @@ public class ProcessorStateManager {
         TopicPartition partition = partitionForTopic.get(topic);
 
         return partition == null ? taskId.partition : partition.partition();
+    }
+
+    void registerGlobalStateStores(final List<StateStore> stateStores) {
+        for (StateStore stateStore : stateStores) {
+            globalStores.put(stateStore.name(), stateStore);
+        }
+    }
+
+    public StateStore getGlobalStore(final String name) {
+        return globalStores.get(name);
     }
 }

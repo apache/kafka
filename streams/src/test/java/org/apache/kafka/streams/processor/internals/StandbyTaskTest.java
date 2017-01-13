@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -84,7 +85,8 @@ public class StandbyTaskTest {
                     put(storeName1, storeChangelogTopicName1);
                     put(storeName2, storeChangelogTopicName2);
                 }
-            });
+            },
+            Collections.<StateStore>emptyList());
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
@@ -96,10 +98,11 @@ public class StandbyTaskTest {
                     new MockStateStoreSupplier(ktable.topic(), true, false).get()
             ),
             new HashMap<String, String>() {
-            {
-                put("ktable1", ktable.topic());
-            }
-        });
+                {
+                    put("ktable1", ktable.topic());
+                }
+            },
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
 

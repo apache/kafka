@@ -131,7 +131,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-        return new Windowed<>(key, new TimeWindow(start, end));
+        return new Windowed<>(key, new SessionWindow(start, end));
     }
 
     private static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {

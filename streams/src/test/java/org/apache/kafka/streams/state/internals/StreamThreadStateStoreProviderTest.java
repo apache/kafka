@@ -112,7 +112,8 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  Time.SYSTEM, new StreamsMetadataState(builder)) {
+                                  Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                                  0) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;

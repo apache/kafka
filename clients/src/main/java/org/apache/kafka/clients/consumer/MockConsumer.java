@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -332,6 +333,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
+        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void close(long timeout, TimeUnit unit) {
         ensureNotClosed();
         this.closed = true;
     }

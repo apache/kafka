@@ -85,6 +85,7 @@ public abstract class AbstractTask {
             log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
+
     }
 
     public final TaskId id() {

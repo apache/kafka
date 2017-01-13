@@ -306,4 +306,8 @@ public class NamedCacheTest {
         cache.evict();
     }
 
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(cache.get(null));
+    }
 }

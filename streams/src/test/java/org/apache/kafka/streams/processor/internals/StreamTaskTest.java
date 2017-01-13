@@ -90,7 +90,8 @@ public class StreamTaskTest {
             },
             Collections.<String, SinkNode>emptyMap(),
             Collections.<StateStore>emptyList(),
-            Collections.<String, String>emptyMap());
+            Collections.<String, String>emptyMap(),
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
     private RecordCollectorImpl recordCollector;
@@ -347,11 +348,11 @@ public class StreamTaskTest {
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
-                                                                 Collections.<String, String>emptyMap());
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
 
         final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
             topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
-
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -397,11 +398,12 @@ public class StreamTaskTest {
                                                                  Collections.<String, SourceNode>emptyMap(),
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
-                                                                 Collections.<String, String>emptyMap());
-
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
-            topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+                                                     restoreStateConsumer, config, streamsMetrics, stateDirectory,
+                                                     new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
 
         try {
             streamTask.punctuate(punctuator, 1);
@@ -419,7 +421,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, SourceNode>emptyMap(),
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
-                                                                 Collections.<String, String>emptyMap());
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
         final AtomicBoolean flushed = new AtomicBoolean(false);
         final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
             @Override

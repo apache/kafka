@@ -1511,7 +1511,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1581,7 +1581,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@link KStream} record weather on not it finds an corresponding record in {@link KTable} the provided
+     * For each {@link KStream} record weather or not it finds an corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1646,4 +1646,68 @@ public interface KStream<K, V> {
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde);
 
+
+    /**
+     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
+     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)} inner-join}, all records from this stream will produce an
+     * output record (cf. below).
+     * The join is a primary key table lookup join with join attribute {@code keyValueMapper.map(stream.keyValue) == table.key}.
+     * "Table lookup join" means, that results are only computed if {@link KStream} records are processed.
+     * This is done by performing a lookup for matching records in the <em>current</em> internal
+     * {@link GlobalKTable} state.
+     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
+     * will not produce any result records.
+     * <p>
+     * For each {@link KStream} record whether or not it finds an corresponding record in {@link GlobalKTable} the provided
+     * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
+     * The key of the result record is the same as this {@link KStream}
+     * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@link KStream}.
+     **
+     * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
+     * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
+     *                          to the key of the {@link GlobalKTable}
+     * @param valueJoiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one output for each input {@link KStream} record
+     * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
+     */
+    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
+                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                         final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner);
+
+    /**
+     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi join
+     * The join is a primary key table lookup join with join attribute {@code keyValueMapper.map(stream.keyValue) == table.key}.
+     * "Table lookup join" means, that results are only computed if {@link KStream} records are processed.
+     * This is done by performing a lookup for matching records in the <em>current</em> internal
+     * {@link GlobalKTable} state.
+     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable} state and
+     * will not produce any result records.
+     * <p>
+     * For each {@link KStream} record that finds an corresponding record in {@link GlobalKTable} the provided
+     * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as the key of this {@link KStream}
+     * If an {@link KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@link KStream}.
+     * <p>
+
+     * @param globalKTable      the {@link GlobalKTable} to be joined with this stream
+     * @param keyValueMapper    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
+     *                          to the key of the {@link GlobalKTable}
+     * @param joiner            a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <GK>              the key type of {@link GlobalKTable}
+     * @param <GV>              the value type of the {@link GlobalKTable}
+     * @param <RV>               the value type of the resulting {@link KStream}
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one output for each input {@link KStream} record
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
+     */
+    <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
+                                     final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                     final ValueJoiner<? super V, ? super GV, ? extends RV> joiner);
 }
