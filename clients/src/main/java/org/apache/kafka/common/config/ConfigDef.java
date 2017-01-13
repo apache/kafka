@@ -631,7 +631,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be a short / string, but it was a " + value.getClass().getName());
+                        throw new ConfigException(name, value, "Expected value to be a short, but it was a " + value.getClass().getName());
                     }
                 case LONG:
                     if (value instanceof Integer)
