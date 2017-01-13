@@ -86,6 +86,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
+
   @Test
   def testLogRetentionUnlimited() {
     val props1 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
@@ -310,6 +311,18 @@ class KafkaConfigTest {
 
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091")
     props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testInterBrokerListenerNameAndSecurityProtocolSet(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "SSL")
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, "SSL")
     assertFalse(isValidKafkaConfig(props))
   }
 
