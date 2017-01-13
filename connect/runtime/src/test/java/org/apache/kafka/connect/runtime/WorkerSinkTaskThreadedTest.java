@@ -104,6 +104,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private WorkerConfig workerConfig;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private TransformationChain transformationChain;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
@@ -128,7 +129,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, TransformationChain.<SinkRecord>noOp(), time);
 
         recordsReturned = 0;
     }
@@ -555,6 +556,15 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 });
         EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
+
+        final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
+        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(new IAnswer<SinkRecord>() {
+            @Override
+            public SinkRecord answer() {
+                return recordCapture.getValue();
+            }
+        }).anyTimes();
+
         Capture<Collection<SinkRecord>> capturedRecords = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));
         EasyMock.expectLastCall().anyTimes();
