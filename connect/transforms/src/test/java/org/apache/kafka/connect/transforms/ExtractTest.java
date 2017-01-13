@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Test;
@@ -25,20 +26,34 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
-public class HoistToStructTest {
+public class ExtractTest {
 
     @Test
-    public void sanityCheck() {
-        final HoistToStruct<SinkRecord> xform = new HoistToStruct.Key<>();
+    public void schemaless() {
+        final Extract<SinkRecord> xform = new Extract.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
-        final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);
+        final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        assertEquals(Schema.Type.STRUCT, transformedRecord.keySchema().type());
-        assertEquals(record.keySchema(),  transformedRecord.keySchema().field("magic").schema());
-        assertEquals(42, ((Struct) transformedRecord.key()).get("magic"));
+        assertNull(transformedRecord.keySchema());
+        assertEquals(42, transformedRecord.key());
+    }
+
+    @Test
+    public void withSchema() {
+        final Extract<SinkRecord> xform = new Extract.Key<>();
+        xform.configure(Collections.singletonMap("field", "magic"));
+
+        final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
+        final Struct key = new Struct(keySchema).put("magic", 42);
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
+        assertEquals(42, transformedRecord.key());
     }
 
 }
