@@ -1080,11 +1080,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
     require(advertisedListenerNames.contains(interBrokerListenerName),
-      s"${KafkaConfig.InterBrokerListenerNameProp} must be a protocol in the configured set of ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured protocols are ${advertisedListenerNames.map(_.value).mkString(",")}")
+      s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+      s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
     require(advertisedListenerNames.subsetOf(listenerNames),
-      s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
-      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on currently configured protocols " +
+      s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
+      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
       s"are ${listenerNames.map(_.value).mkString(",")}"
     )
     require(interBrokerProtocolVersion >= logMessageFormatVersion,
