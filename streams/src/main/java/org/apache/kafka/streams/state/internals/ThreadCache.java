@@ -104,6 +104,10 @@ public class ThreadCache {
     public LRUCacheEntry get(final String namespace, byte[] key) {
         numGets++;
 
+        if (key == null) {
+            return null;
+        }
+
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return null;

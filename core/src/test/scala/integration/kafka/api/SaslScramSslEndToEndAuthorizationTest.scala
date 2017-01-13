@@ -16,15 +16,13 @@
   */
 package kafka.api
 
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramMechanism
 import kafka.utils.JaasTestUtils
 import kafka.admin.ConfigCommand
 import kafka.utils.ZkUtils
 import scala.collection.JavaConverters._
 
-class SaslScramSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
-  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
   override val clientPrincipal = JaasTestUtils.KafkaScramUser
@@ -45,5 +43,6 @@ class SaslScramSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     }
     ConfigCommand.main(configCommandArgs(kafkaPrincipal, kafkaPassword))
     ConfigCommand.main(configCommandArgs(clientPrincipal, clientPassword))
+    ConfigCommand.main(configCommandArgs(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2))
   }
 }

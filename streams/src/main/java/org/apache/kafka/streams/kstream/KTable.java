@@ -351,6 +351,7 @@ public interface KTable<K, V> {
      */
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner);
 
+
     /**
      * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.
      * 

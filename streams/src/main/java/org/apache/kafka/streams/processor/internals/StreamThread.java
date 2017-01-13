@@ -19,9 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -199,7 +201,7 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final StreamsMetricsThreadImpl streamsMetrics;
     final StateDirectory stateDirectory;
-
+    private String originalReset;
     private StreamPartitionAssignor partitionAssignor = null;
     private boolean cleanRun = false;
     private long timerStartedMs;
@@ -282,7 +284,8 @@ public class StreamThread extends Thread {
                         UUID processId,
                         Metrics metrics,
                         Time time,
-                        StreamsMetadataState streamsMetadataState) {
+                        StreamsMetadataState streamsMetadataState,
+                        final long cacheSizeBytes) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
         String threadName = getName();
@@ -300,8 +303,6 @@ public class StreamThread extends Thread {
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
-        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.streamsMetrics);
 
 
@@ -311,7 +312,16 @@ public class StreamThread extends Thread {
         log.info("{} Creating producer client", logPrefix);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("{} Creating consumer client", logPrefix);
-        this.consumer = clientSupplier.getConsumer(config.getConsumerConfigs(this, applicationId, threadClientId));
+
+        Map<String, Object> consumerConfigs = config.getConsumerConfigs(this, applicationId, threadClientId);
+
+        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
+            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+            log.info("{} custom offset resets specified updating configs original auto offset reset {}", logPrefix, originalReset);
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+
+        this.consumer = clientSupplier.getConsumer(consumerConfigs);
         log.info("{} Creating restore consumer client", logPrefix);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
 
@@ -413,6 +423,8 @@ public class StreamThread extends Thread {
         removeStreamTasks();
         removeStandbyTasks();
 
+        // clean up global tasks
+
         log.info("{} Stream thread shutdown complete", logPrefix);
         setState(State.NOT_RUNNING);
         streamsMetrics.removeAllSensors();
@@ -453,13 +465,8 @@ public class StreamThread extends Thread {
 
 
     /**
-<<<<<<< HEAD
      * Similar to shutdownTasksAndState, however does not close the task managers, in the hope that
      * soon the tasks will be assigned again
-=======
-     * Similar to shutdownTasksAndState, however does not close the task managers,
-     * in the hope that soon the tasks will be assigned again
->>>>>>> apache-kafka/trunk
      */
     private void suspendTasksAndState()  {
         log.debug("{} suspendTasksAndState: suspending all active tasks [{}] and standby tasks [{}]", logPrefix,
@@ -574,13 +581,44 @@ public class StreamThread extends Thread {
 
                 boolean longPoll = totalNumBuffered == 0;
 
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(longPoll ? this.pollTimeMs : 0);
+                ConsumerRecords<byte[], byte[]> records = null;
+
+                try {
+                    records = consumer.poll(longPoll ? this.pollTimeMs : 0);
+                } catch (NoOffsetForPartitionException ex) {
+                    TopicPartition partition = ex.partition();
+                    if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                        log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
+                        consumer.seekToBeginning(ex.partitions());
+                    } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                        consumer.seekToEnd(ex.partitions());
+                        log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
+                    } else {
+
+                        if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                            setState(State.PENDING_SHUTDOWN);
+                            String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                            throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
+                        }
+
+                        if (originalReset.equals("earliest")) {
+                            consumer.seekToBeginning(ex.partitions());
+                        } else if (originalReset.equals("latest")) {
+                            consumer.seekToEnd(ex.partitions());
+                        }
+                        log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
+                    }
+
+                }
 
                 if (rebalanceException != null)
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
-                if (!records.isEmpty()) {
+                if (records != null && !records.isEmpty()) {
                     int numAddedRecords = 0;
+
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
                         numAddedRecords += task.addRecords(partition, records.records(partition));
@@ -1070,7 +1108,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * This class extends {@link #StreamsMetricsImpl(Metrics, String, String, Map)} and
+     * This class extends {@link StreamsMetricsImpl(Metrics, String, String, Map)} and
      * overrides one of its functions for efficiency
      */
     private class StreamsMetricsThreadImpl extends StreamsMetricsImpl {

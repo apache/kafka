@@ -121,7 +121,7 @@
     path, only the final copy to the NIC buffer is needed.
     <p>
     We expect a common use case to be multiple consumers on a topic. Using the zero-copy optimization above, data is copied into pagecache exactly once and reused on each consumption instead of being stored in memory
-    and copied out to kernel space every time it is read. This allows messages to be consumed at a rate that approaches the limit of the network connection.
+    and copied out to user-space every time it is read. This allows messages to be consumed at a rate that approaches the limit of the network connection.
     <p>
     This combination of pagecache and sendfile means that on a Kafka cluster where the consumers are mostly caught up you will see no read activity on the disks whatsoever as they will be serving data entirely from cache.
     <p>

@@ -63,7 +63,7 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  private def findCoordinator(groupId: String): Node = {
+  def findCoordinator(groupId: String): Node = {
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
     val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
