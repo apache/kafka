@@ -136,7 +136,7 @@ object ClientUtils extends Logging{
   }
 
    /**
-    * Returns the first end point with the PLAINTEXT security protocol.
+    * Returns the first end point from each broker with the PLAINTEXT security protocol.
     */
   def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
     zkUtils.getAllBrokersInCluster().map { broker =>

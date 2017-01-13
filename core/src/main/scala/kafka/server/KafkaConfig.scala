@@ -393,12 +393,13 @@ object KafkaConfig {
   val HostNameDoc = "DEPRECATED: only used when `listeners` is not set. " +
   "Use `listeners` instead. \n" +
   "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
-  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and their protocols.\n" +
+  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
+  s" If the listener name is not a security protocol, $ListenerSecurityProtocolMapProp must also be set.\n" +
   " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
   " Leave hostname empty to bind to default interface.\n" +
   " Examples of legal listener lists:\n" +
-  " PLAINTEXT://myhost:9092,TRACE://:9091\n" +
-  " PLAINTEXT://0.0.0.0:9092, TRACE://localhost:9093\n"
+  " PLAINTEXT://myhost:9092,SSL://:9091\n" +
+  " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
   val AdvertisedHostNameDoc = "DEPRECATED: only used when `advertised.listeners` or `listeners` are not set. " +
   "Use `advertised.listeners` instead. \n" +
   "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
@@ -413,9 +414,12 @@ object KafkaConfig {
   val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the listeners above." +
   " In IaaS environments, this may need to be different from the interface to which the broker binds." +
   " If this is not set, the value for `listeners` will be used."
-  val ListenerSecurityProtocolMapDoc = "Mapping between listener names and security protocols. Key and value are separated by a colon " +
-    "and map entries are separated by commas. For example, `CLIENT:SSL,REPLICATION:PLAINTEXT` would map the `CLIENT` listener name to " +
-    "the SSL security protocol and the `REPLICATION` listener name to the `PLAINTEXT` security protocol."
+  val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
+    "the same security protocol to be usable in more than one port or IP. For example, we can separate internal and " +
+    "external traffic even if SSL is required for both. Concretely, we could define listeners with names INTERNAL " +
+    "and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are separated by a colon " +
+    "and map entries are separated by commas. Each listener name should only appear once in the map."
+
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketRequestMaxBytesDoc = "The maximum number of bytes in a socket request"
