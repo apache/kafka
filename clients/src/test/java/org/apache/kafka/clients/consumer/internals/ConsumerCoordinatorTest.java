@@ -1357,7 +1357,12 @@ public class ConsumerCoordinatorTest {
                     coordinator.close(Math.min(closeTimeoutMs, requestTimeoutMs));
                 }
             });
-            Thread.sleep(100);
+            // Wait for close to start. If coordinator is known, wait for close to queue
+            // at least one request. Otherwise, sleep for a short time.
+            if (!coordinator.coordinatorUnknown())
+                client.waitForRequests(1, 1000);
+            else
+                Thread.sleep(200);
             if (expectedMinTimeMs > 0) {
                 time.sleep(expectedMinTimeMs - 1);
                 try {
@@ -1395,7 +1400,7 @@ public class ConsumerCoordinatorTest {
             }
         }, new LeaveGroupResponse(Errors.NONE.code()));
 
-        closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
+        coordinator.close();
         assertTrue("Commit not requested", commitRequested.get());
         if (dynamicAssignment)
             assertTrue("Leave group not requested", leaveGroupRequested.get());
