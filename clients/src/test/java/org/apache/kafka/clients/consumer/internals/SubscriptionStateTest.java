@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -36,7 +37,7 @@ import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
 
-    private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+    private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST, new Metrics());
     private final String topic = "test";
     private final String topic1 = "test1";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
