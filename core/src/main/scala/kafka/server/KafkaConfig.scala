@@ -27,9 +27,9 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, Message
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
-import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{MetricsReporter, Sensor}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
 
@@ -58,6 +58,11 @@ object Defaults {
   /** ********* Socket Server Configuration ***********/
   val Port = 9092
   val HostName: String = new String("")
+
+  val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
+    s"${listenerName.value}:${securityProtocol.name}"
+  }.mkString(",")
+
   val SocketSendBufferBytes: Int = 100 * 1024
   val SocketReceiveBufferBytes: Int = 100 * 1024
   val SocketRequestMaxBytes: Int = 100 * 1024 * 1024
@@ -223,6 +228,7 @@ object KafkaConfig {
   val AdvertisedHostNameProp: String = "advertised.host.name"
   val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
+  val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
@@ -295,6 +301,7 @@ object KafkaConfig {
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
+  val InterBrokerListenerNameProp = "inter.broker.listener.name"
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
@@ -387,12 +394,13 @@ object KafkaConfig {
   val HostNameDoc = "DEPRECATED: only used when `listeners` is not set. " +
   "Use `listeners` instead. \n" +
   "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
-  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and their protocols.\n" +
+  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
+  s" If the listener name is not a security protocol, $ListenerSecurityProtocolMapProp must also be set.\n" +
   " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
   " Leave hostname empty to bind to default interface.\n" +
   " Examples of legal listener lists:\n" +
-  " PLAINTEXT://myhost:9092,TRACE://:9091\n" +
-  " PLAINTEXT://0.0.0.0:9092, TRACE://localhost:9093\n"
+  " PLAINTEXT://myhost:9092,SSL://:9091\n" +
+  " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
   val AdvertisedHostNameDoc = "DEPRECATED: only used when `advertised.listeners` or `listeners` are not set. " +
   "Use `advertised.listeners` instead. \n" +
   "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
@@ -407,6 +415,12 @@ object KafkaConfig {
   val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the listeners above." +
   " In IaaS environments, this may need to be different from the interface to which the broker binds." +
   " If this is not set, the value for `listeners` will be used."
+  val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
+    "the same security protocol to be usable in more than one port or IP. For example, we can separate internal and " +
+    "external traffic even if SSL is required for both. Concretely, we could define listeners with names INTERNAL " +
+    "and EXTERNAL and this property as: `INTERNAL:SSL,EXTERNAL:SSL`. As shown, key and value are separated by a colon " +
+    "and map entries are separated by commas. Each listener name should only appear once in the map."
+
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketRequestMaxBytesDoc = "The maximum number of bytes in a socket request"
@@ -504,10 +518,13 @@ object KafkaConfig {
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
-    s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}."
+    s"${SecurityProtocol.nonTestingValues.asScala.toSeq.map(_.name).mkString(", ")}. It is an error to set this and " +
+    s"$InterBrokerListenerNameProp properties at the same time."
   val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
   " This is typically bumped after all brokers were upgraded to a new version.\n" +
   " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check ApiVersion for the full list."
+  val InterBrokerListenerNameDoc = s"Name of listener used for communication between brokers. If this is unset, the listener name is defined by $InterBrokerSecurityProtocolProp. " +
+    s"It is an error to set this and $InterBrokerSecurityProtocolProp properties at the same time."
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
@@ -617,6 +634,7 @@ object KafkaConfig {
       .define(AdvertisedHostNameProp, STRING, null, HIGH, AdvertisedHostNameDoc)
       .define(AdvertisedPortProp, INT, null, HIGH, AdvertisedPortDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
+      .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
@@ -692,6 +710,7 @@ object KafkaConfig {
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
+      .define(InterBrokerListenerNameProp, STRING, null, MEDIUM, InterBrokerListenerNameDoc)
 
       /** ********* Controlled shutdown configuration ***********/
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
@@ -885,7 +904,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val leaderImbalancePerBrokerPercentage = getInt(KafkaConfig.LeaderImbalancePerBrokerPercentageProp)
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
   val uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
-  val interBrokerSecurityProtocol = SecurityProtocol.forName(getString(KafkaConfig.InterBrokerSecurityProtocolProp))
+
+  val (interBrokerListenerName, interBrokerSecurityProtocol) = getInterBrokerListenerNameAndSecurityProtocol
+
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
@@ -953,9 +974,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   val compressionType = getString(KafkaConfig.CompressionTypeProp)
-
-  val listeners = getListeners
-  val advertisedListeners = getAdvertisedListeners
+  val listeners: Seq[EndPoint] = getListeners
+  val advertisedListeners: Seq[EndPoint] = getAdvertisedListeners
+  private[kafka] lazy val listenerSecurityProtocolMap = getListenerSecurityProtocolMap
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
@@ -980,45 +1001,57 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     }
   }
 
-  private def validateUniquePortAndProtocol(listeners: String) {
-
-    val endpoints = try {
-      val listenerList = CoreUtils.parseCsvList(listeners)
-      listenerList.map(listener => EndPoint.createEndPoint(listener))
-    } catch {
-      case e: Exception => throw new IllegalArgumentException("Error creating broker listeners from '%s': %s".format(listeners, e.getMessage))
-    }
-    // filter port 0 for unit tests
-    val endpointsWithoutZeroPort = endpoints.map(ep => ep.port).filter(_ != 0)
-    val distinctPorts = endpointsWithoutZeroPort.distinct
-    val distinctProtocols = endpoints.map(ep => ep.protocolType).distinct
-
-    require(distinctPorts.size == endpointsWithoutZeroPort.size, "Each listener must have a different port")
-    require(distinctProtocols.size == endpoints.size, "Each listener must have a different protocol")
-  }
-
   // If the user did not define listeners but did define host or port, let's use them in backward compatible way
   // If none of those are defined, we default to PLAINTEXT://:9092
-  private def getListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
-    if (getString(KafkaConfig.ListenersProp) != null) {
-      validateUniquePortAndProtocol(getString(KafkaConfig.ListenersProp))
-      CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp))
-    } else {
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port)
-    }
+  private def getListeners: Seq[EndPoint] = {
+    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
+      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
+    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
   }
 
   // If the user defined advertised listeners, we use those
   // If he didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
   // If none of these are defined, we'll use the listeners
-  private def getAdvertisedListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
-    if (getString(KafkaConfig.AdvertisedListenersProp) != null) {
-      validateUniquePortAndProtocol(getString(KafkaConfig.AdvertisedListenersProp))
-      CoreUtils.listenerListToEndPoints(getString(KafkaConfig.AdvertisedListenersProp))
-    } else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null) {
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort)
-    } else {
-      getListeners()
+  private def getAdvertisedListeners: Seq[EndPoint] = {
+    val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
+    if (advertisedListenersProp != null)
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap)
+    else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap)
+    else
+      getListeners
+  }
+
+  private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
+    Option(getString(KafkaConfig.InterBrokerListenerNameProp)) match {
+      case Some(_) if originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) =>
+        throw new ConfigException(s"Only one of ${KafkaConfig.InterBrokerListenerNameProp} and " +
+          s"${KafkaConfig.InterBrokerSecurityProtocolProp} should be set.")
+      case Some(name) =>
+        val listenerName = ListenerName.normalised(name)
+        val securityProtocol = listenerSecurityProtocolMap.getOrElse(listenerName,
+          throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
+            s"${KafkaConfig.InterBrokerListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
+        (listenerName, securityProtocol)
+      case None =>
+        val securityProtocol = getSecurityProtocol(getString(KafkaConfig.InterBrokerSecurityProtocolProp),
+          KafkaConfig.InterBrokerSecurityProtocolProp)
+        (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    }
+  }
+
+  private def getSecurityProtocol(protocolName: String, configName: String): SecurityProtocol = {
+    try SecurityProtocol.forName(protocolName)
+    catch {
+      case e: IllegalArgumentException =>
+        throw new ConfigException(s"Invalid security protocol `$protocolName` defined in $configName")
+    }
+  }
+
+  private def getListenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
+    getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
+      .map { case (listenerName, protocolName) =>
+      ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
     }
   }
 
@@ -1043,12 +1076,16 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
-    require(advertisedListeners.keySet.contains(interBrokerSecurityProtocol),
-      s"${KafkaConfig.InterBrokerSecurityProtocolProp} must be a protocol in the configured set of ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured protocols are ${advertisedListeners.keySet}")
-    require(advertisedListeners.keySet.subsetOf(listeners.keySet),
-      s"${KafkaConfig.AdvertisedListenersProp} protocols must be equal to or a subset of ${KafkaConfig.ListenersProp} protocols. " +
-      s"Found ${advertisedListeners.keySet}. The valid options based on currently configured protocols are ${listeners.keySet}"
+
+    val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
+    val listenerNames = listeners.map(_.listenerName).toSet
+    require(advertisedListenerNames.contains(interBrokerListenerName),
+      s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+      s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+    require(advertisedListenerNames.subsetOf(listenerNames),
+      s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
+      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+      s"are ${listenerNames.map(_.value).mkString(",")}"
     )
     require(interBrokerProtocolVersion >= logMessageFormatVersion,
       s"log.message.format.version $logMessageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
