@@ -97,7 +97,7 @@ public class TopologyBuilder {
     // are connected to these state stores
     private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
 
-    // map from state store names to ths state store's corresponding changelog topic if possible,
+    // map from state store names to this state store's corresponding changelog topic if possible,
     // this is used in the extended KStreamBuilder.
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
