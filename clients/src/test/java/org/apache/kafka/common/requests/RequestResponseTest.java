@@ -108,7 +108,7 @@ public class RequestResponseTest {
         checkSerialization(createApiVersionResponse(), null);
         checkSerialization(createCreateTopicRequest(0), 0);
         checkSerialization(createCreateTopicRequest(0).getErrorResponse(new UnknownServerException()), 0);
-        checkSerialization(createCreateTopicResponse(0),0);
+        checkSerialization(createCreateTopicResponse(0), 0);
         checkSerialization(createCreateTopicRequest(1), 1);
         checkSerialization(createCreateTopicRequest(1).getErrorResponse(new UnknownServerException()), 1);
         checkSerialization(createCreateTopicResponse(1), 1);
