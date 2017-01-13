@@ -108,7 +108,7 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
-    
+
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
 
@@ -692,7 +692,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
     }
-    
+
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
         int rebalanceTimeoutMs = 60000;
@@ -712,7 +712,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
-        
+
         consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
@@ -1207,7 +1207,7 @@ public class KafkaConsumerTest {
             });
 
             // Close task should not complete until commit succeeds or close times out
-            // if close timeout is not zero,
+            // if close timeout is not zero.
             try {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
@@ -1216,9 +1216,13 @@ public class KafkaConsumerTest {
                 // Expected exception
             }
 
+            // Ensure close has started and queued at least one more request after commitAsync
+            client.waitForRequests(2, 1000);
+
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             for (int i = 0; i < responses.size(); i++) {
+                client.waitForRequests(1, 1000);
                 client.respondFrom(responses.get(i), coordinator);
                 if (i != responses.size() - 1) {
                     try {
@@ -1430,7 +1434,7 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
-        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
+        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy, metrics);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 consumerClient,

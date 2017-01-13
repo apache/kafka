@@ -113,7 +113,7 @@ public class ConsumerCoordinatorTest {
     public void setup() {
         this.time = new MockTime();
         this.client = new MockClient(time);
-        this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+        this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST, metrics);
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.metadata.update(cluster, time.milliseconds());
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
@@ -279,7 +279,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test(expected = ApiException.class)
-    public void testJoinGroupInvalidGroupId() { 
+    public void testJoinGroupInvalidGroupId() {
         final String consumerId = "leader";
 
         subscriptions.subscribe(singleton(topicName), rebalanceListener);
@@ -619,7 +619,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testMetadataChangeTriggersRebalance() { 
+    public void testMetadataChangeTriggersRebalance() {
         final String consumerId = "consumer";
 
         // ensure metadata is up-to-date for leader
@@ -703,7 +703,7 @@ public class ConsumerCoordinatorTest {
 
 
     @Test
-    public void testExcludeInternalTopicsConfigOption() { 
+    public void testExcludeInternalTopicsConfigOption() {
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
         metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
@@ -720,7 +720,7 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(subscriptions.subscription().contains(TestUtils.GROUP_METADATA_TOPIC_NAME));
     }
-    
+
     @Test
     public void testRejoinGroup() {
         String otherTopic = "otherTopic";
@@ -1357,7 +1357,12 @@ public class ConsumerCoordinatorTest {
                     coordinator.close(Math.min(closeTimeoutMs, requestTimeoutMs));
                 }
             });
-            Thread.sleep(100);
+            // Wait for close to start. If coordinator is known, wait for close to queue
+            // at least one request. Otherwise, sleep for a short time.
+            if (!coordinator.coordinatorUnknown())
+                client.waitForRequests(1, 1000);
+            else
+                Thread.sleep(200);
             if (expectedMinTimeMs > 0) {
                 time.sleep(expectedMinTimeMs - 1);
                 try {
@@ -1395,7 +1400,7 @@ public class ConsumerCoordinatorTest {
             }
         }, new LeaveGroupResponse(Errors.NONE.code()));
 
-        closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
+        coordinator.close();
         assertTrue("Commit not requested", commitRequested.get());
         if (dynamicAssignment)
             assertTrue("Leave group not requested", leaveGroupRequested.get());

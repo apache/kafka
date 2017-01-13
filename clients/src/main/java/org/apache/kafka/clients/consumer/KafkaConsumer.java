@@ -663,7 +663,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-            this.subscriptions = new SubscriptionState(offsetResetStrategy);
+            this.subscriptions = new SubscriptionState(offsetResetStrategy, metrics);
             List<PartitionAssignor> assignors = config.getConfiguredInstances(
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
@@ -1547,7 +1547,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
         try {
-            coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
+            if (coordinator != null)
+                coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
         } catch (Throwable t) {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
