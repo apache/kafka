@@ -421,7 +421,8 @@ object AdminUtils extends Logging with AdminUtilities {
                                                      topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
-                                                     update: Boolean = false) {
+                                                     update: Boolean = false,
+                                                     validateOnly: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
 
@@ -450,13 +451,17 @@ object AdminUtils extends Logging with AdminUtilities {
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update) {
-      // write out the config if there is any, this isn't transactional with the partition assignments
       LogConfig.validate(config)
-      writeEntityConfig(zkUtils, getEntityConfigPath(ConfigType.Topic, topic), config)
+      if (!validateOnly) {
+        // write out the config if there is any, this isn't transactional with the partition assignments
+        writeEntityConfig(zkUtils, getEntityConfigPath(ConfigType.Topic, topic), config)
+      }
     }
 
-    // create the partition assignment
-    writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
+    if (!validateOnly) {
+      // create the partition assignment
+      writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
+    }
   }
 
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
