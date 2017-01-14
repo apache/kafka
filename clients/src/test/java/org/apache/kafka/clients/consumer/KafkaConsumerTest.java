@@ -497,7 +497,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE),
                 coordinator);
 
         assertEquals(offset1, consumer.committed(tp0).offset());
@@ -508,7 +508,7 @@ public class KafkaConsumerTest {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp0, offset1);
         offsets.put(tp1, offset2);
-        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
 
         assertEquals(offset1, consumer.committed(tp0).offset());
         assertEquals(offset2, consumer.committed(tp1).offset());
@@ -999,7 +999,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE),
                 coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
 
@@ -1064,7 +1064,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE),
                 coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
 
@@ -1365,7 +1365,7 @@ public class KafkaConsumerTest {
         return new SyncGroupResponse(error, buf);
     }
 
-    private OffsetFetchResponse offsetResponse(Map<TopicPartition, Long> offsets, short error) {
+    private OffsetFetchResponse offsetResponse(Map<TopicPartition, Long> offsets, Errors error) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(), "", error));
