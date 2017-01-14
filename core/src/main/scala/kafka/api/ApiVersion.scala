@@ -61,6 +61,7 @@ object ApiVersion {
     "0.10.1-IV2" -> KAFKA_0_10_1_IV2,
     "0.10.1" -> KAFKA_0_10_1_IV2,
     // introduced UpdateMetadataRequest v3 in KIP-103
+    // introduced OffsetFetchResponse v2 in KIP-88
     "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
     "0.10.2" -> KAFKA_0_10_2_IV0
   )
