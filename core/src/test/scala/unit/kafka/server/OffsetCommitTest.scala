@@ -234,7 +234,9 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // committed offset should exist with fetch version 0
-    assertEquals(1L, simpleConsumer.fetchOffsets(OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)), versionId = 0)).requestInfo.get(topicPartition).get.offset)
+    val offsetFetchReq = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)), versionId = 0)
+    val offsetFetchResp = simpleConsumer.fetchOffsets(offsetFetchReq)
+    assertEquals(1L, offsetFetchResp.requestInfo.get(topicPartition).get.offset)
 
 
     // v1 version commit request with commit timestamp set to -1
