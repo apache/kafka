@@ -208,7 +208,7 @@ public class IntegrationTestUtils {
             }
         };
 
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
@@ -248,7 +248,7 @@ public class IntegrationTestUtils {
             }
         };
 
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 

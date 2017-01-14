@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
@@ -201,6 +202,7 @@ public class KafkaStreamsTest {
             final Properties props = new Properties();
             props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
             props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+            props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
             final KStreamBuilder builder = new KStreamBuilder();
             final CountDownLatch latch = new CountDownLatch(1);
