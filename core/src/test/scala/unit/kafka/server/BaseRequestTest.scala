@@ -121,7 +121,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket): ByteBuffer = {
     correlationId += 1
     val serializedBytes = {
-      val header = new RequestHeader(apiKey.id, request.version, "", correlationId)
+      val header = new RequestHeader(apiKey.id, request.version, "client-id", correlationId)
       val byteBuffer = ByteBuffer.allocate(header.sizeOf() + request.sizeOf)
       header.writeTo(byteBuffer)
       request.writeTo(byteBuffer)

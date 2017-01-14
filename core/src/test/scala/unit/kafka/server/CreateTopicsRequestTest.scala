@@ -63,17 +63,17 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
     // Basic
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map(existingTopic -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, timeout).build(),
-      Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS)))
+      Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS, Some("""Topic "existing-topic" already exists."""))))
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-partitions" -> new CreateTopicsRequest.TopicDetails(-1, 1.toShort)).asJava, timeout).build(),
-      Map("error-partitions" -> error(Errors.INVALID_PARTITIONS)))
+      Map("error-partitions" -> error(Errors.INVALID_PARTITIONS)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-replication" -> new CreateTopicsRequest.TopicDetails(1, (numBrokers + 1).toShort)).asJava, timeout).build(),
-      Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR)))
+      Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR)), checkErrorMessage = false)
     val invalidConfig = Map("not.a.property" -> "error").asJava
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-config" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort, invalidConfig)).asJava, timeout).build(),
-      Map("error-config" -> error(Errors.INVALID_CONFIG)))
+      Map("error-config" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
     val invalidAssignments = replicaAssignmentToJava(Map(0 -> List(0, 1), 1 -> List(0)))
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-assignment" -> new CreateTopicsRequest.TopicDetails(invalidAssignments)).asJava, timeout).build(),
-      Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)))
+      Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)
 
     // Partial
     validateErrorCreateTopicsRequests(
@@ -89,19 +89,19 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
         "partial-replication" -> error(Errors.INVALID_REPLICATION_FACTOR),
         "partial-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT),
         "partial-none" -> error(Errors.NONE)
-      )
+      ), checkErrorMessage = false
     )
     validateTopicExists("partial-none")
 
     // Timeout
     // We don't expect a request to ever complete within 1ms. A timeout of 1 ms allows us to test the purgatory timeout logic.
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-timeout" -> new CreateTopicsRequest.TopicDetails(10, 3.toShort)).asJava, 1).build(),
-      Map("error-timeout" -> error(Errors.REQUEST_TIMED_OUT)))
+      Map("error-timeout" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-timeout-zero" -> new CreateTopicsRequest.TopicDetails(10, 3.toShort)).asJava, 0).build(),
-      Map("error-timeout-zero" -> error(Errors.REQUEST_TIMED_OUT)))
+      Map("error-timeout-zero" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
     // Negative timeouts are treated the same as 0
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-timeout-negative" -> new CreateTopicsRequest.TopicDetails(10, 3.toShort)).asJava, -1).build(),
-      Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)))
+      Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
     // The topics should still get created eventually
     TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout", 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout-zero", 0)
@@ -118,7 +118,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
         new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
     val duplicateRequest = duplicateFirstTopic(singleRequest)
     assertFalse("Request doesn't have duplicate topics", duplicateRequest.duplicateTopics().isEmpty)
-    validateErrorCreateTopicsRequests(duplicateRequest, Map("duplicate-topic" -> error(Errors.INVALID_REQUEST)))
+    validateErrorCreateTopicsRequests(duplicateRequest, Map("duplicate-topic" -> error(Errors.INVALID_REQUEST,
+      Some("""Create topics request from client `client-id` contains multiple entries for the following topics: duplicate-topic"""))))
 
     // Duplicate Partial with validateOnly
     val doubleRequestValidateOnly = new CreateTopicsRequest.Builder(Map(
@@ -128,7 +129,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequestValidateOnly.duplicateTopics.isEmpty)
     validateErrorCreateTopicsRequests(duplicateDoubleRequestValidateOnly, Map(
       "duplicate-topic" -> error(Errors.INVALID_REQUEST),
-      "other-topic" -> error(Errors.NONE)))
+      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false)
 
     // Duplicate Partial
     val doubleRequest = new CreateTopicsRequest.Builder(Map(
@@ -138,20 +139,22 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequest.duplicateTopics.isEmpty)
     validateErrorCreateTopicsRequests(duplicateDoubleRequest, Map(
       "duplicate-topic" -> error(Errors.INVALID_REQUEST),
-      "other-topic" -> error(Errors.NONE)))
+      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false)
 
     // Partitions/ReplicationFactor and ReplicaAssignment
     val assignments = replicaAssignmentToJava(Map(0 -> List(0)))
     val assignmentRequest = new CreateTopicsRequest.Builder(Map("bad-args-topic" ->
         new CreateTopicsRequest.TopicDetails(assignments)).asJava, 1000).build()
     val badArgumentsRequest = addPartitionsAndReplicationFactorToFirstTopic(assignmentRequest)
-    validateErrorCreateTopicsRequests(badArgumentsRequest, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)))
+    validateErrorCreateTopicsRequests(badArgumentsRequest, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)),
+      checkErrorMessage = false)
 
     // Partitions/ReplicationFactor and ReplicaAssignment with validateOnly
     val assignmentRequestValidateOnly = new CreateTopicsRequest.Builder(Map("bad-args-topic" ->
       new CreateTopicsRequest.TopicDetails(assignments)).asJava, 1000, true).build()
     val badArgumentsRequestValidateOnly = addPartitionsAndReplicationFactorToFirstTopic(assignmentRequestValidateOnly)
-    validateErrorCreateTopicsRequests(badArgumentsRequestValidateOnly, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)))
+    validateErrorCreateTopicsRequests(badArgumentsRequestValidateOnly, Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)),
+      checkErrorMessage = false)
   }
 
   @Test
@@ -160,7 +163,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     val response = sendCreateTopicRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2.error
-    assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER, error)
+    assertEquals("Expected controller error when routed incorrectly", Errors.NOT_CONTROLLER, error)
   }
 
 }

@@ -101,7 +101,8 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
-                                                  expectedResponse: Map[String, CreateTopicsResponse.Error]): Unit = {
+                                                  expectedResponse: Map[String, CreateTopicsResponse.Error],
+                                                  checkErrorMessage: Boolean = true): Unit = {
     val response = sendCreateTopicRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
@@ -110,8 +111,10 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       val expected = expectedResponse(topic)
       val actual = errors(topic)
       assertEquals("The response error should match", expected.error, actual.error)
-      assertEquals(expected.message, actual.message)
-      assertEquals(expected.messageWithFallback, actual.messageWithFallback)
+      if (checkErrorMessage) {
+        assertEquals(expected.message, actual.message)
+        assertEquals(expected.messageWithFallback, actual.messageWithFallback)
+      }
       // If no error validate topic exists
       if (expectedError.is(Errors.NONE) && !request.validateOnly) {
         validateTopicExists(topic)
