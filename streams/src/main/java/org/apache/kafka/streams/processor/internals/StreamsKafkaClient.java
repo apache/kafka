@@ -140,7 +140,7 @@ public class StreamsKafkaClient {
                 if (error.is(Errors.TOPIC_ALREADY_EXISTS)) {
                     continue;
                 } else {
-                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.message());
+                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
                 }
             }
         }

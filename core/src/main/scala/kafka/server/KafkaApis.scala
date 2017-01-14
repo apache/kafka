@@ -1173,7 +1173,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val duplicatedTopicsResults =
           if (duplicateTopics.nonEmpty) {
-            val errorMessage = s"Create topics request from client ${request.header.clientId} contains multiple entries " +
+            val errorMessage = s"Create topics request from client `${request.header.clientId}` contains multiple entries " +
               s"for the following topics: ${duplicateTopics.keySet.mkString(",")}"
             // We can send the error message in the response for version 1, so we don't have to log it any more
             if (request.header.apiVersion == 0)

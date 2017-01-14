@@ -55,6 +55,10 @@ public class CreateTopicsResponse extends AbstractResponse {
         }
 
         public String message() {
+            return message;
+        }
+
+        public String messageWithFallback() {
             if (message == null)
                 return error.message();
             return message;
@@ -86,18 +90,17 @@ public class CreateTopicsResponse extends AbstractResponse {
     public CreateTopicsResponse(Map<String, Error> errors, short version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version)));
 
-        List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
+        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Error> topicError : errors.entrySet()) {
-            Struct topicErrorCodeStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
-            topicErrorCodeStruct.set(TOPIC_KEY_NAME, topicError.getKey());
+            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
+            topicErrorsStruct.set(TOPIC_KEY_NAME, topicError.getKey());
             Error error = topicError.getValue();
-            topicErrorCodeStruct.set(ERROR_CODE_KEY_NAME, error.error.code());
-            if (version >= 1) {
-                topicErrorCodeStruct.set(ERROR_MESSAGE_KEY_NAME, error.error.message());
-                topicErrorCodeStructs.add(topicErrorCodeStruct);
-            }
+            topicErrorsStruct.set(ERROR_CODE_KEY_NAME, error.error.code());
+            if (version >= 1)
+                topicErrorsStruct.set(ERROR_MESSAGE_KEY_NAME, error.message());
+            topicErrorsStructs.add(topicErrorsStruct);
         }
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorCodeStructs.toArray());
+        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
 
         this.errors = errors;
     }
@@ -105,10 +108,10 @@ public class CreateTopicsResponse extends AbstractResponse {
     public CreateTopicsResponse(Struct struct) {
         super(struct);
 
-        Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
+        Object[] topicErrorStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
         Map<String, Error> errors = new HashMap<>();
-        for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
-            Struct topicErrorCodeStruct = (Struct) topicErrorCodeStructObj;
+        for (Object topicErrorStructObj : topicErrorStructs) {
+            Struct topicErrorCodeStruct = (Struct) topicErrorStructObj;
             String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
             short errorCode = topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME);
             String errorMessage = null;
