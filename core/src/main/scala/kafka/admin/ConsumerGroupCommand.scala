@@ -308,8 +308,8 @@ object ConsumerGroupCommand extends Logging {
           // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
           // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
           try {
-            val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-            offsetMap.put(topicAndPartition, offset)
+            val offset = zkUtils.getOffset(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)
+            offsetMap.put(topicAndPartition, offset.get)
           } catch {
             case z: ZkNoNodeException =>
               printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
