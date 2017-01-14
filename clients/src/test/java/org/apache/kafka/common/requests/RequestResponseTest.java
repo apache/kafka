@@ -15,6 +15,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
@@ -90,6 +91,8 @@ public class RequestResponseTest {
         checkSerialization(createOffsetCommitRequest(2));
         checkSerialization(createOffsetCommitRequest(2).getErrorResponse(new UnknownServerException()), null);
         checkSerialization(createOffsetCommitResponse(), null);
+        checkSerialization(OffsetFetchRequest.forAllPartitions("group1"));
+        checkSerialization(OffsetFetchRequest.forAllPartitions("group1").getErrorResponse(new NotCoordinatorForGroupException()), 2);
         checkSerialization(createOffsetFetchRequest());
         checkSerialization(createOffsetFetchRequest().getErrorResponse(new UnknownServerException()), null);
         checkSerialization(createOffsetFetchResponse(), null);
@@ -426,8 +429,8 @@ public class RequestResponseTest {
 
     private OffsetFetchResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
-        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE.code()));
+        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE));
+        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE));
         return new OffsetFetchResponse(responseData);
     }
 
