@@ -334,8 +334,12 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val keyString = s"metadata::$groupId"
-      val valueString = s"$protocolType:${group.protocol}:${group.generationId}:$assignment"
+      val keyString = Json.encode(Map("metadata" -> groupId))
+      val valueString = Json.encode(Map(
+          "protocolType" -> protocolType,
+          "groupMetadata.protocol" -> group.protocol,
+          "groupMetadata.generationId" -> group.generationId,
+          "assignment" -> assignment))
 
       (Some(keyString), Some(valueString))
     }
