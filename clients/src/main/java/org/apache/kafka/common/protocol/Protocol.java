@@ -913,6 +913,10 @@ public class Protocol {
 
     public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
 
+    // Improves on TOPIC_ERROR_CODE by adding an error_message to complement the error_code
+    public static final Schema TOPIC_ERROR = new Schema(new Field("topic", STRING), new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING));
+
     /* CreateTopic api */
     public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
         new Field("topic",
@@ -940,12 +944,30 @@ public class Protocol {
             "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"));
 
     public static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
-        new Field("topic_error_codes",
+        new Field("topic_errors",
             new ArrayOf(TOPIC_ERROR_CODE),
             "An array of per topic error codes."));
 
-    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0};
-    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0};
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V1 = SINGLE_CREATE_TOPIC_REQUEST_V0;
+
+    public static final Schema CREATE_TOPICS_REQUEST_V1 = new Schema(
+            new Field("create_topic_requests",
+                    new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1),
+                    "An array of single topic creation requests. Can not have multiple entries for the same topic."),
+            new Field("timeout",
+                    INT32,
+                    "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"),
+            new Field("validate_only",
+                    BOOLEAN,
+                    "If this is true, the request will be validated, but the topic won't be created."));
+
+    public static final Schema CREATE_TOPICS_RESPONSE_V1 = new Schema(
+            new Field("topic_errors",
+                    new ArrayOf(TOPIC_ERROR),
+                    "An array of per topic errors."));
+
+    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1};
 
     /* DeleteTopic api */
     public static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
