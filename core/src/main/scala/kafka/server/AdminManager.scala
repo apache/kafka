@@ -42,7 +42,7 @@ class AdminManager(val config: KafkaConfig,
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
 
-  private val createTopicPolicy = Option(config.createTopicsPolicyClassName).map { className =>
+  private val createTopicPolicy = Option(KafkaConfig.CreateTopicsPolicyClassNameProp).map { className =>
     config.getConfiguredInstance(className, classOf[CreateTopicPolicy])
   }
 
