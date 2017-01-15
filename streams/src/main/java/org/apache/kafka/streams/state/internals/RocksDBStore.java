@@ -253,7 +253,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private void putInternal(byte[] rawKey, byte[] rawValue) {
         if (rawValue == null) {
             try {
-                db.remove(wOptions, rawKey);
+                db.delete(wOptions, rawKey);
             } catch (RocksDBException e) {
                 throw new ProcessorStateException("Error while removing key " + serdes.keyFrom(rawKey) +
                         " from store " + this.name, e);
@@ -274,7 +274,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (KeyValue<K, V> entry : entries) {
                 final byte[] rawKey = serdes.rawKey(entry.key);
                 if (entry.value == null) {
-                    db.remove(rawKey);
+                    db.delete(rawKey);
                 } else {
                     final byte[] value = serdes.rawValue(entry.value);
                     batch.put(rawKey, value);
