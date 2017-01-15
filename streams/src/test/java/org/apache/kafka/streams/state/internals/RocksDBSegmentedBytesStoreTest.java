@@ -62,8 +62,8 @@ public class RocksDBSegmentedBytesStoreTest {
                                                     new SessionKeySchema());
 
         stateDir = TestUtils.tempDirectory();
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      stateDir,
+        final MockProcessorContext context = new MockProcessorContext(
+                stateDir,
                                                                       Serdes.String(),
                                                                       Serdes.Long(),
                                                                       new NoOpRecordCollector(),

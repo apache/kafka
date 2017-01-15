@@ -50,8 +50,8 @@ public class SegmentIteratorTest {
 
     @Before
     public void before() {
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
+        final MockProcessorContext context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.String(),
                                                                       new NoOpRecordCollector(),

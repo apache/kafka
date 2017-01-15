@@ -43,8 +43,8 @@ public class SegmentsTest {
 
     @Before
     public void createContext() {
-        context = new MockProcessorContext(null,
-                                           TestUtils.tempDirectory(),
+        context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),

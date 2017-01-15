@@ -52,8 +52,8 @@ public class ChangeLoggingSegmentedBytesStoreTest {
                 sent.put(record.key(), record.value());
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
+        final MockProcessorContext context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.Long(),
                                                                       collector,
