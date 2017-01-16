@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -81,6 +82,7 @@ public class QueryableStateIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final int STREAM_THREE_PARTITIONS = 4;
     private final MockTime mockTime = CLUSTER.time;
     private String streamOne = "stream-one";
     private String streamTwo = "stream-two";
@@ -91,7 +93,7 @@ public class QueryableStateIntegrationTest {
     private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
-    private static final int NUM_PARTITIONS = 2;
+    private static final int STREAM_TWO_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -111,8 +113,8 @@ public class QueryableStateIntegrationTest {
         streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopic(streamOne);
         CLUSTER.createTopic(streamConcurrent);
-        CLUSTER.createTopic(streamTwo, NUM_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(streamThree, 4, 1);
+        CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
         CLUSTER.createTopic(outputTopic);
         CLUSTER.createTopic(outputTopicConcurrent);
         CLUSTER.createTopic(outputTopicThree);
@@ -145,13 +147,22 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
 
-        CLUSTER.waitForTopics(new StreamsConfig(streamsConfiguration), streamOne,
-                              streamTwo,
-                              streamThree,
-                              streamConcurrent,
-                              outputTopic,
-                              outputTopicConcurrent,
-                              outputTopicThree);
+        IntegrationTestUtils.waitForTopicPartitions(CLUSTER.brokers(),
+                                                    Arrays.asList(new TopicPartition(streamOne, 0),
+                                                              new TopicPartition(streamTwo, 0),
+                                                              new TopicPartition(streamTwo, 1),
+                                                              new TopicPartition(streamThree, 0),
+                                                              new TopicPartition(streamThree, 1),
+                                                              new TopicPartition(streamThree, 2),
+                                                              new TopicPartition(streamThree, 3),
+                                                              new TopicPartition(streamConcurrent, 0),
+                                                              new TopicPartition(outputTopic, 0),
+                                                              new TopicPartition(outputTopicConcurrent, 0),
+                                                              new TopicPartition(outputTopicThree, 0)),
+                                                    30000);
+
+
+
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
@@ -335,7 +346,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void queryOnRebalance() throws Exception {
-        final int numThreads = NUM_PARTITIONS;
+        final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
         final int numIterations = 500000;

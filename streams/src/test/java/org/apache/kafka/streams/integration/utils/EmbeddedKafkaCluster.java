@@ -18,21 +18,17 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaConfig$;
+import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
-import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
@@ -41,7 +37,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
-    public static final int MAX_TOPIC_CREATION_WAIT_TIME = 30000;
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
     private final Properties brokerConfig;
@@ -164,19 +159,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokers[0].deleteTopic(topic);
     }
 
-    public void waitForTopics(final StreamsConfig config, final String...topics) throws InterruptedException, IOException {
-        final StreamsKafkaClient streamsKafkaClient = new StreamsKafkaClient(config);
-        final Set<String> expectedTopics = new HashSet<>(Arrays.asList(topics));
-        final long start = System.currentTimeMillis();
-        while (!expectedTopics.isEmpty() && System.currentTimeMillis() - start < MAX_TOPIC_CREATION_WAIT_TIME) {
-            final Collection<MetadataResponse.TopicMetadata> topicMetadatas =
-                    streamsKafkaClient.fetchTopicMetadata();
-            for (MetadataResponse.TopicMetadata topicMetadata : topicMetadatas) {
-                expectedTopics.remove(topicMetadata.topic());
-            }
-            Thread.sleep(10);
+    public List<KafkaServer> brokers() {
+        final List<KafkaServer> servers = new ArrayList<>();
+        for (final KafkaEmbedded broker : brokers) {
+            servers.add(broker.kafkaServer());
         }
-        streamsKafkaClient.close();
-
+        return servers;
     }
 }
