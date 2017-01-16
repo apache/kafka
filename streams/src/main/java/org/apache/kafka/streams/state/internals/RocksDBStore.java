@@ -99,22 +99,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     public RocksDBStore(final String name,
                         final Serde<K> keySerde,
-                        final Serde<V> valueSerde,
-                        final boolean logged) {
-        this(name, DB_FILE_DIR, keySerde, valueSerde, logged);
+                        final Serde<V> valueSerde) {
+        this(name, DB_FILE_DIR, keySerde, valueSerde);
     }
 
 
     public RocksDBStore(final String name,
                         final String parentDir,
                         final Serde<K> keySerde,
-                        final Serde<V> valueSerde,
-                        final boolean logged) {
+                        final Serde<V> valueSerde) {
         this.name = name;
         this.parentDir = parentDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.loggingEnabled = logged;
 
         // initialize the default rocksdb options
         BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -162,7 +159,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, loggingEnabled, new StateRestoreCallback() {
+        context.register(root, false, new StateRestoreCallback() {
 
             @Override
             public void restore(byte[] key, byte[] value) {

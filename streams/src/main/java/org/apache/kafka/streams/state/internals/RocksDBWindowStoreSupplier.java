@@ -65,8 +65,8 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
                                 name,
                                 retentionPeriod,
                                 numSegments,
-                                new WindowStoreKeySchema(),
-                                logged)));
+                                new WindowStoreKeySchema()
+                        )));
 
     }
 

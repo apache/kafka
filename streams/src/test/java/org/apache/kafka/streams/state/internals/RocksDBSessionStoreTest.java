@@ -47,7 +47,7 @@ public class RocksDBSessionStoreTest {
     @Before
     public void before() {
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, new SessionKeySchema(), false);
+                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, new SessionKeySchema());
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),

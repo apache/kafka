@@ -17,21 +17,22 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -41,49 +42,92 @@ import static org.junit.Assert.assertTrue;
 
 public class RocksDBKeyValueStoreSupplierTest {
 
-    @Test
-    public void shouldRegisterWithLoggingEnabledWhenStoreLogged() throws Exception {
-        final KeyValueStore<String, String> store = createStore(true, false);
-        store.init(new MyMockProcessorContext() {
-            @Override
-            public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
-                assertTrue("store should be registering as loggingEnabled", loggingEnabled);
-            }
-        }, store);
+    private static final String STORE_NAME = "name";
+    private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics(new Metrics()));
+    private final MockProcessorContext context = new MockProcessorContext(null,
+                                                                          TestUtils.tempDirectory(),
+                                                                          Serdes.String(),
+                                                                          Serdes.String(),
+                                                                          new NoOpRecordCollector(),
+                                                                          cache);
+    private KeyValueStore<String, String> store;
+
+    @After
+    public void close() {
+        store.close();
     }
 
     @Test
-    public void shouldRegisterWithLoggingDisabledWhenStoreNotLogged() throws Exception {
-        final KeyValueStore<String, String> store = createStore(false, false);
-        store.init(new MyMockProcessorContext() {
+    public void shouldCreateLoggingEnabledStoreWhenStoreLogged() throws Exception {
+        store = createStore(true, false);
+        final List<ProducerRecord> logged = new ArrayList<>();
+        final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
-            public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
-                assertFalse("store should not be registering as loggingEnabled", loggingEnabled);
+            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+                logged.add(record);
             }
+        };
+        final MockProcessorContext context = new MockProcessorContext(null,
+                                                                      TestUtils.tempDirectory(),
+                                                                      Serdes.String(),
+                                                                      Serdes.String(),
+                                                                      collector,
+                                                                      cache);
+        context.setTime(1);
+        store.init(context, store);
+        store.put("a", "b");
+        assertFalse(logged.isEmpty());
+    }
 
-        }, store);
+    @Test
+    public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() throws Exception {
+        store = createStore(false, false);
+        final List<ProducerRecord> logged = new ArrayList<>();
+        final NoOpRecordCollector collector = new NoOpRecordCollector() {
+            @Override
+            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+                logged.add(record);
+            }
+        };
+        final MockProcessorContext context = new MockProcessorContext(null,
+                                                                      TestUtils.tempDirectory(),
+                                                                      Serdes.String(),
+                                                                      Serdes.String(),
+                                                                      collector,
+                                                                      cache);
+        context.setTime(1);
+        store.init(context, store);
+        store.put("a", "b");
+        assertTrue(logged.isEmpty());
     }
 
     @Test
     public void shouldReturnCachedKeyValueStoreWhenCachingEnabled() throws Exception {
-        assertThat(createStore(false, true), is(instanceOf(CachingKeyValueStore.class)));
+        store = createStore(false, true);
+        store.init(context, store);
+        context.setTime(1);
+        store.put("a", "b");
+        store.put("b", "c");
+        assertThat(store, is(instanceOf(CachingKeyValueStore.class)));
+        assertThat(cache.size(), is(2L));
     }
 
     @Test
     public void shouldReturnMeteredStoreWhenCachingAndLoggingDisabled() throws Exception {
-        assertThat(createStore(false, false), is(instanceOf(MeteredKeyValueStore.class)));
+        store = createStore(false, false);
+        assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
     }
 
     @Test
     public void shouldReturnMeteredStoreWhenCachingDisabled() throws Exception {
-        assertThat(createStore(true, false), is(instanceOf(MeteredKeyValueStore.class)));
+        store = createStore(true, false);
+        assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
-        final KeyValueStore store = createStore(false, true);
-        final MockProcessorContext context = new MyMockProcessorContext();
+        store = createStore(false, true);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
@@ -92,8 +136,7 @@ public class RocksDBKeyValueStoreSupplierTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() throws Exception {
-        final KeyValueStore store = createStore(true, false);
-        final MockProcessorContext context = new MyMockProcessorContext();
+        store = createStore(true, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
@@ -101,28 +144,12 @@ public class RocksDBKeyValueStoreSupplierTest {
 
     @SuppressWarnings("unchecked")
     private KeyValueStore<String, String> createStore(final boolean logged, final boolean cached) {
-        return new RocksDBKeyValueStoreSupplier<>("name",
+        return new RocksDBKeyValueStoreSupplier<>(STORE_NAME,
                                                   Serdes.String(),
                                                   Serdes.String(),
                                                   logged,
                                                   Collections.EMPTY_MAP,
                                                   cached).get();
-    }
-
-    private static class MyMockProcessorContext extends MockProcessorContext {
-        MyMockProcessorContext() {
-            super(new StateSerdes<>("", Serdes.String(), Serdes.String()), new NoOpRecordCollector());
-        }
-
-        @Override
-        public ThreadCache getCache() {
-            return new ThreadCache("foo", 0, new MockStreamsMetrics(new Metrics()));
-        }
-
-        @Override
-        public File stateDir() {
-            return TestUtils.tempDirectory();
-        }
     }
 
 }

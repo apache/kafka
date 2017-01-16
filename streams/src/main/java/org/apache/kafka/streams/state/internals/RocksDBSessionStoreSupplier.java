@@ -56,8 +56,8 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     keySchema,
-                                                                                     logged);
+                                                                                     keySchema
+        );
 
         if (cached && logged) {
             final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);

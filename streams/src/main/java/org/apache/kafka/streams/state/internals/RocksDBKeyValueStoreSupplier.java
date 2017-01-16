@@ -50,13 +50,13 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
     public KeyValueStore get() {
         if (!cached && !logged) {
             return new MeteredKeyValueStore<>(
-                    new RocksDBStore<>(name, keySerde, valueSerde, logged), METRICS_SCOPE, time);
+                    new RocksDBStore<>(name, keySerde, valueSerde), METRICS_SCOPE, time);
         }
 
         // when cached, logged, or both we use a bytes store as the inner most store
         final RocksDBStore<Bytes, byte[]> rocks = new RocksDBStore<>(name,
                                                                      Serdes.Bytes(),
-                                                                     Serdes.ByteArray(), logged);
+                                                                     Serdes.ByteArray());
 
         if (cached && logged) {
             return new CachingKeyValueStore<>(

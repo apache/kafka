@@ -25,7 +25,7 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
     public final long id;
 
     Segment(String segmentName, String windowName, long id) {
-        super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE, false);
+        super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE);
         this.id = id;
     }
 

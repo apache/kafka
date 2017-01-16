@@ -17,21 +17,22 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -41,48 +42,92 @@ import static org.junit.Assert.assertTrue;
 
 public class RocksDBWindowStoreSupplierTest {
 
-    @Test
-    public void shouldRegisterWithLoggingEnabledWhenWindowStoreLogged() throws Exception {
-        final WindowStore windowStore = createStore(true, false);
-        windowStore.init(new MockProcessorContext(new StateSerdes<>("", Serdes.String(), Serdes.String()), new NoOpRecordCollector()) {
-            @Override
-            public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
-                assertTrue("store should be registering as loggingEnabled", loggingEnabled);
-            }
-        }, windowStore);
+    private static final String STORE_NAME = "name";
+    private WindowStore<String, String> store;
+    private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics(new Metrics()));
+    private final MockProcessorContext context = new MockProcessorContext(null,
+                                                                          TestUtils.tempDirectory(),
+                                                                          Serdes.String(),
+                                                                          Serdes.String(),
+                                                                          new NoOpRecordCollector(),
+                                                                          cache);
+
+    @After
+    public void close() {
+        store.close();
     }
 
     @Test
-    public void shouldRegisterWithLoggingDisabledWhenWindowStoreNotLogged() throws Exception {
-        final WindowStore windowStore = createStore(false, false);
-        windowStore.init(new MockProcessorContext(new StateSerdes<>("", Serdes.String(), Serdes.String()), new NoOpRecordCollector()) {
+    public void shouldCreateLoggingEnabledStoreWhenWindowStoreLogged() throws Exception {
+        store = createStore(true, false);
+        final List<ProducerRecord> logged = new ArrayList<>();
+        final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
-            public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
-                assertFalse("store should not be registering as loggingEnabled", loggingEnabled);
+            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+                logged.add(record);
             }
-        }, windowStore);
+        };
+        final MockProcessorContext context = new MockProcessorContext(null,
+                                                                      TestUtils.tempDirectory(),
+                                                                      Serdes.String(),
+                                                                      Serdes.String(),
+                                                                      collector,
+                                                                      cache);
+        context.setTime(1);
+        store.init(context, store);
+        store.put("a", "b");
+        assertFalse(logged.isEmpty());
     }
 
     @Test
-    public void shouldReturnCachedWindowStoreWhenCachingEnabled() throws Exception {
-        assertThat(createStore(false, true), is(instanceOf(CachingWindowStore.class)));
+    public void shouldNotBeLoggingEnabledStoreWhenLogginNotEnabled() throws Exception {
+        store = createStore(false, false);
+        final List<ProducerRecord> logged = new ArrayList<>();
+        final NoOpRecordCollector collector = new NoOpRecordCollector() {
+            @Override
+            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+                logged.add(record);
+            }
+        };
+        final MockProcessorContext context = new MockProcessorContext(null,
+                                                                      TestUtils.tempDirectory(),
+                                                                      Serdes.String(),
+                                                                      Serdes.String(),
+                                                                      collector,
+                                                                      cache);
+        context.setTime(1);
+        store.init(context, store);
+        store.put("a", "b");
+        assertTrue(logged.isEmpty());
+    }
+
+    @Test
+    public void shouldBeCachedWindowStoreWhenCachingEnabled() throws Exception {
+        store = createStore(false, true);
+        store.init(context, store);
+        context.setTime(1);
+        store.put("a", "b");
+        store.put("b", "c");
+        assertThat(store, is(instanceOf(CachingWindowStore.class)));
+        assertThat(context.getCache().size(), is(2L));
     }
 
     @Test
     public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() throws Exception {
-        assertThat(createStore(false, false), is(instanceOf(RocksDBWindowStore.class)));
+        store = createStore(false, false);
+        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
     }
 
     @Test
     public void shouldReturnRocksDbStoreWhenCachingDisabled() throws Exception {
-        assertThat(createStore(true, false), is(instanceOf(RocksDBWindowStore.class)));
+        store = createStore(true, false);
+        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
-        final WindowStore store = createStore(false, true);
-        final MockProcessorContext context = new MyMockProcessorContext();
+        store = createStore(false, true);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
@@ -91,8 +136,7 @@ public class RocksDBWindowStoreSupplierTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() throws Exception {
-        final WindowStore store = createStore(true, false);
-        final MockProcessorContext context = new MyMockProcessorContext();
+        store = createStore(true, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
@@ -101,15 +145,15 @@ public class RocksDBWindowStoreSupplierTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
-        final WindowStore store = createStore(false, false);
-        final MockProcessorContext context = new MyMockProcessorContext();
+        store = createStore(false, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    private WindowStore createStore(final boolean logged, final boolean cached) {
-        return new RocksDBWindowStoreSupplier<>("name",
+    @SuppressWarnings("unchecked")
+    private WindowStore<String, String> createStore(final boolean logged, final boolean cached) {
+        return new RocksDBWindowStoreSupplier<>(STORE_NAME,
                                                 10,
                                                 3,
                                                 false,
@@ -121,19 +165,4 @@ public class RocksDBWindowStoreSupplierTest {
                                                 cached).get();
     }
 
-    private static class MyMockProcessorContext extends MockProcessorContext {
-        public MyMockProcessorContext() {
-            super(new StateSerdes<>("", Serdes.String(), Serdes.String()), new NoOpRecordCollector());
-        }
-
-        @Override
-        public ThreadCache getCache() {
-            return new ThreadCache("foo", 0, new MockStreamsMetrics(new Metrics()));
-        }
-
-        @Override
-        public File stateDir() {
-            return TestUtils.tempDirectory();
-        }
-    }
 }
