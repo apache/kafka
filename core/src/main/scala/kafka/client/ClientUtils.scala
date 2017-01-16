@@ -22,9 +22,10 @@ import scala.collection._
 import kafka.cluster._
 import kafka.api._
 import kafka.producer._
-import kafka.common.KafkaException
+import kafka.common.{BrokerEndPointNotAvailableException, KafkaException}
 import kafka.utils.{CoreUtils, Logging}
 import java.util.Properties
+
 import util.Random
 import kafka.network.BlockingChannel
 import kafka.utils.ZkUtils
@@ -105,34 +106,46 @@ object ClientUtils extends Logging{
     }
   }
 
-   /**
-    * Creates a blocking channel to a random broker
-    */
-   def channelToAnyBroker(zkUtils: ZkUtils, socketTimeoutMs: Int = 3000) : BlockingChannel = {
-     var channel: BlockingChannel = null
-     var connected = false
-     while (!connected) {
-       val allBrokers = zkUtils.getAllBrokerEndPointsForChannel(SecurityProtocol.PLAINTEXT)
-       Random.shuffle(allBrokers).find { broker =>
-         trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
-         try {
-           channel = new BlockingChannel(broker.host, broker.port, BlockingChannel.UseDefaultBufferSize, BlockingChannel.UseDefaultBufferSize, socketTimeoutMs)
-           channel.connect()
-           debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
-           true
-         } catch {
-           case _: Exception =>
-             if (channel != null) channel.disconnect()
-             channel = null
-             info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
-             false
-         }
-       }
-       connected = channel != null
-     }
+  /**
+   * Creates a blocking channel to a random broker
+   */
+  def channelToAnyBroker(zkUtils: ZkUtils, socketTimeoutMs: Int = 3000) : BlockingChannel = {
+    var channel: BlockingChannel = null
+    var connected = false
+    while (!connected) {
+      val allBrokers = getPlaintextBrokerEndPoints(zkUtils)
+      Random.shuffle(allBrokers).find { broker =>
+        trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
+        try {
+          channel = new BlockingChannel(broker.host, broker.port, BlockingChannel.UseDefaultBufferSize, BlockingChannel.UseDefaultBufferSize, socketTimeoutMs)
+          channel.connect()
+          debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
+          true
+        } catch {
+          case _: Exception =>
+            if (channel != null) channel.disconnect()
+            channel = null
+            info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
+            false
+        }
+      }
+      connected = channel != null
+    }
 
-     channel
-   }
+    channel
+  }
+
+   /**
+    * Returns the first end point from each broker with the PLAINTEXT security protocol.
+    */
+  def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
+    zkUtils.getAllBrokersInCluster().map { broker =>
+      broker.endPoints.collectFirst {
+        case endPoint if endPoint.securityProtocol == SecurityProtocol.PLAINTEXT =>
+          new BrokerEndPoint(broker.id, endPoint.host, endPoint.port)
+      }.getOrElse(throw new BrokerEndPointNotAvailableException(s"End point with security protocol PLAINTEXT not found for broker ${broker.id}"))
+    }
+  }
 
    /**
     * Creates a blocking channel to the offset manager of the given group

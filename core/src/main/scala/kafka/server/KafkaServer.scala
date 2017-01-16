@@ -253,11 +253,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager.startup()
 
         /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
+        val listeners = config.advertisedListeners.map { endpoint =>
           if (endpoint.port == 0)
-            (protocol, EndPoint(endpoint.host, socketServer.boundPort(protocol), endpoint.protocolType))
+            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
           else
-            (protocol, endpoint)
+            endpoint
         }
         kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
           config.interBrokerProtocolVersion)
@@ -345,7 +345,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def controlledShutdown() {
 
     def node(broker: Broker): Node = {
-      val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
+      val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
       new Node(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
     }
 
@@ -379,7 +379,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
-          time)
+          time,
+          false)
       }
 
       var shutdownSucceeded: Boolean = false
@@ -425,10 +426,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
               // send the controlled shutdown request
-              val requestHeader = networkClient.nextRequestHeader(ApiKeys.CONTROLLED_SHUTDOWN_KEY)
-              val controlledShutdownRequest = new ControlledShutdownRequest(config.brokerId)
-              val request = new ClientRequest(node(prevController).idString, time.milliseconds(), true,
-                requestHeader, controlledShutdownRequest, null)
+              val controlledShutdownRequest = new ControlledShutdownRequest.Builder(config.brokerId)
+              val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
+                time.milliseconds(), true)
               val clientResponse = networkClient.blockingSendAndReceive(request)(time)
 
               val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
@@ -482,8 +482,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 if (channel != null)
                   channel.disconnect()
 
-                channel = new BlockingChannel(broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).host,
-                  broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).port,
+                val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
+                channel = new BlockingChannel(brokerEndPoint.host,
+                  brokerEndPoint.port,
                   BlockingChannel.UseDefaultBufferSize,
                   BlockingChannel.UseDefaultBufferSize,
                   config.controllerSocketTimeoutMs)
@@ -619,7 +620,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   def getLogManager(): LogManager = logManager
 
-  def boundPort(protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int = socketServer.boundPort(protocol)
+  def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)

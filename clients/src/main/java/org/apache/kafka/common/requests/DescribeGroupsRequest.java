@@ -15,27 +15,47 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DescribeGroupsRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.DESCRIBE_GROUPS.id);
     private static final String GROUP_IDS_KEY_NAME = "group_ids";
+
+    public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
+        private final List<String> groupIds;
+
+        public Builder(List<String> groupIds) {
+            super(ApiKeys.DESCRIBE_GROUPS);
+            this.groupIds = groupIds;
+        }
+
+        @Override
+        public DescribeGroupsRequest build() {
+            short version = version();
+            return new DescribeGroupsRequest(this.groupIds, version);
+        }
+
+        @Override
+        public String toString() {
+            return "(type=DescribeGroupsRequest, groupIds=(" + Utils.join(groupIds, ",") + "))";
+        }
+    }
 
     private final List<String> groupIds;
 
-    public DescribeGroupsRequest(List<String> groupIds) {
-        super(new Struct(CURRENT_SCHEMA));
+    private DescribeGroupsRequest(List<String> groupIds, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.DESCRIBE_GROUPS.id, version)),
+                version);
         struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
         this.groupIds = groupIds;
     }
 
-    public DescribeGroupsRequest(Struct struct) {
-        super(struct);
+    public DescribeGroupsRequest(Struct struct, short version) {
+        super(struct, version);
         this.groupIds = new ArrayList<>();
         for (Object groupId : struct.getArray(GROUP_IDS_KEY_NAME))
             this.groupIds.add((String) groupId);
@@ -46,7 +66,8 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return DescribeGroupsResponse.fromError(Errors.forException(e), groupIds);
@@ -58,11 +79,11 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer));
+        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer) {
-        return new DescribeGroupsRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.DESCRIBE_GROUPS.id));
     }
-
 }

@@ -27,6 +27,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetFetchResponse
+import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
@@ -39,10 +41,10 @@ class AdminClient(val time: Time,
 
   private def send(target: Node,
                    api: ApiKeys,
-                   request: AbstractRequest): AbstractResponse = {
+                   request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     var future: RequestFuture[ClientResponse] = null
 
-    future = client.send(target, api, request)
+    future = client.send(target, request)
     client.poll(future)
 
     if (future.succeeded())
@@ -51,7 +53,7 @@ class AdminClient(val time: Time,
       throw future.exception()
   }
 
-  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): AbstractResponse = {
+  private def sendAnyNode(api: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     bootstrapBrokers.foreach { broker =>
       try {
         return send(broker, api, request)
@@ -63,21 +65,21 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  private def findCoordinator(groupId: String): Node = {
-    val request = new GroupCoordinatorRequest(groupId)
-    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request).asInstanceOf[GroupCoordinatorResponse]
+  def findCoordinator(groupId: String): Node = {
+    val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
+    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
     response.node()
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
-    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest()).asInstanceOf[ListGroupsResponse]
+    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
     response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
   private def findAllBrokers(): List[Node] = {
-    val request = new MetadataRequest(Collections.emptyList[String])
+    val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
     val errors = response.errors()
     if (!errors.isEmpty)
@@ -114,6 +116,16 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
+  def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
+    val coordinator = findCoordinator(groupId)
+    val responseBody = send(coordinator, ApiKeys.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
+    val response = responseBody.asInstanceOf[OffsetFetchResponse]
+    if (response.hasError)
+      throw response.error.exception
+    response.maybeThrowFirstPartitionError
+    response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
+  }
+
   /**
    * Case class used to represent a consumer of a consumer group
    */
@@ -132,7 +144,8 @@ class AdminClient(val time: Time,
 
   def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
     val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(Collections.singletonList(groupId)))
+    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
+        new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)
     if (metadata == null)
@@ -225,7 +238,8 @@ object AdminClient {
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       DefaultRequestTimeoutMs,
-      time)
+      time,
+      true)
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,

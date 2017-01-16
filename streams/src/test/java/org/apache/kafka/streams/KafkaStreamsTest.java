@@ -17,6 +17,10 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -27,6 +31,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
@@ -38,6 +43,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -48,19 +54,29 @@ public class KafkaStreamsTest {
     // quick enough)
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final KStreamBuilder builder = new KStreamBuilder();
+    private KafkaStreams streams;
+    private Properties props;
 
-    @Test
-    public void testStartAndClose() throws Exception {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testStartAndClose");
+    @Before
+    public void before() {
+        props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streams = new KafkaStreams(builder, props);
+    }
 
+    @Test
+    public void testInitializesAndDestroysMetricsReporters() throws Exception {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
+        final int initDiff = newInitCount - oldInitCount;
+        assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
+
         StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
@@ -72,14 +88,9 @@ public class KafkaStreamsTest {
         Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
-
-        final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final int initCountDifference = newInitCount - oldInitCount;
-        assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
-
-        assertTrue(streams.close(15, TimeUnit.SECONDS));
-        Assert.assertEquals("each reporter initialized should also be closed",
-            oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
+        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
+        streams.close();
+        assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
@@ -87,13 +98,6 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCloseIsIdempotent() throws Exception {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCloseIsIdempotent");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
         streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -104,12 +108,6 @@ public class KafkaStreamsTest {
 
     @Test(expected = IllegalStateException.class)
     public void testCannotStartOnceClosed() throws Exception {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotStartOnceClosed");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
         streams.close();
         try {
@@ -124,12 +122,6 @@ public class KafkaStreamsTest {
 
     @Test(expected = IllegalStateException.class)
     public void testCannotStartTwice() throws Exception {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotStartTwice");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
 
         try {
@@ -142,27 +134,58 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void testNumberDefaultMetrics() {
+        final KafkaStreams streams = createKafkaStreams();
+        final Map<MetricName, ? extends Metric> metrics = streams.metrics();
+        // all 15 default StreamThread metrics + 1 metric that keeps track of number of metrics
+        assertEquals(metrics.size(), 16);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testIllegalMetricsConfig() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+    }
+
+    @Test
+    public void testLegalMetricsConfig() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+        final KStreamBuilder builder1 = new KStreamBuilder();
+        final KafkaStreams streams1 = new KafkaStreams(builder1, props);
+        streams1.close();
+
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
+        final KStreamBuilder builder2 = new KStreamBuilder();
+        final KafkaStreams streams2 = new KafkaStreams(builder2, props);
+
+    }
+
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
-        final KafkaStreams streams = createKafkaStreams();
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
-        final KafkaStreams streams = createKafkaStreams();
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
-        final KafkaStreams streams = createKafkaStreams();
         streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
-        final KafkaStreams streams = createKafkaStreams();
         streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {

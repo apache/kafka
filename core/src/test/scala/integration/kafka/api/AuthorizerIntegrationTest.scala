@@ -40,6 +40,7 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import org.apache.kafka.common.KafkaException
 import kafka.admin.AdminUtils
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.MemoryRecords
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
@@ -104,12 +105,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   )
 
   val RequestKeyToErrorCode = Map[ApiKeys, (Nothing) => Short](
-    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
+    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error.code),
     ApiKeys.GROUP_COORDINATOR -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
     ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.errorCode()),
@@ -119,7 +120,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode()),
-    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.code),
+    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.error.code),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors().asScala.find(_._1 == deleteTopic).get._2.code)
   )
 
@@ -177,79 +178,89 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createMetadataRequest = {
-    new requests.MetadataRequest(List(topic).asJava)
+    new requests.MetadataRequest.Builder(List(topic).asJava).build()
   }
 
   private def createProduceRequest = {
-    new requests.ProduceRequest(1, 5000, collection.mutable.Map(tp -> MemoryRecords.readableRecords(ByteBuffer.wrap("test".getBytes))).asJava)
+    new requests.ProduceRequest.Builder(1, 5000,
+      collection.mutable.Map(tp -> MemoryRecords.readableRecords(ByteBuffer.wrap("test".getBytes))).asJava).
+      build()
   }
 
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 100))
-    new requests.FetchRequest(5000, 100, Int.MaxValue, partitionMap)
+    new requests.FetchRequest.Builder(100, Int.MaxValue, partitionMap).setReplicaId(5000).build()
   }
 
   private def createListOffsetsRequest = {
-    new requests.ListOffsetRequest(Map(tp -> new ListOffsetRequest.PartitionData(0, 100)).asJava)
+    new requests.ListOffsetRequest.Builder().setTargetTimes(
+      Map(tp -> (0L: java.lang.Long)).asJava).
+      build()
   }
 
   private def createOffsetFetchRequest = {
-    new requests.OffsetFetchRequest(group, List(tp).asJava)
+    new requests.OffsetFetchRequest.Builder(group, List(tp).asJava).build()
   }
 
   private def createGroupCoordinatorRequest = {
-    new requests.GroupCoordinatorRequest(group)
+    new requests.GroupCoordinatorRequest.Builder(group).build()
   }
 
   private def createUpdateMetadataRequest = {
     val partitionState = Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava
+    val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
-      Map(SecurityProtocol.PLAINTEXT -> new requests.UpdateMetadataRequest.EndPoint("localhost", 0)).asJava, null)).asJava
-    new requests.UpdateMetadataRequest(brokerId, Int.MaxValue, partitionState, brokers)
+      Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
+        ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
+    new requests.UpdateMetadataRequest.Builder(brokerId, Int.MaxValue, partitionState, brokers).build()
   }
 
   private def createJoinGroupRequest = {
-    new JoinGroupRequest(group, 10000, 60000, "", "consumer",
+    new JoinGroupRequest.Builder(group, 10000, "", "consumer",
       List( new JoinGroupRequest.ProtocolMetadata("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
+      .setRebalanceTimeout(60000).build()
   }
 
   private def createSyncGroupRequest = {
-    new SyncGroupRequest(group, 1, "", Map[String, ByteBuffer]().asJava)
+    new SyncGroupRequest.Builder(group, 1, "", Map[String, ByteBuffer]().asJava).build()
   }
 
   private def createOffsetCommitRequest = {
-    new requests.OffsetCommitRequest(group, 1, "", 1000, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, "metadata")).asJava)
+    new requests.OffsetCommitRequest.Builder(
+      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, "metadata")).asJava).
+      setMemberId("").setGenerationId(1).setRetentionTime(1000).
+      build()
   }
 
   private def createHeartbeatRequest = {
-    new HeartbeatRequest(group, 1, "")
+    new HeartbeatRequest.Builder(group, 1, "").build()
   }
 
   private def createLeaveGroupRequest = {
-    new LeaveGroupRequest(group, "")
+    new LeaveGroupRequest.Builder(group, "").build()
   }
 
   private def createLeaderAndIsrRequest = {
-    new requests.LeaderAndIsrRequest(brokerId, Int.MaxValue,
+    new requests.LeaderAndIsrRequest.Builder(brokerId, Int.MaxValue,
       Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
-      Set(new Node(brokerId, "localhost", 0)).asJava)
+      Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
   private def createStopReplicaRequest = {
-    new requests.StopReplicaRequest(brokerId, Int.MaxValue, true, Set(tp).asJava)
+    new requests.StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava).build()
   }
 
   private def createControlledShutdownRequest = {
-    new requests.ControlledShutdownRequest(brokerId)
+    new requests.ControlledShutdownRequest.Builder(brokerId).build()
   }
 
   private def createTopicsRequest = {
-    new CreateTopicsRequest(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0)
+    new CreateTopicsRequest.Builder(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0).build()
   }
 
   private def deleteTopicsRequest = {
-    new DeleteTopicsRequest(Set(deleteTopic).asJava, 5000)
+    new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
   }
 
   @Test

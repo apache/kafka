@@ -15,6 +15,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -26,7 +27,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -62,6 +63,7 @@ import java.util.Random;
 import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -390,7 +392,7 @@ public class SaslAuthenticatorTest {
         String node = "1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS.id, Short.MAX_VALUE, "someclient", 1);
-        ApiVersionsRequest request = new ApiVersionsRequest();
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer);
@@ -486,8 +488,9 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         sendHandshakeRequestReceiveResponse(node1);
 
-        ApiVersionsRequest request = new ApiVersionsRequest();
-        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id, "someclient", 2);
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id,
+                request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -550,8 +553,10 @@ public class SaslAuthenticatorTest {
         // Send metadata request before Kafka SASL handshake request
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 1);
-        MetadataRequest metadataRequest1 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest1 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest1.version(), "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
         NetworkTestUtils.waitForChannelClose(selector, node1);
         selector.close();
@@ -563,8 +568,10 @@ public class SaslAuthenticatorTest {
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         sendHandshakeRequestReceiveResponse(node2);
-        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id, "someclient", 2);
-        MetadataRequest metadataRequest2 = new MetadataRequest(Collections.singletonList("sometopic"));
+        MetadataRequest metadataRequest2 =
+                new MetadataRequest.Builder(Collections.singletonList("sometopic")).build();
+        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id,
+                metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
         NetworkTestUtils.waitForChannelClose(selector, node2);
         selector.close();
@@ -654,6 +661,17 @@ public class SaslAuthenticatorTest {
         // Check that another user 'user2' can also connect with a Jaas config override without any changes to static configuration
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
         createAndCheckClientConnection(securityProtocol, "4");
+
+        // Check that clients specifying multiple login modules fail even if the credentials are valid
+        String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
+        String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
+        try {
+            createClientConnection(securityProtocol, "1");
+            fail("Connection created with multiple login modules in sasl.jaas.config");
+        } catch (KafkaException e) {
+            assertTrue("Unexpected exception " + e, e.getCause() instanceof IllegalArgumentException);
+        }
     }
 
     /**
@@ -702,8 +720,8 @@ public class SaslAuthenticatorTest {
 
         // Send ApiVersionsRequest and check response
         ApiVersionsResponse versionsResponse = sendVersionRequestReceiveResponse(node);
-        assertEquals(Protocol.MIN_VERSIONS[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
-        assertEquals(Protocol.CURR_VERSION[ApiKeys.SASL_HANDSHAKE.id], versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
+        assertEquals(ProtoUtils.oldestVersion(ApiKeys.SASL_HANDSHAKE.id), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
+        assertEquals(ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
 
         // Send SaslHandshakeRequest and check response
         SaslHandshakeResponse handshakeResponse = sendHandshakeRequestReceiveResponse(node);
@@ -756,7 +774,8 @@ public class SaslAuthenticatorTest {
     }
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
-        RequestHeader header = new RequestHeader(apiKey.id, "someclient", 1);
+        RequestHeader header =
+                new RequestHeader(apiKey.id, request.version(), "someclient", 1);
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
@@ -771,7 +790,7 @@ public class SaslAuthenticatorTest {
     }
 
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
-        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest();
+        ApiVersionsRequest handshakeRequest = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
         assertEquals(Errors.NONE.code(), response.errorCode());
         return response;

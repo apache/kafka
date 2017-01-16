@@ -17,11 +17,14 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -38,7 +41,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Before
     public void setUp() throws Exception {
         store = new InMemoryKeyValueStore<>(namespace);
-        cache = new ThreadCache(10000L);
+        cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
     }
 
     @Test
@@ -142,7 +145,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldPeekNextKey() throws Exception {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one");
-        final ThreadCache cache = new ThreadCache(1000000L);
+        final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         final String namespace = "one";
         for (int i = 0; i < bytes.length - 1; i += 2) {

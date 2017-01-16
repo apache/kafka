@@ -79,8 +79,8 @@ public class KTableAggregateTest {
                 stringSerde,
                 stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 
@@ -128,8 +128,8 @@ public class KTableAggregateTest {
             stringSerde,
             stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.STRING_ADDER,
-            MockAggregator.STRING_REMOVER,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
             stringSerde,
             "topic1-Canonized");
 
@@ -170,8 +170,8 @@ public class KTableAggregateTest {
                 stringSerde
         )
                 .aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 

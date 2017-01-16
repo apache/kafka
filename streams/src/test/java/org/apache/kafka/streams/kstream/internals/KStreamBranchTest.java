@@ -95,4 +95,26 @@ public class KStreamBranchTest {
         assertEquals(1, processors[1].processed.size());
         assertEquals(2, processors[2].processed.size());
     }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() > 0;
+            }
+        };
+
+        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() < 0;
+            }
+        };
+
+        @SuppressWarnings("unchecked")
+        final KStream<Integer, String>[] branches = new KStreamBuilder()
+            .<Integer, String>stream("empty")
+            .branch(positive, negative);
+    }
 }

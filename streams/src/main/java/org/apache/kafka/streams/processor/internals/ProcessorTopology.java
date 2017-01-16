@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.streams.processor.internals;
+
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Collections;
@@ -23,27 +24,28 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
+    private final List<StateStore> stateStores;
+    private final List<StateStore> globalStateStores;
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
-    private final List<StateStore> stateStores;
-    private final Map<String, String> sourceStoreToSourceTopic;
-    private final Map<StateStore, ProcessorNode> storeToProcessorNodeMap;
+    private final Map<String, String> storeToChangelogTopic;
 
-    public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics,
-                             Map<String, SinkNode> sinkByTopics,
-                             List<StateStore> stateStores,
-                             Map<String, String> sourceStoreToSourceTopic,
-                             Map<StateStore, ProcessorNode> storeToProcessorNodeMap) {
+    public ProcessorTopology(final List<ProcessorNode> processorNodes,
+                             final Map<String, SourceNode> sourceByTopics,
+                             final Map<String, SinkNode> sinkByTopics,
+                             final List<StateStore> stateStores,
+                             final Map<String, String> storeToChangelogTopic,
+                             final List<StateStore> globalStateStores) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
-        this.stateStores = Collections.unmodifiableList(stateStores);
-        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
-        this.storeToProcessorNodeMap = Collections.unmodifiableMap(storeToProcessorNodeMap);
+        this.stateStores    = Collections.unmodifiableList(stateStores);
+        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
+        this.globalStateStores = Collections.unmodifiableList(globalStateStores);
     }
 
     public Set<String> sourceTopics() {
@@ -78,12 +80,12 @@ public class ProcessorTopology {
         return stateStores;
     }
 
-    public Map<String, String> sourceStoreToSourceTopic() {
-        return sourceStoreToSourceTopic;
+    public Map<String, String> storeToChangelogTopic() {
+        return storeToChangelogTopic;
     }
 
-    public Map<StateStore, ProcessorNode> storeToProcessorNodeMap() {
-        return storeToProcessorNodeMap;
+    public List<StateStore> globalStateStores() {
+        return globalStateStores;
     }
 
     private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {

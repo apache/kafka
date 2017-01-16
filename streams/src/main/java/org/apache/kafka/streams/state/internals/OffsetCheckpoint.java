@@ -55,10 +55,7 @@ public class OffsetCheckpoint {
     private final File file;
     private final Object lock;
 
-    /**
-     * @throws IOException
-     */
-    public OffsetCheckpoint(File file) throws IOException {
+    public OffsetCheckpoint(File file) {
         this.file = file;
         this.lock = new Object();
     }

@@ -39,7 +39,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -98,10 +98,10 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
@@ -506,13 +506,13 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
-        assertThat(results.get(new Windowed<>("bob", new TimeWindow(t1, t1))), equalTo(1L));
-        assertThat(results.get(new Windowed<>("penny", new TimeWindow(t1, t1))), equalTo(1L));
-        assertThat(results.get(new Windowed<>("jo", new TimeWindow(t1, t1))), equalTo(1L));
-        assertThat(results.get(new Windowed<>("jo", new TimeWindow(t4, t4))), equalTo(1L));
-        assertThat(results.get(new Windowed<>("emily", new TimeWindow(t1, t2))), equalTo(2L));
-        assertThat(results.get(new Windowed<>("bob", new TimeWindow(t3, t4))), equalTo(2L));
-        assertThat(results.get(new Windowed<>("penny", new TimeWindow(t3, t3))), equalTo(1L));
+        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo(1L));
+        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo(1L));
+        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo(1L));
+        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t4, t4))), equalTo(1L));
+        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo(2L));
+        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(2L));
+        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(1L));
     }
 
     @Test
@@ -601,18 +601,18 @@ public class KStreamAggregationIntegrationTest {
                 = kafkaStreams.store(userSessionsStore, QueryableStoreTypes.<String, String>sessionStore());
 
         // verify correct data received
-        assertThat(results.get(new Windowed<>("bob", new TimeWindow(t1, t1))), equalTo("start"));
-        assertThat(results.get(new Windowed<>("penny", new TimeWindow(t1, t1))), equalTo("start"));
-        assertThat(results.get(new Windowed<>("jo", new TimeWindow(t1, t1))), equalTo("pause"));
-        assertThat(results.get(new Windowed<>("jo", new TimeWindow(t4, t4))), equalTo("resume"));
-        assertThat(results.get(new Windowed<>("emily", new TimeWindow(t1, t2))), equalTo("pause:resume"));
-        assertThat(results.get(new Windowed<>("bob", new TimeWindow(t3, t4))), equalTo("pause:resume"));
-        assertThat(results.get(new Windowed<>("penny", new TimeWindow(t3, t3))), equalTo("stop"));
+        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo("start"));
+        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo("start"));
+        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo("pause"));
+        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t4, t4))), equalTo("resume"));
+        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo("pause:resume"));
+        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo("pause:resume"));
+        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo("stop"));
 
         // verify can query data via IQ
         final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob");
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new TimeWindow(t1, t1)), "start")));
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new TimeWindow(t3, t4)), "pause:resume")));
+        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
+        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
         assertFalse(bob.hasNext());
 
     }

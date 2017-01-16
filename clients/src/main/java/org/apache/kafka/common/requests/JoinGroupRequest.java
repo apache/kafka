@@ -15,8 +15,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -24,8 +24,6 @@ import java.util.Collections;
 import java.util.List;
 
 public class JoinGroupRequest extends AbstractRequest {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
     private static final String REBALANCE_TIMEOUT_KEY_NAME = "rebalance_timeout";
@@ -62,51 +60,74 @@ public class JoinGroupRequest extends AbstractRequest {
         }
     }
 
-    // v0 constructor
-    @Deprecated
-    public JoinGroupRequest(String groupId,
-                            int sessionTimeout,
-                            String memberId,
-                            String protocolType,
-                            List<ProtocolMetadata> groupProtocols) {
-        this(0, groupId, sessionTimeout, sessionTimeout, memberId, protocolType, groupProtocols);
+    public static class Builder extends AbstractRequest.Builder<JoinGroupRequest> {
+        private final String groupId;
+        private final int sessionTimeout;
+        private final String memberId;
+        private final String protocolType;
+        private final List<ProtocolMetadata> groupProtocols;
+        private int rebalanceTimeout = 0;
+
+        public Builder(String groupId, int sessionTimeout, String memberId,
+                       String protocolType, List<ProtocolMetadata> groupProtocols) {
+            super(ApiKeys.JOIN_GROUP);
+            this.groupId = groupId;
+            this.sessionTimeout = sessionTimeout;
+            this.rebalanceTimeout = sessionTimeout;
+            this.memberId = memberId;
+            this.protocolType = protocolType;
+            this.groupProtocols = groupProtocols;
+        }
+
+        public Builder setRebalanceTimeout(int rebalanceTimeout) {
+            this.rebalanceTimeout = rebalanceTimeout;
+            return this;
+        }
+
+        @Override
+        public JoinGroupRequest build() {
+            short version = version();
+            if (version < 1) {
+                rebalanceTimeout = -1;
+            }
+            return new JoinGroupRequest(version, groupId, sessionTimeout,
+                    rebalanceTimeout, memberId, protocolType, groupProtocols);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type: JoinGroupRequest").
+                append(", groupId=").append(groupId).
+                append(", sessionTimeout=").append(sessionTimeout).
+                append(", rebalanceTimeout=").append(rebalanceTimeout).
+                append(", memberId=").append(memberId).
+                append(", protocolType=").append(protocolType).
+                append(", groupProtocols=").append(Utils.join(groupProtocols, ", ")).
+                append(")");
+            return bld.toString();
+        }
     }
 
-    public JoinGroupRequest(String groupId,
-                            int sessionTimeout,
-                            int rebalanceTimeout,
-                            String memberId,
-                            String protocolType,
-                            List<ProtocolMetadata> groupProtocols) {
-        this(1, groupId, sessionTimeout, rebalanceTimeout, memberId, protocolType, groupProtocols);
-    }
-
-    private JoinGroupRequest(int version,
-                             String groupId,
-                             int sessionTimeout,
-                             int rebalanceTimeout,
-                             String memberId,
-                             String protocolType,
-                             List<ProtocolMetadata> groupProtocols) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.JOIN_GROUP.id, version)));
-
+    private JoinGroupRequest(short version, String groupId, int sessionTimeout,
+            int rebalanceTimeout, String memberId, String protocolType,
+            List<ProtocolMetadata> groupProtocols) {
+        super(new Struct(ProtoUtils.
+                requestSchema(ApiKeys.JOIN_GROUP.id, version)), version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
-
-        if (version >= 1)
+        if (version >= 1) {
             struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
-
+        }
         struct.set(MEMBER_ID_KEY_NAME, memberId);
         struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
-
-        List<Struct> groupProtocolsList = new ArrayList<>();
+        List<Struct> groupProtocolsList = new ArrayList<>(groupProtocols.size());
         for (ProtocolMetadata protocol : groupProtocols) {
             Struct protocolStruct = struct.instance(GROUP_PROTOCOLS_KEY_NAME);
             protocolStruct.set(PROTOCOL_NAME_KEY_NAME, protocol.name);
             protocolStruct.set(PROTOCOL_METADATA_KEY_NAME, protocol.metadata);
             groupProtocolsList.add(protocolStruct);
         }
-
         struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
@@ -116,8 +137,8 @@ public class JoinGroupRequest extends AbstractRequest {
         this.groupProtocols = groupProtocols;
     }
 
-    public JoinGroupRequest(Struct struct) {
-        super(struct);
+    public JoinGroupRequest(Struct struct, short versionId) {
+        super(struct, versionId);
 
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
@@ -142,7 +163,8 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
             case 1:
@@ -186,10 +208,11 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer));
+        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer) {
-        return new JoinGroupRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id));
     }
 }

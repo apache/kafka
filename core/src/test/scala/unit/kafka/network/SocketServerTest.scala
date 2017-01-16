@@ -30,7 +30,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.NetworkSend
+import org.apache.kafka.common.network.{ListenerName, NetworkSend}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
@@ -99,7 +99,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    val socket = new Socket("localhost", s.boundPort(protocol))
+    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
     sockets += socket
     socket
   }
@@ -119,8 +119,9 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = 10000
     val ack = 0: Short
 
-    val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]())
+    val emptyRequest = new ProduceRequest.Builder(
+        ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
     val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
     emptyHeader.writeTo(byteBuffer)
@@ -279,7 +280,8 @@ class SocketServerTest extends JUnitSuite {
       val sslContext = SSLContext.getInstance("TLSv1.2")
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
-      val sslSocket = socketFactory.createSocket("localhost", overrideServer.boundPort(SecurityProtocol.SSL)).asInstanceOf[SSLSocket]
+      val sslSocket = socketFactory.createSocket("localhost",
+        overrideServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))).asInstanceOf[SSLSocket]
       sslSocket.setNeedClientAuth(false)
 
       val apiKey = ApiKeys.PRODUCE.id
@@ -287,8 +289,9 @@ class SocketServerTest extends JUnitSuite {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]())
+      val emptyRequest = new ProduceRequest.Builder(
+          ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
       val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
       emptyHeader.writeTo(byteBuffer)
@@ -322,9 +325,10 @@ class SocketServerTest extends JUnitSuite {
     val serverMetrics = new Metrics
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
-      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, protocol, config.values, metrics, credentialProvider) {
+          config.connectionsMaxIdleMs, listenerName, protocol, config.values, metrics, credentialProvider) {
           override protected[network] def sendResponse(response: RequestChannel.Response) {
             conn.close()
             super.sendResponse(response)
