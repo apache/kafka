@@ -150,7 +150,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = self.kafka.security_config.client_config_setup(node, prop_file)
+        self.security_config = self.kafka.security_config.client_config(prop_file, node)
+        self.security_config.setup_node(node)
 
         prop_file += str(self.security_config)
         return prop_file

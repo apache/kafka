@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import os
-import re
 import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
@@ -158,16 +157,14 @@ class SecurityConfig(TemplateRenderer):
             'sasl.kerberos.service.name' : 'kafka'
         }
 
-    def client_config(self, template_props="", static_jaas_conf=True):
+    def client_config(self, template_props="", node=None):
+        # If node is not specified, use static jaas config which will be created later.
+        # Otherwise use static JAAS configuration files with SASL_SSL and sasl.jaas.config
+        # property with SASL_PLAINTEXT so that both code paths are tested by existing tests.
+        # Note that this is an artibtrary choice and it is possible to run all tests with
+        # either static or dynamic jaas config files if required.
+        static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props, static_jaas_conf=static_jaas_conf)
-
-    def client_config_setup(self, node, template_props=""):
-        # Use static JAAS configuration files with SASL_SSL and sasl.jaas.config
-        # property with SASL_PLAINTEXT so that both code paths are tested
-        static_jaas_conf = self.has_sasl and self.has_ssl
-        security_config = self.client_config(template_props, static_jaas_conf)
-        security_config.setup_node(node)
-        return security_config
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
@@ -185,15 +182,12 @@ class SecurityConfig(TemplateRenderer):
         jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
                                 SecurityConfig=SecurityConfig,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
-                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
+                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms,
+                                static_jaas_conf=self.static_jaas_conf)
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
         else:
-            match = re.search("KafkaClient *{([^}]*)}", jaas_conf.replace("\n", " "))
-            if match:
-                self.properties['sasl.jaas.config'] = match.group(1)
-            else:
-                raise Exception("KafkaClient section not found in JAAS configuration")
+            self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", "\\\n")
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
             node.account.copy_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)

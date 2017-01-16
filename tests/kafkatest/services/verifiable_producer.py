@@ -101,7 +101,8 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Configure security
-        self.security_config = self.kafka.security_config.client_config_setup(node)
+        self.security_config = self.kafka.security_config.client_config(node=node)
+	self.security_config.setup_node(node)
 
         # Create and upload config file
         producer_prop_file = self.prop_file(node)
