@@ -474,5 +474,4 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }
-
 }
