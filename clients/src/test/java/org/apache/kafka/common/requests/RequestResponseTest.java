@@ -42,14 +42,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class RequestResponseTest {
-    private static final Logger log = LoggerFactory.getLogger(RequestResponseTest.class);
 
     @Test
     public void testSerialization() throws Exception {
@@ -93,8 +90,13 @@ public class RequestResponseTest {
         checkSerialization(createOffsetCommitResponse(), null);
         checkSerialization(OffsetFetchRequest.forAllPartitions("group1"));
         checkSerialization(OffsetFetchRequest.forAllPartitions("group1").getErrorResponse(new NotCoordinatorForGroupException()), 2);
-        checkSerialization(createOffsetFetchRequest());
-        checkSerialization(createOffsetFetchRequest().getErrorResponse(new UnknownServerException()), null);
+        checkSerialization(createOffsetFetchRequest(0));
+        checkSerialization(createOffsetFetchRequest(1));
+        checkSerialization(createOffsetFetchRequest(2));
+        checkSerialization(OffsetFetchRequest.forAllPartitions("group1"));
+        checkSerialization(createOffsetFetchRequest(0).getErrorResponse(new UnknownServerException()), 0);
+        checkSerialization(createOffsetFetchRequest(1).getErrorResponse(new UnknownServerException()), 1);
+        checkSerialization(createOffsetFetchRequest(2).getErrorResponse(new UnknownServerException()), 2);
         checkSerialization(createOffsetFetchResponse(), null);
         checkSerialization(createProduceRequest());
         checkSerialization(createProduceRequest().getErrorResponse(new UnknownServerException()), null);
@@ -331,7 +333,7 @@ public class RequestResponseTest {
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
-        return new DescribeGroupsRequest.Builder(Collections.singletonList("test-group")).build();
+        return new DescribeGroupsRequest.Builder(singletonList("test-group")).build();
     }
 
     private DescribeGroupsResponse createDescribeGroupResponse() {
@@ -422,16 +424,17 @@ public class RequestResponseTest {
         return new OffsetCommitResponse(responseData);
     }
 
-    private OffsetFetchRequest createOffsetFetchRequest() {
-        return new OffsetFetchRequest.Builder("group1",
-                Arrays.asList(new TopicPartition("test11", 1))).build();
+    private OffsetFetchRequest createOffsetFetchRequest(int version) {
+        return new OffsetFetchRequest.Builder("group1", singletonList(new TopicPartition("test11", 1)))
+                .setVersion((short) version)
+                .build();
     }
 
     private OffsetFetchResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE));
         responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(100L, null, Errors.NONE));
-        return new OffsetFetchResponse(responseData);
+        return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
     private ProduceRequest createProduceRequest() {
@@ -538,7 +541,7 @@ public class RequestResponseTest {
     }
 
     private SaslHandshakeResponse createSaslHandshakeResponse() {
-        return new SaslHandshakeResponse(Errors.NONE.code(), Collections.singletonList("GSSAPI"));
+        return new SaslHandshakeResponse(Errors.NONE.code(), singletonList("GSSAPI"));
     }
 
     private ApiVersionsRequest createApiVersionRequest() {
