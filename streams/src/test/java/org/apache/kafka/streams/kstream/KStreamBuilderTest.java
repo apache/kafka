@@ -44,12 +44,12 @@ public class KStreamBuilderTest {
 
     private static final String APP_ID = "app-id";
 
+    private final KStreamBuilder builder = new KStreamBuilder();
+
     private KStreamTestDriver driver = null;
-    private KStreamBuilder builder = null;
 
     @Before
     public void setUp() {
-        builder = new KStreamBuilder();
         builder.setApplicationId(APP_ID);
     }
 
@@ -74,11 +74,11 @@ public class KStreamBuilderTest {
         assertEquals("Y-0000000001", builder.newName("Y-"));
         assertEquals("Z-0000000002", builder.newName("Z-"));
 
-        builder = new KStreamBuilder();
+        KStreamBuilder newBuilder = new KStreamBuilder();
 
-        assertEquals("X-0000000000", builder.newName("X-"));
-        assertEquals("Y-0000000001", builder.newName("Y-"));
-        assertEquals("Z-0000000002", builder.newName("Z-"));
+        assertEquals("X-0000000000", newBuilder.newName("X-"));
+        assertEquals("Y-0000000001", newBuilder.newName("Y-"));
+        assertEquals("Z-0000000002", newBuilder.newName("Z-"));
     }
 
     @Test
