@@ -55,8 +55,14 @@ public class JaasUtils {
         if (jaasConfigArgs != null) {
             if (loginType == LoginType.SERVER)
                 throw new IllegalArgumentException("JAAS config property not supported for server");
-            else
-                return new JaasConfig(loginType, jaasConfigArgs.value());
+            else {
+                JaasConfig jaasConfig = new JaasConfig(loginType, jaasConfigArgs.value());
+                AppConfigurationEntry[] clientModules = jaasConfig.getAppConfigurationEntry(LoginType.CLIENT.contextName());
+                int numModules = clientModules == null ? 0 : clientModules.length;
+                if (numModules != 1)
+                    throw new IllegalArgumentException("JAAS config property contains " + numModules + " login modules, should be one module");
+                return jaasConfig;
+            }
         } else
             return defaultJaasConfig(loginType);
     }
@@ -83,17 +89,19 @@ public class JaasUtils {
 
     /**
      * Returns the configuration option for <code>key</code> from the server login context
-     * of the default JAAS configuration.
+     * of the default JAAS configuration. If login module name is specified, return option value
+     * only from that module.
      */
-    public static String defaultServerJaasConfigOption(String key) throws IOException {
-        return jaasConfigOption(Configuration.getConfiguration(), LoginType.SERVER.contextName(), key);
+    public static String defaultServerJaasConfigOption(String key, String loginModuleName) throws IOException {
+        return jaasConfigOption(Configuration.getConfiguration(), LoginType.SERVER.contextName(), key, loginModuleName);
     }
 
     /**
      * Returns the configuration option for <code>key</code> from the login context
      * <code>loginContextName</code> of the specified JAAS configuration.
+     * If login module name is specified, return option value only from that module.
      */
-    public static String jaasConfigOption(Configuration jaasConfig, String loginContextName, String key) throws IOException {
+    public static String jaasConfigOption(Configuration jaasConfig, String loginContextName, String key, String loginModuleName) throws IOException {
         AppConfigurationEntry[] configurationEntries = jaasConfig.getAppConfigurationEntry(loginContextName);
         if (configurationEntries == null) {
             String errorMessage = "Could not find a '" + loginContextName + "' entry in this JAAS configuration.";
@@ -101,6 +109,8 @@ public class JaasUtils {
         }
 
         for (AppConfigurationEntry entry: configurationEntries) {
+            if (loginModuleName != null && !loginModuleName.equals(entry.getLoginModuleName()))
+                continue;
             Object val = entry.getOptions().get(key);
             if (val != null)
                 return (String) val;

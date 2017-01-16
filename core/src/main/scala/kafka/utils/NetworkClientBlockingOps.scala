@@ -105,14 +105,15 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    */
   def blockingSendAndReceive(request: ClientRequest)(implicit time: Time): ClientResponse = {
     client.send(request, time.milliseconds())
-
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.requestHeader.correlationId == request.header.correlationId
+        response.requestHeader.correlationId == request.correlationId
       }
       response.foreach { r =>
         if (r.wasDisconnected)
           throw new IOException(s"Connection to ${request.destination} was disconnected before the response was read")
+        else if (r.versionMismatch() != null)
+          throw r.versionMismatch();
       }
       response
     }

@@ -53,6 +53,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
+        super.init(context);
         this.context = context;
 
         // if serializers are null, get the default ones from the context
@@ -63,7 +64,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (this.valSerializer instanceof ChangedSerializer &&
                 ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
-
     }
 
 
@@ -77,7 +77,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         }
 
         try {
-            collector.send(new ProducerRecord<K, V>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
+            collector.send(new ProducerRecord<>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
         } catch (ClassCastException e) {
             throw new StreamsException(
                     String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
@@ -91,17 +91,23 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         }
     }
 
-    @Override
-    public void close() {
-        // do nothing
-    }
-
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("topic:" + topic);
+        return toString("");
+    }
+
+    /**
+     * @return a string representation of this node starting with the given indent, useful for debugging.
+     */
+    public String toString(String indent) {
+        final StringBuilder sb = new StringBuilder(super.toString(indent));
+        sb.append(indent).append("\ttopic:\t\t");
+        sb.append(topic);
+        sb.append("\n");
         return sb.toString();
     }
+
 }

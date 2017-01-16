@@ -46,9 +46,9 @@ import scala.concurrent.duration._
  * 2- Perform a second rolling upgrade keeping the system property for the login file
  * and now setting zookeeper.set.acl to true
  * 3- Finally run this tool. There is a script under ./bin. Run 
- *   ./bin/zookeeper-security-migration --help
+ *   ./bin/zookeeper-security-migration.sh --help
  * to see the configuration parameters. An example of running it is the following:
- *  ./bin/zookeeper-security-migration --zookeeper.acl=secure --zookeeper.connection=localhost:2181
+ *  ./bin/zookeeper-security-migration.sh --zookeeper.acl=secure --zookeeper.connect=localhost:2181
  * 
  * To convert a cluster from secure to unsecure, we need to perform the following
  * steps:

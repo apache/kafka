@@ -25,22 +25,30 @@ import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.LoginType;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
 
 public class LoginManager {
 
-    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap<>(LoginType.class);
+    // static configs (broker or client)
+    private static final EnumMap<LoginType, LoginManager> LOGIN_TYPE_INSTANCES = new EnumMap<>(LoginType.class);
+
+    // dynamic configs (client-only)
+    private static final Map<Password, LoginManager> JAAS_CONF_INSTANCES = new HashMap<>();
 
     private final Login login;
-    private final LoginType loginType;
+    private final Object cacheKey;
     private int refCount;
 
-    private LoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs, Configuration jaasConfig) throws IOException, LoginException {
-        this.loginType = loginType;
+    private LoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs, Configuration jaasConfig,
+                         Password jaasConfigValue) throws IOException, LoginException {
+        this.cacheKey = jaasConfigValue != null ? jaasConfigValue : loginType;
         String loginContext = loginType.contextName();
         login = hasKerberos ? new KerberosLogin() : new DefaultLogin();
         login.configure(configs, jaasConfig, loginContext);
@@ -51,8 +59,7 @@ public class LoginManager {
      * Returns an instance of `LoginManager` and increases its reference count.
      *
      * `release()` should be invoked when the `LoginManager` is no longer needed. This method will try to reuse an
-     * existing `LoginManager` for the provided `mode` if available. However, it expects `configs` to be the same for
-     * every invocation and it will ignore them in the case where it's returning a cached instance of `LoginManager`.
+     * existing `LoginManager` for the provided `loginType` and `SaslConfigs.SASL_JAAS_CONFIG` in `configs`, if available. 
      *
      * This is a bit ugly and it would be nicer if we could pass the `LoginManager` to `ChannelBuilders.create` and
      * shut it down when the broker or clients are closed. It's straightforward to do the former, but it's more
@@ -60,14 +67,28 @@ public class LoginManager {
      *
      * @param loginType the type of the login context, it should be SERVER for the broker and CLIENT for the clients
      *                  (i.e. consumer and producer)
+     * @param hasKerberos 
      * @param configs configuration as key/value pairs
+     * @param jaasConfig JAAS Configuration object
      */
-    public static final LoginManager acquireLoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs, Configuration jaasConfig) throws IOException, LoginException {
+    public static LoginManager acquireLoginManager(LoginType loginType, boolean hasKerberos, Map<String, ?> configs,
+                                                   Configuration jaasConfig) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            LoginManager loginManager = CACHED_INSTANCES.get(loginType);
-            if (loginManager == null) {
-                loginManager = new LoginManager(loginType, hasKerberos, configs, jaasConfig);
-                CACHED_INSTANCES.put(loginType, loginManager);
+            // SASL_JAAS_CONFIG is only supported by clients
+            LoginManager loginManager;
+            Password jaasConfigValue = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
+            if (loginType == LoginType.CLIENT && jaasConfigValue != null) {
+                loginManager = JAAS_CONF_INSTANCES.get(jaasConfigValue);
+                if (loginManager == null) {
+                    loginManager = new LoginManager(loginType, hasKerberos, configs, jaasConfig, jaasConfigValue);
+                    JAAS_CONF_INSTANCES.put(jaasConfigValue, loginManager);
+                }
+            } else {
+                loginManager = LOGIN_TYPE_INSTANCES.get(loginType);
+                if (loginManager == null) {
+                    loginManager = new LoginManager(loginType, hasKerberos, configs, jaasConfig, jaasConfigValue);
+                    LOGIN_TYPE_INSTANCES.put(loginType, loginManager);
+                }
             }
             return loginManager.acquire();
         }
@@ -94,7 +115,11 @@ public class LoginManager {
             if (refCount == 0)
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
-                CACHED_INSTANCES.remove(loginType);
+                if (cacheKey instanceof Password) {
+                    JAAS_CONF_INSTANCES.remove(cacheKey);
+                } else {
+                    LOGIN_TYPE_INSTANCES.remove(cacheKey);
+                }
                 login.close();
             }
             --refCount;
@@ -104,10 +129,10 @@ public class LoginManager {
     /* Should only be used in tests. */
     public static void closeAll() {
         synchronized (LoginManager.class) {
-            for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
-                LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
-                loginManager.login.close();
-            }
+            for (LoginType key : new ArrayList<>(LOGIN_TYPE_INSTANCES.keySet()))
+                LOGIN_TYPE_INSTANCES.remove(key).login.close();
+            for (Password key : new ArrayList<>(JAAS_CONF_INSTANCES.keySet()))
+                JAAS_CONF_INSTANCES.remove(key).login.close();
         }
     }
 }

@@ -146,6 +146,10 @@ public class JoinGroupResponse extends AbstractResponse {
         return members;
     }
 
+    public static JoinGroupResponse parse(ByteBuffer buffer, int version) {
+        return new JoinGroupResponse(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version).read(buffer));
+    }
+
     public static JoinGroupResponse parse(ByteBuffer buffer) {
         return new JoinGroupResponse(CURRENT_SCHEMA.read(buffer));
     }

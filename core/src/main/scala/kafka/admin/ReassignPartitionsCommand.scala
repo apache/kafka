@@ -74,7 +74,7 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkUtils, partitionsToBeReassigned, reassignedPartitionsStatus)
   }
 
-  private def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
+  private[admin] def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus], admin: AdminUtilities = AdminUtils): Unit = {
     var changed = false
 
     //If all partitions have completed remove the throttle
@@ -82,11 +82,11 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null){
-          AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
+          admin.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
       }
@@ -94,11 +94,11 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
       for (topic <- topics) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
           | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null){
-          AdminUtils.changeTopicConfig(zkUtils, topic, configs)
+          admin.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
       }
@@ -303,7 +303,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]])
+class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils)
   extends Logging {
 
   def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
@@ -329,10 +329,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
       for (id <- brokers) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
         configs.put(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString)
         configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
-        AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
+        admin.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(s"The throttle limit was set to $throttle B/s")
     }

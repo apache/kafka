@@ -29,6 +29,7 @@ import kafka.controller.{ControllerChannelManager, ControllerContext}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
@@ -128,8 +129,11 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val controllerId = 2
 
     val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
-    val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
-    val nodes = brokers.map(_.getNode(SecurityProtocol.PLAINTEXT))
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+    val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", TestUtils.boundPort(s), listenerName,
+      securityProtocol))
+    val nodes = brokers.map(_.getNode(listenerName))
 
     val controllerContext = new ControllerContext(zkUtils)
     controllerContext.liveBrokers = brokers.toSet
@@ -143,10 +147,10 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
           Set(0, 1).map(Integer.valueOf).asJava)
       )
-      val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
-        nodes.toSet.asJava)
+      val requestBuilder = new LeaderAndIsrRequest.Builder(
+          controllerId, staleControllerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
-      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
+      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
         staleControllerEpochCallback)
       TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)

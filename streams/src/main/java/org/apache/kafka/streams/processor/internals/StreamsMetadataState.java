@@ -43,12 +43,18 @@ import java.util.Set;
  * in a KafkaStreams application
  */
 public class StreamsMetadataState {
+    public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
     private final TopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
+    private final Set<String> globalStores;
+    private final HostInfo thisHost;
     private Cluster clusterMetadata;
+    private StreamsMetadata myMetadata;
 
-    public StreamsMetadataState(final TopologyBuilder builder) {
+    public StreamsMetadataState(final TopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
+        this.globalStores = builder.globalStateStores().keySet();
+        this.thisHost = thisHost;
     }
 
     /**
@@ -72,6 +78,10 @@ public class StreamsMetadataState {
 
         if (!isInitialized()) {
             return Collections.emptyList();
+        }
+
+        if (globalStores.contains(storeName)) {
+            return allMetadata;
         }
 
         final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
@@ -114,6 +124,15 @@ public class StreamsMetadataState {
             return StreamsMetadata.NOT_AVAILABLE;
         }
 
+        if (globalStores.contains(storeName)) {
+            // global stores are on every node. if we dont' have the host info
+            // for this host then just pick the first metadata
+            if (thisHost == UNKNOWN_HOST) {
+                return allMetadata.get(0);
+            }
+            return myMetadata;
+        }
+
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
@@ -146,13 +165,22 @@ public class StreamsMetadataState {
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
-                                                               final StreamPartitioner<K, ?> partitioner) {
+                                                               final StreamPartitioner<? super K, ?> partitioner) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
 
         if (!isInitialized()) {
             return StreamsMetadata.NOT_AVAILABLE;
+        }
+
+        if (globalStores.contains(storeName)) {
+            // global stores are on every node. if we dont' have the host info
+            // for this host then just pick the first metadata
+            if (thisHost == UNKNOWN_HOST) {
+                return allMetadata.get(0);
+            }
+            return myMetadata;
         }
 
         SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -198,13 +226,18 @@ public class StreamsMetadataState {
                     storesOnHost.add(storeTopicEntry.getKey());
                 }
             }
-            allMetadata.add(new StreamsMetadata(key, storesOnHost, partitionsForHost));
+            storesOnHost.addAll(globalStores);
+            final StreamsMetadata metadata = new StreamsMetadata(key, storesOnHost, partitionsForHost);
+            allMetadata.add(metadata);
+            if (key.equals(thisHost)) {
+                myMetadata = metadata;
+            }
         }
     }
 
     private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
                                                          final K key,
-                                                         final StreamPartitioner<K, ?> partitioner,
+                                                         final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
         final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);

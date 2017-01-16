@@ -31,13 +31,13 @@ import java.util.NoSuchElementException;
  * @param <V>
  */
 class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
-    private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
-    private final PeekingKeyValueIterator<Bytes, byte[]> storeIterator;
+    private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
+    private final KeyValueIterator<Bytes, byte[]> storeIterator;
     private final StateSerdes<K, V> serdes;
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
 
-    public MergedSortedCacheKeyValueStoreIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
-                                                  final PeekingKeyValueIterator<Bytes, byte[]> storeIterator,
+    public MergedSortedCacheKeyValueStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
+                                                  final KeyValueIterator<Bytes, byte[]> storeIterator,
                                                   final StateSerdes<K, V> serdes) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
@@ -48,9 +48,9 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
     public boolean hasNext() {
         while (cacheIterator.hasNext() && isDeletedCacheEntry(cacheIterator.peekNext())) {
             if (storeIterator.hasNext()) {
-                final byte[] storeKey = storeIterator.peekNextKey().get();
+                final Bytes storeKey = storeIterator.peekNextKey();
                 // advance the store iterator if the key is the same as the deleted cache key
-                if (comparator.compare(storeKey, cacheIterator.peekNext().key) == 0) {
+                if (storeKey.equals(cacheIterator.peekNextKey())) {
                     storeIterator.next();
                 }
             }
@@ -60,20 +60,74 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
         return cacheIterator.hasNext() || storeIterator.hasNext();
     }
 
-    private boolean isDeletedCacheEntry(final KeyValue<byte[], LRUCacheEntry> nextFromCache) {
+
+    private boolean isDeletedCacheEntry(final KeyValue<Bytes, LRUCacheEntry> nextFromCache) {
         return  nextFromCache.value.value == null;
     }
 
 
     @Override
     public KeyValue<K, V> next() {
+
+        return internalNext(new NextValueFunction<KeyValue<K, V>>() {
+            @Override
+            public KeyValue<K, V> apply(final byte[] cacheKey, final byte[] storeKey) {
+                if (cacheKey == null) {
+                    return nextStoreValue();
+                }
+
+                if (storeKey == null) {
+                    return nextCacheValue();
+                }
+
+                final int comparison = comparator.compare(cacheKey, storeKey);
+                if (comparison > 0) {
+                    return nextStoreValue();
+                } else if (comparison < 0) {
+                    return nextCacheValue();
+                } else {
+                    storeIterator.next();
+                    return nextCacheValue();
+                }
+            }
+        });
+    }
+
+    @Override
+    public K peekNextKey() {
+        return internalNext(new NextValueFunction<K>() {
+            @Override
+            public K apply(final byte[] cacheKey, final byte[] storeKey) {
+                if (cacheKey == null) {
+                    return serdes.keyFrom(storeKey);
+                }
+
+                if (storeKey == null) {
+                    return serdes.keyFrom(cacheKey);
+                }
+
+                final int comparison = comparator.compare(cacheKey, storeKey);
+                if (comparison > 0) {
+                    return serdes.keyFrom(storeKey);
+                } else {
+                    return serdes.keyFrom(cacheKey);
+                }
+            }
+        });
+    }
+
+    interface NextValueFunction<T> {
+        T apply(final byte[] cacheKey, final byte [] storeKey);
+    }
+
+    private <T> T internalNext(final NextValueFunction<T> nextValueFunction) {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
 
         byte[] nextCacheKey = null;
         if (cacheIterator.hasNext()) {
-            nextCacheKey = cacheIterator.peekNextKey();
+            nextCacheKey = cacheIterator.peekNextKey().get();
         }
 
         byte[] nextStoreKey = null;
@@ -81,29 +135,12 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
             nextStoreKey = storeIterator.peekNextKey().get();
         }
 
-        if (nextCacheKey == null) {
-            return nextStoreValue();
-        }
-
-        if (nextStoreKey == null) {
-            return nextCacheValue();
-        }
-
-        final int comparison = comparator.compare(nextCacheKey, nextStoreKey);
-        if (comparison > 0) {
-            return nextStoreValue();
-        } else if (comparison < 0) {
-            return nextCacheValue();
-        } else {
-            storeIterator.next();
-            return nextCacheValue();
-        }
-
+        return nextValueFunction.apply(nextCacheKey, nextStoreKey);
     }
 
     private KeyValue<K, V> nextCacheValue() {
-        final KeyValue<byte[], LRUCacheEntry> next = cacheIterator.next();
-        return KeyValue.pair(serdes.keyFrom(next.key), serdes.valueFrom(next.value.value));
+        final KeyValue<Bytes, LRUCacheEntry> next = cacheIterator.next();
+        return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value.value));
     }
 
     private KeyValue<K, V> nextStoreValue() {
