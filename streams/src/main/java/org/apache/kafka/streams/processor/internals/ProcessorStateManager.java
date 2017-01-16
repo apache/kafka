@@ -74,8 +74,7 @@ public class ProcessorStateManager implements StateManager {
      *                       (this might be recoverable by retrying)
      * @throws IOException if any severe error happens while creating or locking the state directory
      */
-    public ProcessorStateManager(final String applicationId,
-                                 final TaskId taskId,
+    public ProcessorStateManager(final TaskId taskId,
                                  final Collection<TopicPartition> sources,
                                  final Consumer<byte[], byte[]> restoreConsumer,
                                  final boolean isStandby,
