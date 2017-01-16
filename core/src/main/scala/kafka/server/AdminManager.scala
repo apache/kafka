@@ -27,6 +27,9 @@ import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
+import org.apache.kafka.common.requests.CreateTopicsResponse
+import org.apache.kafka.server.policy.CreateTopicPolicy
+import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -37,7 +40,10 @@ class AdminManager(val config: KafkaConfig,
                    val zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
-  val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+  private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+
+  private val createTopicPolicy =
+    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicsPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.delayed() != 0
 
@@ -55,8 +61,9 @@ class AdminManager(val config: KafkaConfig,
     * The callback function will be triggered either when timeout, error or the topics are created.
     */
   def createTopics(timeout: Int,
+                   validateOnly: Boolean,
                    createInfo: Map[String, TopicDetails],
-                   responseCallback: Map[String, Errors] => Unit) {
+                   responseCallback: Map[String, CreateTopicsResponse.Error] => Unit) {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
@@ -73,32 +80,38 @@ class AdminManager(val config: KafkaConfig,
             && !arguments.replicasAssignments.isEmpty)
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
-          else if (!arguments.replicasAssignments.isEmpty) {
-            // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
-            // this follows the existing logic in TopicCommand
-            arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
-              (partitionId.intValue, replicas.asScala.map(_.intValue))
+          else {
+            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, arguments.numPartitions,
+              arguments.replicationFactor, arguments.replicasAssignments, arguments.configs)))
+
+            if (!arguments.replicasAssignments.isEmpty) {
+              // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
+              // this follows the existing logic in TopicCommand
+              arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
+                (partitionId.intValue, replicas.asScala.map(_.intValue))
+              }
+            } else {
+              AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
             }
-          } else {
-            AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
           }
         }
         trace(s"Assignments for topic $topic are $assignments ")
-        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
-        CreateTopicMetadata(topic, assignments, Errors.NONE)
+        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
+          update = false, validateOnly = validateOnly)
+        CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
         case e: Throwable =>
-          warn(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), Errors.forException(e))
+          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
       }
     }
 
-    // 2. if timeout <= 0 or no topics can proceed return immediately
-    if (timeout <= 0 || !metadata.exists(_.error == Errors.NONE)) {
+    // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
+    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
-        if (createTopicMetadata.error == Errors.NONE) {
-          (createTopicMetadata.topic, Errors.REQUEST_TIMED_OUT)
+        if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
+          (createTopicMetadata.topic, new CreateTopicsResponse.Error(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
         }

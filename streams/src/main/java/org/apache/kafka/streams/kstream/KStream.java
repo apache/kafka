@@ -1677,8 +1677,8 @@ public interface KStream<K, V> {
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
     <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
-                                         final KeyValueMapper<K, V, GK> keyValueMapper,
-                                         final ValueJoiner<? super V, ? super GV, ? super RV> valueJoiner);
+                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                         final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner);
 
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi join
@@ -1708,6 +1708,6 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
     <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
-                                     final KeyValueMapper<K, V, GK> keyValueMapper,
-                                     final ValueJoiner<? super V, ? super GV, ? super RV> joiner);
+                                     final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                     final ValueJoiner<? super V, ? super GV, ? extends RV> joiner);
 }

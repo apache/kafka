@@ -40,6 +40,7 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import org.apache.kafka.common.KafkaException
 import kafka.admin.AdminUtils
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.MemoryRecords
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
@@ -104,12 +105,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   )
 
   val RequestKeyToErrorCode = Map[ApiKeys, (Nothing) => Short](
-    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
+    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error.code),
     ApiKeys.GROUP_COORDINATOR -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
     ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.errorCode()),
@@ -119,7 +120,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode()),
-    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.code),
+    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.error.code),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors().asScala.find(_._1 == deleteTopic).get._2.code)
   )
 
@@ -208,15 +209,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createUpdateMetadataRequest = {
     val partitionState = Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava
+    val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
-      Map(SecurityProtocol.PLAINTEXT -> new requests.UpdateMetadataRequest.EndPoint("localhost", 0)).asJava, null)).asJava
+      Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
+        ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
     new requests.UpdateMetadataRequest.Builder(brokerId, Int.MaxValue, partitionState, brokers).build()
   }
 
   private def createJoinGroupRequest = {
     new JoinGroupRequest.Builder(group, 10000, "", "consumer",
       List( new JoinGroupRequest.ProtocolMetadata("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
-      .setRebalanceTimeout(60000).build();
+      .setRebalanceTimeout(60000).build()
   }
 
   private def createSyncGroupRequest = {

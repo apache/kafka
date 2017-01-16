@@ -20,15 +20,16 @@ from ducktape.mark import matrix, parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 
-import itertools, time
 from collections import Counter, namedtuple
+import itertools
+import json
 import operator
-
+import time
 
 class ConnectDistributedTest(Test):
     """
@@ -70,10 +71,13 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT):
+    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics)
+        if timestamp_type is not None:
+            for node in self.kafka.nodes:
+                node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
         self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
         self.cc.log_level = "DEBUG"
@@ -436,6 +440,61 @@ class ConnectDistributedTest(Test):
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
+
+    @cluster(num_nodes=6)
+    def test_transformations(self):
+        self.setup_services(timestamp_type='CreateTime')
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        ts_fieldname = 'the_timestamp'
+
+        NamedConnector = namedtuple('Connector', ['name'])
+
+        source_connector = NamedConnector(name='file-src')
+
+        self.cc.create_connector({
+            'name': source_connector.name,
+            'connector.class': 'org.apache.kafka.connect.file.FileStreamSourceConnector',
+            'tasks.max': 1,
+            'file': self.INPUT_FILE,
+            'topic': self.TOPIC,
+            'transforms': 'hoistToStruct,insertTimestampField',
+            'transforms.hoistToStruct.type': 'org.apache.kafka.connect.transforms.HoistToStruct$Value',
+            'transforms.hoistToStruct.field': 'content',
+            'transforms.insertTimestampField.type': 'org.apache.kafka.connect.transforms.InsertField$Value',
+            'transforms.insertTimestampField.timestamp.field': ts_fieldname,
+        })
+
+        wait_until(lambda: self.connector_is_running(source_connector), timeout_sec=30, err_msg='Failed to see connector transition to the RUNNING state')
+
+        for node in self.cc.nodes:
+            node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
+
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer.run()
+
+        assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)
+
+        expected_schema = {
+            'type': 'struct',
+            'fields': [
+                {'field': 'content', 'type': 'string', 'optional': False},
+                {'field': ts_fieldname, 'name': 'org.apache.kafka.connect.data.Timestamp', 'type': 'int64', 'version': 1, 'optional': True},
+            ],
+            'optional': False
+        }
+
+        for msg in consumer.messages_consumed[1]:
+            (ts_info, value) = msg.split('\t')
+
+            assert ts_info.startswith('CreateTime:')
+            ts = int(ts_info[len('CreateTime:'):])
+
+            obj = json.loads(value)
+            assert obj['schema'] == expected_schema
+            assert obj['payload']['content'] in self.FIRST_INPUT_LIST
+            assert obj['payload'][ts_fieldname] == ts
 
     def _validate_file_output(self, input):
         input_set = set(input)

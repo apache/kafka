@@ -33,6 +33,8 @@ can upgrade the brokers one at a time: shut down the broker, update the code, an
 <ul>
     <li>Several methods on the Java consumer may now throw <code>InterruptException</code> if the calling thread is interrupted.
         Please refer to the <code>KafkaConsumer</code> Javadoc for a more in-depth explanation of this change.</li>
+    <li>Java consumer now shuts down gracefully. By default, the consumer waits up to 30 seconds to complete pending requests.
+        A new close API with timeout has been added to <code>KafkaConsumer</code> to control the maximum wait time.</li>
     <li>Multiple regular expressions separated by commas can be passed to MirrorMaker with the new Java consumer via the --whitelist option. This
         makes the behaviour consistent with MirrorMaker when used the old Scala consumer.</li>
 </ul>

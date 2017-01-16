@@ -253,11 +253,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager.startup()
 
         /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
+        val listeners = config.advertisedListeners.map { endpoint =>
           if (endpoint.port == 0)
-            (protocol, EndPoint(endpoint.host, socketServer.boundPort(protocol), endpoint.protocolType))
+            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
           else
-            (protocol, endpoint)
+            endpoint
         }
         kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
           config.interBrokerProtocolVersion)
@@ -345,7 +345,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def controlledShutdown() {
 
     def node(broker: Broker): Node = {
-      val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
+      val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
       new Node(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
     }
 
@@ -482,8 +482,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 if (channel != null)
                   channel.disconnect()
 
-                channel = new BlockingChannel(broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).host,
-                  broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).port,
+                val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
+                channel = new BlockingChannel(brokerEndPoint.host,
+                  brokerEndPoint.port,
                   BlockingChannel.UseDefaultBufferSize,
                   BlockingChannel.UseDefaultBufferSize,
                   config.controllerSocketTimeoutMs)
@@ -619,7 +620,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   def getLogManager(): LogManager = logManager
 
-  def boundPort(protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int = socketServer.boundPort(protocol)
+  def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)

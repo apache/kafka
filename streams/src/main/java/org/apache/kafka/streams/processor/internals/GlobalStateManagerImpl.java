@@ -144,7 +144,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
-        final String sourceTopic = topology.sourceStoreToSourceTopic().get(store.name());
+        final String sourceTopic = topology.storeToChangelogTopic().get(store.name());
         final List<PartitionInfo> partitionInfos = consumer.partitionsFor(sourceTopic);
         if (partitionInfos == null || partitionInfos.isEmpty()) {
             throw new StreamsException(String.format("There are no partitions available for topic %s when initializing global store %s", sourceTopic, store.name()));

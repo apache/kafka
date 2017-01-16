@@ -19,6 +19,7 @@ package kafka.integration
 
 import java.io.File
 import java.util.Arrays
+
 import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
@@ -26,8 +27,11 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{After, Before}
+
 import scala.collection.mutable.Buffer
 import java.util.Properties
+
+import org.apache.kafka.common.network.ListenerName
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -66,7 +70,10 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
 
+  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
   protected def trustStoreFile: Option[File] = None
   protected def saslProperties: Option[Properties] = None
 

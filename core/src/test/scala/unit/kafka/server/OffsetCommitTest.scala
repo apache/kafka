@@ -52,7 +52,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     server = TestUtils.createServer(KafkaConfig.fromProps(config), Time.SYSTEM)
-    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "test-client")
+    simpleConsumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 1000000, 64*1024, "test-client")
     val consumerMetadataRequest = GroupCoordinatorRequest(group)
     Stream.continually {
       val consumerMetadataResponse = simpleConsumer.send(consumerMetadataRequest)
@@ -234,7 +234,9 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // committed offset should exist with fetch version 0
-    assertEquals(1L, simpleConsumer.fetchOffsets(OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)), versionId = 0)).requestInfo.get(topicPartition).get.offset)
+    val offsetFetchReq = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)), versionId = 0)
+    val offsetFetchResp = simpleConsumer.fetchOffsets(offsetFetchReq)
+    assertEquals(1L, offsetFetchResp.requestInfo.get(topicPartition).get.offset)
 
 
     // v1 version commit request with commit timestamp set to -1
