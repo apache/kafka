@@ -72,7 +72,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
   @volatile private var timeOfLastRun : Long = Time.SYSTEM.milliseconds
-  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = Time.SYSTEM.milliseconds - timeOfLastRun })
+  newGauge("time-since-last-run-ms", new Gauge[Long] {
+    override def getValue: Long = Time.SYSTEM.milliseconds - timeOfLastRun
+  })
 
   /**
    * @return the position processed for all logs.
