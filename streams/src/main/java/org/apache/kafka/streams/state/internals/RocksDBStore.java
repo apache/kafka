@@ -92,8 +92,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private WriteOptions wOptions;
     private FlushOptions fOptions;
 
-    private boolean loggingEnabled = false;
-
     protected volatile boolean open = false;
 
 
