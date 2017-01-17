@@ -94,6 +94,12 @@ class SecurityConfig(TemplateRenderer):
     SASL_SSL = 'SASL_SSL'
     SASL_MECHANISM_GSSAPI = 'GSSAPI'
     SASL_MECHANISM_PLAIN = 'PLAIN'
+    SASL_MECHANISM_SCRAM_SHA_256 = 'SCRAM-SHA-256'
+    SASL_MECHANISM_SCRAM_SHA_512 = 'SCRAM-SHA-512'
+    SCRAM_CLIENT_USER = "kafka-client"
+    SCRAM_CLIENT_PASSWORD = "client-secret"
+    SCRAM_BROKER_USER = "kafka-broker"
+    SCRAM_BROKER_PASSWORD = "broker-secret"
     CONFIG_DIR = "/mnt/security"
     KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
     TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
@@ -167,6 +173,7 @@ class SecurityConfig(TemplateRenderer):
         else:
             is_ibm_jdk = False
         jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
+                                SecurityConfig=SecurityConfig,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
         node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
@@ -180,6 +187,21 @@ class SecurityConfig(TemplateRenderer):
 
         if self.has_sasl:
             self.setup_sasl(node)
+
+    def setup_credentials(self, node, path, zk_connect, broker):
+        if broker:
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.interbroker_sasl_mechanism,
+                 SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
+        else:
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.client_sasl_mechanism,
+                 SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD)
+
+    def maybe_create_scram_credentials(self, node, zk_connect, path, mechanism, user_name, password):
+        if self.has_sasl and self.is_sasl_scram(mechanism):
+            cmd = "%s --zookeeper %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
+                  (path.script("kafka-configs.sh", node), zk_connect,
+                  user_name, mechanism, password)
+            node.account.ssh(cmd)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
@@ -202,6 +224,9 @@ class SecurityConfig(TemplateRenderer):
 
     def is_sasl(self, security_protocol):
         return security_protocol == SecurityConfig.SASL_PLAINTEXT or security_protocol == SecurityConfig.SASL_SSL
+
+    def is_sasl_scram(self, sasl_mechanism):
+        return sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_256 or sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_512
 
     @property
     def security_protocol(self):
