@@ -27,17 +27,24 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
-import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireSinkRecord;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+
 public abstract class InsertField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public interface ConfigName {
+    public static final String OVERVIEW_DOC =
+            "Insert field(s) using attributes from the record metadata or a configured static value."
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
+                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
+
+    private interface ConfigName {
         String TOPIC_FIELD = "topic.field";
         String PARTITION_FIELD = "partition.field";
         String OFFSET_FIELD = "offset.field";
@@ -48,7 +55,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.TOPIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for Kafka topic.\n" + OPTIONALITY_DOC)
             .define(ConfigName.PARTITION_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
@@ -61,6 +68,8 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
                     "Field name for static data field.\n" + OPTIONALITY_DOC)
             .define(ConfigName.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Static field value, if field name configured.");
+
+    private static final String PURPOSE = "field insertion";
 
     private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
 
@@ -113,24 +122,16 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     public R apply(R record) {
         if (!applicable) return record;
 
-        final Schema schema = operatingSchema(record);
-        final Object value = operatingValue(record);
-
-        if (value == null)
-            throw new DataException("null value");
-
-        if (schema == null) {
-            if (!(value instanceof Map))
-                throw new DataException("Can only operate on Map value in schemaless mode: " + value.getClass().getName());
-            return applySchemaless(record, (Map<String, Object>) value);
+        if (operatingSchema(record) == null) {
+            return applySchemaless(record);
         } else {
-            if (schema.type() != Schema.Type.STRUCT)
-                throw new DataException("Can only operate on Struct types: " + value.getClass().getName());
-            return applyWithSchema(record, schema, (Struct) value);
+            return applyWithSchema(record);
         }
     }
 
-    private R applySchemaless(R record, Map<String, Object> value) {
+    private R applySchemaless(R record) {
+        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+
         final Map<String, Object> updatedValue = new HashMap<>(value);
 
         if (topicField != null) {
@@ -140,9 +141,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             updatedValue.put(partitionField.name, record.kafkaPartition());
         }
         if (offsetField != null) {
-            if (!(record instanceof SinkRecord))
-                throw new DataException("Offset insertion is only supported for sink connectors, record is of type: " + record.getClass());
-            updatedValue.put(offsetField.name, ((SinkRecord) record).kafkaOffset());
+            updatedValue.put(offsetField.name, requireSinkRecord(record, PURPOSE).kafkaOffset());
         }
         if (timestampField != null && record.timestamp() != null) {
             updatedValue.put(timestampField.name, record.timestamp());
@@ -150,14 +149,17 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         if (staticField != null && staticValue != null) {
             updatedValue.put(staticField.name, staticValue);
         }
+
         return newRecord(record, null, updatedValue);
     }
 
-    private R applyWithSchema(R record, Schema schema, Struct value) {
-        Schema updatedSchema = schemaUpdateCache.get(schema);
+    private R applyWithSchema(R record) {
+        final Struct value = requireStruct(operatingValue(record), PURPOSE);
+
+        Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {
-            updatedSchema = makeUpdatedSchema(schema);
-            schemaUpdateCache.put(schema, updatedSchema);
+            updatedSchema = makeUpdatedSchema(value.schema());
+            schemaUpdateCache.put(value.schema(), updatedSchema);
         }
 
         final Struct updatedValue = new Struct(updatedSchema);
@@ -218,10 +220,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             value.put(partitionField.name, record.kafkaPartition());
         }
         if (offsetField != null) {
-            if (!(record instanceof SinkRecord)) {
-                throw new DataException("Offset insertion is only supported for sink connectors, record is of type: " + record.getClass());
-            }
-            value.put(offsetField.name, ((SinkRecord) record).kafkaOffset());
+            value.put(offsetField.name, requireSinkRecord(record, PURPOSE).kafkaOffset());
         }
         if (timestampField != null && record.timestamp() != null) {
             value.put(timestampField.name, new Date(record.timestamp()));
@@ -248,8 +247,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
     /**
-     * This transformation allows inserting configured attributes of the record metadata as fields in the record key.
-     * It also allows adding a static data field.
+     *
      */
     public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
 
@@ -270,10 +268,6 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     }
 
-    /**
-     * This transformation allows inserting configured attributes of the record metadata as fields in the record value.
-     * It also allows adding a static data field.
-     */
     public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
 
         @Override

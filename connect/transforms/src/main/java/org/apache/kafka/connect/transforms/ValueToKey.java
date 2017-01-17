@@ -25,20 +25,26 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+
 public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
+
+    public static final String OVERVIEW_DOC = "Copy fields from the record value to the record key. The existing record key if any is clobbered.";
 
     public static final String FIELDS_CONFIG = "fields";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.HIGH,
                     "Field names on the record value to extract as the record key.");
+
+    private static final String PURPOSE = "copying fields from value to key";
 
     private List<String> fields;
 
@@ -53,22 +59,15 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
 
     @Override
     public R apply(R record) {
-        final Schema valueSchema = record.valueSchema();
-        if (valueSchema == null) {
-            if (!(record.value() instanceof Map)) {
-                throw new DataException("Only Map values supported for schemaless data");
-            }
+        if (record.valueSchema() == null) {
             return applySchemaless(record);
         } else {
-            if (valueSchema.type() != Schema.Type.STRUCT) {
-                throw new DataException("Only STRUCT schema type supported, was: " + valueSchema.type());
-            }
             return applyWithSchema(record);
         }
     }
 
     private R applySchemaless(R record) {
-        final Map<String, Object> value = (Map<String, Object>) record.value();
+        final Map<String, Object> value = requireMap(record.value(), PURPOSE);
         final Map<String, Object> key = new HashMap<>(fields.size());
         for (String field : fields) {
             key.put(field, value.get(field));
@@ -77,10 +76,9 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     }
 
     private R applyWithSchema(R record) {
-        final Schema valueSchema = record.valueSchema();
-        final Struct value = (Struct) record.value();
+        final Struct value = requireStruct(record.value(), PURPOSE);
 
-        Schema keySchema = valueToKeySchemaCache.get(valueSchema);
+        Schema keySchema = valueToKeySchemaCache.get(value.schema());
         if (keySchema == null) {
             final SchemaBuilder keySchemaBuilder = SchemaBuilder.struct();
             for (String field : fields) {
@@ -88,7 +86,7 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
                 keySchemaBuilder.field(field, fieldSchema);
             }
             keySchema = keySchemaBuilder.build();
-            valueToKeySchemaCache.put(valueSchema, keySchema);
+            valueToKeySchemaCache.put(value.schema(), keySchema);
         }
 
         final Struct key = new Struct(keySchema);
@@ -96,7 +94,7 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
             key.put(field, value.get(field));
         }
 
-        return record.newRecord(record.topic(), record.kafkaPartition(), keySchema, key, valueSchema, value, record.timestamp());
+        return record.newRecord(record.topic(), record.kafkaPartition(), keySchema, key, value.schema(), value, record.timestamp());
     }
 
     @Override

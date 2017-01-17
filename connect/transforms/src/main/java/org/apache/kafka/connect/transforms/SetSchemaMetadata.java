@@ -21,19 +21,24 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireSchema;
+
 public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public interface ConfigName {
+    public static final String OVERVIEW_DOC =
+            "Set the schema name, version or both on the record's key (<code>" + Key.class.getCanonicalName() + "</code>)"
+                    + " or value (<code>" + Value.class.getCanonicalName() + "</code>) schema.";
+
+    private interface ConfigName {
         String SCHEMA_NAME = "schema.name";
         String SCHEMA_VERSION = "schema.version";
     }
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
             .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.");
 
@@ -51,9 +56,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     public R apply(R record) {
         if (schemaName == null && schemaVersion == null) return record; // no-op
         final Schema schema = operatingSchema(record);
-        if (schema == null) {
-            throw new DataException("Cannot update metadata on null Schema");
-        }
+        requireSchema(schema, "updating schema metadata");
         final boolean isArray = schema.type() == Schema.Type.ARRAY;
         final boolean isMap = schema.type() == Schema.Type.MAP;
         final Schema updatedSchema = new ConnectSchema(

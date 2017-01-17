@@ -21,17 +21,26 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+
 public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String FIELD_CONFIG = "field";
+    public static final String OVERVIEW_DOC =
+            "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data."
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
+                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    private static final String FIELD_CONFIG = "field";
+
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM, "Field name to extract.");
+
+    private static final String PURPOSE = "field extraction";
 
     private String fieldName;
 
@@ -44,18 +53,12 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     @Override
     public R apply(R record) {
         final Schema schema = operatingSchema(record);
-        final Object value = operatingValue(record);
-
         if (schema == null) {
-            if (!(value instanceof Map)) {
-                throw new DataException("Only Map supported in schemaless mode");
-            }
-            return newRecord(record, null, ((Map) value).get(fieldName));
+            final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+            return newRecord(record, null, value.get(fieldName));
         } else {
-            if (schema.type() != Schema.Type.STRUCT) {
-                throw new DataException("Only STRUCT schema type supported, was: " + schema.type());
-            }
-            return newRecord(record, schema.field(fieldName).schema(), ((Struct) value).get(fieldName));
+            final Struct value = requireStruct(operatingValue(record), PURPOSE);
+            return newRecord(record, schema.field(fieldName).schema(), value.get(fieldName));
         }
     }
 

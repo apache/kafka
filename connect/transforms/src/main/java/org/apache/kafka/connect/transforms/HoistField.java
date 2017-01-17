@@ -32,9 +32,14 @@ import java.util.Map;
 
 public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String FIELD_CONFIG = "field";
+    public static final String OVERVIEW_DOC =
+            "Wrap data using the specified field name in a Struct when schema present, or a Map in the case of schemaless data."
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
+                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    private static final String FIELD_CONFIG = "field";
+
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
                     "Field name for the single field that will be created in the resulting Struct or Map.");
 
@@ -85,9 +90,6 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    /**
-     * Wraps the record key in a {@link Struct} when schema present, or a {@link Map} in schemaless mode, with the specified field name.
-     */
     public static class Key<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
@@ -105,9 +107,6 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
         }
     }
 
-    /**
-     * Wraps the record value in a {@link Struct} when schema present, or a {@link Map} in schemaless mode, with the specified field name.
-     */
     public static class Value<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
