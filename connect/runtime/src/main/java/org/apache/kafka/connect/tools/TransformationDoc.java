@@ -52,21 +52,25 @@ public class TransformationDoc {
             new DocInfo(TimestampRouter.class.getName(), TimestampRouter.OVERVIEW_DOC, TimestampRouter.CONFIG_DEF)
     );
 
+    private static void printTransformationHtml(PrintStream out, DocInfo docInfo) {
+        out.println("<div id=\"" + docInfo.transformationName + "\">");
+
+        out.print("<h5>");
+        out.print(docInfo.transformationName);
+        out.println("</h5>");
+
+        out.println(docInfo.overview);
+
+        out.println("<p/>");
+
+        out.println(docInfo.configDef.toHtmlTable());
+
+        out.println("</div>");
+    }
+
     private static void printHtml(PrintStream out) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
         for (final DocInfo docInfo : TRANSFORMATIONS) {
-            out.println("<div id=\"" + docInfo.transformationName + "\">");
-
-            out.print("<h2>");
-            out.print(docInfo.transformationName);
-            out.println("</h2>");
-
-            out.println("<p>");
-            out.println(docInfo.overview);
-            out.println("</p>");
-
-            out.println(docInfo.configDef.toHtmlTable());
-
-            out.println("</div>");
+            printTransformationHtml(out, docInfo);
         }
     }
 
