@@ -81,6 +81,7 @@ public class QueryableStateIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final int STREAM_THREE_PARTITIONS = 4;
     private final MockTime mockTime = CLUSTER.time;
     private String streamOne = "stream-one";
     private String streamTwo = "stream-two";
@@ -91,7 +92,7 @@ public class QueryableStateIntegrationTest {
     private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
-    private static final int NUM_PARTITIONS = 2;
+    private static final int STREAM_TWO_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -101,7 +102,7 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, Long>> stringLongComparator;
     private static int testNo = 0;
 
-    public void createTopics() {
+    public void createTopics() throws InterruptedException {
         streamOne = streamOne + "-" + testNo;
         streamConcurrent = streamConcurrent + "-" + testNo;
         streamThree = streamThree + "-" + testNo;
@@ -111,8 +112,8 @@ public class QueryableStateIntegrationTest {
         streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopic(streamOne);
         CLUSTER.createTopic(streamConcurrent);
-        CLUSTER.createTopic(streamTwo, NUM_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(streamThree, 4, 1);
+        CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
         CLUSTER.createTopic(outputTopic);
         CLUSTER.createTopic(outputTopicConcurrent);
         CLUSTER.createTopic(outputTopicThree);
@@ -128,7 +129,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException {
+    public void before() throws IOException, InterruptedException {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -144,7 +145,6 @@ public class QueryableStateIntegrationTest {
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
@@ -328,7 +328,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void queryOnRebalance() throws Exception {
-        final int numThreads = NUM_PARTITIONS;
+        final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
         final int numIterations = 500000;
