@@ -52,7 +52,6 @@ public class OffsetFetchResponse extends AbstractResponse {
      *
      * - Partition errors:
      *   - UNKNOWN_TOPIC_OR_PARTITION (3)
-     *   - TOPIC_AUTHORIZATION_FAILED (29)
      *
      * - Group or coordinator errors:
      *   - GROUP_LOAD_IN_PROGRESS (14)
