@@ -25,7 +25,6 @@ import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.OffsetFetchResponse.PARTITION_ERRORS
 
 object OffsetFetchRequest extends Logging {
   val CurrentVersion: Short = 2

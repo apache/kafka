@@ -422,7 +422,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def doCommitOffsets(group: GroupMetadata,
+  private def doCommitOffsets(group: GroupMetadata,
                       memberId: String,
                       generationId: Int,
                       offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
@@ -455,7 +455,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleFetchOffsets(groupId: String,
-                         partitions: Option[Seq[TopicPartition]]): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
+                         partitions: Option[Seq[TopicPartition]] = None): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
     if (!isActive.get)
       (Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Map())
     else if (!isCoordinatorForGroup(groupId)) {
