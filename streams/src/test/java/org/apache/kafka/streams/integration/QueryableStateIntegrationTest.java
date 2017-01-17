@@ -19,7 +19,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -103,7 +102,7 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, Long>> stringLongComparator;
     private static int testNo = 0;
 
-    public void createTopics() {
+    public void createTopics() throws InterruptedException {
         streamOne = streamOne + "-" + testNo;
         streamConcurrent = streamConcurrent + "-" + testNo;
         streamThree = streamThree + "-" + testNo;
@@ -146,23 +145,6 @@ public class QueryableStateIntegrationTest {
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-
-        IntegrationTestUtils.waitForTopicPartitions(CLUSTER.brokers(),
-                                                    Arrays.asList(new TopicPartition(streamOne, 0),
-                                                              new TopicPartition(streamTwo, 0),
-                                                              new TopicPartition(streamTwo, 1),
-                                                              new TopicPartition(streamThree, 0),
-                                                              new TopicPartition(streamThree, 1),
-                                                              new TopicPartition(streamThree, 2),
-                                                              new TopicPartition(streamThree, 3),
-                                                              new TopicPartition(streamConcurrent, 0),
-                                                              new TopicPartition(outputTopic, 0),
-                                                              new TopicPartition(outputTopicConcurrent, 0),
-                                                              new TopicPartition(outputTopicThree, 0)),
-                                                    30000);
-
-
-
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
