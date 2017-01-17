@@ -54,13 +54,15 @@ public class CachingWindowStoreTest {
     private String topic;
     private static final long DEFAULT_TIMESTAMP = 10L;
     private WindowStoreKeySchema keySchema;
+    private RocksDBWindowStore<Bytes, byte[]> windowStore;
 
     @Before
     public void setUp() throws Exception {
         keySchema = new WindowStoreKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
+        windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
-        cachingStore = new CachingWindowStore<>(underlying,
+        cachingStore = new CachingWindowStore<>(windowStore,
                                                 Serdes.String(),
                                                 Serdes.String(),
                                                 WINDOW_SIZE);
@@ -71,6 +73,7 @@ public class CachingWindowStoreTest {
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic));
         cachingStore.init(context, cachingStore);
     }
+
 
     @Test
     public void shouldPutFetchFromCache() throws Exception {
