@@ -30,9 +30,9 @@ import java.util.TimeZone;
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
-            "This transformation facilitates updating the record's topic field as a function of the original topic value and the record timestamp."
+            "Update the record's topic field as a function of the original topic value and the record timestamp."
                     + "<p/>"
-                    + "It is mainly useful for sink connectors, since the topic field is often used to determine the equivalent entity name in the destination system"
+                    + "This is mainly useful for sink connectors, since the topic field is often used to determine the equivalent entity name in the destination system"
                     + "(e.g. database table or search index name).";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
