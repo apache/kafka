@@ -167,7 +167,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testPartitionReassignmentWithLeaderInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2), 1  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
     val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
@@ -178,7 +178,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partitionToBeReassigned = 0
     val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas))
-    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
+    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions(1000L))
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)

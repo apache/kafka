@@ -361,7 +361,9 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
 
   private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
     //For each partition in the proposed list, filter out any replicas that exist now (i.e. are in the proposed list and hence are not moving)
-    existing.map { case (tp, current) =>
+    existing
+      .filter{ case (tp, current) => proposed.contains(tp)}
+      .map { case (tp, current) =>
       tp -> (proposed(tp).toSet -- current).toSeq
     }
   }
@@ -369,6 +371,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   private def preRebalanceReplicaForMovingPartitions(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
     //Throttle all existing replicas (as any one might be a leader). So just filter out those which aren't moving
     existing.filter { case (tp, current) =>
+      proposed.contains(tp) &&
       (proposed(tp).toSet -- current).nonEmpty
     }
   }
