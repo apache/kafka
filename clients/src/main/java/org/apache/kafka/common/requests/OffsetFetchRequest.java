@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -78,7 +79,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     private final List<TopicPartition> partitions;
 
     public static OffsetFetchRequest forAllPartitions(String groupId) {
-        return new OffsetFetchRequest.Builder(groupId, (List<TopicPartition>) null).setVersion((short) 2).build();
+        return new OffsetFetchRequest.Builder(groupId, null).setVersion((short) 2).build();
     }
 
     // v0, v1, and v2 have the same fields.
@@ -131,18 +132,33 @@ public class OffsetFetchRequest extends AbstractRequest {
         groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
 
-    @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public OffsetFetchResponse getErrorResponse(Errors error) {
         short versionId = version();
+
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
+        if (versionId < 2) {
+            for (TopicPartition partition : this.partitions) {
+                responsePartitions.put(partition, new OffsetFetchResponse.PartitionData(
+                        OffsetFetchResponse.INVALID_OFFSET,
+                        OffsetFetchResponse.NO_METADATA,
+                        error));
+            }
+        }
+
         switch (versionId) {
             case 0:
             case 1:
             case 2:
-                return new OffsetFetchResponse(Errors.forException(e), partitions, versionId);
+                return new OffsetFetchResponse(error, responsePartitions, versionId);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id)));
         }
+    }
+
+    @Override
+    public OffsetFetchResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(Errors.forException(e));
     }
 
     public String groupId() {
