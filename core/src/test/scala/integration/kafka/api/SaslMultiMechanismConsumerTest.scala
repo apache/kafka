@@ -26,7 +26,8 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslTestHarne
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @Test
   def testMultipleBrokerMechanisms() {
@@ -34,7 +35,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslTestHarne
     val plainSaslProducer = producers.head
     val plainSaslConsumer = consumers.head
 
-    val gssapiSaslProperties = kafkaSaslProperties("GSSAPI", dynamicJaasConfig=true)
+    val gssapiSaslProperties = kafkaClientSaslProperties("GSSAPI", dynamicJaasConfig = true)
     val gssapiSaslProducer = TestUtils.createNewProducer(brokerList,
                                                          securityProtocol = this.securityProtocol,
                                                          trustStoreFile = this.trustStoreFile,

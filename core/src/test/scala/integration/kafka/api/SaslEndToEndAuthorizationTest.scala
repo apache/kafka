@@ -29,7 +29,8 @@ import scala.collection.JavaConverters._
 
 abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   
   protected def kafkaClientSaslMechanism: String
   protected def kafkaServerSaslMechanisms: List[String]
@@ -68,7 +69,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     val consumer2 = TestUtils.createNewConsumer(brokerList,
                                                 securityProtocol = securityProtocol,
                                                 trustStoreFile = trustStoreFile,
-                                                saslProperties = saslProperties,
+                                                saslProperties = clientSaslProperties,
                                                 props = Some(consumer2Config))
     consumers += consumer2
 

@@ -43,8 +43,8 @@ trait SaslSetup {
   private val workDir = TestUtils.tempDir()
   private val kdcConf = MiniKdc.createConfig
   private var kdc: MiniKdc = null
-  var serverKeytabFile: Option[File] = None
-  var clientKeytabFile: Option[File] = None
+  private var serverKeytabFile: Option[File] = null
+  private var clientKeytabFile: Option[File] = null
 
   def startSasl(mode: SaslSetupMode = Both, kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String]) {
     // Important if tests leak consumers, producers or brokers
@@ -59,6 +59,9 @@ trait SaslSetup {
       kdc.start()
       kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
       kdc.createPrincipal(clientKeytabFile, JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
+    } else {
+      this.clientKeytabFile = None
+      this.serverKeytabFile = None
     }
     setJaasConfiguration(mode, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
     if (mode == Both || mode == ZkSasl)
@@ -86,13 +89,16 @@ trait SaslSetup {
     Configuration.setConfiguration(null)
   }
 
-  def kafkaSaslProperties(clientSaslMechanism: String, serverSaslMechanisms: Option[Seq[String]] = None, dynamicJaasConfig: Boolean = false) = {
+  def kafkaServerSaslProperties(serverSaslMechanisms: Seq[String], interBrokerSaslMechanism: String) = {
+    val props = new Properties
+    props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, interBrokerSaslMechanism)
+    props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverSaslMechanisms.mkString(","))
+    props
+  }
+
+  def kafkaClientSaslProperties(clientSaslMechanism: String, dynamicJaasConfig: Boolean = false) = {
     val props = new Properties
     props.put(SaslConfigs.SASL_MECHANISM, clientSaslMechanism)
-    serverSaslMechanisms.foreach { serverMechanisms =>
-        props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, clientSaslMechanism)
-        props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverMechanisms.mkString(","))
-    }
     if (dynamicJaasConfig)
       props.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism))
     props
