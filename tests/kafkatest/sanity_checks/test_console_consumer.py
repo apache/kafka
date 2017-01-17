@@ -47,7 +47,7 @@ class ConsoleConsumerTest(Test):
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=4)
-    @parametrize(security_protocol='SASL_SSL', sasl_mechanism='PLAIN')
+    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'])
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
     def test_lifecycle(self, security_protocol, new_consumer=True, sasl_mechanism='GSSAPI'):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
