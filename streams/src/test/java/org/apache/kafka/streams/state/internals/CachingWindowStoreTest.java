@@ -58,7 +58,7 @@ public class CachingWindowStoreTest {
     @Before
     public void setUp() throws Exception {
         keySchema = new WindowStoreKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
+        underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema, false);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(underlying,
                                                 Serdes.String(),

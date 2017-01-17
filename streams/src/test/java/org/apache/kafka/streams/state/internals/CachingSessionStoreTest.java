@@ -58,7 +58,7 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema());
+        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema(), false);
         cachingStore = new CachingSessionStore<>(underlying,
                                                  Serdes.String(),
                                                  Serdes.Long());
