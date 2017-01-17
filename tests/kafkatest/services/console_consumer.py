@@ -150,7 +150,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = self.kafka.security_config.client_config(prop_file)
+        self.security_config = self.kafka.security_config.client_config(prop_file, node)
+        self.security_config.setup_node(node)
 
         prop_file += str(self.security_config)
         return prop_file
@@ -231,7 +232,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         prop_file = self.prop_file(node)
         self.logger.info(prop_file)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
-        self.security_config.setup_node(node)
 
         # Create and upload log properties
         log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
