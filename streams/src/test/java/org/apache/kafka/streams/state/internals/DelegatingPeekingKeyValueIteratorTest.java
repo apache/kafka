@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,11 +38,20 @@ public class DelegatingPeekingKeyValueIteratorTest {
     }
 
     @Test
-    public void shouldPeekNext() throws Exception {
+    public void shouldPeekNextKey() throws Exception {
         store.put("A", "A");
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         assertEquals("A", peekingIterator.peekNextKey());
         assertEquals("A", peekingIterator.peekNextKey());
+        assertTrue(peekingIterator.hasNext());
+    }
+
+    @Test
+    public void shouldPeekNext() throws Exception {
+        store.put("A", "A");
+        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
+        assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
+        assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
         assertTrue(peekingIterator.hasNext());
     }
 
