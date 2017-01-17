@@ -92,7 +92,7 @@ public class NodeApiVersions {
         StringBuilder bld = new StringBuilder();
         bld.append("(");
         if (lineBreaks)
-            bld.append("\n    ");
+            bld.append("\n\t");
         bld.append(Utils.join(apiKeysText.values(), separator));
         if (lineBreaks)
             bld.append("\n");

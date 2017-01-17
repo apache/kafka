@@ -81,10 +81,10 @@ class AdminClient(val time: Time,
     response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
-  def getApiVersions(node: Node): util.Collection[ApiVersion] = {
+  def getApiVersions(node: Node): List[ApiVersion] = {
     val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
-    response.apiVersions()
+    response.apiVersions().asScala.toList
   }
 
   private def findAllBrokers(): List[Node] = {
@@ -136,17 +136,8 @@ class AdminClient(val time: Time,
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] = {
-    findAllBrokers.map {
-      case broker =>
-        broker -> {
-          try {
-            Success(new NodeApiVersions(getApiVersions(broker)))
-          } catch {
-            case e: Exception => Failure(e)
-          }
-        }
-    }.toMap
-  }
+      findAllBrokers.map { broker => broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava)) }
+  }.toMap
 
   /**
    * Case class used to represent a consumer of a consumer group

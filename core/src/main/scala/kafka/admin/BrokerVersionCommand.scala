@@ -39,14 +39,13 @@ object BrokerVersionCommand extends Config {
     val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfoOrError) =>
       versionInfoOrError match {
-        case Success(v) => print(s"${broker.toString} -> ${v.toString(true)}\n")
-        case Failure(v) => print(s"${broker.toString} -> ${v}\n")
+        case Success(v) => print(s"${broker} -> ${v.toString(true)}\n")
+        case Failure(v) => print(s"${broker} -> ERROR: ${v}\n")
       }
     }
   }
 
-  private def createAdminClient(opts: BrokerVersionCommandOptions): AdminClient =
-  {
+  private def createAdminClient(opts: BrokerVersionCommandOptions): AdminClient = {
     val props = if (opts.options.has(opts.commandConfigOpt))
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
@@ -56,19 +55,18 @@ object BrokerVersionCommand extends Config {
   }
 
   class BrokerVersionCommandOptions(args: Array[String]) {
-    val ListApiVersionsDoc = "List the RPC API versions supported by each broker."
+    val ListApiVersionsDoc = "List the API versions supported by each broker."
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
-    val CommandConfigDoc = "A property file containing configs to be passed to Admin Client and Consumer."
+    val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val parser = new OptionParser
-    val listApiVersionsOpt = parser.accepts("list-api-versions", ListApiVersionsDoc)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                  .withRequiredArg
                                  .describedAs("command config property file")
                                  .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server to connect to")
+                                   .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
     val options = parser.parse(args : _*)
     checkArgs()
@@ -76,9 +74,6 @@ object BrokerVersionCommand extends Config {
     def checkArgs() {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-      if (!options.has(listApiVersionsOpt)) {
-        CommandLineUtils.printUsageAndDie(parser, s"You must supply an action, such as ${listApiVersionsOpt}")
-      }
     }
   }
 }
