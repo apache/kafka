@@ -81,7 +81,7 @@ public class GlobalKTableIntegrationTest {
     private ForeachAction<String, String> foreachAction;
 
     @Before
-    public void before() {
+    public void before() throws InterruptedException {
         testNo++;
         builder = new KStreamBuilder();
         createTopics();
@@ -212,7 +212,7 @@ public class GlobalKTableIntegrationTest {
     }
 
 
-    private void createTopics() {
+    private void createTopics() throws InterruptedException {
         inputStream = "input-stream-" + testNo;
         inputTable = "input-table-" + testNo;
         globalOne = "globalOne-" + testNo;

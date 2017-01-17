@@ -93,7 +93,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Before
-    public void before() {
+    public void before() throws InterruptedException {
         testNo++;
         String applicationId = "kstream-repartition-join-test-" + testNo;
         builder = new KStreamBuilder();
@@ -146,7 +146,7 @@ public class KStreamRepartitionJoinTest {
         verifyLeftJoin(leftJoin);
     }
 
-    private ExpectedOutputOnTopic mapStreamOneAndJoin() {
+    private ExpectedOutputOnTopic mapStreamOneAndJoin() throws InterruptedException {
         String mapOneStreamAndJoinOutput = "map-one-join-output-" + testNo;
         doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
@@ -350,7 +350,7 @@ public class KStreamRepartitionJoinTest {
             mockTime);
     }
 
-    private void createTopics() {
+    private void createTopics() throws InterruptedException {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
         streamFourInput = "stream-four-" + testNo;
@@ -395,7 +395,7 @@ public class KStreamRepartitionJoinTest {
 
     private void doJoin(final KStream<Integer, Integer> lhs,
                         final KStream<Integer, String> rhs,
-                        final String outputTopic) {
+                        final String outputTopic) throws InterruptedException {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
             TOSTRING_JOINER,
