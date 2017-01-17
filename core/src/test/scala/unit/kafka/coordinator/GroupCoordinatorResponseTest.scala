@@ -25,7 +25,7 @@ import kafka.server.{DelayedOperationPurgatory, KafkaConfig, ReplicaManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{After, Before, Test}
@@ -746,6 +746,62 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
       OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp -> offset))
     assertEquals(Errors.NONE.code, commitOffsetResult(tp))
+  }
+
+  @Test
+  def testFetchOffsets() {
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+  }
+
+  @Test
+  def testFetchOffsetForUnknownPartition(): Unit = {
+    val tp = new TopicPartition("topic", 0)
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+  }
+
+  @Test
+  def testFetchOffsetNotCoordinatorForGroup(): Unit = {
+    val tp = new TopicPartition("topic", 0)
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(otherGroupId, Some(Seq(tp)))
+    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, error)
+    assertTrue(partitionData.isEmpty)
+  }
+
+  @Test
+  def testFetchAllOffsets() {
+    val tp1 = new TopicPartition("topic", 0)
+    val tp2 = new TopicPartition("topic", 1)
+    val tp3 = new TopicPartition("other-topic", 0)
+    val offset1 = OffsetAndMetadata(15)
+    val offset2 = OffsetAndMetadata(16)
+    val offset3 = OffsetAndMetadata(17)
+
+    assertEquals((Errors.NONE, Map.empty), groupCoordinator.handleFetchOffsets(groupId))
+
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp1 -> offset1, tp2 -> offset2, tp3 -> offset3))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp1))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp2))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp3))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId)
+    assertEquals(Errors.NONE, error)
+    assertEquals(3, partitionData.size)
+    assertTrue(partitionData.forall(_._2.error == Errors.NONE))
+    assertEquals(Some(offset1.offset), partitionData.get(tp1).map(_.offset))
+    assertEquals(Some(offset2.offset), partitionData.get(tp2).map(_.offset))
+    assertEquals(Some(offset3.offset), partitionData.get(tp3).map(_.offset))
   }
 
   @Test
