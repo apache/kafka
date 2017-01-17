@@ -130,13 +130,13 @@ public class StreamsKafkaClient {
         }
         final CreateTopicsResponse createTopicsResponse =  (CreateTopicsResponse) clientResponse.responseBody();
 
-        for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
-            short errorCode = createTopicsResponse.errors().get(internalTopicConfig.name()).code();
-            if (errorCode > 0) {
-                if (errorCode == Errors.TOPIC_ALREADY_EXISTS.code()) {
+        for (InternalTopicConfig internalTopicConfig : topicsMap.keySet()) {
+            CreateTopicsResponse.Error error = createTopicsResponse.errors().get(internalTopicConfig.name());
+            if (!error.is(Errors.NONE)) {
+                if (error.is(Errors.TOPIC_ALREADY_EXISTS)) {
                     continue;
                 } else {
-                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + ". " + createTopicsResponse.errors().get(internalTopicConfig.name()).name());
+                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
                 }
             }
         }
@@ -177,10 +177,12 @@ public class StreamsKafkaClient {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");
                 }
-                if (responseList.get(0).requestHeader().correlationId() ==  clientRequest.correlationId()) {
-                    return responseList.get(0);
+                ClientResponse response = responseList.get(0);
+                if (response.requestHeader().correlationId() == clientRequest.correlationId()) {
+                    return response;
                 } else {
-                    throw new StreamsException("Inconsistent response received.");
+                    throw new StreamsException("Inconsistent response received from the broker, expected correlation id " + clientRequest.correlationId() + ", but received " +
+                            response.requestHeader().correlationId());
                 }
             }
         }

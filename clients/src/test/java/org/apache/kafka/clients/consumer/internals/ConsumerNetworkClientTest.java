@@ -71,7 +71,7 @@ public class ConsumerNetworkClientTest {
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
 
-        consumerClient.awaitPendingRequests(node);
+        consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
     }

@@ -31,6 +31,7 @@ import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMars
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
@@ -252,10 +253,6 @@ class ZkUtils(val zkClient: ZkClient,
     brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
   }
 
-  def getAllBrokerEndPointsForChannel(protocolType: SecurityProtocol): Seq[BrokerEndPoint] = {
-    getAllBrokersInCluster().map(_.getBrokerEndPoint(protocolType))
-  }
-
   def getLeaderAndIsrForPartition(topic: String, partition: Int):Option[LeaderAndIsr] = {
     ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topic, partition).map(_.leaderAndIsr)
   }
@@ -266,15 +263,8 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getLeaderForPartition(topic: String, partition: Int): Option[Int] = {
-    val leaderAndIsrOpt = readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1
-    leaderAndIsrOpt match {
-      case Some(leaderAndIsr) =>
-        Json.parseFull(leaderAndIsr) match {
-          case Some(m) =>
-            Some(m.asInstanceOf[Map[String, Any]].get("leader").get.asInstanceOf[Int])
-          case None => None
-        }
-      case None => None
+    readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1.flatMap { leaderAndIsr =>
+      Json.parseFull(leaderAndIsr).map(_.asInstanceOf[Map[String, Any]]("leader").asInstanceOf[Int])
     }
   }
 
@@ -341,11 +331,11 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Register brokers with v3 json format (which includes multiple endpoints and rack) if
+   * Register brokers with v4 json format (which includes multiple endpoints and rack) if
    * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
-   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X without having to upgrade
-   * to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
+   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
    *
    * This format also includes default endpoints for compatibility with older clients.
    *
@@ -360,25 +350,15 @@ class ZkUtils(val zkClient: ZkClient,
   def registerBrokerInZk(id: Int,
                          host: String,
                          port: Int,
-                         advertisedEndpoints: collection.Map[SecurityProtocol, EndPoint],
+                         advertisedEndpoints: Seq[EndPoint],
                          jmxPort: Int,
                          rack: Option[String],
                          apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
-    val timestamp = Time.SYSTEM.milliseconds.toString
-
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
-    var jsonMap = Map("version" -> version,
-                      "host" -> host,
-                      "port" -> port,
-                      "endpoints" -> advertisedEndpoints.values.map(_.connectionString).toArray,
-                      "jmx_port" -> jmxPort,
-                      "timestamp" -> timestamp
-    )
-    rack.foreach(rack => if (version >= 3) jsonMap += ("rack" -> rack))
-
-    val brokerInfo = Json.encode(jsonMap)
-    registerBrokerInZk(brokerIdPath, brokerInfo)
+    // see method documentation for reason why we do this
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    registerBrokerInZk(brokerIdPath, json)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
   }

@@ -269,10 +269,19 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
+     * @param timeoutMs The maximum time in milliseconds to block
+     * @return true If all requests finished, false if the timeout expired first
      */
-    public void awaitPendingRequests(Node node) {
-        while (pendingRequestCount(node) > 0)
-            poll(retryBackoffMs);
+    public boolean awaitPendingRequests(Node node, long timeoutMs) {
+        long startMs = time.milliseconds();
+        long remainingMs = timeoutMs;
+
+        while (pendingRequestCount(node) > 0 && remainingMs > 0) {
+            poll(remainingMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+        }
+
+        return pendingRequestCount(node) == 0;
     }
 
     /**

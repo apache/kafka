@@ -31,7 +31,7 @@ import org.apache.kafka.connect.data.Schema;
  * timestamp, which may be {@code null}.
  */
 @InterfaceStability.Unstable
-public class SinkRecord extends ConnectRecord {
+public class SinkRecord extends ConnectRecord<SinkRecord> {
     private final long kafkaOffset;
     private final TimestampType timestampType;
 
@@ -52,6 +52,11 @@ public class SinkRecord extends ConnectRecord {
 
     public TimestampType timestampType() {
         return timestampType;
+    }
+
+    @Override
+    public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType);
     }
 
     @Override

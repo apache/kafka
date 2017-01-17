@@ -62,6 +62,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final TransformationChain<SinkRecord> transformationChain;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
@@ -82,6 +83,7 @@ class WorkerSinkTask extends WorkerTask {
                           WorkerConfig workerConfig,
                           Converter keyConverter,
                           Converter valueConverter,
+                          TransformationChain<SinkRecord> transformationChain,
                           Time time) {
         super(id, statusListener, initialState);
 
@@ -89,6 +91,7 @@ class WorkerSinkTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.transformationChain = transformationChain;
         this.time = time;
         this.messageBatch = new ArrayList<>();
         this.currentOffsets = new HashMap<>();
@@ -128,6 +131,7 @@ class WorkerSinkTask extends WorkerTask {
         task.stop();
         if (consumer != null)
             consumer.close();
+        transformationChain.close();
     }
 
     @Override
@@ -395,14 +399,16 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
             SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
             SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
-            messageBatch.add(
-                    new SinkRecord(msg.topic(), msg.partition(),
-                            keyAndSchema.schema(), keyAndSchema.value(),
-                            valueAndSchema.schema(), valueAndSchema.value(),
-                            msg.offset(),
-                            (msg.timestampType() == TimestampType.NO_TIMESTAMP_TYPE) ? null : msg.timestamp(),
-                            msg.timestampType())
-            );
+            SinkRecord record = new SinkRecord(msg.topic(), msg.partition(),
+                    keyAndSchema.schema(), keyAndSchema.value(),
+                    valueAndSchema.schema(), valueAndSchema.value(),
+                    msg.offset(),
+                    (msg.timestampType() == TimestampType.NO_TIMESTAMP_TYPE) ? null : msg.timestamp(),
+                    msg.timestampType());
+            record = transformationChain.apply(record);
+            if (record != null) {
+                messageBatch.add(record);
+            }
         }
     }
 

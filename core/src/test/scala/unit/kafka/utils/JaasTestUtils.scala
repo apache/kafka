@@ -58,8 +58,7 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false,
-                              validUsers: Map[String, String] = Map.empty) {
+                              debug: Boolean = false) {
     def toJaasModule: JaasModule = {
       JaasModule(
         "org.apache.kafka.common.security.scram.ScramLoginModule",
@@ -67,7 +66,7 @@ object JaasTestUtils {
         entries = Map(
           "username" -> username,
           "password" -> password
-        ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
+        )
       )
     }
   }
