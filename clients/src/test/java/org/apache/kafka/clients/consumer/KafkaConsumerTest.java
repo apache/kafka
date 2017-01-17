@@ -1370,7 +1370,7 @@ public class KafkaConsumerTest {
         for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(), "", error));
         }
-        return new OffsetFetchResponse(partitionData);
+        return new OffsetFetchResponse(Errors.NONE, partitionData);
     }
 
     private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets, short error) {
