@@ -20,16 +20,16 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
-from kafkatest.version import TRUNK, V_0_10_0_1, KafkaVersion
+from kafkatest.version import TRUNK, V_0_10_0_0, V_0_10_0_1, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
-    if (broker_version < V_0_10_0_1):
-        features["offsetsForTimesSupported"] = False
-        features["clusterIdSupported"] = False
+    if (broker_version < V_0_10_1_0):
+        features["offsets-for-times-supported"] = False
+        features["cluster-id-supported"] = False
     else:
-        features["offsetsForTimesSupported"] = True
-        features["clusterIdSupported"] = True
+        features["offsets-for-times-supported"] = True
+        features["cluster-id-supported"] = True
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -65,13 +65,13 @@ class RunCompatibilityTest(Test):
         # Run the compatibility test on the first Kafka node.
         node = self.zk.nodes[0]
         cmd = ("%s org.apache.kafka.tools.CompatibilityTest "
-               "--bootstrap-servers %s "
-               "--offsetsForTimesSupported %s "
-               "--clusterIdSupported %s "
+               "--bootstrap-server %s "
+               "--offsets-for-times-supported %s "
+               "--cluster-id-supported %s "
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
-                               features["offsetsForTimesSupported"],
-                               features["clusterIdSupported"],
+                               features["offsets-for-times-supported"],
+                               features["cluster-id-supported"],
                                self.topics.keys()[0]))
         ssh_log_file = "%s/%s" % (TestContext.results_dir(self.test_context, 0),
                                   "compatibility_test_output.txt")
@@ -82,8 +82,10 @@ class RunCompatibilityTest(Test):
           self.logger.info("** Command failed.  See %s for log messages." % ssh_log_file)
           raise e
 
-    # TODO: when KAFKA-4462 is complete, we should test other supported versions here.
     @parametrize(broker_version=str(TRUNK))
+    @parametrize(broker_version=str(V_0_10_0_0))
+    @parametrize(broker_version=str(V_0_10_0_1))
+    @parametrize(broker_version=str(V_0_10_1_0))
     def run_compatibility_test(self, broker_version):
         self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))

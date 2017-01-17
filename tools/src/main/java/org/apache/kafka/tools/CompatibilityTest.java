@@ -93,22 +93,22 @@ public class CompatibilityTest {
                 System.exit(1);
             }
         }
-        String bootstrapServers = res.getString("bootstrap_servers");
+        String bootstrapServer = res.getString("bootstrap_server");
         String topic = res.getString("topic");
-        boolean offsetsForTimesSupported = res.getBoolean("offsetsForTimesSupported");
+        boolean offsetsForTimesSupported = res.getBoolean("offsets_for_times_supported");
         CompatibilityTestDeserializer.expectClusterId =
-                res.getBoolean("clusterIdSupported");
+                res.getBoolean("cluster_id_supported");
 
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         testProduce(topic, producerProps);
 
         Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.tools.CompatibilityTest$CompatibilityTestDeserializer");
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
@@ -134,7 +134,7 @@ public class CompatibilityTest {
 
         @Override
         public String toString() {
-            return Utils.join(result, ": ", " ,");
+            return Utils.mkString(result);
         }
     }
 
@@ -231,24 +231,24 @@ public class CompatibilityTest {
                 .type(String.class)
                 .metavar("TOPIC")
                 .help("the compatibility test will produce messages to this topic");
-        parser.addArgument("--bootstrap-servers")
+        parser.addArgument("--bootstrap-server")
                 .action(store())
                 .required(true)
                 .type(String.class)
-                .metavar("BOOTSTRAP-SERVERS")
+                .metavar("BOOTSTRAP_SERVER")
                 .help("The server(s) to use for bootstrapping");
-        parser.addArgument("--offsetsForTimesSupported")
+        parser.addArgument("--offsets-for-times-supported")
                 .action(store())
                 .required(true)
                 .type(Boolean.class)
-                .metavar("OFFSETS-FOR-TIMES-SUPPORTED")
+                .metavar("OFFSETS_FOR_TIMES_SUPPORTED")
                 .help("True if KafkaConsumer#offsetsForTimes is supported by the " +
                         "current broker version");
-        parser.addArgument("--clusterIdSupported")
+        parser.addArgument("--cluster-id-supported")
                 .action(store())
                 .required(true)
                 .type(Boolean.class)
-                .metavar("CLUSTER-ID-SUPPORTED")
+                .metavar("CLUSTER_ID_SUPPORTED")
                 .help("True if cluster IDs are supported.  " +
                       "False if cluster ID always appears as null.");
         return parser;

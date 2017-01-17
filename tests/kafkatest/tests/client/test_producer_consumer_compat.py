@@ -22,7 +22,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
-from kafkatest.version import TRUNK, V_0_10_0_0, KafkaVersion
+from kafkatest.version import TRUNK, V_0_10_0_0, V_0_10_0_1, V_0_10_1_0, KafkaVersion
 
 class TestProducerConsumerCompat(ProduceConsumeValidateTest):
     """
@@ -53,8 +53,10 @@ class TestProducerConsumerCompat(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(TestProducerConsumerCompat, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    # TODO: when KAFKA-4462 is fully implemented, we should test other versions here.
     @parametrize(broker_version=str(TRUNK))
+    @parametrize(broker_version=str(V_0_10_0_0))
+    @parametrize(broker_version=str(V_0_10_0_1))
+    @parametrize(broker_version=str(V_0_10_1_0))
     def test_produce_consume(self, broker_version):
         print("running producer_consumer_compat with broker_version = %s" % broker_version)
         self.kafka.set_version(KafkaVersion(broker_version))
