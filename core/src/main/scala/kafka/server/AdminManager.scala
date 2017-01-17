@@ -80,28 +80,42 @@ class AdminManager(val config: KafkaConfig,
             && !arguments.replicasAssignments.isEmpty)
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
-          else {
+          else if (!arguments.replicasAssignments.isEmpty) {
+            // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
+            // this follows the existing logic in TopicCommand
+            arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
+              (partitionId.intValue, replicas.asScala.map(_.intValue))
+            }
+          } else
+            AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
+        }
+        trace(s"Assignments for topic $topic are $assignments ")
+
+        createTopicPolicy match {
+          case Some(policy) =>
+            // Do internal validation before calling the policy
+            AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
+              update = false, validateOnly = true)
+
+            // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
               if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
             val replicationFactor: java.lang.Short =
               if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
-            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, numPartitions, replicationFactor,
-              arguments.replicasAssignments, arguments.configs)))
+            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
 
-            if (!arguments.replicasAssignments.isEmpty) {
-              // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
-              // this follows the existing logic in TopicCommand
-              arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
-                (partitionId.intValue, replicas.asScala.map(_.intValue))
-              }
-            } else {
-              AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
-            }
-          }
+            policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
+              arguments.configs))
+
+            // Actually try to create the topic if validation succeeded
+            if (!validateOnly)
+              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
+                update = false, validateOnly = false)
+
+          case None =>
+            AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
+              update = false, validateOnly = validateOnly)
         }
-        trace(s"Assignments for topic $topic are $assignments ")
-        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
-          update = false, validateOnly = validateOnly)
         CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
         case e: Throwable =>

@@ -37,8 +37,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
      */
     class RequestMetadata {
         private final String topic;
-        private final int numPartitions;
-        private final short replicationFactor;
+        private final Integer numPartitions;
+        private final Short replicationFactor;
         private final Map<Integer, List<Integer>> replicasAssignments;
         private final Map<String, String> configs;
 
@@ -60,7 +60,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
             this.topic = topic;
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
-            this.replicasAssignments = Collections.unmodifiableMap(replicasAssignments);
+            this.replicasAssignments = replicasAssignments == null ? null : Collections.unmodifiableMap(replicasAssignments);
             this.configs = Collections.unmodifiableMap(configs);
         }
 
@@ -86,7 +86,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
         }
 
         /**
-         * Return a map from partition id to replica (broker) ids.
+         * Return a map from partition id to replica (broker) ids or null if numPartitions and replicationFactor are
+         * set instead.
          */
         public Map<Integer, List<Integer>> replicasAssignments() {
             return replicasAssignments;
