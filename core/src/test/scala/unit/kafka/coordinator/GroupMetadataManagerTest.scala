@@ -233,12 +233,12 @@ class GroupMetadataManagerTest {
     assertEquals(Some(Errors.NONE.code), maybeError)
     assertTrue(group.hasOffsets)
 
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition)))
     val maybePartitionResponse = cachedOffsets.get(topicPartition)
     assertFalse(maybePartitionResponse.isEmpty)
 
     val partitionResponse = maybePartitionResponse.get
-    assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+    assertEquals(Errors.NONE, partitionResponse.error)
     assertEquals(offset, partitionResponse.offset)
   }
 
@@ -317,7 +317,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(expectedError.code), maybeError)
     assertFalse(group.hasOffsets)
 
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
 
     EasyMock.verify(replicaManager)
@@ -372,7 +372,7 @@ class GroupMetadataManagerTest {
     assertEquals(None, group.offset(topicPartition1))
     assertEquals(Some(offset), group.offset(topicPartition2).map(_.offset))
 
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition1, topicPartition2)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition2).map(_.offset))
   }
@@ -418,7 +418,7 @@ class GroupMetadataManagerTest {
 
     // the full group should be gone since all offsets were removed
     assertEquals(None, groupMetadataManager.getGroup(groupId))
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition1, topicPartition2)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
   }
@@ -464,7 +464,7 @@ class GroupMetadataManagerTest {
 
     // the full group should be gone since all offsets were removed
     assertEquals(None, groupMetadataManager.getGroup(groupId))
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition1, topicPartition2)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
   }
@@ -535,7 +535,7 @@ class GroupMetadataManagerTest {
 
     // the full group should be gone since all offsets were removed
     assertEquals(None, groupMetadataManager.getGroup(groupId))
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition1, topicPartition2)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
   }
@@ -599,7 +599,7 @@ class GroupMetadataManagerTest {
     assertEquals(None, group.offset(topicPartition1))
     assertEquals(None, group.offset(topicPartition2))
 
-    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, Some(Seq(topicPartition1, topicPartition2)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
   }

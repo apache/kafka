@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
@@ -35,21 +34,22 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 
-class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
+class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedStateStore implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
 
-    private final SegmentedBytesStore bytesStore;
+    private final SessionStore<Bytes, byte[]> bytesStore;
     private final SessionKeySchema keySchema;
     private Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
     private InternalProcessorContext context;
     private String name;
-    private StateSerdes<Windowed<K>, AGG> serdes;
+    private StateSerdes<K, AGG> serdes;
     private ThreadCache cache;
     private CacheFlushListener<Windowed<K>, AGG> flushListener;
 
-    CachingSessionStore(final SegmentedBytesStore bytesStore,
+    CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
                         final Serde<K> keySerde,
                         final Serde<AGG> aggSerde) {
+        super(bytesStore);
         this.bytesStore = bytesStore;
         this.keySerde = keySerde;
         this.aggSerde = aggSerde;
@@ -65,12 +65,12 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
                                                                                   keySchema.lowerRange(binarySessionId,
                                                                                                        earliestSessionEndTime).get(),
                                                                                   keySchema.upperRange(binarySessionId, latestSessionStartTime).get());
-        final KeyValueIterator<Bytes, byte[]> storeIterator = bytesStore.fetch(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionId,
-                                                                                    earliestSessionEndTime,
-                                                                                    latestSessionStartTime);
+                                                                             earliestSessionEndTime,
+                                                                             latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
-        return new MergedSortedCacheKeyValueStoreIterator<>(filteredCacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes);
     }
 
 
@@ -92,11 +92,6 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         return findSessions(key, 0, Long.MAX_VALUE);
     }
 
-
-    public String name() {
-        return bytesStore.name();
-    }
-
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
@@ -107,14 +102,9 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
-        if (keySerde == null) {
-            keySerde = (Serde<K>) context.keySerde();
-        }
-
-
-        this.serdes = (StateSerdes<Windowed<K>, AGG>) new StateSerdes<>(bytesStore.name(),
-                                                                              new SessionKeySerde<>(keySerde),
-                                                                              aggSerde == null ? context.valueSerde() : aggSerde);
+        this.serdes = new StateSerdes<>(bytesStore.name(),
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 
 
         this.name = context.taskId() + "-" + bytesStore.name();
@@ -135,27 +125,27 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {
+            final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), keySerde.deserializer());
             if (flushListener != null) {
-                final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), keySerde.deserializer());
                 final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = fetchPrevious(binaryKey);
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue == null ? null : newValue, oldValue);
                 }
-
             }
-            bytesStore.put(binaryKey, entry.newValue());
+            bytesStore.put(new Windowed<>(Bytes.wrap(serdes.rawKey(key.key())), key.window()), entry.newValue());
         } finally {
             context.setRecordContext(current);
         }
     }
 
     private AGG fetchPrevious(final Bytes key) {
-        final byte[] bytes = bytesStore.get(key);
-        if (bytes == null) {
-            return null;
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.fetch(key)) {
+            if (!iterator.hasNext()) {
+                return null;
+            }
+            return serdes.valueFrom(iterator.next().value);
         }
-        return serdes.valueFrom(bytes);
     }
 
 
@@ -170,24 +160,9 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         cache.close(name);
     }
 
-    public boolean persistent() {
-        return bytesStore.persistent();
-    }
-
-    public boolean isOpen() {
-        return bytesStore.isOpen();
-    }
-
     public void setFlushListener(CacheFlushListener<Windowed<K>, AGG> flushListener) {
         this.flushListener = flushListener;
     }
-
-    private void validateStoreOpen() {
-        if (!isOpen()) {
-            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
-        }
-    }
-
 
     private static class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
         private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;

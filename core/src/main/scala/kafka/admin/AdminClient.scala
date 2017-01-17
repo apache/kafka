@@ -27,6 +27,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetFetchResponse
+import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
@@ -112,6 +114,16 @@ class AdminClient(val time: Time,
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+  }
+
+  def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
+    val coordinator = findCoordinator(groupId)
+    val responseBody = send(coordinator, ApiKeys.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
+    val response = responseBody.asInstanceOf[OffsetFetchResponse]
+    if (response.hasError)
+      throw response.error.exception
+    response.maybeThrowFirstPartitionError
+    response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
   }
 
   /**

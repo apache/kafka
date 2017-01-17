@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.Record
  *
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
- * 
+ *
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a

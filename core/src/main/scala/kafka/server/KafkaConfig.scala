@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.{MetricsReporter, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.server.policy.CreateTopicPolicy
 
 import scala.collection.{Map, immutable}
 import scala.collection.JavaConverters._
@@ -280,6 +281,7 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
+  val CreateTopicsPolicyClassNameProp = "create.topics.policy.class.name"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -488,6 +490,9 @@ object KafkaConfig {
     "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
     "produce with acks of \"all\". This will ensure that the producer raises an exception " +
     "if a majority of replicas do not receive a write."
+
+  val CreateTopicsPolicyClassNameDoc = "The create topics policy class that should be used for validation. The class should " +
+    "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
   val ControllerMessageQueueSizeDoc = "The buffer size for controller-to-broker-channels"
@@ -688,6 +693,7 @@ object KafkaConfig {
       .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
+      .define(CreateTopicsPolicyClassNameProp, CLASS, null, LOW, CreateTopicsPolicyClassNameDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)

@@ -26,9 +26,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
-import org.junit.Before
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -122,7 +121,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket): ByteBuffer = {
     correlationId += 1
     val serializedBytes = {
-      val header = new RequestHeader(apiKey.id, request.version, "", correlationId)
+      val header = new RequestHeader(apiKey.id, request.version, "client-id", correlationId)
       val byteBuffer = ByteBuffer.allocate(header.sizeOf() + request.sizeOf)
       header.writeTo(byteBuffer)
       request.writeTo(byteBuffer)

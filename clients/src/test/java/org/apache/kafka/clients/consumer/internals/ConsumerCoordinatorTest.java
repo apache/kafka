@@ -285,7 +285,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(singleton(topicName), rebalanceListener);
 
         // ensure metadata is up-to-date for leader
-        metadata.setTopics(Arrays.asList(topicName));
+        metadata.setTopics(singletonList(topicName));
         metadata.update(cluster, time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
@@ -303,14 +303,14 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(singleton(topicName), rebalanceListener);
 
         // ensure metadata is up-to-date for leader
-        metadata.setTopics(Arrays.asList(topicName));
+        metadata.setTopics(singletonList(topicName));
         metadata.update(cluster, time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
 
         // normal join group
-        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, Arrays.asList(topicName));
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, singletonList(topicName));
         partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(tp)));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
@@ -348,7 +348,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
 
-        Map<String, List<String>> initialSubscription = singletonMap(consumerId, Arrays.asList(topicName));
+        Map<String, List<String>> initialSubscription = singletonMap(consumerId, singletonList(topicName));
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(tp)));
 
         // the metadata will be updated in flight with a new topic added
@@ -404,13 +404,13 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(singleton(topicName), rebalanceListener);
 
         // ensure metadata is up-to-date for leader
-        metadata.setTopics(Arrays.asList(topicName));
+        metadata.setTopics(singletonList(topicName));
         metadata.update(cluster, time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
 
-        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, Arrays.asList(topicName));
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, singletonList(topicName));
         partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(tp)));
 
         // prepare only the first half of the join and then trigger the wakeup
@@ -623,7 +623,7 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "consumer";
 
         // ensure metadata is up-to-date for leader
-        metadata.setTopics(Arrays.asList(topicName));
+        metadata.setTopics(singletonList(topicName));
         metadata.update(cluster, time.milliseconds());
 
         subscriptions.subscribe(singleton(topicName), rebalanceListener);
@@ -631,7 +631,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
 
-        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, Arrays.asList(topicName));
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, singletonList(topicName));
         partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(tp)));
 
         // the leader is responsible for picking up metadata changes and forcing a group rebalance
@@ -1143,7 +1143,7 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
         assertFalse(subscriptions.refreshCommitsNeeded());
         assertEquals(100L, subscriptions.committed(tp).offset());
@@ -1156,11 +1156,27 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.GROUP_LOAD_IN_PROGRESS.code(), "", 100L));
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(Errors.GROUP_LOAD_IN_PROGRESS));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
         assertFalse(subscriptions.refreshCommitsNeeded());
         assertEquals(100L, subscriptions.committed(tp).offset());
+    }
+
+    @Test
+    public void testRefreshOffsetsGroupNotAuthorized() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorReady();
+
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.needRefreshCommits();
+        client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED));
+        try {
+            coordinator.refreshCommittedOffsetsIfNeeded();
+            fail("Expected group authorization error");
+        } catch (GroupAuthorizationException e) {
+            assertEquals(groupId, e.groupId());
+        }
     }
 
     @Test(expected = KafkaException.class)
@@ -1170,7 +1186,7 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.UNKNOWN_TOPIC_OR_PARTITION, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
     }
 
@@ -1181,9 +1197,9 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NOT_COORDINATOR_FOR_GROUP.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(Errors.NOT_COORDINATOR_FOR_GROUP));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
         assertFalse(subscriptions.refreshCommitsNeeded());
         assertEquals(100L, subscriptions.committed(tp).offset());
@@ -1196,7 +1212,7 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE, "", -1L));
         coordinator.refreshCommittedOffsetsIfNeeded();
         assertFalse(subscriptions.refreshCommitsNeeded());
         assertEquals(null, subscriptions.committed(tp));
@@ -1465,9 +1481,13 @@ public class ConsumerCoordinatorTest {
         return new OffsetCommitResponse(responseData);
     }
 
-    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Short error, String metadata, long offset) {
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, metadata, error);
-        return new OffsetFetchResponse(Collections.singletonMap(tp, data));
+    private OffsetFetchResponse offsetFetchResponse(Errors topLevelError) {
+        return new OffsetFetchResponse(topLevelError, Collections.<TopicPartition, OffsetFetchResponse.PartitionData>emptyMap());
+    }
+
+    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
+        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, metadata, partitionLevelError);
+        return new OffsetFetchResponse(Errors.NONE, Collections.singletonMap(tp, data));
     }
 
     private OffsetCommitCallback callback(final AtomicBoolean success) {

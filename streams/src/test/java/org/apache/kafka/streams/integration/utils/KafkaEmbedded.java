@@ -202,4 +202,7 @@ public class KafkaEmbedded {
         zkClient.close();
     }
 
+    public KafkaServer kafkaServer() {
+        return kafka;
+    }
 }

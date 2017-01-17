@@ -744,23 +744,36 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class OffsetFetchResponseHandler extends CoordinatorResponseHandler<OffsetFetchResponse, Map<TopicPartition, OffsetAndMetadata>> {
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+            if (response.hasError()) {
+                Errors error = response.error();
+                log.debug("Offset fetch for group {} failed: {}", groupId, error.message());
+
+                if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                    // just retry
+                    future.raise(error);
+                } else if (error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                    // re-discover the coordinator and retry
+                    coordinatorDead();
+                    future.raise(error);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                } else {
+                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
+                }
+                return;
+            }
+
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData data = entry.getValue();
                 if (data.hasError()) {
-                    Errors error = Errors.forCode(data.errorCode);
+                    Errors error = data.error;
                     log.debug("Group {} failed to fetch offset for partition {}: {}", groupId, tp, error.message());
 
-                    if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
-                        // just retry
-                        future.raise(error);
-                    } else if (error == Errors.NOT_COORDINATOR_FOR_GROUP) {
-                        // re-discover the coordinator and retry
-                        coordinatorDead();
-                        future.raise(error);
-                    } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic"));
+                    if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        future.raise(new KafkaException("Partition " + tp + " may not exist or the user may not have " +
+                                "Describe access to the topic"));
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                     }
@@ -778,11 +791,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class ConsumerCoordinatorMetrics {
-        public final String metricGrpName;
+        private final String metricGrpName;
+        private final Sensor commitLatency;
 
-        public final Sensor commitLatency;
-
-        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+        private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.commitLatency = metrics.sensor("commit-latency");
@@ -811,7 +823,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private static class MetadataSnapshot {
         private final Map<String, Integer> partitionsPerTopic;
 
-        public MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
+        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
@@ -837,7 +849,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final Exception exception;
 
-        public OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+        private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             this.callback = callback;
             this.offsets = offsets;
             this.exception = exception;

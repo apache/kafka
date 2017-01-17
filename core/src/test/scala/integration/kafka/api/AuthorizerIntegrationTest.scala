@@ -40,6 +40,7 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import org.apache.kafka.common.KafkaException
 import kafka.admin.AdminUtils
+import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.MemoryRecords
 
@@ -105,12 +106,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   )
 
   val RequestKeyToErrorCode = Map[ApiKeys, (Nothing) => Short](
-    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
+    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error.code),
     ApiKeys.GROUP_COORDINATOR -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
     ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.errorCode()),
@@ -120,7 +121,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
     ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode()),
-    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.code),
+    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.error.code),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors().asScala.find(_._1 == deleteTopic).get._2.code)
   )
 
@@ -173,7 +174,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producers.foreach(_.close())
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close())
-    removeAllAcls
+    removeAllAcls()
     super.tearDown()
   }
 
@@ -712,6 +713,34 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def testFetchAllOffsetsTopicAuthorization() {
+    val offset = 15L
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    this.consumers.head.assign(List(tp).asJava)
+    this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(offset)).asJava)
+
+    removeAllAcls()
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+
+    // send offset fetch requests directly since the consumer does not expose an API to do so
+    // note there's only one broker, so no need to lookup the group coordinator
+
+    // without describe permission on the topic, we shouldn't be able to fetch offsets
+    val offsetFetchRequest = requests.OffsetFetchRequest.forAllPartitions(group)
+    var offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest, anySocketServer)
+    assertEquals(Errors.NONE, offsetFetchResponse.error)
+    assertTrue(offsetFetchResponse.responseData.isEmpty)
+
+    // now add describe permission on the topic and verify that the offset can be fetched
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
+    offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest, anySocketServer)
+    assertEquals(Errors.NONE, offsetFetchResponse.error)
+    assertTrue(offsetFetchResponse.responseData.containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
+  }
+
+  @Test
   def testOffsetFetchTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
@@ -844,6 +873,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
     }
+  }
+
+  private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest,
+                                     socketServer: SocketServer): requests.OffsetFetchResponse = {
+    val response = send(request, ApiKeys.OFFSET_FETCH, socketServer)
+    requests.OffsetFetchResponse.parse(response, request.version)
   }
 
 }
