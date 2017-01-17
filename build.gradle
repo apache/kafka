@@ -139,7 +139,7 @@ subprojects {
         cp.entries.findAll { it.kind == "src" && it.path.startsWith("src/test/resources") }*.output = "build/resources/test"
         cp.entries.findAll { it.kind == "src" && it.path.startsWith("src/test/scala") }*.output = "build/classes/test"
 
-        cp.entries.removeAll { it.kind == "output" }
+        cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
       }
     }
   }
