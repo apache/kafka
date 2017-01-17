@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.utils.TestUtils
@@ -34,7 +35,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
   override def propertyOverrides(properties: Properties): Unit = {
     super.propertyOverrides(properties)
-    properties.put(KafkaConfig.CreateTopicsPolicyClassNameProp, classOf[Policy].getName)
+    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
   }
 
   @Test
@@ -73,9 +74,14 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 }
 
 object CreateTopicsRequestWithPolicyTest {
+
   class Policy extends CreateTopicPolicy {
+    def configure(configs: util.Map[String, _]): Unit = ()
+
     def validate(requestMetadata: RequestMetadata): Unit =
       if (requestMetadata.numPartitions < 5)
         throw new PolicyViolationException(s"Topics should have at least 5 partitions, received ${requestMetadata.numPartitions}")
+
+    def close(): Unit = ()
   }
 }

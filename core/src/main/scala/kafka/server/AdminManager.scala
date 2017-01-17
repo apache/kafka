@@ -43,7 +43,7 @@ class AdminManager(val config: KafkaConfig,
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicsPolicyClassNameProp, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.delayed() != 0
 
@@ -81,8 +81,12 @@ class AdminManager(val config: KafkaConfig,
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
           else {
-            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, arguments.numPartitions,
-              arguments.replicationFactor, arguments.replicasAssignments, arguments.configs)))
+            val numPartitions: java.lang.Integer =
+              if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
+            val replicationFactor: java.lang.Short =
+              if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
+            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, numPartitions, replicationFactor,
+              arguments.replicasAssignments, arguments.configs)))
 
             if (!arguments.replicasAssignments.isEmpty) {
               // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
