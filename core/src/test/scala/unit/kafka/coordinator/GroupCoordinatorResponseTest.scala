@@ -780,19 +780,28 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def testFetchAllOffsets() {
-    val tp = new TopicPartition("topic", 0)
-    val offset = OffsetAndMetadata(0)
+    val tp1 = new TopicPartition("topic", 0)
+    val tp2 = new TopicPartition("topic", 1)
+    val tp3 = new TopicPartition("other-topic", 0)
+    val offset1 = OffsetAndMetadata(15)
+    val offset2 = OffsetAndMetadata(16)
+    val offset3 = OffsetAndMetadata(17)
 
     assertEquals((Errors.NONE, Map.empty), groupCoordinator.handleFetchOffsets(groupId))
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp -> offset))
-    assertEquals(Errors.NONE.code, commitOffsetResult(tp))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp1 -> offset1, tp2 -> offset2, tp3 -> offset3))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp1))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp2))
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp3))
 
     val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId)
     assertEquals(Errors.NONE, error)
-    assertEquals(1, partitionData.size)
-    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+    assertEquals(3, partitionData.size)
+    assertTrue(partitionData.forall(_._2.error == Errors.NONE))
+    assertEquals(Some(offset1.offset), partitionData.get(tp1).map(_.offset))
+    assertEquals(Some(offset2.offset), partitionData.get(tp2).map(_.offset))
+    assertEquals(Some(offset3.offset), partitionData.get(tp3).map(_.offset))
   }
 
   @Test

@@ -86,7 +86,16 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Unified constructor
+     * Constructor for the latest version.
+     * @param error Potential coordinator or group level error code
+     * @param responseData Fetched offset information grouped by topic-partition
+     */
+    public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
+        this(error, responseData, CURRENT_VERSION);
+    }
+
+    /**
+     * Unified constructor for all versions.
      * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
      * @param version The request API version
@@ -94,15 +103,30 @@ public class OffsetFetchResponse extends AbstractResponse {
     public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData, int version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.OFFSET_FETCH.id, version)));
 
-        this.struct.set(RESPONSES_KEY_NAME, getTopicArray(responseData).toArray());
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        List<Struct> topicArray = new ArrayList<>();
+        for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
+            Struct topicData = this.struct.instance(RESPONSES_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, entries.getKey());
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
+                PartitionData fetchPartitionData = partitionEntry.getValue();
+                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
+                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
+                partitionData.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionArray.add(partitionData);
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+
+        this.struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
         this.responseData = responseData;
         this.error = error;
         if (version > 1)
             this.struct.set(ERROR_CODE_KEY_NAME, this.error.code());
-    }
-
-    public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
-        this(error, responseData, CURRENT_VERSION);
     }
 
     public OffsetFetchResponse(Struct struct) {
@@ -130,31 +154,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         // so if there is a group or coordinator error at the partition level use that as the top-level error.
         // this way clients can depend on the top-level error regardless of the offset fetch version.
         this.error = struct.hasField(ERROR_CODE_KEY_NAME) ? Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME)) : topLevelError;
-    }
-
-
-    private List<Struct> getTopicArray(Map<TopicPartition, PartitionData> responseData) {
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
-
-        List<Struct> topicArray = new ArrayList<>();
-        for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
-            Struct topicData = this.struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entries.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
-                PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
-                partitionData.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
-                partitionArray.add(partitionData);
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
-        }
-
-        return topicArray;
     }
 
     public void maybeThrowFirstPartitionError() {

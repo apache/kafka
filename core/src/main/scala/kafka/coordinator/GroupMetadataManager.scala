@@ -346,8 +346,8 @@ class GroupMetadataManager(val brokerId: Int,
               case None =>
                 // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
                 // that commit offsets to Kafka.)
-                group.allOffsets.mapValues { offsetAndMetadata =>
-                  new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
+                  topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
                 }
 
               case Some(topicPartitions) =>

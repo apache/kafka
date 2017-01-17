@@ -938,7 +938,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               offsetFetchRequest.getErrorResponse(error)
             else {
               // clients are not allowed to see offsets for topics that are not authorized for Describe
-              val authorizedPartitionData = allPartitionData.filterKeys(authorizeTopicDescribe)
+              val authorizedPartitionData = allPartitionData.filter { case (topicPartition, _) => authorizeTopicDescribe(topicPartition) }
               new OffsetFetchResponse(Errors.NONE, authorizedPartitionData.asJava, header.apiVersion)
             }
           } else {
