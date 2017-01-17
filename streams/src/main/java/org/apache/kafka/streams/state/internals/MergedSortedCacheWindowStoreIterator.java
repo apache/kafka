@@ -20,38 +20,39 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
  * Merges two iterators. Assumes each of them is sorted by key
  *
- * @param <K>
  * @param <V>
  */
-class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedCacheStoreIterator<K, Bytes, V> {
+class MergedSortedCacheWindowStoreIterator<V> extends AbstractMergedSortedCacheStoreIterator<Long, Long, V> implements WindowStoreIterator<V> {
 
-    MergedSortedCacheKeyValueStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                           final KeyValueIterator<Bytes, byte[]> storeIterator,
-                                           final StateSerdes<K, V> serdes) {
+    MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
+                                         final KeyValueIterator<Long, byte[]> storeIterator,
+                                         final StateSerdes<Long, V> serdes) {
         super(cacheIterator, storeIterator, serdes);
     }
 
     @Override
-    public KeyValue<K, V> deserializeStorePair(KeyValue<Bytes, byte[]> pair) {
-        return KeyValue.pair(serdes.keyFrom(pair.key.get()), serdes.valueFrom(pair.value));
+    public KeyValue<Long, V> deserializeStorePair(final KeyValue<Long, byte[]> pair) {
+        return KeyValue.pair(pair.key, serdes.valueFrom(pair.value));
     }
 
     @Override
-    K deserializeCacheKey(final Bytes cacheKey) {
-        return serdes.keyFrom(cacheKey.get());
+    Long deserializeCacheKey(final Bytes cacheKey) {
+        return WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
     }
 
     @Override
-    public K deserializeStoreKey(Bytes key) {
-        return serdes.keyFrom(key.get());
+    public Long deserializeStoreKey(final Long key) {
+        return key;
     }
 
     @Override
-    public int compare(Bytes cacheKey, Bytes storeKey) {
-        return cacheKey.compareTo(storeKey);
+    public int compare(final Bytes cacheKey, final Long storeKey) {
+        final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
+        return cacheTimestamp.compareTo(storeKey);
     }
 }
