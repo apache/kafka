@@ -23,7 +23,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
@@ -116,8 +116,12 @@ class AdminManager(val config: KafkaConfig,
         }
         CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
-        case e: Throwable =>
+        // Log client errors at a lower level than unexpected exceptions
+        case e@ (_: PolicyViolationException | _: ApiException) =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+        case e: Throwable =>
+          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
       }
     }
