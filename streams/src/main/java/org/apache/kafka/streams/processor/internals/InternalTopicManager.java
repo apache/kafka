@@ -48,9 +48,13 @@ public class InternalTopicManager {
     }
 
     /**
-     * Prepares the set of given internal topics. If the topic with the correct number of partitions exists ignores it. For the ones with different number of
-     * partitions delete them and create new ones with correct number of partitons along with the non existing topics.
+     * Prepares a given internal topic.
+     * If the topic does not exist creates a new topic.
+     * If the topic with the correct number of partitions exists ignores it.
+     * If the topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
+     *
      * @param topic
+     * @param numPartitions
      */
     public void makeReady(final InternalTopicConfig topic, int numPartitions) {
 
@@ -58,11 +62,9 @@ public class InternalTopicManager {
         topics.put(topic, numPartitions);
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
-                Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
-                Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
-                Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
-                topicsToBeCreated.putAll(topicsToBeDeleted);
-                streamsKafkaClient.deleteTopics(topicsToBeDeleted);
+                Collection<MetadataResponse.TopicMetadata> topicsMetadata = streamsKafkaClient.fetchTopicsMetadata();
+                validateTopicPartitons(topics, topicsMetadata);
+                Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicsMetadata);
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
                 return;
             } catch (StreamsException ex) {
@@ -99,24 +101,22 @@ public class InternalTopicManager {
         return nonExistingTopics;
     }
 
+
     /**
-     * Return the topics that exist but have different partiton number to be deleted.
+     * Make sure the existing topics have correct number of partitions.
+     *
      * @param topicsPartitionsMap
      * @param topicsMetadata
-     * @return
      */
-    private Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+    private void validateTopicPartitons(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
         Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
-        Map<InternalTopicConfig, Integer> deleteTopics = new HashMap<>();
-        // Add the topics that don't exist to the nonExistingTopics.
         for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
             if (existingTopicNamesPartitions.get(topic.name()) != null) {
                 if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
-                    deleteTopics.put(topic, topicsPartitionsMap.get(topic));
+                    throw new StreamsException("Internal topic with invalid partitons. Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             }
         }
-        return deleteTopics;
     }
 
     private Map<String, Integer> getExistingTopicNamesPartitions(Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
