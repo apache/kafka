@@ -16,12 +16,13 @@ import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Logging, ZkUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-import scala.collection.Seq
+
+import scala.collection.{Map, Seq}
 
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -244,6 +245,50 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that includes an invalid partition (1:101 in this case)
     ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}""")
+  }
+
+  @Test
+  def shouldPerformThrottledReassignmentOverVariousTopics() {
+    val throttle = 1000L
+
+    //Given four brokers
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
+
+    //With up several small topics
+    createTopicWith("orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)))
+    createTopicWith("payments", Map(0 -> List(0, 1), 1 -> List(0, 1)))
+    createTopicWith("deliveries", Map(0 -> List(0)))
+    createTopicWith("customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)))
+
+    //Define a move for some of them
+    val move = Map(
+      TopicAndPartition("orders", 0) -> Seq(0, 2, 3),//moves
+      TopicAndPartition("orders", 1) -> Seq(0, 1, 2),//stays
+      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
+      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
+    )
+
+    //When we run a throttled reassignment
+    new ReassignPartitionsCommand(zkUtils, move).reassignPartitions(throttle)
+
+    waitForReassignmentToComplete()
+
+    //Check moved replicas did move
+    assertEquals(zkUtils.getReplicasForPartition("orders", 0), Seq(0, 2, 3))
+    assertEquals(zkUtils.getReplicasForPartition("orders", 1), Seq(0, 1, 2))
+    assertEquals(zkUtils.getReplicasForPartition("payments", 1), Seq(1, 2))
+    assertEquals(zkUtils.getReplicasForPartition("deliveries", 0), Seq(1, 2))
+
+    //Check untouched replicas are still there
+    assertEquals(zkUtils.getReplicasForPartition("payments", 0), Seq(0, 1))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 0), Seq(0))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 1), Seq(1))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 2), Seq(2))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 3), Seq(3))
+  }
+
+  def createTopicWith(topic: String, replicaAssignment: Map[Int, Seq[Int]]) = {
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment)
   }
 
   def waitForReassignmentToComplete() {

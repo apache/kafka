@@ -258,55 +258,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def shouldPerformThrottledReassignmentOverVariousTopics() {
-    val throttle = 1000L
-
-    //Given four brokers
-    TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
-
-    //With up several small topics
-    createTopic("orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)))
-    createTopic("payments", Map(0 -> List(0, 1), 1 -> List(0, 1)))
-    createTopic("deliveries", Map(0 -> List(0)))
-    createTopic("customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)))
-
-    //Define a move for some of them
-    val move = Map(
-      TopicAndPartition("orders", 0) -> Seq(0, 2, 3),//moves
-      TopicAndPartition("orders", 1) -> Seq(0, 1, 2),//stays
-      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
-      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
-    )
-
-    //When we run a throttled reassignment
-    new ReassignPartitionsCommand(zkUtils, move).reassignPartitions(throttle)
-
-    TestUtils.waitUntilTrue(() => {
-      val current = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-      move.forall { case (tp, reps) =>
-        ReassignmentCompleted == ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, tp, move, current)
-      }
-    }, "Partition reassignment didn't complete within timeout")
-
-    //Check moved replicas did move
-    assertEquals(zkUtils.getReplicasForPartition("orders", 0), Seq(0, 2, 3))
-    assertEquals(zkUtils.getReplicasForPartition("orders", 1), Seq(0, 1, 2))
-    assertEquals(zkUtils.getReplicasForPartition("payments", 1), Seq(1, 2))
-    assertEquals(zkUtils.getReplicasForPartition("deliveries", 0), Seq(1, 2))
-
-    //Check untouched replicas are still there
-    assertEquals(zkUtils.getReplicasForPartition("payments", 0), Seq(0, 1))
-    assertEquals(zkUtils.getReplicasForPartition("customers", 0), Seq(0))
-    assertEquals(zkUtils.getReplicasForPartition("customers", 1), Seq(1))
-    assertEquals(zkUtils.getReplicasForPartition("customers", 2), Seq(2))
-    assertEquals(zkUtils.getReplicasForPartition("customers", 3), Seq(3))
-  }
-
-  def createTopic(topic: String, replicaAssignment: Map[Int, Seq[Int]]) = {
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment)
-  }
-
-  @Test
   def testReassigningNonExistingPartition() {
     val topic = "test"
     // create brokers
