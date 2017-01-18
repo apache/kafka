@@ -126,7 +126,7 @@ public class StreamsKafkaClient {
         final ClientResponse clientResponse = sendRequest(clientRequest);
 
         if (!clientResponse.hasResponse()) {
-            throw new StreamsException("Empty respoinse for client request.");
+            throw new StreamsException("Empty response for client request.");
         }
         if (!(clientResponse.responseBody() instanceof CreateTopicsResponse)) {
             throw new StreamsException("Inconsistent response type for internal topic creation request. Expected CreateTopicsResponse but received " + clientResponse.responseBody().getClass().getName());
@@ -203,7 +203,7 @@ public class StreamsKafkaClient {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(getBrokerId(), new MetadataRequest.Builder(Arrays.asList(topic)), Time.SYSTEM.milliseconds(), true, null);
         final ClientResponse clientResponse = sendRequest(clientRequest);
         if (!clientResponse.hasResponse()) {
-            throw new StreamsException("Empty respoinse for client request.");
+            throw new StreamsException("Empty response for client request.");
         }
         if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
             throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
@@ -228,7 +228,7 @@ public class StreamsKafkaClient {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(getBrokerId(), new MetadataRequest.Builder(null), Time.SYSTEM.milliseconds(), true, null);
         final ClientResponse clientResponse = sendRequest(clientRequest);
         if (!clientResponse.hasResponse()) {
-            throw new StreamsException("Empty respoinse for client request.");
+            throw new StreamsException("Empty response for client request.");
         }
         if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
             throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
