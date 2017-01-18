@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import java.io.PrintStream
 import java.util.Properties
 
 import kafka.common.Config
@@ -34,13 +35,17 @@ import scala.util.{Failure, Success}
 object BrokerApiVersionCommand extends Config {
 
   def main(args: Array[String]): Unit = {
+    execute(args, System.out)
+  }
+
+  def execute(args: Array[String], out: PrintStream): Unit = {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
     val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfoOrError) =>
       versionInfoOrError match {
-        case Success(v) => print(s"${broker} -> ${v.toString(true)}\n")
-        case Failure(v) => print(s"${broker} -> ERROR: ${v}\n")
+        case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
+        case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
       }
     }
   }

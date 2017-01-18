@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 public class NodeApiVersions {
@@ -125,5 +126,14 @@ public class NodeApiVersions {
             }
         }
         return bld.toString();
+    }
+
+    public ApiVersion apiVersion(ApiKeys apiKey) {
+        for (ApiVersion apiVersion : apiVersions) {
+            if (apiVersion.apiKey == apiKey.id) {
+                return apiVersion;
+            }
+        }
+        throw new NoSuchElementException();
     }
 }
