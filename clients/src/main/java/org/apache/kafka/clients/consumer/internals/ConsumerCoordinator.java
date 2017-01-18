@@ -307,12 +307,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.ensureFreshMetadata();
 
         isLeader = true;
-        assignmentSnapshot = metadataSnapshot;
 
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
                 groupId, assignor.name(), subscriptions);
 
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
+
+        // check if the assignor has realized some new topics, if yes update the snapshot
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        for (Map.Entry<String, Assignment> entry : assignment.entrySet()) {
+            for (TopicPartition tp : entry.getValue().partitions()) {
+                Integer numPartitions = partitionsPerTopic.get(tp.topic());
+                if (numPartitions == null || numPartitions < tp.partition() + 1) {
+                    partitionsPerTopic.put(tp.topic(), tp.partition() + 1);
+                }
+            }
+        }
+        metadataSnapshot = new MetadataSnapshot(metadataSnapshot, partitionsPerTopic);
+
+        assignmentSnapshot = metadataSnapshot;
 
         log.debug("Finished assignment for group {}: {}", groupId, assignment);
 
@@ -821,12 +834,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class MetadataSnapshot {
-        private final Map<String, Integer> partitionsPerTopic;
+        public final Map<String, Integer> partitionsPerTopic;
 
         private MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
+            this.partitionsPerTopic = partitionsPerTopic;
+        }
+
+        private MetadataSnapshot(MetadataSnapshot oldSnapshot, Map<String, Integer> newPartitionsCount) {
+            Map<String, Integer> partitionsPerTopic = new HashMap<>(oldSnapshot.partitionsPerTopic);
+            for (Map.Entry<String, Integer> entry : newPartitionsCount.entrySet()) {
+                if (!partitionsPerTopic.containsKey(entry.getKey()))
+                    partitionsPerTopic.put(entry.getKey(), entry.getValue());
+            }
             this.partitionsPerTopic = partitionsPerTopic;
         }
 
