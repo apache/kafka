@@ -93,9 +93,7 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            // Do internal validation before calling the policy
-            AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
-              update = false, validateOnly = true)
+            AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -107,19 +105,19 @@ class AdminManager(val config: KafkaConfig,
             policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
               arguments.configs))
 
-            // Actually try to create the topic if validation succeeded
             if (!validateOnly)
-              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
-                update = false, validateOnly = false)
+              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
 
           case None =>
-            AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
-              update = false, validateOnly = validateOnly)
+            if (validateOnly)
+              AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+            else
+              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
         CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
         case e: Throwable =>
-          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
       }
     }
