@@ -58,7 +58,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
- *            auto.commit.enable=false
+ *            enable.auto.commit=false
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
  */
