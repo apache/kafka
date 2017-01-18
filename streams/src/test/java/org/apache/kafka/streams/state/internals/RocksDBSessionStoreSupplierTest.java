@@ -46,8 +46,7 @@ public class RocksDBSessionStoreSupplierTest {
 
     private static final String STORE_NAME = "name";
     private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics(new Metrics()));
-    private final MockProcessorContext context = new MockProcessorContext(null,
-                                                                          TestUtils.tempDirectory(),
+    private final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
                                                                           Serdes.String(),
                                                                           Serdes.String(),
                                                                           new NoOpRecordCollector(),
@@ -70,8 +69,7 @@ public class RocksDBSessionStoreSupplierTest {
                 logged.add(record);
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
+        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.String(),
                                                                       collector,
@@ -92,8 +90,7 @@ public class RocksDBSessionStoreSupplierTest {
                 logged.add(record);
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
+        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.String(),
                                                                       collector,

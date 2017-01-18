@@ -94,25 +94,21 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     protected volatile boolean open = false;
 
-
-    public RocksDBStore(final String name,
-                        final Serde<K> keySerde,
-                        final Serde<V> valueSerde) {
+    RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);
     }
 
-
-    public RocksDBStore(final String name,
-                        final String parentDir,
-                        final Serde<K> keySerde,
-                        final Serde<V> valueSerde) {
+    RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde) {
         this.name = name;
         this.parentDir = parentDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+    }
 
+    @SuppressWarnings("unchecked")
+    public void openDB(ProcessorContext context) {
         // initialize the default rocksdb options
-        BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+        final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
 
@@ -125,16 +121,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setCreateIfMissing(true);
         options.setErrorIfExists(false);
 
-
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
-    }
 
-    @SuppressWarnings("unchecked")
-    public void openDB(ProcessorContext context) {
         final Map<String, Object> configs = context.appConfigs();
         final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
         if (configSetterClass != null) {
@@ -464,5 +456,4 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }
-
 }
