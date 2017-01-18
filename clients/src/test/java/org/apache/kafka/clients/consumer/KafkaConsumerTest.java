@@ -108,7 +108,7 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
-    
+
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
 
@@ -497,7 +497,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE),
                 coordinator);
 
         assertEquals(offset1, consumer.committed(tp0).offset());
@@ -508,7 +508,7 @@ public class KafkaConsumerTest {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp0, offset1);
         offsets.put(tp1, offset2);
-        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
 
         assertEquals(offset1, consumer.committed(tp0).offset());
         assertEquals(offset2, consumer.committed(tp1).offset());
@@ -692,7 +692,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
     }
-    
+
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
         int rebalanceTimeoutMs = 60000;
@@ -712,7 +712,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
-        
+
         consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
@@ -999,7 +999,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE),
                 coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
 
@@ -1064,7 +1064,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE),
                 coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
 
@@ -1207,7 +1207,7 @@ public class KafkaConsumerTest {
             });
 
             // Close task should not complete until commit succeeds or close times out
-            // if close timeout is not zero,
+            // if close timeout is not zero.
             try {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
@@ -1216,9 +1216,13 @@ public class KafkaConsumerTest {
                 // Expected exception
             }
 
+            // Ensure close has started and queued at least one more request after commitAsync
+            client.waitForRequests(2, 1000);
+
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             for (int i = 0; i < responses.size(); i++) {
+                client.waitForRequests(1, 1000);
                 client.respondFrom(responses.get(i), coordinator);
                 if (i != responses.size() - 1) {
                     try {
@@ -1361,12 +1365,12 @@ public class KafkaConsumerTest {
         return new SyncGroupResponse(error, buf);
     }
 
-    private OffsetFetchResponse offsetResponse(Map<TopicPartition, Long> offsets, short error) {
+    private OffsetFetchResponse offsetResponse(Map<TopicPartition, Long> offsets, Errors error) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(), "", error));
         }
-        return new OffsetFetchResponse(partitionData);
+        return new OffsetFetchResponse(Errors.NONE, partitionData);
     }
 
     private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets, short error) {
@@ -1430,7 +1434,7 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
-        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
+        SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy, metrics);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 consumerClient,

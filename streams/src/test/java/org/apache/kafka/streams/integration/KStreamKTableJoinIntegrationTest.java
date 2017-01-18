@@ -74,7 +74,7 @@ public class KStreamKTableJoinIntegrationTest {
     private Properties streamsConfiguration;
 
     @Before
-    public void before() {
+    public void before() throws InterruptedException {
         testNo++;
         userClicksTopic = "user-clicks-" + testNo;
         userRegionsTopic = "user-regions-" + testNo;

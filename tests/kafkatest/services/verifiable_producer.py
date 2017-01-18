@@ -83,10 +83,6 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
 
-    @property
-    def security_config(self):
-        return self.kafka.security_config.client_config()
-
     def prop_file(self, node):
         idx = self.idx(node)
         prop_file = str(self.security_config)
@@ -104,6 +100,10 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
+        # Configure security
+        self.security_config = self.kafka.security_config.client_config(node=node)
+        self.security_config.setup_node(node)
+
         # Create and upload config file
         producer_prop_file = self.prop_file(node)
         if self.acks is not None:
@@ -112,7 +112,6 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
-        self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node, idx)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))

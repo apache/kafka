@@ -150,7 +150,7 @@ object SerializationTestUtils {
     new OffsetFetchResponse(collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", Errors.NONE.code),
       TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-    ))
+    ), errorCode = Errors.NONE.code)
   }
 
   def createConsumerMetadataRequest: GroupCoordinatorRequest = GroupCoordinatorRequest("group 1", clientId = "client 1")
@@ -183,8 +183,8 @@ class RequestResponseSerializationTest extends JUnitSuite {
     val requestsAndResponses =
       collection.immutable.Seq(producerRequest, producerResponse,
                                fetchRequest, offsetRequest, offsetResponse,
-                               offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
-                               offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
+                               offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2, offsetCommitResponse,
+                               offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,
                                consumerMetadataResponseNoCoordinator)
 

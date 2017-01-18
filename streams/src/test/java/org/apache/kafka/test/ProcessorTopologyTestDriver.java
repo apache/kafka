@@ -162,7 +162,7 @@ public class ProcessorTopologyTestDriver {
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
-        topology = builder.setApplicationId("ProcessorTopologyTestDriver").build(null);
+        topology = builder.setApplicationId(applicationId).build(null);
         globalTopology  = builder.buildGlobalStateTopology();
 
         // Set up the consumer and producer ...

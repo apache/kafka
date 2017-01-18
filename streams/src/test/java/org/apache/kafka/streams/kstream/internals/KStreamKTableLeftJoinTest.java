@@ -141,6 +141,4 @@ public class KStreamKTableLeftJoinTest {
 
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
     }
-
-
 }

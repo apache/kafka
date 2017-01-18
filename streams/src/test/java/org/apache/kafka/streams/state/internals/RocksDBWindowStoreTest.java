@@ -100,7 +100,7 @@ public class RocksDBWindowStoreTest {
         };
 
         MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 
@@ -151,7 +151,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -225,7 +225,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -314,7 +314,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -401,7 +401,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -457,7 +457,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 
@@ -485,13 +485,11 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
             WindowStore<Integer, String> store = createWindowStore(context, false, true);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
             try {
                 // to validate segments
                 final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
@@ -615,7 +613,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -664,7 +662,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -712,7 +710,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -812,7 +810,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -872,7 +870,7 @@ public class RocksDBWindowStoreTest {
         };
 
         MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 

@@ -66,8 +66,7 @@ public class InternalTopicManager {
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
                 return;
             } catch (StreamsException ex) {
-                log.debug("Could not create internal topics: " + ex.getMessage());
-                log.debug("Retry #" + i);
+                log.warn("Could not create internal topics: " + ex.getMessage() + ". Retry #" + i);
             }
         }
         throw new StreamsException("Could not create internal topics.");

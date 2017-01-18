@@ -74,7 +74,6 @@ public class GlobalStateTaskTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  storeToTopic,
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
         context = new NoOpProcessorContext();
 
