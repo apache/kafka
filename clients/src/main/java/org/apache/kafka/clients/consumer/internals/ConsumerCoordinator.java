@@ -216,6 +216,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
 
+        // update the metadata and enforce a refresh to make sure the fetcher can start
+        // fetching data in the next iteration
+        this.metadata.setTopics(subscriptions.groupSubscription());
+        client.ensureFreshMetadata();
+
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
 
@@ -313,17 +318,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
-        // check if the assignor has realized some new topics, if yes update the snapshot
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (Map.Entry<String, Assignment> entry : assignment.entrySet()) {
-            for (TopicPartition tp : entry.getValue().partitions()) {
-                Integer numPartitions = partitionsPerTopic.get(tp.topic());
-                if (numPartitions == null || numPartitions < tp.partition() + 1) {
-                    partitionsPerTopic.put(tp.topic(), tp.partition() + 1);
-                }
-            }
+        // user-customized assignor may have created some topics that are not in the subscription list
+        // and assign their partitions to the members; in this case we would like to update the leader's
+        // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
+        // when these topics gets updated from metadata refresh.
+        Set<String> assignedTopics = new HashSet<>();
+        for (String topic : assignment.keySet()) {
+            assignedTopics.add(topic);
         }
-        metadataSnapshot = new MetadataSnapshot(metadataSnapshot, partitionsPerTopic);
+
+        if (!assignedTopics.containsAll(allSubscribedTopics)) {
+            Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
+            notAssignedTopics.removeAll(assignedTopics);
+            log.warn("The following subscribed topics are not assigned to any members in the group: " + notAssignedTopics);
+        }
+
+        if (!allSubscribedTopics.containsAll(assignedTopics)) {
+            Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
+            newlyAddedTopics.removeAll(allSubscribedTopics);
+            log.info("The following not-subscribed topics are assigned, and their metadata will be fetched from the brokers: " + newlyAddedTopics);
+
+            allSubscribedTopics.addAll(assignedTopics);
+            this.subscriptions.groupSubscribe(allSubscribedTopics);
+            metadata.setTopics(this.subscriptions.groupSubscription());
+            client.ensureFreshMetadata();
+        }
 
         assignmentSnapshot = metadataSnapshot;
 
@@ -834,21 +853,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class MetadataSnapshot {
-        public final Map<String, Integer> partitionsPerTopic;
+        private final Map<String, Integer> partitionsPerTopic;
 
         private MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
-            this.partitionsPerTopic = partitionsPerTopic;
-        }
-
-        private MetadataSnapshot(MetadataSnapshot oldSnapshot, Map<String, Integer> newPartitionsCount) {
-            Map<String, Integer> partitionsPerTopic = new HashMap<>(oldSnapshot.partitionsPerTopic);
-            for (Map.Entry<String, Integer> entry : newPartitionsCount.entrySet()) {
-                if (!partitionsPerTopic.containsKey(entry.getKey()))
-                    partitionsPerTopic.put(entry.getKey(), entry.getValue());
-            }
             this.partitionsPerTopic = partitionsPerTopic;
         }
 
