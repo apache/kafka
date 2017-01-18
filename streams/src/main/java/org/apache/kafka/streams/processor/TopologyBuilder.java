@@ -62,6 +62,8 @@ public class TopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
 
+    private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
+
     // node factories in a topological order
     private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
@@ -97,11 +99,6 @@ public class TopologyBuilder {
     // are connected to these state stores
     private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
 
-<<<<<<< HEAD
-    // map from state store names to ths state store's corresponding changelog topic if possible,
-    // this is used in the extended KStreamBuilder.
-    private final HashMap<String, String> storeToChangelogTopic = new HashMap<>();
-=======
     // map from state store names to this state store's corresponding changelog topic if possible,
     // this is used in the extended KStreamBuilder.
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
@@ -116,9 +113,6 @@ public class TopologyBuilder {
     private final Set<Pattern> earliestResetPatterns = new HashSet<>();
 
     private final Set<Pattern> latestResetPatterns = new HashSet<>();
-
-    private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
@@ -1066,15 +1060,6 @@ public class TopologyBuilder {
                             }
 
                             stateStoreMap.put(stateStoreName, stateStore);
-<<<<<<< HEAD
-
-                            // remember the changelog topic is this state store is change-logging enabled
-                            if (supplier.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
-                                final String changelogTopic = ProcessorStateManager.storeChangelogTopic(this.applicationId, stateStoreName);
-                                storeToChangelogTopic.put(stateStoreName, changelogTopic);
-                            }
-=======
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
@@ -1108,9 +1093,6 @@ public class TopologyBuilder {
             }
         }
 
-<<<<<<< HEAD
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic);
-=======
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), storeToChangelogTopic, new ArrayList<>(globalStateStores.values()));
     }
 
@@ -1121,14 +1103,6 @@ public class TopologyBuilder {
      */
     public Map<String, StateStore> globalStateStores() {
         return Collections.unmodifiableMap(globalStateStores);
-    }
-
-    private StateStore getStateStore(final String stateStoreName) {
-        if (stateFactories.containsKey(stateStoreName)) {
-            return stateFactories.get(stateStoreName).supplier.get();
-        }
-        return globalStateStores.get(stateStoreName);
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
     }
 
     /**

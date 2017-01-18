@@ -32,21 +32,6 @@ public class ProcessorTopology {
     private final List<StateStore> globalStateStores;
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
-<<<<<<< HEAD
-    private final List<StateStore> stateStores;
-    private final Map<String, String> storeToChangelogTopic;
-
-    public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics,
-                             Map<String, SinkNode> sinkByTopics,
-                             List<StateStore> stateStores,
-                             Map<String, String> storeToChangelogTopic) {
-        this.processorNodes = Collections.unmodifiableList(processorNodes);
-        this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
-        this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
-        this.stateStores = Collections.unmodifiableList(stateStores);
-        this.storeToChangelogTopic = storeToChangelogTopic;
-=======
     private final Map<String, String> storeToChangelogTopic;
 
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
@@ -61,7 +46,6 @@ public class ProcessorTopology {
         this.stateStores    = Collections.unmodifiableList(stateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
     }
 
     public Set<String> sourceTopics() {
@@ -98,13 +82,10 @@ public class ProcessorTopology {
 
     public Map<String, String> storeToChangelogTopic() {
         return storeToChangelogTopic;
-<<<<<<< HEAD
-=======
     }
 
     public List<StateStore> globalStateStores() {
         return globalStateStores;
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
     }
 
     private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {

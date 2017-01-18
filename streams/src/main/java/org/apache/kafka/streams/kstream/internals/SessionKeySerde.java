@@ -144,14 +144,10 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-<<<<<<< HEAD
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), new TimeWindow(start, end));
-=======
-        return new Windowed<>(key, new SessionWindow(start, end));
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
     }
 
-    public static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {
+    private static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {
         return deserializer.deserialize(SESSIONKEY, extractKeyBytes(binaryKey));
     }
 
@@ -172,14 +168,4 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         buf.putLong(sessionKey.window().start());
         return new Bytes(buf.array());
     }
-<<<<<<< HEAD
-=======
-
-    public static Window extractWindow(final byte [] binaryKey) {
-        final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
-        final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
-        final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-        return new TimeWindow(start, end);
-    }
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
 }

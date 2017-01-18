@@ -52,40 +52,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return this.collector;
     }
 
-<<<<<<< HEAD
-    @Override
-    public Serde<?> keySerde() {
-        return this.keySerde;
-    }
-
-    @Override
-    public Serde<?> valueSerde() {
-        return this.valSerde;
-    }
-
-    @Override
-    public File stateDir() {
-        return stateMgr.baseDir();
-    }
-
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
-    }
-
-    /**
-     * @throws IllegalStateException if this method is called before {@link #initialized()}
-     */
-    @Override
-    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
-
-        stateMgr.register(store, stateRestoreCallback);
-    }
-
-=======
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
     /**
      * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
      */
