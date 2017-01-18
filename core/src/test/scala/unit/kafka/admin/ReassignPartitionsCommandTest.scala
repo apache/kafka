@@ -69,7 +69,6 @@ class ReassignPartitionsCommandTest extends Logging {
     )
     val proposedSubset = Map(TopicAndPartition("topic1", 0) -> Seq(101, 102))
 
-
     val mock = new TestAdminUtils {
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         assertEquals("0:102", configChange.get(FollowerReplicationThrottledReplicasProp))
@@ -78,6 +77,7 @@ class ReassignPartitionsCommandTest extends Logging {
       }
     }
 
+    //Then replicas should assign correctly (based on the proposed map)
     assigner.assignThrottledReplicas(existingSuperset, proposedSubset, mock)
     assertEquals(1, calls)
   }
