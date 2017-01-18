@@ -113,7 +113,7 @@ public class InternalTopicManager {
         for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
             if (existingTopicNamesPartitions.get(topic.name()) != null) {
                 if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
-                    throw new StreamsException("Internal topic with invalid partitons. Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before proceesing.");
+                    throw new StreamsException("Internal topic with invalid partitons. Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             }
         }
