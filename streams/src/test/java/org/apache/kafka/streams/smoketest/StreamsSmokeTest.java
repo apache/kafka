@@ -32,13 +32,11 @@ public class StreamsSmokeTest {
     public static void main(String[] args) throws Exception {
         String command = args[0];
         String kafka = args.length > 1 ? args[1] : null;
-        String zookeeper = args.length > 2 ? args[2] : null;
-        String stateDir = args.length > 3 ? args[3] : null;
+        String stateDir = args.length > 2 ? args[2] : null;
 
-        System.out.println("StreamsSmokeTest instance started");
+        System.out.println("StreamsTest instance started");
         System.out.println("command=" + command);
         System.out.println("kafka=" + kafka);
-        System.out.println("zookeeper=" + zookeeper);
         System.out.println("stateDir=" + stateDir);
 
         switch (command) {
@@ -54,7 +52,7 @@ public class StreamsSmokeTest {
                 break;
             case "process":
                 // this starts a KafkaStreams client
-                final SmokeTestClient client = new SmokeTestClient(new File(stateDir), kafka, zookeeper);
+                final SmokeTestClient client = new SmokeTestClient(new File(stateDir), kafka);
                 client.start();
 
                 Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -65,7 +63,7 @@ public class StreamsSmokeTest {
                 });
                 break;
             case "close-deadlock-test":
-                final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka, zookeeper);
+                final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka);
                 test.start();
                 break;
             default:
