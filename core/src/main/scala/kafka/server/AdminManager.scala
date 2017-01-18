@@ -81,7 +81,7 @@ class AdminManager(val config: KafkaConfig,
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
           else if (!arguments.replicasAssignments.isEmpty) {
-            // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
+            // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
             // this follows the existing logic in TopicCommand
             arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
               (partitionId.intValue, replicas.asScala.map(_.intValue))
