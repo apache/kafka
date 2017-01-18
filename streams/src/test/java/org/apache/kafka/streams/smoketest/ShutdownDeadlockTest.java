@@ -33,13 +33,9 @@ import java.util.concurrent.TimeUnit;
 public class ShutdownDeadlockTest {
 
     private final String kafka;
-    private final String zookeeper;
 
-    public ShutdownDeadlockTest(final String kafka,
-                                final String zookeeper) {
-
+    public ShutdownDeadlockTest(final String kafka) {
         this.kafka = kafka;
-        this.zookeeper = zookeeper;
     }
 
     public void start() {
@@ -47,7 +43,6 @@ public class ShutdownDeadlockTest {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "shouldNotDeadlock");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.setProperty(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> source = builder.stream(Serdes.String(), Serdes.String(), topic);
 
