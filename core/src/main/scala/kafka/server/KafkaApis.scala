@@ -38,7 +38,7 @@ import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
 import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -886,38 +886,31 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
-  /*
+  /**
    * Handle an offset fetch request
    */
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val header = request.header
     val offsetFetchRequest = request.body.asInstanceOf[OffsetFetchRequest]
 
+    def authorizeTopicDescribe(partition: TopicPartition) =
+      authorize(request.session, Describe, new Resource(auth.Topic, partition.topic))
+
     val offsetFetchResponse =
       // reject the request if not authorized to the group
       if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId)))
-        new OffsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchRequest.partitions, header.apiVersion)
+        offsetFetchRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED)
       else {
-        val partitions =
-          if (offsetFetchRequest.isAllPartitions)
-            List[TopicPartition]()
-          else
-            offsetFetchRequest.partitions.asScala.toList
-
-        val (authorizedPartitions, unauthorizedPartitions) =
-          partitions.partition { partition => authorize(request.session, Describe, new Resource(auth.Topic, partition.topic)) }
-
-        val unknownTopicPartitionResponse = new OffsetFetchResponse.PartitionData(
-            OffsetFetchResponse.INVALID_OFFSET, OffsetFetchResponse.NO_METADATA, Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        val unauthorizedStatus = unauthorizedPartitions.map(topicPartition => (topicPartition, unknownTopicPartitionResponse)).toMap
-
         if (header.apiVersion == 0) {
+          val (authorizedPartitions, unauthorizedPartitions) = offsetFetchRequest.partitions.asScala
+            .partition(authorizeTopicDescribe)
+
           // version 0 reads offsets from ZK
-          val responseInfo = authorizedPartitions.map { topicPartition =>
+          val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
             val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
             try {
               if (!metadataCache.contains(topicPartition.topic))
-                (topicPartition, unknownTopicPartitionResponse)
+                (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
               else {
                 val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
                 payloadOpt match {
@@ -925,7 +918,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                     (topicPartition, new OffsetFetchResponse.PartitionData(
                         payload.toLong, OffsetFetchResponse.NO_METADATA, Errors.NONE))
                   case None =>
-                    (topicPartition, unknownTopicPartitionResponse)
+                    (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 }
               }
             } catch {
@@ -934,43 +927,32 @@ class KafkaApis(val requestChannel: RequestChannel,
                     OffsetFetchResponse.INVALID_OFFSET, OffsetFetchResponse.NO_METADATA, Errors.forException(e)))
             }
           }.toMap
-          new OffsetFetchResponse(Errors.NONE, (responseInfo ++ unauthorizedStatus).asJava, header.apiVersion)
-        }
-        else {
-          // versions 1 and above read offsets from Kafka
-          val offsets = coordinator.handleFetchOffsets(offsetFetchRequest.groupId,
-            if (offsetFetchRequest.isAllPartitions)
-              None
-            else
-              Some(authorizedPartitions))
 
-          // Note that we do not need to filter the partitions in the
-          // metadata cache as the topic partitions will be filtered
-          // in coordinator's offset manager through the offset cache
-          if (header.apiVersion == 1) {
-            val authorizedStatus =
-              if (offsets._1 != Errors.NONE) {
-                authorizedPartitions.map { partition =>
-                  (partition, new OffsetFetchResponse.PartitionData(
-                      OffsetFetchResponse.INVALID_OFFSET, OffsetFetchResponse.NO_METADATA, offsets._1))}.toMap
-              }
-              else
-                offsets._2.toMap
-            new OffsetFetchResponse(Errors.NONE, (authorizedStatus ++ unauthorizedStatus).asJava, header.apiVersion)
-          }
-          else if (offsets._1 == Errors.NONE) {
-            if (offsetFetchRequest.isAllPartitions) {
-              // filter out unauthorized topics in case all group offsets are requested
-              val authorizedStatus = offsets._2.filter {
-                case (partition, _) => authorize(request.session, Describe, new Resource(auth.Topic, partition.topic))
-              }
-              new OffsetFetchResponse((authorizedStatus).asJava)
+          val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
+          new OffsetFetchResponse(Errors.NONE, (authorizedPartitionData ++ unauthorizedPartitionData).asJava, header.apiVersion)
+        } else {
+          // versions 1 and above read offsets from Kafka
+          if (offsetFetchRequest.isAllPartitions) {
+            val (error, allPartitionData) = coordinator.handleFetchOffsets(offsetFetchRequest.groupId)
+            if (error != Errors.NONE)
+              offsetFetchRequest.getErrorResponse(error)
+            else {
+              // clients are not allowed to see offsets for topics that are not authorized for Describe
+              val authorizedPartitionData = allPartitionData.filter { case (topicPartition, _) => authorizeTopicDescribe(topicPartition) }
+              new OffsetFetchResponse(Errors.NONE, authorizedPartitionData.asJava, header.apiVersion)
             }
-            else
-              new OffsetFetchResponse((offsets._2.toMap ++ unauthorizedStatus).asJava)
+          } else {
+            val (authorizedPartitions, unauthorizedPartitions) = offsetFetchRequest.partitions.asScala
+              .partition(authorizeTopicDescribe)
+            val (error, authorizedPartitionData) = coordinator.handleFetchOffsets(offsetFetchRequest.groupId,
+              Some(authorizedPartitions))
+            if (error != Errors.NONE)
+              offsetFetchRequest.getErrorResponse(error)
+            else {
+              val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
+              new OffsetFetchResponse(Errors.NONE, (authorizedPartitionData ++ unauthorizedPartitionData).asJava, header.apiVersion)
+            }
           }
-          else
-            new OffsetFetchResponse(offsets._1)
         }
       }
 

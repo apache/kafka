@@ -97,7 +97,7 @@ class GroupMetadataManager(val brokerId: Int,
       unit = TimeUnit.MILLISECONDS)
   }
 
-  def currentGroups(): Iterable[GroupMetadata] = groupMetadataCache.values
+  def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
 
   def isPartitionOwned(partition: Int) = inLock(partitionLock) { ownedPartitions.contains(partition) }
 
@@ -342,19 +342,24 @@ class GroupMetadataManager(val brokerId: Int,
             (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
           }.toMap
         } else {
-            if (topicPartitionsOpt.isEmpty) {
-              // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
-              group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE))
-              }
-            } else {
-              topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-                group.offset(topicPartition) match {
-                  case None => (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
-                  case Some(offsetAndMetadata) =>
-                    (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE))
+            topicPartitionsOpt match {
+              case None =>
+                // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
+                // that commit offsets to Kafka.)
+                group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
+                  topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
                 }
-              }.toMap
+
+              case Some(topicPartitions) =>
+                topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+                  val partitionData = group.offset(topicPartition) match {
+                    case None =>
+                      new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
+                    case Some(offsetAndMetadata) =>
+                      new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                  }
+                  topicPartition -> partitionData
+                }.toMap
             }
         }
       }

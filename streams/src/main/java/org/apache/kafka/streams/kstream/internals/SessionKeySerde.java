@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
@@ -145,5 +146,21 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         buf.putLong(sessionKey.window().end());
         buf.putLong(sessionKey.window().start());
         return new Bytes(buf.array());
+    }
+
+    public static Bytes bytesToBinary(final Windowed<Bytes> sessionKey) {
+        final byte[] bytes = sessionKey.key().get();
+        ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
+        buf.put(bytes);
+        buf.putLong(sessionKey.window().end());
+        buf.putLong(sessionKey.window().start());
+        return new Bytes(buf.array());
+    }
+
+    public static Window extractWindow(final byte [] binaryKey) {
+        final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
+        final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
+        final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
+        return new TimeWindow(start, end);
     }
 }
