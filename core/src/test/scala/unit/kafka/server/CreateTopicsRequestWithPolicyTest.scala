@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.utils.TestUtils
@@ -34,16 +35,22 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
   override def propertyOverrides(properties: Properties): Unit = {
     super.propertyOverrides(properties)
-    properties.put(KafkaConfig.CreateTopicsPolicyClassNameProp, classOf[Policy].getName)
+    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
   }
 
   @Test
   def testValidCreateTopicsRequests() {
     val timeout = 10000
+
     validateValidCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("topic1" -> new CreateTopicsRequest.TopicDetails(5, 1.toShort)).asJava, timeout).build())
+
     validateValidCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("topic2" -> new CreateTopicsRequest.TopicDetails(5, 3.toShort)).asJava, timeout, true).build())
+
+    val assignments = replicaAssignmentToJava(Map(0 -> List(1, 0), 1 -> List(0, 1)))
+    validateValidCreateTopicsRequests(new CreateTopicsRequest.Builder(
+      Map("topic3" -> new CreateTopicsRequest.TopicDetails(assignments)).asJava, timeout).build())
   }
 
   @Test
@@ -54,28 +61,62 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
     // Policy violations
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
-      Map("topic3" -> new CreateTopicsRequest.TopicDetails(4, 1.toShort)).asJava, timeout).build(),
-      Map("topic3" -> error(Errors.POLICY_VIOLATION, Some("Topics should have at least 5 partitions, received 4"))))
+      Map("policy-topic1" -> new CreateTopicsRequest.TopicDetails(4, 1.toShort)).asJava, timeout).build(),
+      Map("policy-topic1" -> error(Errors.POLICY_VIOLATION, Some("Topics should have at least 5 partitions, received 4"))))
 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
-      Map("topic4" -> new CreateTopicsRequest.TopicDetails(4, 1.toShort)).asJava, timeout, true).build(),
-      Map("topic4" -> error(Errors.POLICY_VIOLATION, Some("Topics should have at least 5 partitions, received 4"))))
+      Map("policy-topic2" -> new CreateTopicsRequest.TopicDetails(4, 1.toShort)).asJava, timeout, true).build(),
+      Map("policy-topic2" -> error(Errors.POLICY_VIOLATION, Some("Topics should have at least 5 partitions, received 4"))))
+
+    val assignments = replicaAssignmentToJava(Map(0 -> List(1), 1 -> List(0)))
+    validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
+      Map("policy-topic3" -> new CreateTopicsRequest.TopicDetails(assignments)).asJava, timeout).build(),
+      Map("policy-topic3" -> error(Errors.POLICY_VIOLATION,
+        Some("""Topic partitions should have at least 2 partitions, received 1 for partition 0"""))), checkErrorMessage = true)
 
     // Check that basic errors still work
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map(existingTopic -> new CreateTopicsRequest.TopicDetails(5, 1.toShort)).asJava, timeout).build(),
       Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS, Some("""Topic "existing-topic" already exists."""))))
+
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("error-replication" -> new CreateTopicsRequest.TopicDetails(10, (numBrokers + 1).toShort)).asJava, timeout, true).build(),
-      Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("replication factor: 4 larger than available brokers: 3"))))
+      Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
+        Some("replication factor: 4 larger than available brokers: 3"))))
+
+    validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
+      Map("error-replication2" -> new CreateTopicsRequest.TopicDetails(10, -1: Short)).asJava, timeout, true).build(),
+      Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("replication factor must be larger than 0"))))
   }
 
 }
 
 object CreateTopicsRequestWithPolicyTest {
+
   class Policy extends CreateTopicPolicy {
-    def validate(requestMetadata: RequestMetadata): Unit =
-      if (requestMetadata.numPartitions < 5)
-        throw new PolicyViolationException(s"Topics should have at least 5 partitions, received ${requestMetadata.numPartitions}")
+    def configure(configs: util.Map[String, _]): Unit = ()
+
+    def validate(requestMetadata: RequestMetadata): Unit = {
+      import requestMetadata._
+      require(configs.isEmpty, s"Topic configs should be empty, but it is $configs")
+      if (numPartitions != null || replicationFactor != null) {
+        require(numPartitions != null, s"numPartitions should not be null, but it is $numPartitions")
+        require(replicationFactor != null, s"replicationFactor should not be null, but it is $replicationFactor")
+        require(replicasAssignments == null, s"replicaAssigments should be null, but it is $replicasAssignments")
+        if (numPartitions < 5)
+          throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
+      } else {
+        require(numPartitions == null, s"numPartitions should be null, but it is $numPartitions")
+        require(replicationFactor == null, s"replicationFactor should be null, but it is $replicationFactor")
+        require(replicasAssignments != null, s"replicaAssigments should not be null, but it is $replicasAssignments")
+        replicasAssignments.asScala.foreach { case (partitionId, assignment) =>
+          if (assignment.size < 2)
+            throw new PolicyViolationException("Topic partitions should have at least 2 partitions, received " +
+              s"${assignment.size} for partition $partitionId")
+        }
+      }
+    }
+
+    def close(): Unit = ()
   }
 }
