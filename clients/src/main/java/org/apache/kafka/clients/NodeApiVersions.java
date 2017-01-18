@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 public class NodeApiVersions {
@@ -56,10 +57,21 @@ public class NodeApiVersions {
     }
 
     /**
+     * Convert the object to a string with no linebreaks.<p/>
+     *
      * This toString method is relatively expensive, so avoid calling it unless debug logging is turned on.
      */
     @Override
     public String toString() {
+        return toString(false);
+    }
+
+    /**
+     * Convert the object to a string.
+     *
+     * @param lineBreaks True if we should add a linebreak after each api.
+     */
+    public String toString(boolean lineBreaks) {
         // The apiVersion collection may not be in sorted order.  We put it into
         // a TreeMap before printing it out to ensure that we always print in
         // ascending order.
@@ -73,11 +85,20 @@ public class NodeApiVersions {
             if (!apiKeysText.containsKey(apiKey.id)) {
                 StringBuilder bld = new StringBuilder();
                 bld.append(apiKey.name).append("(").
-                    append(apiKey.id).append("): ").append("UNSUPPORTED");
+                        append(apiKey.id).append("): ").append("UNSUPPORTED");
                 apiKeysText.put(apiKey.id, bld.toString());
             }
         }
-        return "{" + Utils.join(apiKeysText.values(), ", ") + "}";
+        String separator = lineBreaks ? ",\n\t" : ", ";
+        StringBuilder bld = new StringBuilder();
+        bld.append("(");
+        if (lineBreaks)
+            bld.append("\n\t");
+        bld.append(Utils.join(apiKeysText.values(), separator));
+        if (lineBreaks)
+            bld.append("\n");
+        bld.append(")");
+        return bld.toString();
     }
 
     private String apiVersionToText(ApiVersion apiVersion) {
@@ -105,5 +126,14 @@ public class NodeApiVersions {
             }
         }
         return bld.toString();
+    }
+
+    public ApiVersion apiVersion(ApiKeys apiKey) {
+        for (ApiVersion apiVersion : apiVersions) {
+            if (apiVersion.apiKey == apiKey.id) {
+                return apiVersion;
+            }
+        }
+        throw new NoSuchElementException();
     }
 }

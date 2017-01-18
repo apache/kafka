@@ -13,9 +13,11 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
+import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
 import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
@@ -33,6 +35,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.util.{Failure, Success, Try}
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
@@ -76,6 +79,12 @@ class AdminClient(val time: Time,
     val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
     response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
+  }
+
+  def getApiVersions(node: Node): List[ApiVersion] = {
+    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    Errors.forCode(response.errorCode()).maybeThrow()
+    response.apiVersions().asScala.toList
   }
 
   private def findAllBrokers(): List[Node] = {
@@ -125,6 +134,10 @@ class AdminClient(val time: Time,
     response.maybeThrowFirstPartitionError
     response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
   }
+
+  def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] = {
+      findAllBrokers.map { broker => broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava)) }
+  }.toMap
 
   /**
    * Case class used to represent a consumer of a consumer group

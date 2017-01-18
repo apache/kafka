@@ -36,13 +36,13 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(
                 Collections.<ApiVersion>emptyList());
         StringBuilder bld = new StringBuilder();
-        String prefix = "{";
+        String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
         }
-        bld.append("}");
+        bld.append(")");
         assertEquals(bld.toString(), versions.toString());
     }
 
@@ -59,7 +59,7 @@ public class NodeApiVersionsTest {
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
         StringBuilder bld = new StringBuilder();
-        String prefix = "{";
+        String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix);
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
@@ -80,7 +80,7 @@ public class NodeApiVersionsTest {
             }
             prefix = ", ";
         }
-        bld.append("}");
+        bld.append(")");
         assertEquals(bld.toString(), versions.toString());
     }
 
