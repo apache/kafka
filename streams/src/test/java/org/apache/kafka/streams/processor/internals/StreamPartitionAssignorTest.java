@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -1060,30 +1059,6 @@ public class StreamPartitionAssignorTest {
             assertEquals(expectedTopics, standbyTopics);
 
         return info;
-    }
-
-    private class MockInternalTopicManager extends InternalTopicManager {
-
-        Map<String, Integer> readyTopics = new HashMap<>();
-        MockConsumer<byte[], byte[]> restoreConsumer;
-
-        MockInternalTopicManager(StreamsConfig streamsConfig, MockConsumer<byte[], byte[]> restoreConsumer) {
-            super(new StreamsKafkaClient(streamsConfig), 0, 0);
-
-            this.restoreConsumer = restoreConsumer;
-        }
-
-        @Override
-        public void makeReady(InternalTopicConfig topic, int numPartitions) {
-            readyTopics.put(topic.name(), numPartitions);
-
-            List<PartitionInfo> partitions = new ArrayList<>();
-            for (int i = 0; i < numPartitions; i++) {
-                partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
-            }
-
-            restoreConsumer.updatePartitions(topic.name(), partitions);
-        }
     }
 
 }
