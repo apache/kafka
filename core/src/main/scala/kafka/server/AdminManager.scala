@@ -23,7 +23,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
@@ -43,7 +43,7 @@ class AdminManager(val config: KafkaConfig,
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicsPolicyClassNameProp, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.delayed() != 0
 
@@ -80,28 +80,48 @@ class AdminManager(val config: KafkaConfig,
             && !arguments.replicasAssignments.isEmpty)
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
-          else {
-            createTopicPolicy.foreach(_.validate(new RequestMetadata(topic, arguments.numPartitions,
-              arguments.replicationFactor, arguments.replicasAssignments, arguments.configs)))
-
-            if (!arguments.replicasAssignments.isEmpty) {
-              // Note: we don't check that replicaAssignment doesn't contain unknown brokers - unlike in add-partitions case,
-              // this follows the existing logic in TopicCommand
-              arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
-                (partitionId.intValue, replicas.asScala.map(_.intValue))
-              }
-            } else {
-              AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
+          else if (!arguments.replicasAssignments.isEmpty) {
+            // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
+            // this follows the existing logic in TopicCommand
+            arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
+              (partitionId.intValue, replicas.asScala.map(_.intValue))
             }
-          }
+          } else
+            AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
         }
         trace(s"Assignments for topic $topic are $assignments ")
-        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs,
-          update = false, validateOnly = validateOnly)
+
+        createTopicPolicy match {
+          case Some(policy) =>
+            AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+
+            // Use `null` for unset fields in the public API
+            val numPartitions: java.lang.Integer =
+              if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
+            val replicationFactor: java.lang.Short =
+              if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
+            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
+
+            policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
+              arguments.configs))
+
+            if (!validateOnly)
+              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+
+          case None =>
+            if (validateOnly)
+              AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+            else
+              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+        }
         CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
-        case e: Throwable =>
+        // Log client errors at a lower level than unexpected exceptions
+        case e@ (_: PolicyViolationException | _: ApiException) =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+        case e: Throwable =>
+          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
       }
     }

@@ -417,12 +417,11 @@ object AdminUtils extends Logging with AdminUtilities {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig)
   }
 
-  def createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils: ZkUtils,
-                                                     topic: String,
-                                                     partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                                     config: Properties = new Properties,
-                                                     update: Boolean = false,
-                                                     validateOnly: Boolean = false) {
+  def validateCreateOrUpdateTopic(zkUtils: ZkUtils,
+                                  topic: String,
+                                  partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                  config: Properties,
+                                  update: Boolean): Unit = {
     // validate arguments
     Topic.validate(topic)
 
@@ -450,18 +449,25 @@ object AdminUtils extends Logging with AdminUtilities {
 
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
-    if (!update) {
+    if (!update)
       LogConfig.validate(config)
-      if (!validateOnly) {
-        // write out the config if there is any, this isn't transactional with the partition assignments
-        writeEntityConfig(zkUtils, getEntityConfigPath(ConfigType.Topic, topic), config)
-      }
+  }
+
+  def createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils: ZkUtils,
+                                                     topic: String,
+                                                     partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                                     config: Properties = new Properties,
+                                                     update: Boolean = false) {
+    validateCreateOrUpdateTopic(zkUtils, topic, partitionReplicaAssignment, config, update)
+
+    // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
+    if (!update) {
+      // write out the config if there is any, this isn't transactional with the partition assignments
+      writeEntityConfig(zkUtils, getEntityConfigPath(ConfigType.Topic, topic), config)
     }
 
-    if (!validateOnly) {
-      // create the partition assignment
-      writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
-    }
+    // create the partition assignment
+    writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
   }
 
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {

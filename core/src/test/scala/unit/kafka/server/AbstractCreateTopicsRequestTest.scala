@@ -130,7 +130,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def replicaAssignmentToJava(assignments: Map[Int, List[Int]]) = {
-    assignments.map { case (k, v) => (k:Integer, v.map { i => i:Integer }.asJava) }.asJava
+    assignments.map { case (k, v) => (k: Integer, v.map { i => i: Integer }.asJava) }.asJava
   }
 
   protected def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
