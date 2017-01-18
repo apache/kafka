@@ -48,14 +48,16 @@ public class SegmentIteratorTest {
         }
     };
 
+    private SegmentIterator iterator = null;
+
     @Before
     public void before() {
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.String(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        final MockProcessorContext context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
+                Serdes.String(),
+                Serdes.String(),
+                new NoOpRecordCollector(),
+                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
@@ -67,13 +69,17 @@ public class SegmentIteratorTest {
 
     @After
     public void closeSegments() {
+        if (iterator != null) {
+            iterator.close();
+            iterator = null;
+        }
         segmentOne.close();
         segmentTwo.close();
     }
 
     @Test
     public void shouldIterateOverAllSegments() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
+        iterator = new SegmentIterator(
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -101,7 +107,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
+        iterator = new SegmentIterator(
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -121,7 +127,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
+        iterator = new SegmentIterator(
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -133,7 +139,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
+        iterator = new SegmentIterator(
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -146,5 +152,4 @@ public class SegmentIteratorTest {
     private KeyValue<String, String> toStringKeyValue(final KeyValue<Bytes, byte[]> binaryKv) {
         return KeyValue.pair(new String(binaryKv.key.get()), new String(binaryKv.value));
     }
-
 }

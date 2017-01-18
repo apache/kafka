@@ -42,14 +42,11 @@ import java.util.Set;
 
 public class KStreamTestDriver {
 
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
     private final ProcessorTopology globalTopology;
-    private ThreadCache cache;
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    public final File stateDir;
-
-    private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
@@ -78,9 +75,8 @@ public class KStreamTestDriver {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
         this.globalTopology = builder.buildGlobalStateTopology();
-        this.stateDir = stateDir;
-        this.cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
-        this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        this.context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -88,7 +84,6 @@ public class KStreamTestDriver {
             initTopology(globalTopology, globalTopology.globalStateStores());
         }
         initTopology(topology, topology.stateStores());
-
     }
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
@@ -106,14 +101,17 @@ public class KStreamTestDriver {
         }
     }
 
+    public ProcessorTopology topology() {
+        return topology;
+    }
 
     public ProcessorContext context() {
         return context;
     }
 
     public void process(String topicName, Object key, Object value) {
-        final ProcessorNode previous = currNode;
-        currNode = topology.source(topicName);
+        final ProcessorNode prevNode = context.currentNode();
+        ProcessorNode currNode = topology.source(topicName);
         if (currNode == null && globalTopology != null) {
             currNode = globalTopology.source(topicName);
         }
@@ -121,33 +119,27 @@ public class KStreamTestDriver {
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
         if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-            currNode = previous;
             return;
         }
         context.setRecordContext(createRecordContext(context.timestamp()));
         context.setCurrentNode(currNode);
         try {
-            forward(key, value);
+            context.forward(key, value);
         } finally {
-            currNode = null;
-            context.setCurrentNode(null);
+            context.setCurrentNode(prevNode);
         }
     }
 
-    private ProcessorRecordContext createRecordContext(long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
-    }
-
-
     public void punctuate(long timestamp) {
+        final ProcessorNode prevNode = context.currentNode();
         for (ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
-                currNode = processor;
+                context.setRecordContext(createRecordContext(timestamp));
+                context.setCurrentNode(processor);
                 try {
-                    context.setRecordContext(createRecordContext(timestamp));
                     processor.processor().punctuate(timestamp);
                 } finally {
-                    currNode = null;
+                    context.setCurrentNode(prevNode);
                 }
             }
         }
@@ -157,59 +149,18 @@ public class KStreamTestDriver {
         context.setTime(timestamp);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) currNode.children()) {
-            currNode = childNode;
-            try {
-                childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, String childName) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currNode = childNode;
-                try {
-                    childNode.process(key, value);
-                } finally {
-                    currNode = thisNode;
-                }
-                break;
-            }
-        }
-    }
-
     public void close() {
         // close all processors
         for (ProcessorNode node : topology.processors()) {
-            currNode = node;
+            context.setCurrentNode(node);
             try {
                 node.close();
             } finally {
-                currNode = null;
+                context.setCurrentNode(null);
             }
         }
 
-        flushState();
+        closeState();
     }
 
     public Set<String> allProcessorNames() {
@@ -245,24 +196,19 @@ public class KStreamTestDriver {
         }
     }
 
-    public void setCurrentNode(final ProcessorNode currentNode) {
-        currNode = currentNode;
-    }
-
-    public StateStore globalStateStore(final String storeName) {
-        if (globalTopology != null) {
-            for (final StateStore store : globalTopology.globalStateStores()) {
-                if (store.name().equals(storeName)) {
-                    return store;
-                }
-            }
+    private void closeState() {
+        for (StateStore stateStore : context.allStateStores().values()) {
+            stateStore.flush();
+            stateStore.close();
         }
-        return null;
     }
 
+    private ProcessorRecordContext createRecordContext(long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
+    }
 
     private class MockRecordCollector extends RecordCollectorImpl {
-        public MockRecordCollector() {
+        MockRecordCollector() {
             super(null, "KStreamTestDriver");
         }
 
@@ -280,12 +226,9 @@ public class KStreamTestDriver {
         }
 
         @Override
-        public void flush() {
-        }
+        public void flush() {}
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
-
 }
