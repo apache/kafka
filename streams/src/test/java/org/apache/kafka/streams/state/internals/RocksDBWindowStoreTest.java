@@ -100,7 +100,7 @@ public class RocksDBWindowStoreTest {
         };
 
         MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 
@@ -151,7 +151,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -225,7 +225,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -314,7 +314,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -401,7 +401,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -457,7 +457,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 
@@ -485,7 +485,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -613,7 +613,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -662,7 +662,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -710,7 +710,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -810,7 +810,7 @@ public class RocksDBWindowStoreTest {
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
                     recordCollector, cache);
 
@@ -870,7 +870,7 @@ public class RocksDBWindowStoreTest {
         };
 
         MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
                 recordCollector, cache);
 
