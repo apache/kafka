@@ -36,7 +36,7 @@ import java.util
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 
-import scala.collection.{Map, immutable}
+import scala.collection.{Map, Seq, immutable}
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
 
@@ -167,7 +167,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testPartitionReassignmentWithLeaderInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2), 1  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
     val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
@@ -178,7 +178,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partitionToBeReassigned = 0
     val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas))
-    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions(1000L))
+    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
@@ -255,6 +255,55 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
     servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def shouldPerformThrottledReassignmentOverVariousTopics() {
+    val throttle = 1000L
+
+    //Given four brokers
+    TestUtils.createBrokerConfigs(4, zkConnect, false).map(conf => TestUtils.createServer(KafkaConfig.fromProps(conf)))
+
+    //With up several small topics
+    createTopic("orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)))
+    createTopic("payments", Map(0 -> List(0, 1), 1 -> List(0, 1)))
+    createTopic("deliveries", Map(0 -> List(0)))
+    createTopic("customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)))
+
+    //Define a move for some of them
+    val move = Map(
+      TopicAndPartition("orders", 0) -> Seq(0, 2, 3),//moves
+      TopicAndPartition("orders", 1) -> Seq(0, 1, 2),//stays
+      TopicAndPartition("payments", 1) -> Seq(1, 2), //only define one partition as moving
+      TopicAndPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
+    )
+
+    //When we run a throttled reassignment
+    new ReassignPartitionsCommand(zkUtils, move).reassignPartitions(throttle)
+
+    TestUtils.waitUntilTrue(() => {
+      val current = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
+      move.forall { case (tp, reps) =>
+        ReassignmentCompleted == ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, tp, move, current)
+      }
+    }, "Partition reassignment didn't complete within timeout")
+
+    //Check moved replicas did move
+    assertEquals(zkUtils.getReplicasForPartition("orders", 0), Seq(0, 2, 3))
+    assertEquals(zkUtils.getReplicasForPartition("orders", 1), Seq(0, 1, 2))
+    assertEquals(zkUtils.getReplicasForPartition("payments", 1), Seq(1, 2))
+    assertEquals(zkUtils.getReplicasForPartition("deliveries", 0), Seq(1, 2))
+
+    //Check untouched replicas are still there
+    assertEquals(zkUtils.getReplicasForPartition("payments", 0), Seq(0, 1))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 0), Seq(0))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 1), Seq(1))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 2), Seq(2))
+    assertEquals(zkUtils.getReplicasForPartition("customers", 3), Seq(3))
+  }
+
+  def createTopic(topic: String, replicaAssignment: Map[Int, Seq[Int]]) = {
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment)
   }
 
   @Test

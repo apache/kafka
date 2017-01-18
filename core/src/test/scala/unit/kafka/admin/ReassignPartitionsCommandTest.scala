@@ -58,14 +58,14 @@ class ReassignPartitionsCommandTest extends Logging {
   }
 
   @Test
-  def shouldSupportProposedAsSubsetOfExisting() {
+  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting() {
     val assigner = new ReassignPartitionsCommand(null, null)
 
     //Given we have more existing partitions than we are proposing
     val existingSuperset = Map(
       TopicAndPartition("topic1", 0) -> Seq(100, 101),
       TopicAndPartition("topic1", 1) -> Seq(100, 102),
-      TopicAndPartition("foo", 0) -> Seq(100, 102)
+      TopicAndPartition("topic2", 0) -> Seq(100, 101, 102)
     )
     val proposedSubset = Map(TopicAndPartition("topic1", 0) -> Seq(101, 102))
 
