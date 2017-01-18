@@ -105,10 +105,6 @@ public class KStreamTestDriver {
         return topology;
     }
 
-    public ProcessorTopology globalTopology() {
-        return globalTopology;
-    }
-
     public ProcessorContext context() {
         return context;
     }
