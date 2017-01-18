@@ -105,6 +105,42 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldMoveSubsetOfPartitions() {
+    //Given partitions on 3 of 3 brokers
+    val brokers = Array(100, 101, 102)
+    startBrokers(brokers)
+    createTopic(zkUtils, "topic1", Map(
+      0 -> Seq(100, 101),
+      1 -> Seq(101, 102),
+      2 -> Seq(102, 100)
+    ), servers = servers)
+    createTopic(zkUtils, "topic2", Map(
+      0 -> Seq(100, 101),
+      1 -> Seq(101, 102),
+      2 -> Seq(102, 100)
+    ), servers = servers)
+
+    val proposed: Map[TopicAndPartition, Seq[Int]] = Map(
+      TopicAndPartition("topic1", 0) -> Seq(100, 102),
+      TopicAndPartition("topic1", 2) -> Seq(100, 102),
+      TopicAndPartition("topic2", 2) -> Seq(100, 102)
+    )
+
+    //When rebalancing
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(proposed))
+    waitForReassignmentToComplete()
+
+    //Then the proposed changes should have been made
+    val actual = zkUtils.getPartitionAssignmentForTopics(Seq("topic1", "topic2"))
+    assertEquals(actual("topic1")(0), Seq(100, 102))//changed
+    assertEquals(actual("topic1")(1), Seq(101, 102))
+    assertEquals(actual("topic1")(2), Seq(100, 102))//changed
+    assertEquals(actual("topic2")(0), Seq(100, 101))
+    assertEquals(actual("topic2")(1), Seq(101, 102))
+    assertEquals(actual("topic2")(2), Seq(100, 102))//changed
+  }
+
+  @Test
   def shouldExecuteThrottledReassignment() {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
