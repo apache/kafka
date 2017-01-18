@@ -18,7 +18,6 @@
 package org.apache.kafka.test;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -48,7 +47,6 @@ import java.util.LinkedHashMap;
 
 public class MockProcessorContext implements InternalProcessorContext, RecordCollector.Supplier {
 
-    private final KStreamTestDriver driver;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
@@ -67,34 +65,34 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     private ProcessorNode currentNode;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
-        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
+        this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
-    public MockProcessorContext(KStreamTestDriver driver, File stateDir,
+    public MockProcessorContext(File stateDir,
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
                                 final RecordCollector collector,
                                 final ThreadCache cache) {
-        this(driver, stateDir, keySerde, valSerde,
+        this(stateDir, keySerde, valSerde,
                 new RecordCollector.Supplier() {
                     @Override
                     public RecordCollector recordCollector() {
                         return collector;
                     }
-                }, cache);
+                },
+                cache);
     }
 
-    public MockProcessorContext(KStreamTestDriver driver, File stateDir,
-                                Serde<?> keySerde,
-                                Serde<?> valSerde,
-                                RecordCollector.Supplier collectorSupplier,
+    public MockProcessorContext(final File stateDir,
+                                final Serde<?> keySerde,
+                                final Serde<?> valSerde,
+                                final RecordCollector.Supplier collectorSupplier,
                                 final ThreadCache cache) {
-        this.driver = driver;
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
-        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        this.metrics = new Metrics(config, Collections.singletonList((MetricsReporter) new JmxReporter()), time, true);
         this.cache = cache;
         this.streamsMetrics = new MockStreamsMetrics(metrics);
     }
@@ -182,19 +180,45 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        driver.forward(key, value);
+        ProcessorNode thisNode = currentNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            currentNode = childNode;
+            try {
+                childNode.process(key, value);
+            } finally {
+                currentNode = thisNode;
+            }
+        }
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        driver.forward(key, value, childIndex);
+        ProcessorNode thisNode = currentNode;
+        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
+        currentNode = childNode;
+        try {
+            childNode.process(key, value);
+        } finally {
+            currentNode = thisNode;
+        }
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
-        driver.forward(key, value, childName);
+        ProcessorNode thisNode = currentNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currentNode = childNode;
+                try {
+                    childNode.process(key, value);
+                } finally {
+                    currentNode = thisNode;
+                }
+                break;
+            }
+        }
     }
 
 
@@ -268,8 +292,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public void setCurrentNode(final ProcessorNode currentNode) {
-        this.currentNode  = currentNode;
-        driver.setCurrentNode(currentNode);
+        this.currentNode = currentNode;
     }
 
     @Override
