@@ -340,8 +340,12 @@ public class Fetcher<K, V> {
             timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException(partition);
-        long offset = retrieveOffsetsByTimes(Collections.singletonMap(partition, timestamp),
-                Long.MAX_VALUE, false).get(partition).offset();
+        Map<TopicPartition, OffsetAndTimestamp> offsetsByTimes = retrieveOffsetsByTimes(
+                Collections.singletonMap(partition, timestamp), Long.MAX_VALUE, false);
+        OffsetAndTimestamp offsetAndTimestamp = offsetsByTimes.get(partition);
+        if (offsetAndTimestamp == null)
+            throw new NoOffsetForPartitionException(partition);
+        long offset = offsetAndTimestamp.offset();
         // we might lose the assignment while fetching the offset, so check it is still active
         if (subscriptions.isAssigned(partition))
             this.subscriptions.seek(partition, offset);
@@ -748,7 +752,7 @@ public class Fetcher<K, V> {
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
-                } else if ((!skippedRecords) && (partition.records.sizeInBytes() > 0)) {
+                } else if (!skippedRecords && (partition.records.sizeInBytes() > 0)) {
                     // We did not read a single message from a non-empty buffer, because that message's size is
                     // larger than the fetch size.
                     Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
