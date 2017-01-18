@@ -45,7 +45,7 @@ class AdminClient(val time: Time,
     var future: RequestFuture[ClientResponse] = null
 
     future = client.send(target, request)
-    client.poll(future)
+    client.poll(future, requestTimeoutMs)
 
     if (future.succeeded())
       future.value().responseBody()
