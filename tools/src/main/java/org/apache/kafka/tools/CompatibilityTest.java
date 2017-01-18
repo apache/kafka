@@ -22,7 +22,8 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.producer.Callback;
@@ -35,18 +36,176 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ObsoleteBrokerException;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 public class CompatibilityTest {
+    private static final Logger log = LoggerFactory.getLogger(CompatibilityTest.class);
+
+    static class TestConfig {
+        final String bootstrapServer;
+        final String topic;
+        final boolean offsetsForTimesSupported;
+        final boolean expectClusterId;
+
+        TestConfig(Namespace res) {
+            this.bootstrapServer = res.getString("bootstrapServer");
+            this.topic = res.getString("topic");
+            this.offsetsForTimesSupported = res.getBoolean("offsetsForTimesSupported");
+            this.expectClusterId = res.getBoolean("clusterIdSupported");
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        ArgumentParser parser = ArgumentParsers
+            .newArgumentParser("compatibility-test")
+            .defaultHelp(true)
+            .description("This tool is used to verify compatibility guarantees.");
+        parser.addArgument("--topic")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("topic")
+            .metavar("TOPIC")
+            .help("the compatibility test will produce messages to this topic");
+        parser.addArgument("--bootstrap-server")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("bootstrapServer")
+            .metavar("BOOTSTRAP_SERVER")
+            .help("The server(s) to use for bootstrapping");
+        parser.addArgument("--offsets-for-times-supported")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("offsetsForTimesSupported")
+            .metavar("OFFSETS_FOR_TIMES_SUPPORTED")
+            .help("True if KafkaConsumer#offsetsForTimes is supported by the current broker version");
+        parser.addArgument("--cluster-id-supported")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("clusterIdSupported")
+            .metavar("CLUSTER_ID_SUPPORTED")
+            .help("True if cluster IDs are supported.  False if cluster ID always appears as null.");
+        Namespace res = null;
+        try {
+            res = parser.parseArgs(args);
+        } catch (ArgumentParserException e) {
+            if (args.length == 0) {
+                parser.printHelp();
+                System.exit(0);
+            } else {
+                parser.handleError(e);
+                System.exit(1);
+            }
+        }
+        TestConfig testConfig = new TestConfig(res);
+        CompatibilityTest compatibilityTest = new CompatibilityTest(testConfig);
+        try {
+            compatibilityTest.run();
+        } catch (Throwable t) {
+            System.out.printf("FAILED: Caught exception %s\n\n", t.getMessage());
+            t.printStackTrace();
+            System.exit(1);
+        }
+        System.out.printf("SUCCESS.\n");
+        System.exit(0);
+    }
+
+    private static byte[] asByteArray(long a) {
+        ByteBuffer buf = ByteBuffer.allocate(8);
+        buf.putLong(a);
+        return buf.array();
+    }
+
+    private static byte[] asByteArray(long a, long b) {
+        ByteBuffer buf = ByteBuffer.allocate(16);
+        buf.putLong(a);
+        buf.putLong(b);
+        return buf.array();
+    }
+
+    private static String toHexString(byte[] buf) {
+        StringBuilder bld = new StringBuilder();
+        for (byte b: buf) {
+            bld.append(String.format("%02x", b));
+        }
+        return bld.toString();
+    }
+
+    private static void compareArrays(byte[] a, byte[] b) {
+        if (!Arrays.equals(a, b)) {
+            throw new RuntimeException("Arrays did not match: expected " + toHexString(a) +
+                ", got " + toHexString(b));
+        }
+    }
+
+    private final TestConfig testConfig;
+
+    private final byte[] message1;
+
+    private final byte[] message2;
+
+    CompatibilityTest(TestConfig testConfig) {
+        this.testConfig = testConfig;
+        long curTime = Time.SYSTEM.milliseconds();
+        this.message1 = asByteArray(curTime);
+        this.message2 = asByteArray(curTime, curTime);
+    }
+
+    void run() throws Exception {
+        long prodTimeMs = Time.SYSTEM.milliseconds();
+        testProduce();
+        testConsume(prodTimeMs);
+    }
+
+    public void testProduce() throws Exception {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        CompatibilityTestSenderCompletion cb = new CompatibilityTestSenderCompletion();
+        ByteArraySerializer serializer = new ByteArraySerializer();
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
+        ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(testConfig.topic, message1);
+        producer.send(record1, cb);
+        ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(testConfig.topic, message2);
+        producer.send(record2, cb);
+        producer.flush();
+        cb.verify();
+        producer.close();
+    }
+
+    private static class OffsetsForTime {
+        Map<TopicPartition, OffsetAndTimestamp> result;
+
+        @Override
+        public String toString() {
+            return Utils.mkString(result);
+        }
+    }
+
     public static class CompatibilityTestDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
-        static volatile boolean expectClusterId = false;
+        private final boolean expectClusterId;
+
+        CompatibilityTestDeserializer(boolean expectClusterId) {
+            this.expectClusterId = expectClusterId;
+        }
 
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
@@ -68,123 +227,124 @@ public class CompatibilityTest {
             if (expectClusterId) {
                 if (clusterResource.clusterId() == null) {
                     throw new RuntimeException("expected cluster id to be " +
-                            "supported, but it was null.");
+                        "supported, but it was null.");
                 }
             } else {
                 if (clusterResource.clusterId() != null) {
                     throw new RuntimeException("expected cluster id to be " +
-                            "null, but it was supported.");
+                        "null, but it was supported.");
                 }
             }
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        ArgumentParser parser = argParser();
-        Namespace res = null;
-        try {
-            res = parser.parseArgs(args);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                System.exit(0);
-            } else {
-                parser.handleError(e);
-                System.exit(1);
-            }
-        }
-        String bootstrapServer = res.getString("bootstrap_server");
-        String topic = res.getString("topic");
-        boolean offsetsForTimesSupported = res.getBoolean("offsets_for_times_supported");
-        CompatibilityTestDeserializer.expectClusterId =
-                res.getBoolean("cluster_id_supported");
-
-        Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-        testProduce(topic, producerProps);
-
+    public void testConsume(final long prodTimeMs) throws Exception {
         Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.tools.CompatibilityTest$CompatibilityTestDeserializer");
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        testConsume(topic, consumerProps, offsetsForTimesSupported);
-
-    }
-
-    public static void testProduce(String topic, Properties props) throws Exception {
-        byte[] payload = new byte[] {0x61, 0x62, 0x63};
-        ProducerRecord<byte[], byte[]> record =
-                new ProducerRecord<>(topic, payload);
-        CompatibilityTestSenderCompletion cb =
-                new CompatibilityTestSenderCompletion();
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(props);
-        producer.send(record, cb);
-        cb.verify();
-        producer.close();
-    }
-
-    private static class OffsetsForTime {
-        Map<TopicPartition, OffsetAndTimestamp> result;
-
-        @Override
-        public String toString() {
-            return Utils.mkString(result);
-        }
-    }
-
-    public static void testConsume(String topic, Properties props,
-                                   boolean offsetsForTimesSupported) throws Exception {
-        byte[] payload = new byte[] {0x61, 0x62, 0x63};
-        CompatibilityTestSenderCompletion cb =
-                new CompatibilityTestSenderCompletion();
+        consumerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        CompatibilityTestDeserializer deserializer = new CompatibilityTestDeserializer(testConfig.expectClusterId);
         final KafkaConsumer<byte[], byte[]> consumer =
-                new KafkaConsumer<byte[], byte[]>(props);
-        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
-        if (partitionInfos.size() < 1) {
-            throw new RuntimeException("expected at least one partition for topic " + topic);
-        }
-        final Map<TopicPartition, Long> timestampsToSearch =
-                new HashMap<TopicPartition, Long>();
+                new KafkaConsumer<byte[], byte[]>(consumerProps, deserializer, deserializer);
+        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
+        if (partitionInfos.size() < 1)
+            throw new RuntimeException("expected at least one partition for topic " + testConfig.topic);
+        final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+        final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();
         for (PartitionInfo partitionInfo: partitionInfos) {
-            timestampsToSearch.put(
-                    new TopicPartition(partitionInfo.topic(), partitionInfo.partition()), 0L);
+            TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+            timestampsToSearch.put(topicPartition, prodTimeMs);
+            topicPartitions.add(topicPartition);
         }
-
         final OffsetsForTime offsetsForTime = new OffsetsForTime();
-        tryFeature("offsetsForTimes", offsetsForTimesSupported,
+        tryFeature("offsetsForTimes", testConfig.offsetsForTimesSupported,
                 new Runnable() {
                     @Override
                     public void run() {
-                        offsetsForTime.result =
-                                consumer.offsetsForTimes(timestampsToSearch);
+                        offsetsForTime.result = consumer.offsetsForTimes(timestampsToSearch);
                     }
                 },
                 new Runnable() {
                     @Override
                     public void run() {
-                        System.out.println("offsetsForTime = " + offsetsForTime.result);
+                        log.info("offsetsForTime = {}", offsetsForTime.result);
                     }
                 });
-
         // Whether or not offsetsForTimes works, beginningOffsets and endOffsets
         // should work.
         consumer.beginningOffsets(timestampsToSearch.keySet());
         consumer.endOffsets(timestampsToSearch.keySet());
 
+        consumer.assign(topicPartitions);
+        consumer.seekToBeginning(topicPartitions);
+        final Iterator<byte[]> iter = new Iterator<byte[]>() {
+            private final int timeoutMs = 10000;
+            private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
+            private byte[] next = null;
+
+            private byte[] fetchNext() {
+                while (true) {
+                    long curTime = Time.SYSTEM.milliseconds();
+                    if (curTime - prodTimeMs > timeoutMs)
+                        throw new RuntimeException("Timed out after " + timeoutMs + " ms.");
+                    if (recordIter == null) {
+                        ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                        recordIter = records.iterator();
+                    }
+                    if (recordIter.hasNext())
+                        return recordIter.next().value();
+                    recordIter = null;
+                }
+            }
+
+            @Override
+            public boolean hasNext() {
+                if (next != null)
+                    return true;
+                next = fetchNext();
+                return next != null;
+            }
+
+            @Override
+            public byte[] next() {
+                if (!hasNext())
+                    throw new NoSuchElementException();
+                byte[] cur = next;
+                next = null;
+                return cur;
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        byte[] next = iter.next();
+        try {
+            compareArrays(message1, next);
+            log.debug("Found first message...");
+        } catch (RuntimeException e) {
+            throw new RuntimeException("The first message in this topic was not ours.  Please use a new " +
+                "topic when running this program.\n");
+        }
+        next = iter.next();
+        try {
+            compareArrays(message2, next);
+            log.debug("Found second message...");
+        } catch (RuntimeException e) {
+            throw new RuntimeException("The first message in this topic was not ours.  Please use a new " +
+                "topic when running this program.\n");
+        }
+        log.debug("Closing consumer.");
         consumer.close();
+        log.info("Closed consumer.");
     }
 
-    private static void tryFeature(String featureName, boolean supported,
-                                   Runnable invoker, Runnable resultTester) {
+    private void tryFeature(String featureName, boolean supported, Runnable invoker, Runnable resultTester) {
         try {
             invoker.run();
+            log.info("Successfully used feature {}", featureName);
         } catch (ObsoleteBrokerException e) {
+            log.info("Got ObsoleteBrokerException when attempting to use feature {}", featureName);
             if (supported) {
                 throw new RuntimeException("Expected " + featureName +
                         " to be supported, but it wasn't.", e);
@@ -199,7 +359,7 @@ public class CompatibilityTest {
     }
 
     private static class CompatibilityTestSenderCompletion implements Callback {
-        private CountDownLatch latch = new CountDownLatch(1);
+        private final CountDownLatch latch = new CountDownLatch(1);
         volatile private boolean done = false;
         volatile private Exception exception;
 
@@ -220,37 +380,4 @@ public class CompatibilityTest {
         }
     }
 
-    private static ArgumentParser argParser() {
-        ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("compatibility-test")
-                .defaultHelp(true)
-                .description("This tool is used to verify compatibility guarantees.");
-        parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("the compatibility test will produce messages to this topic");
-        parser.addArgument("--bootstrap-server")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("BOOTSTRAP_SERVER")
-                .help("The server(s) to use for bootstrapping");
-        parser.addArgument("--offsets-for-times-supported")
-                .action(store())
-                .required(true)
-                .type(Boolean.class)
-                .metavar("OFFSETS_FOR_TIMES_SUPPORTED")
-                .help("True if KafkaConsumer#offsetsForTimes is supported by the " +
-                        "current broker version");
-        parser.addArgument("--cluster-id-supported")
-                .action(store())
-                .required(true)
-                .type(Boolean.class)
-                .metavar("CLUSTER_ID_SUPPORTED")
-                .help("True if cluster IDs are supported.  " +
-                      "False if cluster ID always appears as null.");
-        return parser;
-    }
 }
