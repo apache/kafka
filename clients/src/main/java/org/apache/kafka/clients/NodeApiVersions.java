@@ -88,7 +88,7 @@ public class NodeApiVersions {
                 apiKeysText.put(apiKey.id, bld.toString());
             }
         }
-        String separator = lineBreaks ? ",\n    " : ", ";
+        String separator = lineBreaks ? ",\n\t" : ", ";
         StringBuilder bld = new StringBuilder();
         bld.append("(");
         if (lineBreaks)

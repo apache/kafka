@@ -31,7 +31,7 @@ import scala.util.{Failure, Success}
 /**
  * A command for retrieving broker version information.
  */
-object BrokerVersionCommand extends Config {
+object BrokerApiVersionCommand extends Config {
 
   def main(args: Array[String]): Unit = {
     val opts = new BrokerVersionCommandOptions(args)
@@ -55,7 +55,6 @@ object BrokerVersionCommand extends Config {
   }
 
   class BrokerVersionCommandOptions(args: Array[String]) {
-    val ListApiVersionsDoc = "List the API versions supported by each broker."
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
