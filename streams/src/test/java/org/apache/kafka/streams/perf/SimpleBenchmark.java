@@ -111,7 +111,7 @@ public class SimpleBenchmark {
         rocksdbDir.mkdir();
 
         // Note: this output is needed for automated tests and must not be removed
-        System.out.println("SimpleBenchmark instance started");
+        System.out.println("StreamsTest instance started");
         System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
         System.out.println("stateDir=" + stateDir);
