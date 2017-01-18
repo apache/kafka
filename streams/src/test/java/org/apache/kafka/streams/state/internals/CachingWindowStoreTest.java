@@ -17,12 +17,14 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -44,31 +46,34 @@ import static org.junit.Assert.assertNull;
 public class CachingWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
+    private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10000L;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
     private ThreadCache cache;
     private String topic;
-    private static final long DEFAULT_TIMESTAMP = 10L;
     private WindowKeySchema keySchema;
+    private RocksDBWindowStore<Bytes, byte[]> windowStore;
 
     @Before
     public void setUp() throws Exception {
         keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
+        windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
-        cachingStore = new CachingWindowStore<>(underlying,
+        cachingStore = new CachingWindowStore<>(windowStore,
                                                 Serdes.String(),
                                                 Serdes.String(),
                                                 WINDOW_SIZE);
         cachingStore.setFlushListener(cacheListener);
-        cache = new ThreadCache(MAX_CACHE_SIZE_BYTES);
+        cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
-        final MockProcessorContext context = new MockProcessorContext(null, TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
+        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic));
         cachingStore.init(context, cachingStore);
     }
+
 
     @Test
     public void shouldPutFetchFromCache() throws Exception {

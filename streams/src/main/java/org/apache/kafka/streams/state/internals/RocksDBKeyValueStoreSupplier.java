@@ -35,6 +35,7 @@ import java.util.Map;
 
 public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore<K, V>> {
 
+    private static final String METRICS_SCOPE = "rocksdb-state";
     private final boolean cached;
 
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
@@ -48,18 +49,16 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
 
     @Override
     public KeyValueStore<K, V> get() {
-        final String metricsScope = "rocksdb-state";
-
         KeyValueStore<K, V> store;
 
         if (cached && logged) {
             KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
 
             // logging wrapper
-            inner = ChangeLoggingKeyValueStore.bytesStore(inner, name);
+            inner = new ChangeLoggingKeyValueStore<>(new ChangeLoggingKeyValueBytesStore(inner), Serdes.Bytes(), Serdes.ByteArray());
 
             // metering wrapper, currently enforced
-            inner = new MeteredKeyValueStore<>(inner, metricsScope, time);
+            inner = new MeteredKeyValueStore<>(inner, METRICS_SCOPE, time);
 
             // caching wrapper
             store = new CachingKeyValueStore<>(inner, keySerde, valueSerde);
@@ -67,7 +66,7 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
             KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
 
             // metering wrapper, currently enforced
-            inner = new MeteredKeyValueStore<>(inner, metricsScope, time);
+            inner = new MeteredKeyValueStore<>(inner, METRICS_SCOPE, time);
 
             // caching wrapper
             store = new CachingKeyValueStore<>(inner, keySerde, valueSerde);
@@ -75,15 +74,15 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
             KeyValueStore<Bytes, byte[]> inner = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
 
             // logging wrapper
-            store = new ChangeLoggingKeyValueStore<>(inner, name, keySerde, valueSerde);
+            store = new ChangeLoggingKeyValueStore<>(new ChangeLoggingKeyValueBytesStore(inner), keySerde, valueSerde);
 
             // metering wrapper, currently enforced
-            store = new MeteredKeyValueStore<>(store, metricsScope, time);
+            store = new MeteredKeyValueStore<>(store, METRICS_SCOPE, time);
         } else {
             store = new RocksDBStore<>(name, keySerde, valueSerde);
 
             // metering wrapper, currently enforced
-            store = new MeteredKeyValueStore<>(store, metricsScope, time);
+            store = new MeteredKeyValueStore<>(store, METRICS_SCOPE, time);
         }
 
         return store;

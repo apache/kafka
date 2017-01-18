@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,10 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Map;
 
@@ -36,6 +36,7 @@ import java.util.Map;
 
 public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
+    private static final String METRIC_SCOPE = "rocksdb-session";
     private static final int NUM_SEGMENTS = 3;
     private final long retentionPeriod;
     private final boolean cached;
@@ -51,8 +52,6 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     }
 
     public SessionStore<K, V> get() {
-        final String metricsScope = "rocksdb-session";
-
         SessionStore<K, V> store;
 
         // for session stores, the key schema needs to be used in both
@@ -66,34 +65,34 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
             segmented = new ChangeLoggingSegmentedBytesStore(segmented);
 
             // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
 
             // sessioned
             SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
 
             // caching wrapper
-            store = new CachingSessionStore<>(bytes, keySerde, valueSerde, keySchema);
+            store = new CachingSessionStore<>(bytes, keySerde, valueSerde);
         } else if (cached) {
             // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
 
             // windowed
             SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
 
             // caching wrapper
-            store = new CachingSessionStore<>(bytes, keySerde, valueSerde, keySchema);
+            store = new CachingSessionStore<>(bytes, keySerde, valueSerde);
         } else if (logged) {
             // logging wrapper
             segmented = new ChangeLoggingSegmentedBytesStore(segmented);
 
             // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
 
             // windowed
             store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);
         } else {
             // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
+            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
 
             // windowed
             store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);

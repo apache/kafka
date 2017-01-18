@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -29,23 +30,28 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 class MergedSortedCacheWindowStoreIterator<V> extends AbstractMergedSortedCacheStoreIterator<Long, Long, V> implements WindowStoreIterator<V> {
 
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                         final WindowStoreIterator<byte[]> storeIterator,
+                                         final KeyValueIterator<Long, byte[]> storeIterator,
                                          final StateSerdes<Long, V> serdes) {
         super(cacheIterator, storeIterator, serdes);
     }
 
     @Override
-    public KeyValue<Long, V> deserializeStorePair(KeyValue<Long, byte[]> pair) {
+    public KeyValue<Long, V> deserializeStorePair(final KeyValue<Long, byte[]> pair) {
         return KeyValue.pair(pair.key, serdes.valueFrom(pair.value));
     }
 
     @Override
-    public Long deserializeStoreKey(Long key) {
+    Long deserializeCacheKey(final Bytes cacheKey) {
+        return WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
+    }
+
+    @Override
+    public Long deserializeStoreKey(final Long key) {
         return key;
     }
 
     @Override
-    public int compare(Bytes cacheKey, Long storeKey) {
+    public int compare(final Bytes cacheKey, final Long storeKey) {
         final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
         return cacheTimestamp.compareTo(storeKey);
     }

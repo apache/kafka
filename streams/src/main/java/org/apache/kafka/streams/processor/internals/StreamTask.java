@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -59,8 +61,24 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
-
     private boolean requiresPoll = true;
+    private final Time time;
+    private final TaskMetrics metrics;
+    private Runnable commitDelegate = new Runnable() {
+        @Override
+        public void run() {
+            log.debug("{} Committing its state", logPrefix);
+            // 1) flush local state
+            stateMgr.flush(processorContext);
+
+            log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
+            // 2) flush produced records in the downstream and change logs of local states
+            recordCollector.flush();
+
+            // 3) commit consumed offsets if it is dirty already
+            commitOffsets();
+        }
+    };
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -85,24 +103,28 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
                       ThreadCache cache,
+                      Time time,
                       final RecordCollector recordCollector) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.metrics = new TaskMetrics(metrics);
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
         partitionQueues = new HashMap<>();
 
+        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+
         for (TopicPartition partition : partitions) {
             SourceNode source = topology.source(partition.topic());
-            RecordQueue queue = createRecordQueue(partition, source);
+            RecordQueue queue = createRecordQueue(partition, source, timestampExtractor);
             partitionQueues.put(partition, queue);
         }
 
         this.logPrefix = String.format("task [%s]", id);
 
-        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache
@@ -113,12 +135,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
-
+        this.time = time;
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
+        stateMgr.registerGlobalStateStores(topology.globalStateStores());
         initTopology();
-        ((ProcessorContextImpl) this.processorContext).initialized();
+        this.processorContext.initialized();
     }
 
     /**
@@ -242,7 +265,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
 
         try {
-            node.processor().punctuate(timestamp);
+            node.punctuate(timestamp);
         } catch (KafkaException ke) {
             throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
@@ -250,21 +273,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-
     /**
      * Commit the current task state
      */
     public void commit() {
-        log.debug("{} Committing its state", logPrefix);
-        // 1) flush local state
-        stateMgr.flush(processorContext);
-
-        log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
-        // 2) flush produced records in the downstream and change logs of local states
-        recordCollector.flush();
-
-        // 3) commit consumed offsets if it is dirty already
-        commitOffsets();
+        metrics.metrics.measureLatencyNs(time, commitDelegate, metrics.taskCommitTimeSensor);
     }
 
     /**
@@ -321,7 +334,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         for (ProcessorNode node : this.topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
-                node.init(this.processorContext);
+                node.init(processorContext);
             } finally {
                 processorContext.setCurrentNode(null);
             }
@@ -361,6 +374,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         this.partitionGroup.close();
         closeTopology();
+        metrics.removeAllSensors();
     }
 
     @Override
@@ -368,8 +382,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return recordCollector.offsets();
     }
 
-    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
-        return new RecordQueue(partition, source);
+    @SuppressWarnings("unchecked")
+    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source, final TimestampExtractor timestampExtractor) {
+        return new RecordQueue(partition, source, timestampExtractor);
     }
 
     private ProcessorRecordContext createRecordContext(final StampedRecord currRecord) {
@@ -385,9 +400,26 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return super.toString();
     }
 
+    protected class TaskMetrics  {
+        final StreamsMetricsImpl metrics;
+        final Sensor taskCommitTimeSensor;
+
+
+        public TaskMetrics(StreamsMetrics metrics) {
+            String name = id.toString();
+            this.metrics = (StreamsMetricsImpl) metrics;
+            this.taskCommitTimeSensor = metrics.addLatencySensor("task", name, "commit", Sensor.RecordingLevel.DEBUG, "streams-task-id", name);
+        }
+
+        public void removeAllSensors() {
+            metrics.removeSensor(taskCommitTimeSensor);
+        }
+    }
+
     @Override
     public void flushState() {
         super.flushState();
         recordCollector.flush();
     }
+
 }

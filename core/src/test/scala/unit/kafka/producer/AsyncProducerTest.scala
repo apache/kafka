@@ -36,6 +36,7 @@ import kafka.utils.TestUtils._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 
 @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -49,7 +50,7 @@ class AsyncProducerTest {
   val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port = 65534))
   val configs = props.map(KafkaConfig.fromProps)
   val brokerList = configs.map { config =>
-    val endPoint = config.advertisedListeners.get(SecurityProtocol.PLAINTEXT).get
+    val endPoint = config.advertisedListeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     org.apache.kafka.common.utils.Utils.formatAddress(endPoint.host, endPoint.port)
   }.mkString(",")
 

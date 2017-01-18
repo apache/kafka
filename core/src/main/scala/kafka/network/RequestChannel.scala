@@ -29,7 +29,7 @@ import kafka.server.QuotaId
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
-import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
@@ -38,12 +38,14 @@ import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
 object RequestChannel extends Logging {
-  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
+    buffer = getShutdownReceive, startTimeMs = 0, listenerName = new ListenerName(""),
+    securityProtocol = SecurityProtocol.PLAINTEXT)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-  def getShutdownReceive() = {
-    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
-    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, MemoryRecords]())
+  private def getShutdownReceive = {
+    val emptyProduceRequest = new ProduceRequest.Builder(0, 0, new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version, "", 0)
     AbstractRequestResponse.serialize(emptyRequestHeader, emptyProduceRequest)
   }
 
@@ -51,7 +53,8 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
+  case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer,
+                     startTimeMs: Long, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeMs = -1L
@@ -86,7 +89,7 @@ object RequestChannel extends Logging {
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
           if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion))
-            new ApiVersionsRequest
+            new ApiVersionsRequest.Builder().build()
           else
             AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
         } catch {
@@ -149,12 +152,11 @@ object RequestChannel extends Logging {
         m.totalTimeHist.update(totalTime)
       }
 
-      if (requestLogger.isTraceEnabled)
-        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
-      else if (requestLogger.isDebugEnabled)
-        requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+      if (requestLogger.isDebugEnabled) {
+        val detailsEnabled = requestLogger.isTraceEnabled
+        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s,listener:%s"
+          .format(requestDesc(detailsEnabled), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal, listenerName.value))
+      }
     }
   }
 

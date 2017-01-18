@@ -16,34 +16,59 @@ import java.nio.ByteBuffer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 public class LeaveGroupRequest extends AbstractRequest {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LEAVE_GROUP.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
+
+    public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
+        private final String groupId;
+        private final String memberId;
+
+        public Builder(String groupId, String memberId) {
+            super(ApiKeys.LEAVE_GROUP);
+            this.groupId = groupId;
+            this.memberId = memberId;
+        }
+
+        @Override
+        public LeaveGroupRequest build() {
+            return new LeaveGroupRequest(groupId, memberId, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=LeaveGroupRequest").
+                append(", groupId=").append(groupId).
+                append(", memberId=").append(memberId).
+                append(")");
+            return bld.toString();
+        }
+    }
 
     private final String groupId;
     private final String memberId;
 
-    public LeaveGroupRequest(String groupId, String memberId) {
-        super(new Struct(CURRENT_SCHEMA));
+    private LeaveGroupRequest(String groupId, String memberId, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.LEAVE_GROUP.id, version)),
+                version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
         this.groupId = groupId;
         this.memberId = memberId;
     }
 
-    public LeaveGroupRequest(Struct struct) {
-        super(struct);
+    public LeaveGroupRequest(Struct struct, short version) {
+        super(struct, version);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new LeaveGroupResponse(Errors.forException(e).code());
@@ -62,10 +87,11 @@ public class LeaveGroupRequest extends AbstractRequest {
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new LeaveGroupRequest(ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer));
+        return new LeaveGroupRequest(ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer) {
-        return new LeaveGroupRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.LEAVE_GROUP.id));
     }
 }

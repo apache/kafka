@@ -77,7 +77,7 @@ public interface ProcessorContext {
      *
      * @param store the storage engine
      */
-    void register(StateStore store, StateRestoreCallback stateRestoreCallback);
+    void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.

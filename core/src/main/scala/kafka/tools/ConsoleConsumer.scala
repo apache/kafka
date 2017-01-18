@@ -51,7 +51,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e: Throwable =>
         error("Unknown error when running consumer: ", e)
-        System.exit(1);
+        System.exit(1)
     }
   }
 
@@ -463,6 +463,8 @@ class DefaultMessageFormatter extends MessageFormatter {
 class LoggingMessageFormatter extends MessageFormatter   {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
   val logger = Logger.getLogger(getClass().getName)
+
+  override def init(props: Properties): Unit = defaultWriter.init(props)
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._

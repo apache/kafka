@@ -36,17 +36,22 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedC
     }
 
     @Override
-    public KeyValue<K, V> deserializeStorePair(KeyValue<Bytes, byte[]> pair) {
+    public KeyValue<K, V> deserializeStorePair(final KeyValue<Bytes, byte[]> pair) {
         return KeyValue.pair(serdes.keyFrom(pair.key.get()), serdes.valueFrom(pair.value));
     }
 
     @Override
-    public K deserializeStoreKey(Bytes key) {
+    K deserializeCacheKey(final Bytes cacheKey) {
+        return serdes.keyFrom(cacheKey.get());
+    }
+
+    @Override
+    public K deserializeStoreKey(final Bytes key) {
         return serdes.keyFrom(key.get());
     }
 
     @Override
-    public int compare(Bytes cacheKey, Bytes storeKey) {
+    public int compare(final Bytes cacheKey, final Bytes storeKey) {
         return cacheKey.compareTo(storeKey);
     }
 }

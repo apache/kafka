@@ -15,26 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state.internals;
-
-import org.apache.kafka.common.metrics.Sensor;
+package org.apache.kafka.common.errors;
 
 /**
- * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
+ * Exception thrown if a create topics request does not satisfy the configured policy for a topic.
  */
-public interface ThreadCacheMetrics {
+public class PolicyViolationException extends ApiException {
 
-    /**
-     * Add the hit ratio sensor.
-     * @param entityName Name of the entity, could be the name of the cache instance, etc.
-     * @param operationName Name of the operation, could be "hit ratio".
-     * @param tags Additional tags of the sensor.
-     * @return The added sensor.
-     */
-    Sensor addCacheSensor(String entityName, String operationName, String... tags);
+    public PolicyViolationException(String message) {
+        super(message);
+    }
 
-    /**
-     * Record the given value of the sensor.
-     */
-    void recordCacheSensor(Sensor sensor, double value);
+    public PolicyViolationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

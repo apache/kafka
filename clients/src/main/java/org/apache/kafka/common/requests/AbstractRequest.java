@@ -19,14 +19,42 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public abstract class AbstractRequest extends AbstractRequestResponse {
+    private final short version;
 
-    public AbstractRequest(Struct struct) {
+    public static abstract class Builder<T extends AbstractRequest> {
+        private final ApiKeys apiKey;
+        private short version;
+
+        public Builder(ApiKeys apiKey) {
+            this.apiKey = apiKey;
+            this.version = ProtoUtils.latestVersion(apiKey.id);
+        }
+
+        public ApiKeys apiKey() {
+            return apiKey;
+        }
+
+        public Builder<T> setVersion(short version) {
+            this.version = version;
+            return this;
+        }
+
+        public short version() {
+            return version;
+        }
+
+        public abstract T build();
+    }
+
+    public AbstractRequest(Struct struct, short version) {
         super(struct);
+        this.version = version;
     }
 
     public Send toSend(String destination, RequestHeader header) {
@@ -34,14 +62,21 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     /**
-     * Get an error response for a request for a given api version
+     * Get the version of this AbstractRequest object.
      */
-    public abstract AbstractResponse getErrorResponse(int versionId, Throwable e);
+    public short version() {
+        return version;
+    }
+
+    /**
+     * Get an error response for a request
+     */
+    public abstract AbstractResponse getErrorResponse(Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
-    public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
+    public static AbstractRequest getRequest(int requestId, short versionId, ByteBuffer buffer) {
         ApiKeys apiKey = ApiKeys.forId(requestId);
         switch (apiKey) {
             case PRODUCE:

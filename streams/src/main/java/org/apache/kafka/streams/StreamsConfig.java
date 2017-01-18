@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -39,6 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Configuration for Kafka Streams. Documentation for these configurations can be found in the <a
@@ -120,6 +122,9 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>metrics.num.samples</code> */
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
+    /** <code>metrics.record.level</code> */
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
@@ -141,123 +146,200 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+    public static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
+    public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
+
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+    public static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
+
+    public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+
+    public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
+    public static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
+
+    public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+    public static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
+
+    public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
+    public static final String SEND_BUFFER_DOC = CommonClientConfigs.SEND_BUFFER_DOC;
+
+    public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
+    public static final String RECEIVE_BUFFER_DOC = CommonClientConfigs.RECEIVE_BUFFER_DOC;
+
+    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    public static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
-                                        Type.STRING,
-                                        Importance.HIGH,
-                                        StreamsConfig.APPLICATION_ID_DOC)
-                                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
-                                        Type.LIST,
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_ID_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.HIGH,
-                                        CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(ZOOKEEPER_CONNECT_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.HIGH,
-                                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
-                                .define(STATE_DIR_CONFIG,
-                                        Type.STRING,
-                                        "/tmp/kafka-streams",
-                                        Importance.MEDIUM,
-                                        STATE_DIR_DOC)
-                                .define(REPLICATION_FACTOR_CONFIG,
-                                        Type.INT,
-                                        1,
-                                        Importance.MEDIUM,
-                                        REPLICATION_FACTOR_DOC)
-                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        FailOnInvalidTimestamp.class.getName(),
-                                        Importance.MEDIUM,
-                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
-                                .define(PARTITION_GROUPER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        DefaultPartitionGrouper.class.getName(),
-                                        Importance.MEDIUM,
-                                        PARTITION_GROUPER_CLASS_DOC)
-                                .define(KEY_SERDE_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Serdes.ByteArraySerde.class.getName(),
-                                        Importance.MEDIUM,
-                                        KEY_SERDE_CLASS_DOC)
-                                .define(VALUE_SERDE_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Serdes.ByteArraySerde.class.getName(),
-                                        Importance.MEDIUM,
-                                        VALUE_SERDE_CLASS_DOC)
-                                .define(COMMIT_INTERVAL_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        Importance.LOW,
-                                        COMMIT_INTERVAL_MS_DOC)
-                                .define(POLL_MS_CONFIG,
-                                        Type.LONG,
-                                        100,
-                                        Importance.LOW,
-                                        POLL_MS_DOC)
-                                .define(NUM_STREAM_THREADS_CONFIG,
-                                        Type.INT,
-                                        1,
-                                        Importance.LOW,
-                                        NUM_STREAM_THREADS_DOC)
-                                .define(NUM_STANDBY_REPLICAS_CONFIG,
-                                        Type.INT,
-                                        0,
-                                        Importance.LOW,
-                                        NUM_STANDBY_REPLICAS_DOC)
-                                .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                                        Type.INT,
-                                        1000,
-                                        Importance.LOW,
-                                        BUFFERED_RECORDS_PER_PARTITION_DOC)
-                                .define(STATE_CLEANUP_DELAY_MS_CONFIG,
-                                        Type.LONG,
-                                        60000,
-                                        Importance.LOW,
-                                        STATE_CLEANUP_DELAY_MS_DOC)
-                                .define(METRIC_REPORTER_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        "",
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG,
-                                        Type.INT,
-                                        2,
-                                        atLeast(1),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(APPLICATION_SERVER_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.LOW,
-                                        APPLICATION_SERVER_DOC)
-                                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        null,
-                                        Importance.LOW,
-                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC)
-                                .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
-                                        Type.LONG,
-                                        24 * 60 * 60 * 1000,
-                                        Importance.MEDIUM,
-                                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
-                                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                                        Type.LONG,
-                                        10 * 1024 * 1024L,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CACHE_MAX_BYTES_BUFFERING_DOC);
+                Type.STRING,
+                Importance.HIGH,
+                StreamsConfig.APPLICATION_ID_DOC)
+                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
+                        Type.LIST,
+                        Importance.HIGH,
+                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                .define(CLIENT_ID_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.HIGH,
+                        CommonClientConfigs.CLIENT_ID_DOC)
+                .define(ZOOKEEPER_CONNECT_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.HIGH,
+                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
+                .define(STATE_DIR_CONFIG,
+                        Type.STRING,
+                        "/tmp/kafka-streams",
+                        Importance.MEDIUM,
+                        STATE_DIR_DOC)
+                .define(REPLICATION_FACTOR_CONFIG,
+                        Type.INT,
+                        1,
+                        Importance.MEDIUM,
+                        REPLICATION_FACTOR_DOC)
+                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                        Type.CLASS,
+                        FailOnInvalidTimestamp.class.getName(),
+                        Importance.MEDIUM,
+                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                .define(PARTITION_GROUPER_CLASS_CONFIG,
+                        Type.CLASS,
+                        DefaultPartitionGrouper.class.getName(),
+                        Importance.MEDIUM,
+                        PARTITION_GROUPER_CLASS_DOC)
+                .define(KEY_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        Serdes.ByteArraySerde.class.getName(),
+                        Importance.MEDIUM,
+                        KEY_SERDE_CLASS_DOC)
+                .define(VALUE_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        Serdes.ByteArraySerde.class.getName(),
+                        Importance.MEDIUM,
+                        VALUE_SERDE_CLASS_DOC)
+                .define(COMMIT_INTERVAL_MS_CONFIG,
+                        Type.LONG,
+                        30000,
+                        Importance.LOW,
+                        COMMIT_INTERVAL_MS_DOC)
+                .define(POLL_MS_CONFIG,
+                        Type.LONG,
+                        100,
+                        Importance.LOW,
+                        POLL_MS_DOC)
+                .define(NUM_STREAM_THREADS_CONFIG,
+                        Type.INT,
+                        1,
+                        Importance.LOW,
+                        NUM_STREAM_THREADS_DOC)
+                .define(NUM_STANDBY_REPLICAS_CONFIG,
+                        Type.INT,
+                        0,
+                        Importance.LOW,
+                        NUM_STANDBY_REPLICAS_DOC)
+                .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                        Type.INT,
+                        1000,
+                        Importance.LOW,
+                        BUFFERED_RECORDS_PER_PARTITION_DOC)
+                .define(STATE_CLEANUP_DELAY_MS_CONFIG,
+                        Type.LONG,
+                        60000,
+                        Importance.LOW,
+                        STATE_CLEANUP_DELAY_MS_DOC)
+                .define(METRIC_REPORTER_CLASSES_CONFIG,
+                        Type.LIST,
+                        "",
+                        Importance.LOW,
+                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                        Type.LONG,
+                        30000,
+                        atLeast(0),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+                .define(METRICS_NUM_SAMPLES_CONFIG,
+                        Type.INT,
+                        2,
+                        atLeast(1),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                .define(METRICS_RECORDING_LEVEL_CONFIG,
+                        Type.STRING,
+                        Sensor.RecordingLevel.INFO.toString(),
+                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+                .define(APPLICATION_SERVER_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.LOW,
+                        APPLICATION_SERVER_DOC)
+                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                        Type.CLASS,
+                        null,
+                        Importance.LOW,
+                        ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+                .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+                        Type.LONG,
+                        24 * 60 * 60 * 1000,
+                        Importance.MEDIUM,
+                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        Type.LONG,
+                        10 * 1024 * 1024L,
+                        atLeast(0),
+                        Importance.LOW,
+                        CACHE_MAX_BYTES_BUFFERING_DOC)
+                .define(SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        DEFAULT_SECURITY_PROTOCOL,
+                        Importance.MEDIUM,
+                        SECURITY_PROTOCOL_DOC)
+                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        9 * 60 * 1000,
+                        ConfigDef.Importance.MEDIUM,
+                        CONNECTIONS_MAX_IDLE_MS_DOC)
+                .define(RETRY_BACKOFF_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        100L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        RETRY_BACKOFF_MS_DOC)
+                .define(METADATA_MAX_AGE_CONFIG,
+                        ConfigDef.Type.LONG,
+                        5 * 60 * 1000,
+                        atLeast(0),
+                        ConfigDef.Importance.LOW,
+                        METADATA_MAX_AGE_DOC)
+                .define(RECONNECT_BACKOFF_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        50L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        RECONNECT_BACKOFF_MS_DOC)
+                .define(SEND_BUFFER_CONFIG,
+                        ConfigDef.Type.INT,
+                        128 * 1024,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        SEND_BUFFER_DOC)
+                .define(RECEIVE_BUFFER_CONFIG,
+                        ConfigDef.Type.INT,
+                        32 * 1024,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        RECEIVE_BUFFER_DOC)
+                .define(REQUEST_TIMEOUT_MS_CONFIG,
+                        ConfigDef.Type.INT,
+                        40 * 1000,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        REQUEST_TIMEOUT_MS_DOC);
     }
 
     // this is the list of configs for underlying clients

@@ -74,7 +74,7 @@ public class KStreamKTableJoinIntegrationTest {
     private Properties streamsConfiguration;
 
     @Before
-    public void before() {
+    public void before() throws InterruptedException {
         testNo++;
         userClicksTopic = "user-clicks-" + testNo;
         userRegionsTopic = "user-regions-" + testNo;
@@ -86,7 +86,6 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "join-integration-test-" + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

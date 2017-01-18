@@ -90,9 +90,9 @@ public class FetcherTest {
     private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
-    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
-    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private Metrics metrics = new Metrics(time);
+    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST, metrics);
+    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE, metrics);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
@@ -583,14 +583,17 @@ public class FetcherTest {
     @Test(expected = InvalidTopicException.class)
     public void testGetTopicMetadataInvalidTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION));
-        fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
+        fetcher.getTopicMetadata(
+            new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
     }
 
     @Test
     public void testGetTopicMetadataUnknownTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
-        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata =
+                fetcher.getTopicMetadata(
+                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
         assertNull(topicMetadata.get(topicName));
     }
 
@@ -599,7 +602,9 @@ public class FetcherTest {
         client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE));
         client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
 
-        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata =
+                fetcher.getTopicMetadata(
+                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
         assertTrue(topicMetadata.containsKey(topicName));
     }
 
@@ -652,7 +657,7 @@ public class FetcherTest {
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE.code(), 200L, 0);
-        assertEquals(198, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(197, recordsFetchLagMax.value(), EPSILON);
     }
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(MemoryRecords records, short error, long hw, int throttleTime) {

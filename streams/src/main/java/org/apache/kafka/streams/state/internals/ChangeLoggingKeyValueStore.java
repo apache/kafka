@@ -1,7 +1,22 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -13,107 +28,52 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Changelog-enabled {@link KeyValueStore} wrapper is used for recording operation metrics, and hence its
- * inner KeyValueStore implementation do not need to provide its own write-ahead-logging functionality.
- *
- * @param <K>
- * @param <V>
- */
-class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> implements WrapperKeyValueStore<K, V> {
-
-    private final String storeName;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    protected final KeyValueStore<Bytes, byte[]> innerBytes;
-
+class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> implements KeyValueStore<K, V> {
+    private final ChangeLoggingKeyValueBytesStore innerBytes;
+    private final Serde keySerde;
+    private final Serde valueSerde;
     private StateSerdes<K, V> serdes;
-    protected StoreChangeLogger<Bytes, byte[]> changeLogger;
 
-    // this is optimizing the case when the underlying store is already bytes store, in which we can avoid Bytes.wrap() costs
-    private static class ChangeLoggingBytesKeyValueStore extends ChangeLoggingKeyValueStore<Bytes, byte[]> {
-        ChangeLoggingBytesKeyValueStore(final KeyValueStore<Bytes, byte[]> inner, final String storeName) {
-            super(inner, storeName, Serdes.Bytes(), Serdes.ByteArray());
-        }
 
-        @Override
-        public byte[] get(Bytes key) {
-            return this.innerBytes.get(key);
-        }
-
-        @Override
-        public void put(Bytes key, byte[] value) {
-            this.innerBytes.put(key, value);
-            this.changeLogger.logChange(key, value);
-        }
-
-        @Override
-        public void putAll(List<KeyValue<Bytes, byte[]>> entries) {
-            this.innerBytes.putAll(entries);
-
-            for (KeyValue<Bytes, byte[]> entry : entries) {
-                this.changeLogger.logChange(entry.key, entry.value);
-            }
-        }
-
-        @Override
-        public byte[] delete(Bytes key) {
-            return this.innerBytes.delete(key);
-        }
-
-        @Override
-        public KeyValueIterator<Bytes, byte[]> range(Bytes from, Bytes to) {
-            return SerializedKeyValueStoreIterator.bytesIterator(this.innerBytes.range(from, to));
-        }
-
-        @Override
-        public KeyValueIterator<Bytes, byte[]> all() {
-            return SerializedKeyValueStoreIterator.bytesIterator(this.innerBytes.all());
-        }
+    ChangeLoggingKeyValueStore(final KeyValueStore<Bytes, byte[]> bytesStore,
+                               final Serde keySerde,
+                               final Serde valueSerde) {
+        this(new ChangeLoggingKeyValueBytesStore(bytesStore), keySerde, valueSerde);
     }
 
-    static ChangeLoggingKeyValueStore<Bytes, byte[]> bytesStore(final KeyValueStore<Bytes, byte[]> inner, final String storeName) {
-        return new ChangeLoggingBytesKeyValueStore(inner, storeName);
-    }
-
-    ChangeLoggingKeyValueStore(final KeyValueStore<Bytes, byte[]> inner, final String storeName, final Serde<K> keySerde, final Serde<V> valueSerde) {
-        super(inner);
-        this.innerBytes = inner;
+    private ChangeLoggingKeyValueStore(final ChangeLoggingKeyValueBytesStore bytesStore,
+                                       final Serde keySerde,
+                                       final Serde valueSerde) {
+        super(bytesStore);
+        this.innerBytes = bytesStore;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.storeName = storeName;
+    }
+
+    @Override
+    public String name() {
+        return null;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         innerBytes.init(context, root);
 
         this.serdes = new StateSerdes<>(innerBytes.name(),
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
-        this.changeLogger = new StoreChangeLogger<>(storeName, context, WindowStoreUtils.INNER_SERDES);
     }
 
     @Override
-    public V get(K key) {
-        Bytes rawKey = Bytes.wrap(serdes.rawKey(key));
-
-        return serdes.valueFrom(innerBytes.get(rawKey));
+    public void put(final K key, final V value) {
+        final Bytes bytesKey = Bytes.wrap(serdes.rawKey(key));
+        final byte[] bytesValue = serdes.rawValue(value);
+        innerBytes.put(bytesKey, bytesValue);
     }
 
     @Override
-    public void put(K key, V value) {
-        final Bytes rawKey = Bytes.wrap(serdes.rawKey(key));
-        final byte[] rawValue = serdes.rawValue(value);
-
-        innerBytes.put(rawKey, rawValue);
-        changeLogger.logChange(rawKey, rawValue);
-    }
-
-    @Override
-    public V putIfAbsent(K key, V value) {
+    public V putIfAbsent(final K key, final V value) {
         final V v = get(key);
         if (v == null) {
             put(key, value);
@@ -122,40 +82,41 @@ class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyV
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
-        List<KeyValue<Bytes, byte[]>> entriesBytes = new ArrayList<>();
-
-        for (KeyValue<K, V> entry : entries) {
-            final Bytes rawKey = Bytes.wrap(serdes.rawKey(entry.key));
-            final byte[] rawValue = entry.value == null ? null : serdes.rawValue(entry.value);
-
-            entriesBytes.add(KeyValue.pair(rawKey, rawValue));
+    public void putAll(final List<KeyValue<K, V>> entries) {
+        final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
+        for (final KeyValue<K, V> entry : entries) {
+            keyValues.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
         }
-
-        this.innerBytes.putAll(entriesBytes);
-
-        for (KeyValue<Bytes, byte[]> entry : entriesBytes) {
-            changeLogger.logChange(entry.key, entry.value);
-        }
+        innerBytes.putAll(keyValues);
     }
 
     @Override
-    public V delete(K key) {
-        Bytes rawKey = Bytes.wrap(serdes.rawKey(key));
-
-        return serdes.valueFrom(innerBytes.delete(rawKey));
+    public V delete(final K key) {
+        final byte[] oldValue = innerBytes.delete(Bytes.wrap(serdes.rawKey(key)));
+        if (oldValue == null) {
+            return null;
+        }
+        return serdes.valueFrom(oldValue);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
-        Bytes fromBytes = Bytes.wrap(serdes.rawKey(from));
-        Bytes toBytes = Bytes.wrap(serdes.rawKey(to));
+    public V get(final K key) {
+        final byte[] rawValue = innerBytes.get(Bytes.wrap(serdes.rawKey(key)));
+        if (rawValue == null) {
+            return null;
+        }
+        return serdes.valueFrom(rawValue);
+    }
 
-        return new SerializedKeyValueStoreIterator<>(this.innerBytes.range(fromBytes, toBytes), serdes);
+    @Override
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        return new SerializedKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
+                Bytes.wrap(serdes.rawKey(to))),
+                serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new SerializedKeyValueStoreIterator<>(this.innerBytes.all(), serdes);
+        return new SerializedKeyValueIterator<>(innerBytes.all(), serdes);
     }
 }

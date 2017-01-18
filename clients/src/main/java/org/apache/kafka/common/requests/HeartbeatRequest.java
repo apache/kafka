@@ -15,24 +15,51 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public class HeartbeatRequest extends AbstractRequest {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.HEARTBEAT.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String GROUP_GENERATION_ID_KEY_NAME = "group_generation_id";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
+
+    public static class Builder extends AbstractRequest.Builder<HeartbeatRequest> {
+        private final String groupId;
+        private final int groupGenerationId;
+        private final String memberId;
+
+        public Builder(String groupId, int groupGenerationId, String memberId) {
+            super(ApiKeys.HEARTBEAT);
+            this.groupId = groupId;
+            this.groupGenerationId = groupGenerationId;
+            this.memberId = memberId;
+        }
+
+        @Override
+        public HeartbeatRequest build() {
+            return new HeartbeatRequest(groupId, groupGenerationId, memberId, version());
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=HeartbeatRequest").
+                append(", groupId=").append(groupId).
+                append(", groupGenerationId=").append(groupGenerationId).
+                append(", memberId=").append(memberId).
+                append(")");
+            return bld.toString();
+        }
+    }
 
     private final String groupId;
     private final int groupGenerationId;
     private final String memberId;
 
-    public HeartbeatRequest(String groupId, int groupGenerationId, String memberId) {
-        super(new Struct(CURRENT_SCHEMA));
+    private HeartbeatRequest(String groupId, int groupGenerationId, String memberId, short version) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.HEARTBEAT.id, version)),
+                version);
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
@@ -41,15 +68,16 @@ public class HeartbeatRequest extends AbstractRequest {
         this.memberId = memberId;
     }
 
-    public HeartbeatRequest(Struct struct) {
-        super(struct);
+    public HeartbeatRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         groupGenerationId = struct.getInt(GROUP_GENERATION_ID_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new HeartbeatResponse(Errors.forException(e).code());
@@ -72,10 +100,10 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, int versionId) {
-        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer));
+        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer), (short) versionId);
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return new HeartbeatRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.HEARTBEAT.id));
     }
 }

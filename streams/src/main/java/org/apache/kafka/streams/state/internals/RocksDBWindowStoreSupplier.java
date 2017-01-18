@@ -59,55 +59,34 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     }
 
     public WindowStore get() {
-        final String metricsScope = "rocksdb-window";
-
-        WindowStore<K, V> store;
-
-        SegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name, retentionPeriod, numSegments, new WindowKeySchema());
-
-        if (cached && logged) {
-            // logging wrapper
-            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
-
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
-
-            // windowed
-            WindowStore<Bytes, byte[]> bytes = RocksDBWindowStore.bytesStore(segmented, retainDuplicates);
-
-            // caching wrapper
-            store = new CachingWindowStore<>(bytes, keySerde, valueSerde, windowSize);
-        } else if (cached) {
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
-
-            // windowed
-            WindowStore<Bytes, byte[]> bytes = RocksDBWindowStore.bytesStore(segmented, retainDuplicates);
-
-            // caching wrapper
-            store = new CachingWindowStore<>(bytes, keySerde, valueSerde, windowSize);
-        } else if (logged) {
-            // logging wrapper
-            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
-
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
-
-            // windowed
-            store = new RocksDBWindowStore<>(segmented, keySerde, valueSerde, retainDuplicates);
-        } else {
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, metricsScope, time);
-
-            // windowed
-            store = new RocksDBWindowStore<>(segmented, keySerde, valueSerde, retainDuplicates);
-        }
-
-        return store;
+        return maybeWrapCaching(
+                maybeWrapLogged(
+                        new RocksDBSegmentedBytesStore(
+                                name,
+                                retentionPeriod,
+                                numSegments,
+                                new WindowKeySchema()
+                        )));
     }
 
     @Override
     public long retentionPeriod() {
         return retentionPeriod;
+    }
+
+    private SegmentedBytesStore maybeWrapLogged(final SegmentedBytesStore inner) {
+        if (!logged) {
+            return inner;
+        }
+        return new ChangeLoggingSegmentedBytesStore(inner);
+    }
+
+    private WindowStore<K, V> maybeWrapCaching(final SegmentedBytesStore inner) {
+        final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(inner, "rocksdb-window", time);
+        if (!cached) {
+            return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates);
+        }
+        final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates);
+        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize);
     }
 }

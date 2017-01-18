@@ -22,7 +22,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
-import java.util.Iterator;
 
 /**
  * Iterator interface of {@link KeyValue} with key typed {@link Long} used for {@link WindowStore#fetch(Object, long, long)}.

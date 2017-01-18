@@ -42,7 +42,7 @@ import java.util.Map;
  * </p>
  */
 @InterfaceStability.Unstable
-public class SourceRecord extends ConnectRecord {
+public class SourceRecord extends ConnectRecord<SourceRecord> {
     private final Map<String, ?> sourcePartition;
     private final Map<String, ?> sourceOffset;
 
@@ -83,6 +83,11 @@ public class SourceRecord extends ConnectRecord {
 
     public Map<String, ?> sourceOffset() {
         return sourceOffset;
+    }
+
+    @Override
+    public SourceRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp);
     }
 
     @Override

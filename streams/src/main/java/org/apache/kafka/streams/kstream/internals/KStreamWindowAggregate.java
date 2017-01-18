@@ -36,11 +36,11 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     private final String storeName;
     private final Windows<W> windows;
     private final Initializer<T> initializer;
-    private final Aggregator<K, V, T> aggregator;
+    private final Aggregator<? super K, ? super V, T> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;

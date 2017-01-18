@@ -56,7 +56,8 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): FetchRequest =
-    new FetchRequest(Int.MaxValue, 0, maxResponseBytes, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+    new FetchRequest.Builder(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+      .setMaxBytes(maxResponseBytes).build()
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
@@ -67,8 +68,8 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest, version: Option[Short] = None): FetchResponse = {
-    val response = send(request, ApiKeys.FETCH, version, destination = brokerSocketServer(leaderId))
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+    val response = send(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
     FetchResponse.parse(response)
   }
 
@@ -155,8 +156,10 @@ class FetchRequestTest extends BaseRequestTest {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    val fetchRequest = new FetchRequest(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, Seq(topicPartition)))
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest, Some(2))
+    val fetchRequestBuilder = new FetchRequest.Builder(
+      Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, Seq(topicPartition))).
+      setVersion(2)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequestBuilder.build())
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.highWatermark > 0)

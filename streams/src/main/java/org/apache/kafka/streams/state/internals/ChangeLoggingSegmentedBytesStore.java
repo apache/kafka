@@ -25,12 +25,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  * Simple wrapper around a {@link SegmentedBytesStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
+class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractWrappedStateStore implements SegmentedBytesStore {
 
     private final SegmentedBytesStore bytesStore;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingSegmentedBytesStore(final SegmentedBytesStore bytesStore) {
+        super(bytesStore);
         this.bytesStore = bytesStore;
     }
 
@@ -59,10 +60,6 @@ class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
         return bytesStore.get(key);
     }
 
-    @Override
-    public String name() {
-        return bytesStore.name();
-    }
 
     @Override
     @SuppressWarnings("unchecked")
@@ -70,6 +67,7 @@ class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
         bytesStore.init(context, root);
         changeLogger = new StoreChangeLogger<>(name(), context, WindowStoreUtils.INNER_SERDES);
     }
+<<<<<<< HEAD
 
     @Override
     public void flush() {
@@ -90,4 +88,6 @@ class ChangeLoggingSegmentedBytesStore implements SegmentedBytesStore {
     public boolean isOpen() {
         return bytesStore.isOpen();
     }
+=======
+>>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
 }

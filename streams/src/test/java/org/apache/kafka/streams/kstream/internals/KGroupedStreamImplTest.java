@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -40,9 +41,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KGroupedStreamImplTest {
@@ -92,7 +98,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, Serdes.String(), "store");
+        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Serdes.String(), "store");
     }
 
     @Test(expected = NullPointerException.class)
@@ -103,12 +109,12 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
         String storeName = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), storeName);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), storeName);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), "store");
+        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), "store");
     }
 
     @Test(expected = NullPointerException.class)
@@ -118,19 +124,19 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, null, Serdes.String(), "store");
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Serdes.String(), "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
         String storeName = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), storeName);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), storeName);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
         StateStoreSupplier storeSupplier = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), storeSupplier);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), storeSupplier);
     }
 
     @Test
@@ -173,9 +179,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "1");
         driver.flushState();
-        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test
@@ -202,9 +208,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "1");
         driver.flushState();
-        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test
@@ -238,9 +244,9 @@ public class KGroupedStreamImplTest {
         driver.setTime(100);
         driver.process(TOPIC, "1", "C");
         driver.flushState();
-        assertEquals("A:B", results.get(new Windowed<>("1", new TimeWindow(10, 30))));
-        assertEquals("Z", results.get(new Windowed<>("2", new TimeWindow(15, 15))));
-        assertEquals("A:B:C", results.get(new Windowed<>("1", new TimeWindow(70, 100))));
+        assertEquals("A:B", results.get(new Windowed<>("1", new SessionWindow(10, 30))));
+        assertEquals("Z", results.get(new Windowed<>("2", new SessionWindow(15, 15))));
+        assertEquals("A:B:C", results.get(new Windowed<>("1", new SessionWindow(70, 100))));
     }
 
     @Test(expected = NullPointerException.class)
@@ -265,7 +271,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -286,7 +292,7 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT,
-                                MockAggregator.STRING_ADDER,
+                                MockAggregator.TOSTRING_ADDER,
                                 null,
                                 SessionWindows.with(10),
                                 Serdes.String(),
@@ -295,7 +301,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionWindowsWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -305,7 +311,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreNameWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -315,7 +321,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, new Merger<String, String>() {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -336,5 +342,39 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreStoreSupplierNameWhenCountingSessionWindows() throws Exception {
         groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
+    }
+
+    @Test
+    public void shouldCountWindowed() throws Exception {
+        final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
+        groupedStream.count(
+                TimeWindows.of(500L),
+                "aggregate-by-key-windowed")
+                .foreach(new ForeachAction<Windowed<String>, Long>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final Long value) {
+                        results.add(KeyValue.pair(key, value));
+                    }
+                });
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
+        driver.setTime(0);
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "2", "B");
+        driver.process(TOPIC, "3", "C");
+        driver.setTime(500);
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "1", "A");
+        driver.process(TOPIC, "2", "B");
+        driver.process(TOPIC, "2", "B");
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
+        )));
     }
 }

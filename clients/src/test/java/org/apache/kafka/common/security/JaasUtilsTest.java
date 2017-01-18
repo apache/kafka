@@ -129,9 +129,7 @@ public class JaasUtilsTest {
         }
         String jaasConfigProp = builder.toString();
 
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        Configuration configuration = JaasUtils.jaasConfig(LoginType.CLIENT, configs);
+        Configuration configuration = new JaasConfig(LoginType.CLIENT, jaasConfigProp);
         AppConfigurationEntry[] dynamicEntries = configuration.getAppConfigurationEntry(LoginType.CLIENT.contextName());
         assertEquals(moduleCount, dynamicEntries.length);
 

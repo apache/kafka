@@ -19,10 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -30,6 +32,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class KStreamTransformValuesTest {
 
@@ -51,10 +54,10 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueTransformerSupplier<Integer, Integer> valueTransformerSupplier =
-            new ValueTransformerSupplier<Integer, Integer>() {
-                public ValueTransformer<Integer, Integer> get() {
-                    return new ValueTransformer<Integer, Integer>() {
+        ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            new ValueTransformerSupplier<Number, Integer>() {
+                public ValueTransformer<Number, Integer> get() {
+                    return new ValueTransformer<Number, Integer>() {
 
                         private int total = 0;
 
@@ -63,14 +66,14 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public Integer transform(Integer value) {
-                            total += value;
+                        public Integer transform(Number value) {
+                            total += value.intValue();
                             return total;
                         }
 
                         @Override
                         public Integer punctuate(long timestamp) {
-                            return (int) timestamp;
+                            return null;
                         }
 
                         @Override
@@ -88,20 +91,88 @@ public class KStreamTransformValuesTest {
         stream.transformValues(valueTransformerSupplier).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
         }
 
         assertEquals(4, processor.processed.size());
 
-        driver.punctuate(2);
-        driver.punctuate(3);
-
-        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110", "null:2", "null:3"};
+        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
 
+    @Test
+    public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerSupplier<Integer, Integer>() {
+            @Override
+            public ValueTransformer<Integer, Integer> get() {
+                return new BadValueTransformer();
+            }
+        });
+
+        final Processor transformValueProcessor = transformValue.get();
+        transformValueProcessor.init(null);
+
+        try {
+            transformValueProcessor.process(null, 0);
+            fail("should not allow call to context.forward() within ValueTransformer");
+        } catch (final StreamsException e) {
+            // expected
+        }
+
+        try {
+            transformValueProcessor.process(null, 1);
+            fail("should not allow call to context.forward() within ValueTransformer");
+        } catch (final StreamsException e) {
+            // expected
+        }
+
+        try {
+            transformValueProcessor.process(null, 2);
+            fail("should not allow call to context.forward() within ValueTransformer");
+        } catch (final StreamsException e) {
+            // expected
+        }
+
+        try {
+            transformValueProcessor.punctuate(0);
+            fail("should not allow ValueTransformer#puntuate() to return not-null value");
+        } catch (final StreamsException e) {
+            // expected
+        }
+    }
+
+    private static final class BadValueTransformer implements ValueTransformer<Integer, Integer> {
+        private ProcessorContext context;
+
+        @Override
+        public void init(ProcessorContext context) {
+            this.context = context;
+        }
+
+        @Override
+        public Integer transform(Integer value) {
+            if (value == 0) {
+                context.forward(null, null);
+            }
+            if (value == 1) {
+                context.forward(null, null, null);
+            }
+            if (value == 2) {
+                context.forward(null, null, 0);
+            }
+            throw new RuntimeException("Should never happen in this test");
+        }
+
+        @Override
+        public Integer punctuate(long timestamp) {
+            return 1; // any not-null falue
+        }
+
+        @Override
+        public void close() { }
+    }
 }
