@@ -57,7 +57,6 @@ import java.util.Random;
 public class SimpleBenchmark {
 
     private final String kafka;
-    private final String zookeeper;
     private final File stateDir;
 
     private static final String SOURCE_TOPIC = "simpleBenchmarkSourceTopic";
@@ -91,18 +90,16 @@ public class SimpleBenchmark {
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
 
-    public SimpleBenchmark(File stateDir, String kafka, String zookeeper) {
+    public SimpleBenchmark(File stateDir, String kafka) {
         super();
         this.stateDir = stateDir;
         this.kafka = kafka;
-        this.zookeeper = zookeeper;
     }
 
     public static void main(String[] args) throws Exception {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        String zookeeper = args.length > 1 ? args[1] : "localhost:2181";
-        String stateDirStr = args.length > 2 ? args[2] : "/tmp/kafka-streams-simple-benchmark";
-        numRecords = args.length > 3 ? Integer.parseInt(args[3]) : 10000000;
+        String stateDirStr = args.length > 1 ? args[1] : "/tmp/kafka-streams-simple-benchmark";
+        numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
         endKey = numRecords - 1;
 
         final File stateDir = new File(stateDirStr);
@@ -113,11 +110,10 @@ public class SimpleBenchmark {
         // Note: this output is needed for automated tests and must not be removed
         System.out.println("SimpleBenchmark instance started");
         System.out.println("kafka=" + kafka);
-        System.out.println("zookeeper=" + zookeeper);
         System.out.println("stateDir=" + stateDir);
         System.out.println("numRecords=" + numRecords);
 
-        SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka, zookeeper);
+        SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka);
 
         // producer performance
         benchmark.produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
@@ -239,7 +235,7 @@ public class SimpleBenchmark {
     public void processStream(String topic) {
         CountDownLatch latch = new CountDownLatch(1);
 
-        final KafkaStreams streams = createKafkaStreams(topic, stateDir, kafka, zookeeper, latch);
+        final KafkaStreams streams = createKafkaStreams(topic, stateDir, kafka, latch);
 
         Thread thread = new Thread() {
             public void run() {
@@ -273,7 +269,7 @@ public class SimpleBenchmark {
     public void processStreamWithSink(String topic) {
         CountDownLatch latch = new CountDownLatch(1);
 
-        final KafkaStreams streams = createKafkaStreamsWithSink(topic, stateDir, kafka, zookeeper, latch);
+        final KafkaStreams streams = createKafkaStreamsWithSink(topic, stateDir, kafka, latch);
 
         Thread thread = new Thread() {
             public void run() {
@@ -337,7 +333,7 @@ public class SimpleBenchmark {
     public void processStreamWithStateStore(String topic) {
         CountDownLatch latch = new CountDownLatch(1);
 
-        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, zookeeper, latch, false);
+        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, latch, false);
         internalProcessStreamWithStore(streams, latch, "Streams Performance [MB/sec read+store]: ");
 
     }
@@ -345,7 +341,7 @@ public class SimpleBenchmark {
     public void processStreamWithCachedStateStore(String topic) {
         CountDownLatch latch = new CountDownLatch(1);
 
-        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, zookeeper, latch, true);
+        final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, latch, true);
 
         internalProcessStreamWithStore(streams, latch, "Streams Performance [MB/sec read+cache+store]: ");
     }
@@ -433,7 +429,7 @@ public class SimpleBenchmark {
         System.out.println("Consumer Performance [MB/sec read]: " + megaBytePerSec(endTime - startTime));
     }
 
-    private KafkaStreams createKafkaStreams(String topic, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
+    private KafkaStreams createKafkaStreams(String topic, File stateDir, String kafka, final CountDownLatch latch) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-streams");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
@@ -475,7 +471,7 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
-    private KafkaStreams createKafkaStreamsWithSink(String topic, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
+    private KafkaStreams createKafkaStreamsWithSink(String topic, File stateDir, String kafka, final CountDownLatch latch) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-streams-with-sink");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
@@ -565,7 +561,7 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, streamConfig);
     }
 
-    private KafkaStreams createKafkaStreamsWithStateStore(String topic, File stateDir, String kafka, String zookeeper,
+    private KafkaStreams createKafkaStreamsWithStateStore(String topic, File stateDir, String kafka,
                                                           final CountDownLatch latch,
                                                           boolean enableCaching) {
         Properties props = new Properties();
