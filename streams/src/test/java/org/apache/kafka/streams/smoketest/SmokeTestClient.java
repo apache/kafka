@@ -37,20 +37,18 @@ import java.util.concurrent.TimeUnit;
 public class SmokeTestClient extends SmokeTestUtil {
 
     private final String kafka;
-    private final String zookeeper;
     private final File stateDir;
     private KafkaStreams streams;
     private Thread thread;
 
-    public SmokeTestClient(File stateDir, String kafka, String zookeeper) {
+    public SmokeTestClient(File stateDir, String kafka) {
         super();
         this.stateDir = stateDir;
         this.kafka = kafka;
-        this.zookeeper = zookeeper;
     }
 
     public void start() {
-        streams = createKafkaStreams(stateDir, kafka, zookeeper);
+        streams = createKafkaStreams(stateDir, kafka);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
@@ -75,7 +73,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(File stateDir, String kafka, String zookeeper) {
+    private static KafkaStreams createKafkaStreams(File stateDir, String kafka) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
