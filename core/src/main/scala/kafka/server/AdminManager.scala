@@ -117,7 +117,7 @@ class AdminManager(val config: KafkaConfig,
         CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
       } catch {
         case e: Throwable =>
-          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
       }
     }
