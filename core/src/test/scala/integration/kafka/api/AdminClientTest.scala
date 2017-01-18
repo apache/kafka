@@ -24,6 +24,7 @@ import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
@@ -75,6 +76,24 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     val group = groups.head
     assertEquals(groupId, group.groupId)
     assertEquals("consumer", group.protocolType)
+  }
+
+  @Test
+  def testListAllBrokerVersionInfo() {
+    consumers.head.subscribe(Collections.singletonList(topic))
+    TestUtils.waitUntilTrue(() => {
+      consumers.head.poll(0)
+      !consumers.head.assignment.isEmpty
+    }, "Expected non-empty assignment")
+    val brokerVersionInfos = client.listAllBrokerVersionInfo
+    val brokers = brokerList.split(",")
+    assertEquals(brokers.size, brokerVersionInfos.size)
+    for ((node, tryBrokerVersionInfo) <- brokerVersionInfos) {
+      val hostStr = s"${node.host}:${node.port}"
+      assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
+      val brokerVersionInfo = tryBrokerVersionInfo.get
+      assertEquals(0, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
+    }
   }
 
   @Test
