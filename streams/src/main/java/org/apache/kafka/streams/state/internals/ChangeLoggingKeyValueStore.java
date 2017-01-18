@@ -48,12 +48,7 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrapped
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
     }
-
-    @Override
-    public String name() {
-        return null;
-    }
-
+    
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
