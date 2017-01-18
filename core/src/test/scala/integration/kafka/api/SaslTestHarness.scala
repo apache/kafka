@@ -20,16 +20,12 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   protected val kafkaClientSaslMechanism = "GSSAPI"
   protected val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
 
-  // Override this list to enable client login modules for multiple mechanisms for testing
-  // of multi-mechanism brokers with clients using different mechanisms in a single JVM
-  protected def allKafkaClientSaslMechanisms = List(kafkaClientSaslMechanism)
-
   @Before
   override def setUp() {
     if (zkSaslEnabled)
-      startSasl(Both, kafkaServerSaslMechanisms, allKafkaClientSaslMechanisms)
+      startSasl(Both, kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism))
     else
-      startSasl(KafkaSasl, kafkaServerSaslMechanisms, allKafkaClientSaslMechanisms)
+      startSasl(KafkaSasl, kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism))
     super.setUp
   }
 
