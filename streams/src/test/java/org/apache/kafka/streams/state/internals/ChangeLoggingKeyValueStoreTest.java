@@ -200,6 +200,11 @@ public class ChangeLoggingKeyValueStoreTest {
         assertThat(store.get(hello), is(nullValue()));
     }
 
+    @Test
+    public void shouldReturnInnerStoreName() throws Exception {
+        assertThat(store.name(), equalTo("kv"));
+    }
+
     private String deserializedValueFromInner(final String key) {
         return valueSerde.deserializer().deserialize("blah", inner.get(Bytes.wrap(key.getBytes())));
     }
