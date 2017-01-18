@@ -103,7 +103,7 @@ public class ProcessorNodeTest {
         String name = "task." + context.taskId() + "." + node.name();
         String[] entities = {"all", name};
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        String throughputOperation =  "process-throughput";
+        String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
         Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
 

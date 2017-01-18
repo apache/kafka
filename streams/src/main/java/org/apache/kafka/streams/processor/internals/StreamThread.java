@@ -1122,31 +1122,31 @@ public class StreamThread extends Thread {
 
         public StreamsMetricsThreadImpl(Metrics metrics, String groupName, String prefix, Map<String, String> tags) {
             super(metrics, groupName, tags);
-            this.commitTimeSensor = metrics.sensor(prefix + ".commit-time", Sensor.RecordingLevel.INFO);
-            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", this.groupName, "The average commit time in ms", this.tags), new Avg());
-            this.commitTimeSensor.add(metrics.metricName("commit-time-max", this.groupName, "The maximum commit time in ms", this.tags), new Max());
-            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", this.groupName, "The average per-second number of commit calls", this.tags), new Rate(new Count()));
+            this.commitTimeSensor = metrics.sensor(prefix + ".commit-latency", Sensor.RecordingLevel.INFO);
+            this.commitTimeSensor.add(metrics.metricName("commit-avg-latency", this.groupName, "The average commit time in ms", this.tags), new Avg());
+            this.commitTimeSensor.add(metrics.metricName("commit-max-latency", this.groupName, "The maximum commit time in ms", this.tags), new Max());
+            this.commitTimeSensor.add(metrics.metricName("commit-qps", this.groupName, "The average per-second number of commit calls", this.tags), new Rate(new Count()));
 
-            this.pollTimeSensor = metrics.sensor(prefix + ".poll-time", Sensor.RecordingLevel.INFO);
-            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", this.groupName, "The average poll time in ms", this.tags), new Avg());
-            this.pollTimeSensor.add(metrics.metricName("poll-time-max", this.groupName, "The maximum poll time in ms", this.tags), new Max());
-            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", this.groupName, "The average per-second number of record-poll calls", this.tags), new Rate(new Count()));
+            this.pollTimeSensor = metrics.sensor(prefix + ".poll-latency", Sensor.RecordingLevel.INFO);
+            this.pollTimeSensor.add(metrics.metricName("poll-avg-latency", this.groupName, "The average poll time in ms", this.tags), new Avg());
+            this.pollTimeSensor.add(metrics.metricName("poll-max-latency", this.groupName, "The maximum poll time in ms", this.tags), new Max());
+            this.pollTimeSensor.add(metrics.metricName("poll-qps", this.groupName, "The average per-second number of record-poll calls", this.tags), new Rate(new Count()));
 
-            this.processTimeSensor = metrics.sensor(prefix + ".process-time", Sensor.RecordingLevel.INFO);
-            this.processTimeSensor.add(metrics.metricName("process-time-avg", this.groupName, "The average process time in ms", this.tags), new Avg());
-            this.processTimeSensor.add(metrics.metricName("process-time-max", this.groupName, "The maximum process time in ms", this.tags), new Max());
-            this.processTimeSensor.add(metrics.metricName("process-calls-rate", this.groupName, "The average per-second number of process calls", this.tags), new Rate(new Count()));
+            this.processTimeSensor = metrics.sensor(prefix + ".process-latency", Sensor.RecordingLevel.INFO);
+            this.processTimeSensor.add(metrics.metricName("process-avg-latency", this.groupName, "The average process time in ms", this.tags), new Avg());
+            this.processTimeSensor.add(metrics.metricName("process-max-latency", this.groupName, "The maximum process time in ms", this.tags), new Max());
+            this.processTimeSensor.add(metrics.metricName("process-qps", this.groupName, "The average per-second number of process calls", this.tags), new Rate(new Count()));
 
-            this.punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-time", Sensor.RecordingLevel.INFO);
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
+            this.punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-latency", Sensor.RecordingLevel.INFO);
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-avg-latency", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-max-latency", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-qps", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
 
             this.taskCreationSensor = metrics.sensor(prefix + ".task-creation", Sensor.RecordingLevel.INFO);
-            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
+            this.taskCreationSensor.add(metrics.metricName("task-creation-qps", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
 
             this.taskDestructionSensor = metrics.sensor(prefix + ".task-destruction", Sensor.RecordingLevel.INFO);
-            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", this.groupName, "The average per-second number of destructed tasks", this.tags), new Rate(new Count()));
+            this.taskDestructionSensor.add(metrics.metricName("task-destruction-qps", this.groupName, "The average per-second number of destructed tasks", this.tags), new Rate(new Count()));
 
             this.skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
             this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
