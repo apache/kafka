@@ -67,27 +67,4 @@ class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractWrapped
         bytesStore.init(context, root);
         changeLogger = new StoreChangeLogger<>(name(), context, WindowStoreUtils.INNER_SERDES);
     }
-<<<<<<< HEAD
-
-    @Override
-    public void flush() {
-        bytesStore.flush();
-    }
-
-    @Override
-    public void close() {
-        bytesStore.close();
-    }
-
-    @Override
-    public boolean persistent() {
-        return bytesStore.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return bytesStore.isOpen();
-    }
-=======
->>>>>>> 1974e1b0e54abe5fdebd8ff3338df864b7ab60f3
 }
