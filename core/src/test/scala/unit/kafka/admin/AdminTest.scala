@@ -36,7 +36,7 @@ import java.util
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 
-import scala.collection.{Map, Seq, immutable}
+import scala.collection.{Map, immutable}
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
 
