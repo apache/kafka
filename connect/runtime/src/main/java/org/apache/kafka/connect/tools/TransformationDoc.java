@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.transforms.ExtractField;
 import org.apache.kafka.connect.transforms.HoistField;
 import org.apache.kafka.connect.transforms.InsertField;
+import org.apache.kafka.connect.transforms.RegexRouter;
 import org.apache.kafka.connect.transforms.SetSchemaMetadata;
 import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.ValueToKey;
@@ -49,7 +50,8 @@ public class TransformationDoc {
             new DocInfo(HoistField.class.getName(), HoistField.OVERVIEW_DOC, HoistField.CONFIG_DEF),
             new DocInfo(ExtractField.class.getName(), ExtractField.OVERVIEW_DOC, ExtractField.CONFIG_DEF),
             new DocInfo(SetSchemaMetadata.class.getName(), SetSchemaMetadata.OVERVIEW_DOC, SetSchemaMetadata.CONFIG_DEF),
-            new DocInfo(TimestampRouter.class.getName(), TimestampRouter.OVERVIEW_DOC, TimestampRouter.CONFIG_DEF)
+            new DocInfo(TimestampRouter.class.getName(), TimestampRouter.OVERVIEW_DOC, TimestampRouter.CONFIG_DEF),
+            new DocInfo(RegexRouter.class.getName(), RegexRouter.OVERVIEW_DOC, RegexRouter.CONFIG_DEF)
     );
 
     private static void printTransformationHtml(PrintStream out, DocInfo docInfo) {
