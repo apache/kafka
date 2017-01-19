@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.smoketest;
+package org.apache.kafka.streams.systemtest;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;

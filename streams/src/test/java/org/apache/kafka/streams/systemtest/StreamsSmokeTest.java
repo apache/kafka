@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.smoketest;
+package org.apache.kafka.streams.systemtest;
 
 import java.io.File;
 import java.util.Map;
@@ -30,9 +30,9 @@ public class StreamsSmokeTest {
      * @param args
      */
     public static void main(String[] args) throws Exception {
-        String command = args[0];
-        String kafka = args.length > 1 ? args[1] : null;
-        String stateDir = args.length > 2 ? args[2] : null;
+        String kafka = args[0];
+        String stateDir = args.length > 1 ? args[1] : null;
+        String command = args.length > 2 ? args[2] : null;
 
         System.out.println("StreamsTest instance started");
         System.out.println("command=" + command);

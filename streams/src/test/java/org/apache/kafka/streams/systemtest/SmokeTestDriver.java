@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.smoketest;
+package org.apache.kafka.streams.systemtest;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -78,7 +78,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     public static void main(String[] args) throws Exception {
         final String kafka = "localhost:9092";
         final String zookeeper = "localhost:2181";
-        final File stateDir = TestUtils.tempDirectory();
+        final File stateDir = TestUtils.tempDirectory("kafka-stream-system-test");
 
         final int numKeys = 20;
         final int maxRecordsPerKey = 1000;

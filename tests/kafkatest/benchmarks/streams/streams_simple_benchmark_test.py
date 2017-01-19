@@ -25,7 +25,16 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
     """
 
     def __init__(self, test_context):
-        super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1)
+        super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1,topics={
+            'simpleBenchmarkSourceTopic' : { 'partitions': 1, 'replication-factor': 1 },
+            'simpleBenchmarkSinkTopic' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KTableKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KTableKTable' : { 'partitions': 1, 'replication-factor': 1 }
+        })
 
         self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
