@@ -61,6 +61,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
@@ -1120,10 +1121,10 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
-        List<TopicPartition> partitions = Arrays.asList(tp0, tp1);
+        Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
         consumer.assign(partitions);
         // verify consumer's assignment
-        assertTrue(consumer.assignment().equals(new HashSet<>(Arrays.asList(tp0, tp1))));
+        assertTrue(consumer.assignment().equals(partitions));
 
         consumer.pause(partitions);
         consumer.seekToEnd(partitions);
