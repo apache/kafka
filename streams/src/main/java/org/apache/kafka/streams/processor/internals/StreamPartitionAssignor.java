@@ -205,6 +205,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
+        System.out.println("!!! constructing internal topic manager !!!");
+
         internalTopicManager = new InternalTopicManager(
                 new StreamsKafkaClient(this.streamThread.config),
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
@@ -263,6 +265,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+
+        System.out.println("!!! starting to assign !!!");
 
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
@@ -533,6 +537,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 i++;
             }
         }
+
+        System.out.println("!!! finished to assign !!!");
 
         return assignment;
     }
