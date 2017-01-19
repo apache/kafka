@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,17 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.streams import StreamsTestBaseService
-
-
-#
-# Class used to start the simple Kafka Streams benchmark
-#
-class StreamsSimpleBenchmarkService(StreamsTestBaseService):
-    """Base class for simple Kafka Streams benchmark"""
-
-    def __init__(self, test_context, kafka, numrecs):
-        super(StreamsSimpleBenchmarkService, self).__init__(test_context,
-                                                            kafka,
-                                                            "org.apache.kafka.streams.perf.SimpleBenchmark",
-                                                            numrecs)
+exec $(dirname $0)/kafka-run-class.sh kafka.admin.BrokerApiVersionsCommand "$@"
