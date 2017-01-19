@@ -106,11 +106,15 @@ public class NetworkReceive implements Receive {
                 this.buffer = ByteBuffer.allocate(receiveSize);
             }
         }
+
+        // Packet head is the same as a SSL handshake bytes but actually the packet is correct.
+        // Over read data must be inserted into the buffer.
         if (tempOverBuf != null) {
             buffer.put(tempOverBuf);
             read += 1024;
             tempOverBuf = null;
         }
+
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
             if (bytesRead < 0)
