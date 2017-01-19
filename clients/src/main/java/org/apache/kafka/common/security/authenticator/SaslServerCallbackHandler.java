@@ -21,6 +21,7 @@ package org.apache.kafka.common.security.authenticator;
 import java.io.IOException;
 import java.util.Map;
 
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.slf4j.Logger;
@@ -44,13 +45,19 @@ import org.apache.kafka.common.network.Mode;
 public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
     private final KerberosShortNamer kerberosShortNamer;
+    private final JaasContext jaasContext;
 
-    public SaslServerCallbackHandler(KerberosShortNamer kerberosNameParser) throws IOException {
+    public SaslServerCallbackHandler(JaasContext jaasContext, KerberosShortNamer kerberosNameParser) throws IOException {
+        this.jaasContext = jaasContext;
         this.kerberosShortNamer = kerberosNameParser;
     }
 
     @Override
     public void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism) {
+    }
+
+    public JaasContext jaasContext() {
+        return jaasContext;
     }
 
     @Override

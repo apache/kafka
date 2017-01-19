@@ -33,16 +33,6 @@ public class JaasUtils {
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
     public static final String ZK_LOGIN_CONTEXT_NAME_KEY = "zookeeper.sasl.clientconfig";
 
-    /**
-     * Returns the configuration option for <code>key</code> from the server login context
-     * of the default JAAS configuration. If login module name is specified, return option value
-     * only from that module.
-     */
-    public static String defaultServerJaasConfigOption(String key, String loginContextName, String loginModuleName) {
-        JaasContext context = new JaasContext(loginContextName, JaasContext.Type.SERVER, Configuration.getConfiguration());
-        return context.configEntryOption(key, loginModuleName);
-    }
-
     public static String defaultKerberosRealm()
         throws ClassNotFoundException, NoSuchMethodException,
                IllegalArgumentException, IllegalAccessException,

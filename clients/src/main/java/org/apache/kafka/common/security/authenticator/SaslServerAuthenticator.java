@@ -129,7 +129,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
         if (!ScramMechanism.isScram(mechanism))
-            callbackHandler = new SaslServerCallbackHandler(kerberosNamer);
+            callbackHandler = new SaslServerCallbackHandler(jaasContext, kerberosNamer);
         else
             callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
