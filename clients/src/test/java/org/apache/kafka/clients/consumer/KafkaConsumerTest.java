@@ -365,7 +365,7 @@ public class KafkaConsumerTest {
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
 
-        MockClient client = new MockClient(time);
+        MockClient client = new MockClient(time, metadata);
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
@@ -1173,7 +1173,7 @@ public class KafkaConsumerTest {
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
 
-        MockClient client = new MockClient(time);
+        MockClient client = new MockClient(time, metadata);
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
@@ -1182,6 +1182,8 @@ public class KafkaConsumerTest {
 
         consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
+
+        client.prepareMetadataUpdate(cluster);
 
         // Poll with responses
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
