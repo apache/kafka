@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 
 public class CompatibilityTest {
     private static final Logger log = LoggerFactory.getLogger(CompatibilityTest.class);
@@ -179,15 +180,15 @@ public class CompatibilityTest {
     public void testProduce() throws Exception {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
-        CompatibilityTestSenderCompletion cb = new CompatibilityTestSenderCompletion();
         ByteArraySerializer serializer = new ByteArraySerializer();
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
         ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(testConfig.topic, message1);
-        producer.send(record1, cb);
+        Future<RecordMetadata> future1 = producer.send(record1, null);
         ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(testConfig.topic, message2);
-        producer.send(record2, cb);
+        Future<RecordMetadata> future2 = producer.send(record2, null);
         producer.flush();
-        cb.verify();
+        future1.get();
+        future2.get();
         producer.close();
     }
 
@@ -357,27 +358,4 @@ public class CompatibilityTest {
         }
         resultTester.run();
     }
-
-    private static class CompatibilityTestSenderCompletion implements Callback {
-        private final CountDownLatch latch = new CountDownLatch(1);
-        volatile private boolean done = false;
-        volatile private Exception exception;
-
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            this.done = true;
-            this.exception = exception;
-            latch.countDown();
-        }
-
-        void verify() throws Exception {
-            while (!done) {
-                latch.await();
-            }
-            if (exception != null) {
-                throw exception;
-            }
-        }
-    }
-
 }
