@@ -80,7 +80,7 @@ public class StreamsKafkaClient {
         reporters.add(new JmxReporter("kafka.admin"));
         final Metrics metrics = new Metrics(metricConfig, reporters, time);
 
-        final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig.values());
+        final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);
 
         final Selector selector = new Selector(streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, "kafka-client", channelBuilder);
 

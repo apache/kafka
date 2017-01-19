@@ -18,7 +18,6 @@
 
 package org.apache.kafka.common.security.plain;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
@@ -91,13 +90,12 @@ public class PlainSaslServer implements SaslServer {
         if (authorizationID.isEmpty())
             authorizationID = username;
 
-        try {
-            String expectedPassword = JaasUtils.defaultServerJaasConfigOption(JAAS_USER_PREFIX + username, PlainLoginModule.class.getName());
-            if (!password.equals(expectedPassword)) {
-                throw new SaslException("Authentication failed: Invalid username or password");
-            }
-        } catch (IOException e) {
-            throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
+        //FIXME We need to pass a loginContextName, but don't have one. It would be better to pass the JaasContext
+        //in the constructor and remove the need for `defaultServerJaasConfigOption`
+        String expectedPassword = JaasUtils.defaultServerJaasConfigOption(JAAS_USER_PREFIX + username, "KafkaServer",
+                PlainLoginModule.class.getName());
+        if (!password.equals(expectedPassword)) {
+            throw new SaslException("Authentication failed: Invalid username or password");
         }
         complete = true;
         return new byte[0];

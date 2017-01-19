@@ -35,7 +35,6 @@ import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.network.LoginType;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,7 +43,7 @@ import org.junit.Test;
  * Tests parsing of {@link SaslConfigs#SASL_JAAS_CONFIG} property and verifies that the format
  * and parsing are consistent with JAAS configuration files loaded by the JRE.
  */
-public class JaasUtilsTest {
+public class JaasContextTest {
 
     private File jaasConfigFile;
 
@@ -129,8 +128,9 @@ public class JaasUtilsTest {
         }
         String jaasConfigProp = builder.toString();
 
-        Configuration configuration = new JaasConfig(LoginType.CLIENT, jaasConfigProp);
-        AppConfigurationEntry[] dynamicEntries = configuration.getAppConfigurationEntry(LoginType.CLIENT.contextName());
+        String clientContextName = "CLIENT";
+        Configuration configuration = new JaasConfig(clientContextName, jaasConfigProp);
+        AppConfigurationEntry[] dynamicEntries = configuration.getAppConfigurationEntry(clientContextName);
         assertEquals(moduleCount, dynamicEntries.length);
 
         for (int i = 0; i < moduleCount; i++) {
@@ -138,8 +138,9 @@ public class JaasUtilsTest {
             checkEntry(entry, "test.Module" + i, LoginModuleControlFlag.REQUIRED, moduleOptions.get(i));
         }
 
-        writeConfiguration(LoginType.SERVER, jaasConfigProp);
-        AppConfigurationEntry[] staticEntries = Configuration.getConfiguration().getAppConfigurationEntry(LoginType.SERVER.contextName());
+        String serverContextName = "SERVER";
+        writeConfiguration(serverContextName, jaasConfigProp);
+        AppConfigurationEntry[] staticEntries = Configuration.getConfiguration().getAppConfigurationEntry(serverContextName);
         for (int i = 0; i < moduleCount; i++) {
             AppConfigurationEntry staticEntry = staticEntries[i];
             checkEntry(staticEntry, dynamicEntries[i].getLoginModuleName(), LoginModuleControlFlag.REQUIRED, dynamicEntries[i].getOptions());
@@ -179,14 +180,14 @@ public class JaasUtilsTest {
         checkConfiguration(config, "test.testNumericOptionWithQuotes", LoginModuleControlFlag.REQUIRED, options);
     }
 
-    private AppConfigurationEntry configurationEntry(LoginType loginType, String jaasConfigProp) {
+    private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {
         Map<String, Object> configs = new HashMap<>();
         if (jaasConfigProp != null)
             configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        Configuration configuration = JaasUtils.jaasConfig(loginType, configs);
-        AppConfigurationEntry[] entry = configuration.getAppConfigurationEntry(loginType.contextName());
-        assertEquals(1, entry.length);
-        return entry[0];
+        JaasContext context = JaasContext.load(contextType, null, contextType.name(), configs);
+        List<AppConfigurationEntry> entries = context.configurationEntries();
+        assertEquals(1, entries.size());
+        return entries.get(0);
     }
 
     private String controlFlag(LoginModuleControlFlag loginModuleControlFlag) {
@@ -210,8 +211,8 @@ public class JaasUtilsTest {
         return builder.toString();
     }
 
-    private void writeConfiguration(LoginType loginType, String jaasConfigProp) throws IOException {
-        List<String> lines = Arrays.asList(loginType.contextName() + " { ", jaasConfigProp, "};");
+    private void writeConfiguration(String contextName, String jaasConfigProp) throws IOException {
+        List<String> lines = Arrays.asList(contextName + " { ", jaasConfigProp, "};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
     }
@@ -228,25 +229,25 @@ public class JaasUtilsTest {
     }
 
     private void checkConfiguration(String jaasConfigProp, String loginModule, LoginModuleControlFlag controlFlag, Map<String, Object> options) throws Exception {
-        AppConfigurationEntry dynamicEntry = configurationEntry(LoginType.CLIENT, jaasConfigProp);
+        AppConfigurationEntry dynamicEntry = configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp);
         checkEntry(dynamicEntry, loginModule, controlFlag, options);
-        assertNull("Static configuration updated", Configuration.getConfiguration().getAppConfigurationEntry(LoginType.CLIENT.contextName()));
+        assertNull("Static configuration updated", Configuration.getConfiguration().getAppConfigurationEntry(JaasContext.Type.CLIENT.name()));
 
-        writeConfiguration(LoginType.SERVER, jaasConfigProp);
-        AppConfigurationEntry staticEntry = configurationEntry(LoginType.SERVER, null);
+        writeConfiguration(JaasContext.Type.SERVER.name(), jaasConfigProp);
+        AppConfigurationEntry staticEntry = configurationEntry(JaasContext.Type.SERVER, null);
         checkEntry(staticEntry, loginModule, controlFlag, options);
     }
 
     private void checkInvalidConfiguration(String jaasConfigProp) throws IOException {
         try {
-            writeConfiguration(LoginType.SERVER, jaasConfigProp);
-            AppConfigurationEntry entry = configurationEntry(LoginType.SERVER, null);
+            writeConfiguration(JaasContext.Type.SERVER.name(), jaasConfigProp);
+            AppConfigurationEntry entry = configurationEntry(JaasContext.Type.SERVER, null);
             fail("Invalid JAAS configuration file didn't throw exception, entry=" + entry);
         } catch (SecurityException e) {
             // Expected exception
         }
         try {
-            AppConfigurationEntry entry = configurationEntry(LoginType.CLIENT, jaasConfigProp);
+            AppConfigurationEntry entry = configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp);
             fail("Invalid JAAS configuration property didn't throw exception, entry=" + entry);
         } catch (IllegalArgumentException e) {
             // Expected exception

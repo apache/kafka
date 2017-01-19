@@ -226,7 +226,7 @@ object AdminClient {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata
-    val channelBuilder = ClientUtils.createChannelBuilder(config.values())
+    val channelBuilder = ClientUtils.createChannelBuilder(config)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)

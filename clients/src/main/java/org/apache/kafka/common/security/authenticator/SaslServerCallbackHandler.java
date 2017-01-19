@@ -29,14 +29,11 @@ import org.slf4j.LoggerFactory;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.JaasUtils;
 
 /**
  * Callback handler for Sasl servers. The callbacks required for all the SASL
@@ -48,10 +45,7 @@ public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
     private final KerberosShortNamer kerberosShortNamer;
 
-    public SaslServerCallbackHandler(Configuration configuration, KerberosShortNamer kerberosNameParser) throws IOException {
-        AppConfigurationEntry[] configurationEntries = configuration.getAppConfigurationEntry(JaasUtils.LOGIN_CONTEXT_SERVER);
-        if (configurationEntries == null)
-            throw new IOException("Could not find a 'KafkaServer' entry in this configuration: Kafka Server cannot start.");
+    public SaslServerCallbackHandler(KerberosShortNamer kerberosNameParser) throws IOException {
         this.kerberosShortNamer = kerberosNameParser;
     }
 
