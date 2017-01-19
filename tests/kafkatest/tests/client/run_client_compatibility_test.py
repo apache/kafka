@@ -45,15 +45,15 @@ def run_command(node, cmd, ssh_log_file):
             raise e
 
 
-class RunCompatibilityTest(Test):
+class RunClientCompatibilityTest(Test):
     """
-    Test running the CompatibilityTest.  It will test for the presence or
+    Test running the ClientCompatibilityTest.  It will test for the presence or
     absence of specific features.
     """
 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(RunCompatibilityTest, self).__init__(test_context=test_context)
+        super(RunClientCompatibilityTest, self).__init__(test_context=test_context)
 
         self.zk = ZookeeperService(test_context, num_nodes=3)
         self.topics = { "test_topic": {
@@ -65,7 +65,7 @@ class RunCompatibilityTest(Test):
     def invoke_compatibility_program(self, features):
         # Run the compatibility test on the first Kafka node.
         node = self.zk.nodes[0]
-        cmd = ("%s org.apache.kafka.tools.CompatibilityTest "
+        cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
                "--offsets-for-times-supported %s "
                "--cluster-id-supported %s "

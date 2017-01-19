@@ -53,8 +53,13 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.concurrent.Future;
 
-public class CompatibilityTest {
-    private static final Logger log = LoggerFactory.getLogger(CompatibilityTest.class);
+/**
+ * ClientCompatibilityTest is invoked by the ducktape test run_compatibility_test.py to validate
+ * client behavior when various broker versions are in use.  It runs various
+ * client operations and tests whether they are supported or not.
+ */
+public class ClientCompatibilityTest {
+    private static final Logger log = LoggerFactory.getLogger(ClientCompatibilityTest.class);
 
     static class TestConfig {
         final String bootstrapServer;
@@ -116,9 +121,9 @@ public class CompatibilityTest {
             }
         }
         TestConfig testConfig = new TestConfig(res);
-        CompatibilityTest compatibilityTest = new CompatibilityTest(testConfig);
+        ClientCompatibilityTest test = new ClientCompatibilityTest(testConfig);
         try {
-            compatibilityTest.run();
+            test.run();
         } catch (Throwable t) {
             System.out.printf("FAILED: Caught exception %s\n\n", t.getMessage());
             t.printStackTrace();
@@ -162,7 +167,7 @@ public class CompatibilityTest {
 
     private final byte[] message2;
 
-    CompatibilityTest(TestConfig testConfig) {
+    ClientCompatibilityTest(TestConfig testConfig) {
         this.testConfig = testConfig;
         long curTime = Time.SYSTEM.milliseconds();
         this.message1 = asByteArray(curTime);
@@ -199,10 +204,10 @@ public class CompatibilityTest {
         }
     }
 
-    public static class CompatibilityTestDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
+    public static class ClientCompatibilityTestDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
         private final boolean expectClusterId;
 
-        CompatibilityTestDeserializer(boolean expectClusterId) {
+        ClientCompatibilityTestDeserializer(boolean expectClusterId) {
             this.expectClusterId = expectClusterId;
         }
 
@@ -240,7 +245,8 @@ public class CompatibilityTest {
     public void testConsume(final long prodTimeMs) throws Exception {
         Properties consumerProps = new Properties();
         consumerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
-        CompatibilityTestDeserializer deserializer = new CompatibilityTestDeserializer(testConfig.expectClusterId);
+        ClientCompatibilityTestDeserializer deserializer =
+            new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
         final KafkaConsumer<byte[], byte[]> consumer =
                 new KafkaConsumer<byte[], byte[]>(consumerProps, deserializer, deserializer);
         final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
