@@ -23,13 +23,17 @@ import java.util.Collections;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Random;
 
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Test;
 
+
+import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
-import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -162,7 +166,7 @@ public class UtilsTest {
     }
 
     @Test
-    public void testReadFully() throws IOException {
+    public void testReadFullyWithRealFile() throws IOException {
         RandomAccessFile raf = new RandomAccessFile(TestUtils.tempFile(), "rw");
         FileChannel channel = raf.getChannel();
         try {
@@ -192,6 +196,56 @@ public class UtilsTest {
             channel.close();
             raf.close();
         }
+    }
+
+    @Test
+    public void testReadFullyWithMultiReads() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        final int step = 20;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        final Random random = new Random();
+        int totalMockedBytesRead = 0;
+
+        while (true) {
+            int diff = bufferSize - totalMockedBytesRead;
+            if (diff <= 0) {
+                break;
+            }
+            // If the remaining byte number is less than a step,
+            // directly assign the last mocked bytes read to fix `bufferSize` exactly
+            final int mockedBytesRead = (diff < step) ? diff : random.nextInt(step);
+            EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {
+                @Override
+                public Integer answer() throws Throwable {
+                    ByteBuffer buffer = (ByteBuffer) EasyMock.getCurrentArguments()[0];
+                    Long pos = (Long) EasyMock.getCurrentArguments()[1];
+                    buffer.position(pos.intValue() + mockedBytesRead);
+                    return mockedBytesRead;
+                }
+            });
+            totalMockedBytesRead += mockedBytesRead;
+        }
+
+        EasyMock.replay(channelMock);
+        Utils.readFully(channelMock, buffer, 0L);
+        EasyMock.verify(channelMock);
+    }
+
+    @Test
+    public void testReadFullyThrowIOExceptionForEOF() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        ByteBuffer buffer = ByteBuffer.allocate(12);
+        EasyMock.expect(channelMock.read(buffer, 0L)).andReturn(-1);
+        EasyMock.replay(channelMock);
+
+        try {
+            Utils.readFully(channelMock, buffer, 0L);
+            fail("Expected IOException to be raised");
+        } catch (IOException e) {
+            // expected
+        }
+        EasyMock.verify(channelMock);
     }
 
     private static class TestCloseable implements Closeable {
