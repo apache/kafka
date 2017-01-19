@@ -68,17 +68,17 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         PRIMITIVE_VALUE_MAPPING.put(String.class, "");
     }
 
-    private Set<String> fields;
+    private Set<String> maskedFields;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        fields = new HashSet<>(config.getList(FIELDS_CONFIG));
+        maskedFields = new HashSet<>(config.getList(FIELDS_CONFIG));
     }
 
     @Override
     public R apply(R record) {
-        if (fields.isEmpty()) return record;
+        if (maskedFields.isEmpty()) return record;
 
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
@@ -90,7 +90,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
     private R applySchemaless(R record) {
         final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
         final HashMap<String, Object> updatedValue = new HashMap<>(value);
-        for (String field : fields) {
+        for (String field : maskedFields) {
             updatedValue.put(field, masked(value.get(field)));
         }
         return updatedRecord(record, updatedValue);
@@ -101,7 +101,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         final Struct updatedValue = new Struct(value.schema());
         for (Field field : value.schema().fields()) {
             final Object origFieldValue = value.get(field);
-            updatedValue.put(field, fields.contains(field.name()) ? masked(origFieldValue) : origFieldValue);
+            updatedValue.put(field, maskedFields.contains(field.name()) ? masked(origFieldValue) : origFieldValue);
         }
         return updatedRecord(record, updatedValue);
     }
