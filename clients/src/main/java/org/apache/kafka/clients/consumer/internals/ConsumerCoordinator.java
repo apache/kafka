@@ -323,8 +323,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
         // when these topics gets updated from metadata refresh.
         Set<String> assignedTopics = new HashSet<>();
-        for (String topic : assignment.keySet()) {
-            assignedTopics.add(topic);
+        for (Assignment assigned : assignment.values()) {
+            for (TopicPartition tp : assigned.partitions())
+                assignedTopics.add(tp.topic());
         }
 
         if (!assignedTopics.containsAll(allSubscribedTopics)) {
