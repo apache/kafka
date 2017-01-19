@@ -12,11 +12,14 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.ScatteringByteChannel;
+import java.util.regex.Pattern;
 
 /**
  * A size delimited Receive that consists of a 4 byte network-ordered size N followed by N bytes of content
@@ -30,6 +33,13 @@ public class NetworkReceive implements Receive {
     private final ByteBuffer size;
     private final int maxSize;
     private ByteBuffer buffer;
+
+    private boolean ensureThrough = false;
+    private ByteBuffer tempOverBuf;
+    /**
+     * Supporting TLSv1, TLSv1.1 and TLSv1.2
+     */
+    private final static Pattern SSL_HANDSHAKE_ALERT = Pattern.compile("15030[123]00");
 
 
     public NetworkReceive(String source, ByteBuffer buffer) {
@@ -82,6 +92,9 @@ public class NetworkReceive implements Receive {
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
+
+            ensureNotHandshakeFailurePacket(channel, size);
+
             if (!size.hasRemaining()) {
                 size.rewind();
                 int receiveSize = size.getInt();
@@ -92,6 +105,11 @@ public class NetworkReceive implements Receive {
 
                 this.buffer = ByteBuffer.allocate(receiveSize);
             }
+        }
+        if (tempOverBuf != null) {
+            buffer.put(tempOverBuf);
+            read += 1024;
+            tempOverBuf = null;
         }
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
@@ -107,4 +125,23 @@ public class NetworkReceive implements Receive {
         return this.buffer;
     }
 
+    // We determine if a peer connection uses SSL/TLS by seeing from the first few bytes.
+    private void ensureNotHandshakeFailurePacket(ReadableByteChannel channel, ByteBuffer size) throws IOException {
+        if (ensureThrough)
+            return;
+        ensureThrough = true;
+        String head = Utils.hexToString(size.array());
+        if (SSL_HANDSHAKE_ALERT.matcher(head).find()) {
+            // Actually, SSL record size is 2 bytes, but head byte is already read.
+            ByteBuffer recordSizeBuf = ByteBuffer.allocate(1);
+            channel.read(recordSizeBuf);
+            recordSizeBuf.rewind();
+            // If the data exceeding the SSL record size is read, this packet is correct.
+            tempOverBuf = ByteBuffer.allocate(1024);
+            int bytesRead = channel.read(tempOverBuf);
+            if (bytesRead == recordSizeBuf.get()) {
+                throw new InvalidTransportLayerException("Destination connection may be SSL/TLS");
+            }
+        }
+    }
 }

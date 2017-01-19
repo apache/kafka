@@ -57,6 +57,8 @@ public class Utils {
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
+    private static final char[] HEX_TO_CHAR = "0123456789ABCDEF".toCharArray();
+
     /**
      * Get a sorted list representation of a collection.
      * @param collection The collection to sort
@@ -803,4 +805,17 @@ public class Utils {
         return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
+    /**
+     * Convert byte array into a string
+     * @param data Byte array to convert into a string
+     * @return A string
+     */
+    public static String hexToString(byte[] data) {
+        StringBuilder r = new StringBuilder(data.length * 2);
+        for (byte b : data) {
+            r.append(HEX_TO_CHAR[(b >> 4) & 0xF]);
+            r.append(HEX_TO_CHAR[b & 0xF]);
+        }
+        return r.toString();
+    }
 }
