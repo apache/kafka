@@ -129,7 +129,7 @@ public class ClientCompatibilityTest {
             t.printStackTrace();
             System.exit(1);
         }
-        System.out.printf("SUCCESS.\n");
+        System.out.println("SUCCESS.");
         System.exit(0);
     }
 
@@ -336,7 +336,7 @@ public class ClientCompatibilityTest {
             compareArrays(message2, next);
             log.debug("Found second message...");
         } catch (RuntimeException e) {
-            throw new RuntimeException("The first message in this topic was not ours.  Please use a new " +
+            throw new RuntimeException("The second message in this topic was not ours.  Please use a new " +
                 "topic when running this program.\n");
         }
         log.debug("Closing consumer.");
