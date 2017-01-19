@@ -29,6 +29,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.apache.kafka.connect.transforms.util.SchemaUtil;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -165,24 +166,31 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
         final Struct updatedValue = new Struct(updatedSchema);
 
-        copyFields(value, updatedValue);
+        for (Field field : value.schema().fields()) {
+            updatedValue.put(field.name(), value.get(field));
+        }
 
-        insertFields(record, updatedValue);
+        if (topicField != null) {
+            updatedValue.put(topicField.name, record.topic());
+        }
+        if (partitionField != null && record.kafkaPartition() != null) {
+            updatedValue.put(partitionField.name, record.kafkaPartition());
+        }
+        if (offsetField != null) {
+            updatedValue.put(offsetField.name, requireSinkRecord(record, PURPOSE).kafkaOffset());
+        }
+        if (timestampField != null && record.timestamp() != null) {
+            updatedValue.put(timestampField.name, new Date(record.timestamp()));
+        }
+        if (staticField != null && staticValue != null) {
+            updatedValue.put(staticField.name, staticValue);
+        }
 
         return newRecord(record, updatedSchema, updatedValue);
     }
 
     private Schema makeUpdatedSchema(Schema schema) {
-        final SchemaBuilder builder = SchemaBuilder.struct();
-
-        builder.name(schema.name());
-        builder.version(schema.version());
-        builder.doc(schema.doc());
-
-        final Map<String, String> params = schema.parameters();
-        if (params != null) {
-            builder.parameters(params);
-        }
+        final SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
 
         for (Field field : schema.fields()) {
             builder.field(field.name(), field.schema());
@@ -205,30 +213,6 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         }
 
         return builder.build();
-    }
-
-    private void copyFields(Struct value, Struct updatedValue) {
-        for (Field field : value.schema().fields()) {
-            updatedValue.put(field.name(), value.get(field));
-        }
-    }
-
-    private void insertFields(R record, Struct value) {
-        if (topicField != null) {
-            value.put(topicField.name, record.topic());
-        }
-        if (partitionField != null && record.kafkaPartition() != null) {
-            value.put(partitionField.name, record.kafkaPartition());
-        }
-        if (offsetField != null) {
-            value.put(offsetField.name, requireSinkRecord(record, PURPOSE).kafkaOffset());
-        }
-        if (timestampField != null && record.timestamp() != null) {
-            value.put(timestampField.name, new Date(record.timestamp()));
-        }
-        if (staticField != null && staticValue != null) {
-            value.put(staticField.name, staticValue);
-        }
     }
 
     @Override

@@ -75,7 +75,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 isMap ? schema.keySchema() : null,
                 isMap || isArray ? schema.valueSchema() : null
         );
-        return updatedRecord(record, updatedSchema);
+        return newRecord(record, updatedSchema);
     }
 
     @Override
@@ -89,7 +89,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
     protected abstract Schema operatingSchema(R record);
 
-    protected abstract R updatedRecord(R record, Schema updatedSchema);
+    protected abstract R newRecord(R record, Schema updatedSchema);
 
     /**
      * Set the schema name, version or both on the record's key schema.
@@ -101,7 +101,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         }
 
         @Override
-        protected R updatedRecord(R record, Schema updatedSchema) {
+        protected R newRecord(R record, Schema updatedSchema) {
             return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, record.key(), record.valueSchema(), record.value(), record.timestamp());
         }
     }
@@ -116,7 +116,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         }
 
         @Override
-        protected R updatedRecord(R record, Schema updatedSchema) {
+        protected R newRecord(R record, Schema updatedSchema) {
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, record.value(), record.timestamp());
         }
     }

@@ -92,7 +92,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         for (String field : maskedFields) {
             updatedValue.put(field, masked(value.get(field)));
         }
-        return updatedRecord(record, updatedValue);
+        return newRecord(record, updatedValue);
     }
 
     private R applyWithSchema(R record) {
@@ -102,7 +102,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
             final Object origFieldValue = value.get(field);
             updatedValue.put(field, maskedFields.contains(field.name()) ? masked(origFieldValue) : origFieldValue);
         }
-        return updatedRecord(record, updatedValue);
+        return newRecord(record, updatedValue);
     }
 
     private static Object masked(Object value) {
@@ -133,7 +133,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     protected abstract Object operatingValue(R record);
 
-    protected abstract R updatedRecord(R base, Object value);
+    protected abstract R newRecord(R base, Object value);
 
     public static final class Key<R extends ConnectRecord<R>> extends MaskField<R> {
         @Override
@@ -147,7 +147,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         }
 
         @Override
-        protected R updatedRecord(R record, Object updatedValue) {
+        protected R newRecord(R record, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), updatedValue, record.valueSchema(), record.value(), record.timestamp());
         }
     }
@@ -164,7 +164,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         }
 
         @Override
-        protected R updatedRecord(R record, Object updatedValue) {
+        protected R newRecord(R record, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), record.valueSchema(), updatedValue, record.timestamp());
         }
     }
