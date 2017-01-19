@@ -52,20 +52,20 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private static final String PURPOSE = "mask fields";
 
-    private static final Map<String, Object> PRIMITIVE_VALUE_MAPPING = new HashMap<>();
+    private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = new HashMap<>();
 
     static {
-        PRIMITIVE_VALUE_MAPPING.put(Boolean.class.getCanonicalName(), Boolean.FALSE);
-        PRIMITIVE_VALUE_MAPPING.put(Byte.class.getCanonicalName(), (byte) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Short.class.getCanonicalName(), (short) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Integer.class.getCanonicalName(), 0);
-        PRIMITIVE_VALUE_MAPPING.put(Long.class.getCanonicalName(), 0L);
-        PRIMITIVE_VALUE_MAPPING.put(Float.class.getCanonicalName(), 0f);
-        PRIMITIVE_VALUE_MAPPING.put(Double.class.getCanonicalName(), 0d);
-        PRIMITIVE_VALUE_MAPPING.put(BigInteger.class.getCanonicalName(), BigInteger.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(BigDecimal.class.getCanonicalName(), BigDecimal.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(Date.class.getCanonicalName(), new Date(0));
-        PRIMITIVE_VALUE_MAPPING.put(String.class.getCanonicalName(), "");
+        PRIMITIVE_VALUE_MAPPING.put(Boolean.class, Boolean.FALSE);
+        PRIMITIVE_VALUE_MAPPING.put(Byte.class, (byte) 0);
+        PRIMITIVE_VALUE_MAPPING.put(Short.class, (short) 0);
+        PRIMITIVE_VALUE_MAPPING.put(Integer.class, 0);
+        PRIMITIVE_VALUE_MAPPING.put(Long.class, 0L);
+        PRIMITIVE_VALUE_MAPPING.put(Float.class, 0f);
+        PRIMITIVE_VALUE_MAPPING.put(Double.class, 0d);
+        PRIMITIVE_VALUE_MAPPING.put(BigInteger.class, BigInteger.ZERO);
+        PRIMITIVE_VALUE_MAPPING.put(BigDecimal.class, BigDecimal.ZERO);
+        PRIMITIVE_VALUE_MAPPING.put(Date.class, new Date(0));
+        PRIMITIVE_VALUE_MAPPING.put(String.class, "");
     }
 
     private Set<String> fields;
@@ -109,7 +109,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
     private static Object masked(Object value) {
         if (value == null)
             return null;
-        Object maskedValue = PRIMITIVE_VALUE_MAPPING.get(value.getClass().getCanonicalName());
+        Object maskedValue = PRIMITIVE_VALUE_MAPPING.get(value.getClass());
         if (maskedValue == null) {
             if (value instanceof List)
                 maskedValue = Collections.emptyList();
