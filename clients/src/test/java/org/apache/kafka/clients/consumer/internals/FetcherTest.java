@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -314,6 +315,32 @@ public class FetcherTest {
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
         assertEquals(30L, consumerRecords.get(2).offset());
+    }
+
+    /**
+     * Test the case where the client makes a FetchRequest, but the server replies with only a partial request.
+     * Prior to KIP-74, this would always happen when a single message was larger than the per-partition limit.
+     * The implementation of KIP-74 changed the behavior so that at least one message was always returned.
+     */
+    @Test
+    public void testFetchRequestWhenRecordTooBig() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        MemoryRecords partialRecord = MemoryRecords.readableRecords(
+                ByteBuffer.wrap(new byte[]{0, 0, 0, 0, 0, 0, 0, 0}));
+        client.prepareResponse(fetchResponse(partialRecord, Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+        try {
+            List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
+            assertEquals(0, consumerRecords.size());
+            fail("RecordTooLargeException should have been raised");
+        } catch (RecordTooLargeException e) {
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp).longValue());
+        }
     }
 
     @Test
