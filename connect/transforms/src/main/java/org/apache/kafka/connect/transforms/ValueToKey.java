@@ -36,7 +36,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
 
 public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String OVERVIEW_DOC = "Copy fields from the record value to the record key. The existing record key if any is clobbered.";
+    public static final String OVERVIEW_DOC = "Replace the record key with a new key formed from a subset of fields in the record value.";
 
     public static final String FIELDS_CONFIG = "fields";
 
