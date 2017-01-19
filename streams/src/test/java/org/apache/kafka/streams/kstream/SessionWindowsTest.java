@@ -27,13 +27,13 @@ import static org.junit.Assert.fail;
 public class SessionWindowsTest {
 
     @Test
-    public void testGap() {
+    public void shouldSetWindowGap() {
         final long anyGap = 42L;
         assertEquals(anyGap, SessionWindows.with(anyGap).inactivityGap());
     }
 
     @Test
-    public void testUntil() {
+    public void shouldSetWindowRetentionTime() {
         final long anyRetentionTime = 42L;
         assertEquals(anyRetentionTime, SessionWindows.with(1).until(anyRetentionTime).maintainMs());
     }
@@ -49,7 +49,7 @@ public class SessionWindowsTest {
     }
 
     @Test
-    public void testMaintainMsForLargeWindowGap() {
+    public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
         final long windowGap = 2 * Windows.DEFAULT_MAINTAIN_DURATION;
         assertEquals(windowGap, SessionWindows.with(windowGap).maintainMs());
     }

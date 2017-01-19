@@ -33,7 +33,7 @@ public class UnlimitedWindowsTest {
     private static long anyStartTime = 10L;
 
     @Test
-    public void testStart() {
+    public void shouldSetWindowStartTime() {
         assertEquals(anyStartTime, UnlimitedWindows.of().startOn(anyStartTime).start);
     }
 

@@ -44,6 +44,7 @@ public abstract class Windows<W extends Window> {
      *
      * @return  itself
      */
+    // This should always get overridden to provide the correct return type and thus to avoid a cast
     public Windows<W> until(final long duration) throws IllegalArgumentException {
         if (duration < 0) {
             throw new IllegalArgumentException("Window maintain duration cannot be negative.");

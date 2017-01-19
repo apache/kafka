@@ -38,13 +38,13 @@ public class WindowsTest {
     }
 
     @Test
-    public void testSegments() {
+    public void shouldSetNumberOfSegments() {
         final int anySegmentSizeLargerThanOne = 5;
         assertEquals(anySegmentSizeLargerThanOne, new TestWindows().segments(anySegmentSizeLargerThanOne).segments);
     }
 
     @Test
-    public void testUntil() {
+    public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
         assertEquals(anyNotNegativeRetentionTime, new TestWindows().until(anyNotNegativeRetentionTime).maintainMs());
     }

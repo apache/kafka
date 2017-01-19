@@ -93,7 +93,7 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public Windows<UnlimitedWindow> until(final long duration) {
+    public UnlimitedWindows until(final long duration) {
         throw new IllegalArgumentException("Window retention time (duration) cannot be set for UnlimitedWindows.");
     }
 

@@ -33,23 +33,23 @@ public class TimeWindowsTest {
     private static final long ANY_SIZE = 123L;
 
     @Test
-    public void testSize() {
+    public void shouldSetWindowSize() {
         assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).size);
     }
 
     @Test
-    public void testAdvance() {
+    public void shouldSetWindowAdvance() {
         final long anyAdvance = 4;
         assertEquals(anyAdvance, TimeWindows.of(ANY_SIZE).advanceBy(anyAdvance).advance);
     }
 
     @Test
-    public void testUntil() {
+    public void shouldSetWindowRetentionTime() {
         assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).until(ANY_SIZE).maintainMs());
     }
 
     @Test
-    public void testMaintainMsForLargeWindowSize() {
+    public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
         final long windowSize = 2 * Windows.DEFAULT_MAINTAIN_DURATION;
         assertEquals(windowSize, TimeWindows.of(windowSize).maintainMs());
     }
@@ -141,7 +141,7 @@ public class TimeWindowsTest {
     }
 
     @Test
-    public void windowsForHoppingWindows() {
+    public void shouldComputeWindowsForHoppingWindows() {
         TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(12L / 5L + 1, matched.size());
@@ -151,7 +151,7 @@ public class TimeWindowsTest {
     }
 
     @Test
-    public void windowsForBarelyOverlappingHoppingWindows() {
+    public void shouldComputeWindowsForBarelyOverlappingHoppingWindows() {
         TimeWindows windows = TimeWindows.of(6L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(7L);
         assertEquals(1, matched.size());
@@ -159,7 +159,7 @@ public class TimeWindowsTest {
     }
 
     @Test
-    public void windowsForTumblingWindows() {
+    public void shouldComputeWindowsForTumblingWindows() {
         TimeWindows windows = TimeWindows.of(12L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(1, matched.size());

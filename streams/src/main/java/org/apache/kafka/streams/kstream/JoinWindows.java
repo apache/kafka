@@ -104,7 +104,7 @@ public class JoinWindows extends Windows<Window> {
     }
 
     @Override
-    public Windows<Window> until(final long duration) throws IllegalArgumentException {
+    public JoinWindows until(final long duration) throws IllegalArgumentException {
         if (duration < size()) {
             throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window " +
                 "size.");

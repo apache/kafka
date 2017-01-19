@@ -111,7 +111,7 @@ public class TimeWindows extends Windows<TimeWindow> {
         return size;
     }
 
-    public Windows<TimeWindow> until(final long duration) throws IllegalArgumentException {
+    public TimeWindows until(final long duration) throws IllegalArgumentException {
         if (duration < size) {
             throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window " +
                 "size.");
