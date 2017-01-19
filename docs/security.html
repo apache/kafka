@@ -270,7 +270,7 @@
                     a login module in <tt>KafkaClient</tt> for the selected mechanism as described in the examples
                     for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
                     <a href="#security_sasl_plain_clientconfig">PLAIN</a> or
-                    <a href="#security_sasl_scram_clientconfig">SCRAM</a></li>.
+                    <a href="#security_sasl_scram_clientconfig">SCRAM</a>.
                     For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
                     credentials may be configured as:
                     <pre>
@@ -582,7 +582,7 @@
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
 	        The following is an example configuration for a client for the SCRAM mechanisms:
                 <pre>
-   asl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="alice" \
         password="alice-secret";</pre>
 
