@@ -25,6 +25,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashMap;
@@ -41,7 +42,7 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public static final String FIELDS_CONFIG = "fields";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.HIGH,
+            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH,
                     "Field names on the record value to extract as the record key.");
 
     private static final String PURPOSE = "copying fields from value to key";

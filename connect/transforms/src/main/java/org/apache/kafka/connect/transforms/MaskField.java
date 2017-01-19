@@ -18,11 +18,13 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
@@ -48,7 +50,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
     private static final String FIELDS_CONFIG = "fields";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, "", ConfigDef.Importance.HIGH, "Names of fields to mask.");
+            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH, "Names of fields to mask.");
 
     private static final String PURPOSE = "mask fields";
 
@@ -78,8 +80,6 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     @Override
     public R apply(R record) {
-        if (maskedFields.isEmpty()) return record;
-
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {

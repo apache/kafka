@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Schema;
@@ -50,11 +51,14 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         schemaName = config.getString(ConfigName.SCHEMA_NAME);
         schemaVersion = config.getInt(ConfigName.SCHEMA_VERSION);
+
+        if (schemaName == null && schemaVersion == null) {
+            throw new ConfigException("Neither schema name nor version configured");
+        }
     }
 
     @Override
     public R apply(R record) {
-        if (schemaName == null && schemaVersion == null) return record; // no-op
         final Schema schema = operatingSchema(record);
         requireSchema(schema, "updating schema metadata");
         final boolean isArray = schema.type() == Schema.Type.ARRAY;

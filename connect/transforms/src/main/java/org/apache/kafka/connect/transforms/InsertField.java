@@ -21,6 +21,7 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -100,7 +101,6 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private InsertionSpec timestampField;
     private InsertionSpec staticField;
     private String staticValue;
-    private boolean applicable;
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -113,15 +113,16 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
         staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
         staticValue = config.getString(ConfigName.STATIC_VALUE);
-        applicable = topicField != null || partitionField != null || offsetField != null || timestampField != null;
+
+        if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
+            throw new ConfigException("No field insertion configured");
+        }
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
     }
 
     @Override
     public R apply(R record) {
-        if (!applicable) return record;
-
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {

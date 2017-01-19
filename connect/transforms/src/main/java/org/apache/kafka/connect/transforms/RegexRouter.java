@@ -19,6 +19,7 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.transforms.util.RegexValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
@@ -32,7 +33,7 @@ public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R
             + "If the pattern matches the input topic, <code>java.util.regex.Matcher#replaceFirst()</code> is used with the replacement string to obtain the new topic.";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(ConfigName.REGEX, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.HIGH,
+            .define(ConfigName.REGEX, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new RegexValidator(), ConfigDef.Importance.HIGH,
                     "Regular expression to use for matching.")
             .define(ConfigName.REPLACEMENT, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.HIGH,
                     "Replacement string.");
