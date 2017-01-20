@@ -215,6 +215,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
+        this.joinedSubscription = subscriptions.subscription();
 
         // update the metadata and enforce a refresh to make sure the fetcher can start
         // fetching data in the next iteration
