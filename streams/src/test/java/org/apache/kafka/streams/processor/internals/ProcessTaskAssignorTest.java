@@ -203,6 +203,22 @@ public class ProcessTaskAssignorTest {
         assertThat(consumerCAssignment.standbyTasks.size(), equalTo(1));
     }
 
+    @Test
+    public void shouldKeepActiveTaskStickynessWhenMoreConsumersThanActiveTasks() throws Exception {
+        metadata.addConsumer(consumerA, new SubscriptionInfo(processId, Utils.mkSet(task00), Utils.mkSet(task10), null));
+        metadata.addConsumer(consumerB, new SubscriptionInfo(processId, Utils.mkSet(task01), Utils.mkSet(task11), null));
+        metadata.addConsumer(consumerC, new SubscriptionInfo(processId, Utils.mkSet(task02), Utils.mkSet(task12), null));
+        metadata.addConsumer("D", emptySubscription);
+        metadata.addConsumer("E", emptySubscription);
+        final Map<String, PartitionAssignor.Assignment> assignment = assignor.assign();
+        final AssignmentInfo consumerAAssignment = AssignmentInfo.decode(assignment.get(consumerA).userData());
+        final AssignmentInfo consumerBAssignment = AssignmentInfo.decode(assignment.get(consumerB).userData());
+        final AssignmentInfo consumerCAssignment = AssignmentInfo.decode(assignment.get(consumerC).userData());
+        assertThat(consumerAAssignment.activeTasks, hasItems(task00));
+        assertThat(consumerBAssignment.activeTasks, hasItems(task01));
+        assertThat(consumerCAssignment.activeTasks, hasItems(task02));
+    }
+
     private List<TopicPartition> allAssignedStandbyPartitions(final Map<String, PartitionAssignor.Assignment> assignments) {
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
         for (final PartitionAssignor.Assignment assignment : assignments.values()) {

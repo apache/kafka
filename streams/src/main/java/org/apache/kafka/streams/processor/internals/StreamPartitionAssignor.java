@@ -543,19 +543,22 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                         final ClientState<TaskId> processState,
                                         final Map<String, Map<TaskId, Set<TopicPartition>>> standbyAssignment,
                                         final Map<TaskId, String> previousStandbyTaskAssignment) {
-            final int standbyTasksPerConsumer = processState.standbyTasks.size() / consumers.size();
-            int standbyTaskRemainder = processState.standbyTasks.size() - standbyTasksPerConsumer * consumers.size();
-
-            for (int i = 0; i < standbyTasksPerConsumer; i++) {
+            int tasksPerConsumer = processState.standbyTasks.size() / consumers.size();
+            int remainder = processState.standbyTasks.size() - tasksPerConsumer * consumers.size();
+            if (tasksPerConsumer == 0) {
+                tasksPerConsumer = 1;
+                remainder = 0;
+            }
+            for (int i = 0; i < tasksPerConsumer; i++) {
                 for (final Iterator<TaskId> iterator = processState.standbyTasks.iterator(); iterator.hasNext(); ) {
                     final TaskId standbyTask = iterator.next();
                     String consumer = previousStandbyTaskAssignment.get(standbyTask);
                     if (consumer == null) {
                         consumer = leastLoadedStandby(standbyAssignment);
-                    } else if (standbyAssignment.get(consumer).size() >= standbyTasksPerConsumer && standbyTaskRemainder == 0) {
+                    } else if (standbyAssignment.get(consumer).size() >= tasksPerConsumer && remainder == 0) {
                         consumer = leastLoadedStandby(standbyAssignment);
-                    } else if (standbyAssignment.get(consumer).size() == standbyTasksPerConsumer && standbyTaskRemainder > 0) {
-                        standbyTaskRemainder--;
+                    } else if (standbyAssignment.get(consumer).size() == tasksPerConsumer && remainder > 0) {
+                        remainder--;
                     }
                     standbyAssignment.get(consumer).put(standbyTask, partitionsForTask.get(standbyTask));
                     iterator.remove();
@@ -573,8 +576,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                        final Map<String, List<AssignedPartition>> activeAssignment,
                                        final Map<TaskId, String> previousActiveTaskAssignment,
                                        final Map<TaskId, String> previousStandbyTaskAssignment) {
-            final int taskPerConsumer = processState.activeTasks.size() / consumers.size();
+            int taskPerConsumer = processState.activeTasks.size() / consumers.size();
             int remainder = processState.activeTasks.size() - taskPerConsumer * consumers.size();
+            if (taskPerConsumer == 0) {
+                taskPerConsumer = 1;
+                remainder = 0;
+            }
             for (int i = 0; i < taskPerConsumer; i++) {
                 for (final Iterator<TaskId> iterator = processState.activeTasks.iterator(); iterator.hasNext(); ) {
                     final TaskId next = iterator.next();
