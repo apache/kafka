@@ -290,13 +290,10 @@ public class NetworkClient implements KafkaClient {
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
                 if ((!discoverBrokerVersions) && (log.isTraceEnabled()))
-                    log.trace("No version information found when sending message of type {} to node {}",
-                            clientRequest.apiKey(), nodeId);
+                    log.trace("No version information found when sending message of type {} to node {}.  " +
+                            "Assuming version {}.", clientRequest.apiKey(), nodeId, builder.version());
             } else {
                 short version = versionInfo.usableVersion(clientRequest.apiKey());
-                if (log.isTraceEnabled())
-                    log.trace("When sending message of type {} to node {}, the best usable version is {}",
-                            clientRequest.apiKey(), nodeId, version);
                 builder.setVersion(version);
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
@@ -314,8 +311,15 @@ public class NetworkClient implements KafkaClient {
             return;
         }
         RequestHeader header = clientRequest.makeHeader();
-        if (log.isTraceEnabled())
-            log.trace("Sending {} to node {}", request,  nodeId);
+        if (log.isDebugEnabled()) {
+            int latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);
+            if (header.apiVersion() == latestClientVersion) {
+                log.trace("Sending {} to node {}.", request, nodeId);
+            } else {
+                log.debug("Using older server API v{} to send {} to node {}.",
+                    header.apiVersion(), request, nodeId);
+            }
+        }
         Send send = request.toSend(nodeId, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
                 header,
