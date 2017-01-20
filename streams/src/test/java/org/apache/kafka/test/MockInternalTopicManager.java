@@ -33,7 +33,7 @@ import java.util.Set;
 public class MockInternalTopicManager extends InternalTopicManager {
 
     public Map<String, Integer> readyTopics = new HashMap<>();
-    public MockConsumer<byte[], byte[]> restoreConsumer;
+    private MockConsumer<byte[], byte[]> restoreConsumer;
 
     public MockInternalTopicManager(StreamsConfig streamsConfig, MockConsumer<byte[], byte[]> restoreConsumer) {
         super(new StreamsKafkaClient(streamsConfig), 0, 0);
@@ -46,7 +46,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
         for (Map.Entry<InternalTopicConfig, Integer> entry : topics.entrySet()) {
             readyTopics.put(entry.getKey().name(), entry.getValue());
 
-            List<PartitionInfo> partitions = new ArrayList<>();
+            final List<PartitionInfo> partitions = new ArrayList<>();
             for (int i = 0; i < entry.getValue(); i++) {
                 partitions.add(new PartitionInfo(entry.getKey().name(), i, null, null, null));
             }
@@ -57,7 +57,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
     @Override
     public Map<String, Integer> getNumPartitions(final Set<String> topics) {
-        Map<String, Integer> partitions = new HashMap<>();
+        final Map<String, Integer> partitions = new HashMap<>();
         for (String topic : topics) {
             partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
         }

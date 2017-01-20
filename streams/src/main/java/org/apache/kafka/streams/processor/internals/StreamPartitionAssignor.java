@@ -619,19 +619,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             if (!topicsToMakeReady.isEmpty()) {
                 internalTopicManager.makeReady(topicsToMakeReady);
 
-                // wait until the topic metadata has been propagated to at least one broker
-                boolean allTopicsCreated = true;
-                do {
-                    Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicNamesToMakeReady);
-
-                    for (Map.Entry<InternalTopicConfig, Integer> entry : topicsToMakeReady.entrySet()) {
-                        Integer numPartitions = partitions.get(entry.getKey().name());
-                        if (numPartitions == null || !numPartitions.equals(entry.getValue())) {
-                            allTopicsCreated = false;
-                            break;
-                        }
+                // wait until each one of the topic metadata has been propagated to at least one broker
+                while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
+                    try {
+                        Thread.sleep(50L);
+                    } catch (InterruptedException e) {
+                        // ignore
                     }
-                } while (!allTopicsCreated);
+                }
             }
         } else {
             List<String> missingTopics = new ArrayList<>();
@@ -649,6 +644,17 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
+    }
+
+    private boolean allTopicsCreated(final Set<String> topicNamesToMakeReady, final Map<InternalTopicConfig, Integer> topicsToMakeReady) {
+        final Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicNamesToMakeReady);
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsToMakeReady.entrySet()) {
+            final Integer numPartitions = partitions.get(entry.getKey().name());
+            if (numPartitions == null || !numPartitions.equals(entry.getValue())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
