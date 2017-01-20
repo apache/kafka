@@ -46,6 +46,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,10 +78,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    private static class ClientMetadata {
+    static class ClientMetadata {
         final HostInfo hostInfo;
-        final Set<String> consumers;
-        final ClientState<TaskId> state;
+        final Map<String, ClientState<TaskId>> consumers = new HashMap<>();
+        final ClientState<TaskId> processState = new ClientState<>();
 
         ClientMetadata(final String endPoint) {
 
@@ -97,21 +98,19 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 hostInfo = null;
             }
 
-            // initialize the consumer memberIds
-            consumers = new HashSet<>();
-
-            // initialize the client state
-            state = new ClientState<>();
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
+            final ClientState<TaskId> consumerState = new ClientState<>();
+            consumerState.prevActiveTasks.addAll(info.prevTasks);
+            consumerState.prevAssignedTasks.addAll(info.prevTasks);
+            consumerState.prevAssignedTasks.addAll(info.standbyTasks);
+            consumers.put(consumerMemberId, consumerState);
 
-            consumers.add(consumerMemberId);
-
-            state.prevActiveTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.standbyTasks);
-            state.capacity = state.capacity + 1d;
+            processState.prevActiveTasks.addAll(info.prevTasks);
+            processState.prevAssignedTasks.addAll(info.prevTasks);
+            processState.prevAssignedTasks.addAll(info.standbyTasks);
+            processState.capacity = processState.capacity + 1d;
         }
 
         @Override
@@ -119,7 +118,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             return "ClientMetadata{" +
                     "hostInfo=" + hostInfo +
                     ", consumers=" + consumers +
-                    ", state=" + state +
+                    ", state=" + processState +
                     '}';
         }
     }
@@ -265,7 +264,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
 
         // construct the client metadata from the decoded subscription info
-        Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
+        final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
@@ -385,7 +384,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
         }
 
-        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
+        final Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
                 sourceTopicsByGroup, metadataWithInternalTopics);
 
         // check if all partitions are assigned, and there are no duplicates of partitions in multiple tasks
@@ -453,9 +452,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ---------------- Step Two ---------------- //
 
         // assign tasks to clients
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+        final Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            states.put(entry.getKey(), entry.getValue().state);
+            states.put(entry.getKey(), entry.getValue().processState);
         }
 
         log.debug("stream-thread [{}] Assigning tasks {} to clients {} with number of replicas {}",
@@ -474,7 +473,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             if (hostInfo != null) {
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
-                final ClientState<TaskId> state = entry.getValue().state;
+                final ClientState<TaskId> state = entry.getValue().processState;
 
                 for (TaskId id : state.activeTasks) {
                     topicPartitions.addAll(partitionsForTask.get(id));
@@ -484,57 +483,182 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        // within the client, distribute tasks to its owned consumers
-        Map<String, Assignment> assignment = new HashMap<>();
-        for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            Set<String> consumers = entry.getValue().consumers;
-            ClientState<TaskId> state = entry.getValue().state;
+        return new ProcessTaskAssignor(clientsMetadata, partitionsForTask, partitionsByHostState).assign();
+    }
 
-            ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
-            final int numActiveTasks = state.activeTasks.size();
+    // Assigns the tasks to the consumers that belong to a single process.
+    // Trying to keep the assignment sticky to avoid unnecessary closing, and creating of tasks.
+    static class ProcessTaskAssignor {
+        private final Map<UUID, ClientMetadata> clientsMetadata;
+        private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
+        private final Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
-            taskIds.addAll(state.activeTasks);
-            taskIds.addAll(state.standbyTasks);
+        ProcessTaskAssignor(final Map<UUID, ClientMetadata> clientsMetadata,
+                            final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                            final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
+            this.clientsMetadata = clientsMetadata;
+            this.partitionsForTask = partitionsForTask;
+            this.partitionsByHostState = partitionsByHostState;
+        }
 
-            final int numConsumers = consumers.size();
+        public Map<String, Assignment> assign() {
+            // within the client, distribute tasks to its owned consumers
+            final Map<String, Assignment> assignment = new HashMap<>();
+            for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+                final Map<String, ClientState<TaskId>> consumers = entry.getValue().consumers;
+                final ClientState<TaskId> processState = entry.getValue().processState;
 
-            int i = 0;
-            for (String consumer : consumers) {
-                Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
-                ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
+                final Map<String, List<AssignedPartition>> activeAssignment = new HashMap<>();
+                final Map<String, Map<TaskId, Set<TopicPartition>>> standbyAssignment = new HashMap<>();
+                // initialize active assignment for all consumers to avoid having to do
+                // null checks etc later
+                for (final String consumer : consumers.keySet()) {
+                    activeAssignment.put(consumer, new ArrayList<AssignedPartition>());
+                    standbyAssignment.put(consumer, new HashMap<TaskId, Set<TopicPartition>>());
+                }
 
-                final int numTaskIds = taskIds.size();
-                for (int j = i; j < numTaskIds; j += numConsumers) {
-                    TaskId taskId = taskIds.get(j);
-                    if (j < numActiveTasks) {
-                        for (TopicPartition partition : partitionsForTask.get(taskId)) {
-                            assignedPartitions.add(new AssignedPartition(taskId, partition));
-                        }
-                    } else {
-                        Set<TopicPartition> standbyPartitions = standby.get(taskId);
-                        if (standbyPartitions == null) {
-                            standbyPartitions = new HashSet<>();
-                            standby.put(taskId, standbyPartitions);
-                        }
-                        standbyPartitions.addAll(partitionsForTask.get(taskId));
+                final Map<TaskId, String> previousActiveTaskAssignment = buildPreviousActiveTaskMap(consumers);
+                final Map<TaskId, String> previousStandbyTaskAssignment = buildPreviousStandbyTaskMap(consumers);
+                assignActiveTasks(consumers, processState, activeAssignment, previousActiveTaskAssignment, previousStandbyTaskAssignment);
+                assignStandbyTasks(consumers, processState, standbyAssignment, previousStandbyTaskAssignment);
+
+                for (final String consumer : consumers.keySet()) {
+                    final List<AssignedPartition> consumerAssignment = activeAssignment.get(consumer);
+                    Collections.sort(consumerAssignment);
+                    final List<TaskId> active = new ArrayList<>();
+                    final List<TopicPartition> activePartitions = new ArrayList<>();
+                    for (AssignedPartition partition : consumerAssignment) {
+                        active.add(partition.taskId);
+                        activePartitions.add(partition.partition);
                     }
+                    // finally, encode the assignment before sending back to coordinator
+                    assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standbyAssignment.get(consumer), partitionsByHostState).encode()));
                 }
 
-                Collections.sort(assignedPartitions);
-                List<TaskId> active = new ArrayList<>();
-                List<TopicPartition> activePartitions = new ArrayList<>();
-                for (AssignedPartition partition : assignedPartitions) {
-                    active.add(partition.taskId);
-                    activePartitions.add(partition.partition);
-                }
+            }
+            return assignment;
+        }
 
-                // finally, encode the assignment before sending back to coordinator
-                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-                i++;
+        private void assignStandbyTasks(final Map<String, ClientState<TaskId>> consumers,
+                                        final ClientState<TaskId> processState,
+                                        final Map<String, Map<TaskId, Set<TopicPartition>>> standbyAssignment,
+                                        final Map<TaskId, String> previousStandbyTaskAssignment) {
+            final int standbyTasksPerConsumer = processState.standbyTasks.size() / consumers.size();
+            int standbyTaskRemainder = processState.standbyTasks.size() - standbyTasksPerConsumer * consumers.size();
+
+            for (int i = 0; i < standbyTasksPerConsumer; i++) {
+                for (final Iterator<TaskId> iterator = processState.standbyTasks.iterator(); iterator.hasNext(); ) {
+                    final TaskId standbyTask = iterator.next();
+                    String consumer = previousStandbyTaskAssignment.get(standbyTask);
+                    if (consumer == null) {
+                        consumer = leastLoadedStandby(standbyAssignment);
+                    } else if (standbyAssignment.get(consumer).size() >= standbyTasksPerConsumer && standbyTaskRemainder == 0) {
+                        consumer = leastLoadedStandby(standbyAssignment);
+                    } else if (standbyAssignment.get(consumer).size() == standbyTasksPerConsumer && standbyTaskRemainder > 0) {
+                        standbyTaskRemainder--;
+                    }
+                    standbyAssignment.get(consumer).put(standbyTask, partitionsForTask.get(standbyTask));
+                    iterator.remove();
+                }
+            }
+
+            for (final TaskId next : processState.standbyTasks) {
+                final String consumer = leastLoadedStandby(standbyAssignment);
+                standbyAssignment.get(consumer).put(next, partitionsForTask.get(next));
             }
         }
 
-        return assignment;
+        private void assignActiveTasks(final Map<String, ClientState<TaskId>> consumers,
+                                       final ClientState<TaskId> processState,
+                                       final Map<String, List<AssignedPartition>> activeAssignment,
+                                       final Map<TaskId, String> previousActiveTaskAssignment,
+                                       final Map<TaskId, String> previousStandbyTaskAssignment) {
+            final int taskPerConsumer = processState.activeTasks.size() / consumers.size();
+            int remainder = processState.activeTasks.size() - taskPerConsumer * consumers.size();
+            for (int i = 0; i < taskPerConsumer; i++) {
+                for (final Iterator<TaskId> iterator = processState.activeTasks.iterator(); iterator.hasNext(); ) {
+                    final TaskId next = iterator.next();
+                    String consumer = previousActiveTaskAssignment.get(next);
+                    if (consumer == null) {
+                        consumer = previousStandbyTaskAssignment.get(next);
+                    }
+                    // get the least loaded consumer if we haven't yet found one.
+                    if (consumer == null) {
+                        consumer = leastLoadedActive(activeAssignment);
+                        // get the least loaded consumer if the current consumer has already exceeded its quota
+                    } else if (activeAssignment.get(consumer).size() >= taskPerConsumer && remainder == 0) {
+                        consumer = leastLoadedActive(activeAssignment);
+                    } else if (activeAssignment.get(consumer).size() == taskPerConsumer && remainder > 0) {
+                        remainder--;
+                    }
+
+                    final List<AssignedPartition> assignedPartitions = activeAssignment.get(consumer);
+                    for (final TopicPartition partition : partitionsForTask.get(next)) {
+                        assignedPartitions.add(new AssignedPartition(next, partition));
+                    }
+                    iterator.remove();
+                }
+            }
+
+            for (final TaskId next : processState.activeTasks) {
+                final List<AssignedPartition> assignedPartitions = activeAssignment.get(leastLoadedActive(activeAssignment));
+                for (final TopicPartition partition : partitionsForTask.get(next)) {
+                    assignedPartitions.add(new AssignedPartition(next, partition));
+                }
+            }
+        }
+
+        private Map<TaskId, String> buildPreviousStandbyTaskMap(final Map<String, ClientState<TaskId>> consumers) {
+            final Map<TaskId, String> previousStandbyTaskAssignment = new HashMap<>();
+            for (Map.Entry<String, ClientState<TaskId>> clientState : consumers.entrySet()) {
+                final Set<TaskId> assignedTasks = new HashSet<>(clientState.getValue().prevAssignedTasks);
+                assignedTasks.removeAll(clientState.getValue().prevActiveTasks);
+                for (final TaskId activeTask : assignedTasks) {
+                    previousStandbyTaskAssignment.put(activeTask, clientState.getKey());
+                }
+            }
+            return previousStandbyTaskAssignment;
+        }
+
+        private Map<TaskId, String> buildPreviousActiveTaskMap(final Map<String, ClientState<TaskId>> consumers) {
+            final Map<TaskId, String> previousActiveTaskAssignment = new HashMap<>();
+            for (Map.Entry<String, ClientState<TaskId>> clientState : consumers.entrySet()) {
+                for (final TaskId activeTask : clientState.getValue().prevActiveTasks) {
+                    previousActiveTaskAssignment.put(activeTask, clientState.getKey());
+                }
+            }
+            return previousActiveTaskAssignment;
+        }
+
+        private String leastLoadedStandby(final Map<String, Map<TaskId, Set<TopicPartition>>> standbyAssignment) {
+            int lowestAssigned = Integer.MAX_VALUE;
+            String leastLoaded = null;
+            for (final Map.Entry<String, Map<TaskId, Set<TopicPartition>>> assignment : standbyAssignment.entrySet()) {
+                if (assignment.getValue().isEmpty()) {
+                    return assignment.getKey();
+                }
+                if (assignment.getValue().size() < lowestAssigned) {
+                    lowestAssigned = assignment.getValue().size();
+                    leastLoaded = assignment.getKey();
+                }
+            }
+            return leastLoaded;
+        }
+
+        private <T> String leastLoadedActive(final Map<String, List<T>> allAssignments) {
+            int lowestAssigned = Integer.MAX_VALUE;
+            String leastLoaded = null;
+            for (final Map.Entry<String, List<T>> currentAssignment : allAssignments.entrySet()) {
+                if (currentAssignment.getValue().isEmpty()) {
+                    return currentAssignment.getKey();
+                }
+                if (currentAssignment.getValue().size() < lowestAssigned) {
+                    lowestAssigned = currentAssignment.getValue().size();
+                    leastLoaded = currentAssignment.getKey();
+                }
+            }
+            return leastLoaded;
+        }
     }
 
     /**
