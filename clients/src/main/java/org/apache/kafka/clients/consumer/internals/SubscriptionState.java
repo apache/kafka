@@ -371,11 +371,15 @@ public class SubscriptionState {
         return assignedState(partition).resetStrategy;
     }
 
-    public boolean hasAllFetchPositions() {
-        for (TopicPartitionState state : assignment.partitionStateValues())
-            if (!state.hasValidPosition())
+    public boolean hasAllFetchPositions(Collection<TopicPartition> partitions) {
+        for (TopicPartition partition : partitions)
+            if (!hasValidPosition(partition))
                 return false;
         return true;
+    }
+
+    public boolean hasAllFetchPositions() {
+        return hasAllFetchPositions(this.assignedPartitions());
     }
 
     public Set<TopicPartition> missingFetchPositions() {
@@ -397,6 +401,10 @@ public class SubscriptionState {
 
     public boolean isFetchable(TopicPartition tp) {
         return isAssigned(tp) && assignedState(tp).isFetchable();
+    }
+
+    public boolean hasValidPosition(TopicPartition tp) {
+        return isAssigned(tp) && assignedState(tp).hasValidPosition();
     }
 
     public void pause(TopicPartition tp) {
