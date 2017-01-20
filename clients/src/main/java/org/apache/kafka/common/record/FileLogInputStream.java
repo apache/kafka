@@ -58,8 +58,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         logHeaderBuffer.rewind();
         Utils.readFully(channel, logHeaderBuffer, position);
-        if (logHeaderBuffer.hasRemaining())
-            return null;
 
         logHeaderBuffer.rewind();
         long offset = logHeaderBuffer.getLong();
@@ -119,8 +117,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
                 Utils.readFully(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
-                if (buf.hasRemaining())
-                    throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);
@@ -138,8 +134,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
             Utils.readFully(channel, recordBuffer, position + Records.LOG_OVERHEAD);
-            if (recordBuffer.hasRemaining())
-                throw new IOException("Failed to read full record from channel " + channel);
 
             recordBuffer.rewind();
             record = new Record(recordBuffer);
