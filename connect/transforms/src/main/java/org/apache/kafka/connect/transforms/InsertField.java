@@ -55,19 +55,19 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         String STATIC_VALUE = "static.value";
     }
 
-    private static final String OPTIONALITY_DOC = "Suffix with '!' to make this a required field, or '?' to keep it optional (the default).";
+    private static final String OPTIONALITY_DOC = "Suffix with <code>!</code> to make this a required field, or <code>?</code> to keep it optional (the default).";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.TOPIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for Kafka topic.\n" + OPTIONALITY_DOC)
+                    "Field name for Kafka topic. " + OPTIONALITY_DOC)
             .define(ConfigName.PARTITION_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for Kafka partition.\n" + OPTIONALITY_DOC)
+                    "Field name for Kafka partition. " + OPTIONALITY_DOC)
             .define(ConfigName.OFFSET_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for Kafka offset - only applicable to sink connectors.\n" + OPTIONALITY_DOC)
+                    "Field name for Kafka offset - only applicable to sink connectors.<br/>" + OPTIONALITY_DOC)
             .define(ConfigName.TIMESTAMP_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for record timestamp.\n" + OPTIONALITY_DOC)
+                    "Field name for record timestamp. " + OPTIONALITY_DOC)
             .define(ConfigName.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Field name for static data field.\n" + OPTIONALITY_DOC)
+                    "Field name for static data field. " + OPTIONALITY_DOC)
             .define(ConfigName.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Static field value, if field name configured.");
 
@@ -117,6 +117,10 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
         if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
             throw new ConfigException("No field insertion configured");
+        }
+
+        if (staticField != null && staticValue == null) {
+            throw new ConfigException(ConfigName.STATIC_VALUE, null, "No value specified for static field: " + staticField);
         }
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
