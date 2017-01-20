@@ -331,13 +331,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!assignedTopics.containsAll(allSubscribedTopics)) {
             Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
             notAssignedTopics.removeAll(assignedTopics);
-            log.warn("The following subscribed topics are not assigned to any members in the group: " + notAssignedTopics);
+            log.warn("The following subscribed topics are not assigned to any members in the group {} : {} ", groupId, notAssignedTopics);
         }
 
         if (!allSubscribedTopics.containsAll(assignedTopics)) {
             Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
             newlyAddedTopics.removeAll(allSubscribedTopics);
-            log.info("The following not-subscribed topics are assigned, and their metadata will be fetched from the brokers: " + newlyAddedTopics);
+            log.info("The following not-subscribed topics are assigned to group {}, and their metadata will be fetched from the brokers : {}", groupId, newlyAddedTopics);
 
             allSubscribedTopics.addAll(assignedTopics);
             this.subscriptions.groupSubscribe(allSubscribedTopics);
