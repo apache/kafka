@@ -61,6 +61,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
@@ -1091,6 +1092,60 @@ public class KafkaConsumerTest {
             assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
+        consumer.close();
+    }
+
+    @Test
+    public void testOffsetOfPausedPartitions() {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 2);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        PartitionAssignor assignor = new RangeAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+
+        // lookup coordinator
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // manual assignment
+        Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
+        consumer.assign(partitions);
+        // verify consumer's assignment
+        assertTrue(consumer.assignment().equals(partitions));
+
+        consumer.pause(partitions);
+        consumer.seekToEnd(partitions);
+
+        // fetch and verify committed offset of two partitions
+        Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(tp0, 0L);
+        offsets.put(tp1, 0L);
+
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
+        assertEquals(0, consumer.committed(tp0).offset());
+        assertEquals(0, consumer.committed(tp1).offset());
+
+        // fetch and verify consumer's position in the two partitions
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 3L), Errors.NONE.code()));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp1, 3L), Errors.NONE.code()));
+        assertEquals(3L, consumer.position(tp0));
+        assertEquals(3L, consumer.position(tp1));
+
+        client.requests().clear();
+        consumer.unsubscribe();
         consumer.close();
     }
 
