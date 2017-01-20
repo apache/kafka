@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class MockInternalTopicManager extends InternalTopicManager {
 
@@ -41,15 +42,26 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    public void makeReady(InternalTopicConfig topic, int numPartitions) {
-        readyTopics.put(topic.name(), numPartitions);
+    public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topics.entrySet()) {
+            readyTopics.put(entry.getKey().name(), entry.getValue());
 
-        List<PartitionInfo> partitions = new ArrayList<>();
-        for (int i = 0; i < numPartitions; i++) {
-            partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
+            List<PartitionInfo> partitions = new ArrayList<>();
+            for (int i = 0; i < entry.getValue(); i++) {
+                partitions.add(new PartitionInfo(entry.getKey().name(), i, null, null, null));
+            }
+
+            restoreConsumer.updatePartitions(entry.getKey().name(), partitions);
         }
-
-        restoreConsumer.updatePartitions(topic.name(), partitions);
     }
 
+    @Override
+    public Map<String, Integer> getNumPartitions(final Set<String> topics) {
+        Map<String, Integer> partitions = new HashMap<>();
+        for (String topic : topics) {
+            partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
+        }
+
+        return partitions;
+    }
 }

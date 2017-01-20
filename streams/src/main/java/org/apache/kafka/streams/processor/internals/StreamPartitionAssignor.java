@@ -205,8 +205,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        System.out.println("!!! constructing internal topic manager !!!");
-
         internalTopicManager = new InternalTopicManager(
                 new StreamsKafkaClient(this.streamThread.config),
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
@@ -265,9 +263,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-
-        System.out.println("!!! starting to assign !!!");
-
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
@@ -538,8 +533,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        System.out.println("!!! finished to assign !!!");
-
         return assignment;
     }
 
@@ -603,9 +596,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
-            for (Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
-                InternalTopicConfig topic = entry.getValue().config;
-                Integer numPartitions = entry.getValue().numPartitions;
+
+            // first construct the topics to make ready
+            Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
+            Set<String> topicNamesToMakeReady = new HashSet<>();
+
+            for (InternalTopicMetadata metadata : topicPartitions.values()) {
+                InternalTopicConfig topic = metadata.config;
+                Integer numPartitions = metadata.numPartitions;
 
                 if (numPartitions == NOT_AVAILABLE) {
                     continue;
@@ -614,13 +612,26 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
                 }
 
-                internalTopicManager.makeReady(topic, numPartitions);
+                topicsToMakeReady.put(topic, numPartitions);
+                topicNamesToMakeReady.add(topic.name());
+            }
 
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
+            if (!topicsToMakeReady.isEmpty()) {
+                internalTopicManager.makeReady(topicsToMakeReady);
+
+                // wait until the topic metadata has been propagated to at least one broker
+                boolean allTopicsCreated = true;
                 do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
-                } while (partitions == null || partitions.size() != numPartitions);
+                    Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicNamesToMakeReady);
+
+                    for (Map.Entry<InternalTopicConfig, Integer> entry : topicsToMakeReady.entrySet()) {
+                        Integer numPartitions = partitions.get(entry.getKey().name());
+                        if (numPartitions == null || !numPartitions.equals(entry.getValue())) {
+                            allTopicsCreated = false;
+                            break;
+                        }
+                    }
+                } while (!allTopicsCreated);
             }
         } else {
             List<String> missingTopics = new ArrayList<>();
