@@ -13,18 +13,18 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that a request cannot be completed because an obsolete broker
+ * Indicates that a request cannot be completed because an outdated broker
  * does not support the required functionality.
  */
-public class ObsoleteBrokerException extends ApiException {
+public class OutdatedBrokerException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public ObsoleteBrokerException(String message, Throwable cause) {
+    public OutdatedBrokerException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public ObsoleteBrokerException(String message) {
+    public OutdatedBrokerException(String message) {
         super(message);
     }
 

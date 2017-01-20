@@ -20,14 +20,13 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * A container class for offset and timestamp.
- *
- * Offset must be non-negative.
- *
- * The timestamp should never be negative, unless it is invalid.  This could happen when
- * handling a response from a broker that doesn't support KIP-79.
  */
 public final class OffsetAndTimestamp {
+    // The timestamp should never be negative, unless it is invalid.  This could happen when
+    // handling a response from a broker that doesn't support KIP-79.
     private final long timestamp;
+
+    // Offset must be non-negative
     private final long offset;
 
     public OffsetAndTimestamp(long offset, long timestamp) {
@@ -45,7 +44,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public String toString() {
-        return "{timestamp=" + timestamp + ", offset=" + offset + "}";
+        return "(timestamp=" + timestamp + ", offset=" + offset + ")";
     }
 
     @Override

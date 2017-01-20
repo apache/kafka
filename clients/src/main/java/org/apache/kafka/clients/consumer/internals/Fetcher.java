@@ -503,7 +503,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
     /**
      * Search the offsets by target times for the specified partitions.
      *
-     * @param requireTimestamps true if we should fail with an ObsoleteBrokerException if the broker does not support
+     * @param requireTimestamps true if we should fail with an OutdatedBrokerException if the broker does not support
      *                         fetching precise timestamps for offsets
      * @param timestampsToSearch the mapping between partitions and target time
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
