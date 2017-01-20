@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.{File, IOException, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
@@ -141,8 +141,16 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def delete(): Boolean = {
     info(s"Deleting index ${file.getAbsolutePath}")
-    if(Os.isWindows)
+    inLock(lock) {
+      // On JVM, a memory mapping is typically unmapped by garbage collector.
+      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
+      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
+      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       CoreUtils.swallow(forceUnmap(mmap))
+      // Accessing unmapped mmap crashes JVM by SEGV.
+      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
+      mmap = null
+    }
     file.delete()
   }
 
@@ -185,7 +193,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def truncateTo(offset: Long): Unit
 
   /**
-   * Forcefully free the buffer's mmap. We do this only on windows.
+   * Forcefully free the buffer's mmap.
    */
   protected def forceUnmap(m: MappedByteBuffer) {
     try {
