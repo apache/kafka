@@ -59,8 +59,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
-    final static int UNKNOWN = -1;
-    final static int NOT_AVAILABLE = -2;
+    private final static int UNKNOWN = -1;
+    public final static int NOT_AVAILABLE = -2;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -369,7 +369,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // create these topics if necessary
         prepareTopic(repartitionTopicMetadata);
 
-        metadataWithInternalTopics = metadata;
         metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
         log.debug("stream-thread [{}] Created repartition topics {} from the parsed topology.", streamThread.getName(), allRepartitionTopicPartitions.values());
@@ -591,12 +590,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
-    private void prepareTopic(Map<String, InternalTopicMetadata> topicPartitions) {
+    private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
         log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-        for (Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
-            InternalTopicConfig topic = entry.getValue().config;
-            Integer numPartitions = entry.getValue().numPartitions;
+        for (final Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
+            final InternalTopicConfig topic = entry.getValue().config;
+            final Integer numPartitions = entry.getValue().numPartitions;
 
             if (numPartitions == NOT_AVAILABLE) {
                 continue;

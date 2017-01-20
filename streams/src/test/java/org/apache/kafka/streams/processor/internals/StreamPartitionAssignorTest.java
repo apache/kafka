@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -860,22 +861,47 @@ public class StreamPartitionAssignorTest {
         builder.setApplicationId(applicationId);
 
         KStream<Object, Object> stream1 = builder
+
+            // Task 1 (should get created):
             .stream("topic1")
+            // force repartitioning for aggregation
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
                 public Object apply(Object key, Object value) {
                     return null;
                 }
             })
-            .through("topic2");
+            .groupByKey()
+
+            // Task 2 (should get created):
+            // create repartioning and changelog topic as task 1 exists
+            .count("count")
+
+            // force repartitioning for join, but second join input topic unknown
+            // -> internal repartitioning topic should not get created
+            .toStream()
+            .map(new KeyValueMapper<Object, Long, KeyValue<Object, Object>>() {
+                @Override
+                public KeyValue<Object, Object> apply(Object key, Long value) {
+                    return null;
+                }
+            });
+
         builder
+            // Task 3 (should not get created because input topic unknown)
             .stream("unknownTopic")
+
+            // force repartitioning for join, but input topic unknown
+            // -> thus should not create internal repartitioning topic
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
                 public Object apply(Object key, Object value) {
                     return null;
                 }
             })
+
+            // Task 4 (should not get created because input topics unknown)
+            // should not create any of both input repartition topics or any of both changelog topics
             .join(
                 stream1,
                 new ValueJoiner() {
@@ -911,19 +937,19 @@ public class StreamPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
-        expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-JOINOTHER-0000000012-store-changelog", 3);
-        expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-JOINTHIS-0000000011-store-changelog", 3);
-        assertThat(expectedCreatedInternalTopics, equalTo(mockInternalTopicManager.readyTopics));
+        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
+        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
+        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
             new TopicPartition("topic1", 1),
             new TopicPartition("topic1", 2),
-            new TopicPartition("topic2", 0),
-            new TopicPartition("topic2", 1),
-            new TopicPartition("topic2", 2)
+            new TopicPartition(applicationId + "-count-repartition", 0),
+            new TopicPartition(applicationId + "-count-repartition", 1),
+            new TopicPartition(applicationId + "-count-repartition", 2)
         );
-        assertThat(expectedAssignment, equalTo(assignment.get(client).partitions()));
+        assertThat(new HashSet(assignment.get(client).partitions()), equalTo(new HashSet(expectedAssignment)));
     }
 
     @Test
