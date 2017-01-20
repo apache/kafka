@@ -442,8 +442,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.getSensor(defaultPrefix + ".poll-latency"));
         assertNotNull(metrics.getSensor(defaultPrefix + ".process-latency"));
         assertNotNull(metrics.getSensor(defaultPrefix + ".punctuate-latency"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-creation"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-destruction"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".task-created"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".task-closed"));
         assertNotNull(metrics.getSensor(defaultPrefix + ".skipped-records"));
 
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-avg-latency", defaultGroupName, "The average commit time in ms", defaultTags)));
@@ -458,8 +458,8 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-avg-latency", defaultGroupName, "The average punctuate time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-max-latency", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-qps", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-creation-qps", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-destruction-qps", defaultGroupName, "The average per-second number of destructed tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-qps", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-qps", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-count", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
     }
 

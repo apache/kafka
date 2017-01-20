@@ -832,7 +832,7 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         log.info("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
 
-        streamsMetrics.taskCreationSensor.record();
+        streamsMetrics.taskCreatedSensor.record();
 
         final ProcessorTopology topology = builder.build(id.topicGroupId);
         final RecordCollector recordCollector = new RecordCollectorImpl(producer, id.toString());
@@ -945,7 +945,7 @@ public class StreamThread extends Thread {
     StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         log.info("{} Creating new standby task {} with assigned partitions [{}]", logPrefix, id, partitions);
 
-        streamsMetrics.taskCreationSensor.record();
+        streamsMetrics.taskCreatedSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
@@ -1049,7 +1049,7 @@ public class StreamThread extends Thread {
             public void apply(final AbstractTask task) {
                 log.info("{} Closing a task {}", StreamThread.this.logPrefix, task.id());
                 task.close();
-                streamsMetrics.taskDestructionSensor.record();
+                streamsMetrics.tasksClosedSensor.record();
             }
         }, "close");
     }
@@ -1060,7 +1060,7 @@ public class StreamThread extends Thread {
             public void apply(final AbstractTask task) {
                 log.info("{} Closing a task's topology {}", StreamThread.this.logPrefix, task.id());
                 task.closeTopology();
-                streamsMetrics.taskDestructionSensor.record();
+                streamsMetrics.tasksClosedSensor.record();
             }
         }, "close");
     }
@@ -1116,8 +1116,8 @@ public class StreamThread extends Thread {
         final Sensor pollTimeSensor;
         final Sensor processTimeSensor;
         final Sensor punctuateTimeSensor;
-        final Sensor taskCreationSensor;
-        final Sensor taskDestructionSensor;
+        final Sensor taskCreatedSensor;
+        final Sensor tasksClosedSensor;
         final Sensor skippedRecordsSensor;
 
         public StreamsMetricsThreadImpl(Metrics metrics, String groupName, String prefix, Map<String, String> tags) {
@@ -1142,11 +1142,11 @@ public class StreamThread extends Thread {
             this.punctuateTimeSensor.add(metrics.metricName("punctuate-max-latency", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
             this.punctuateTimeSensor.add(metrics.metricName("punctuate-qps", this.groupName, "The average per-second number of punctuate calls", this.tags), new Rate(new Count()));
 
-            this.taskCreationSensor = metrics.sensor(prefix + ".task-creation", Sensor.RecordingLevel.INFO);
-            this.taskCreationSensor.add(metrics.metricName("task-creation-qps", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
+            this.taskCreatedSensor = metrics.sensor(prefix + ".task-created", Sensor.RecordingLevel.INFO);
+            this.taskCreatedSensor.add(metrics.metricName("task-created-qps", this.groupName, "The average per-second number of newly created tasks", this.tags), new Rate(new Count()));
 
-            this.taskDestructionSensor = metrics.sensor(prefix + ".task-destruction", Sensor.RecordingLevel.INFO);
-            this.taskDestructionSensor.add(metrics.metricName("task-destruction-qps", this.groupName, "The average per-second number of destructed tasks", this.tags), new Rate(new Count()));
+            this.tasksClosedSensor = metrics.sensor(prefix + ".task-closed", Sensor.RecordingLevel.INFO);
+            this.tasksClosedSensor.add(metrics.metricName("task-closed-qps", this.groupName, "The average per-second number of closed tasks", this.tags), new Rate(new Count()));
 
             this.skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
             this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
@@ -1164,8 +1164,8 @@ public class StreamThread extends Thread {
             removeSensor(pollTimeSensor);
             removeSensor(processTimeSensor);
             removeSensor(punctuateTimeSensor);
-            removeSensor(taskCreationSensor);
-            removeSensor(taskDestructionSensor);
+            removeSensor(taskCreatedSensor);
+            removeSensor(tasksClosedSensor);
             removeSensor(skippedRecordsSensor);
 
         }
