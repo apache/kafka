@@ -215,7 +215,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
-        this.joinedSubscription = subscriptions.subscription();
+
+        // check if the assignment contains some topics that is not in the original
+        // subscription, if yes we will obey what leader has decided and add these topics
+        // into the subscriptions
+        //
+        // TODO this part of the logic should be removed once we allow regex on leader assign and remove joinedSubscription
+        Set<String> addedTopics = new HashSet<>();
+        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+            if (!subscriptions.subscription().contains(tp.topic()))
+                addedTopics.add(tp.topic());
+        }
+
+        if (!addedTopics.isEmpty()) {
+            Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
+            Set<String> newJoinedSubsciprtion = new HashSet<>(joinedSubscription);
+            newSubscription.addAll(addedTopics);
+            newJoinedSubsciprtion.addAll(addedTopics);
+
+            this.subscriptions.subscribeFromPattern(newSubscription);
+            this.joinedSubscription = newJoinedSubsciprtion;
+        }
 
         // update the metadata and enforce a refresh to make sure the fetcher can start
         // fetching data in the next iteration

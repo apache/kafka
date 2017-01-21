@@ -184,17 +184,10 @@ public class SubscriptionState {
         removeAllLagSensors(newAssignment);
 
         if (this.subscribedPattern != null) {
-            Set<String> topicsToSubscribe = new HashSet<>(this.subscription);
             for (TopicPartition tp : assignments) {
                 if (!this.subscribedPattern.matcher(tp.topic()).matches())
                     throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic regex pattern; subscription pattern is " + this.subscribedPattern);
-
-                // add this topic to the subscription in case it does not exist; this can happen
-                // if the leader added some new topics during assignment that are not originally subscribed
-                topicsToSubscribe.add(tp.topic());
             }
-
-            changeSubscription(topicsToSubscribe);
         } else {
             for (TopicPartition tp : assignments)
                 if (!this.subscription.contains(tp.topic()))

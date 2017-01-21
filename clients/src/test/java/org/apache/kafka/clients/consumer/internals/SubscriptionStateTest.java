@@ -107,7 +107,7 @@ public class SubscriptionStateTest {
         state.assignFromSubscribed(Collections.singletonList(t1p0));
         // assigned partitions should immediately change
         assertEquals(singleton(t1p0), state.assignedPartitions());
-        assertEquals(2, state.subscription().size());
+        assertEquals(singleton(topic), state.subscription());
 
         state.subscribe(Pattern.compile(".*t"), rebalanceListener);
         // assigned partitions should remain unchanged
