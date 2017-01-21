@@ -119,7 +119,7 @@ public class ConsumerCoordinatorTest {
     @Before
     public void setup() {
         this.time = new MockTime();
-        this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST, metrics);
+        this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.metadata.update(cluster, time.milliseconds());
         this.client = new MockClient(time, metadata);

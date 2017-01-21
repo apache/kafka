@@ -91,8 +91,8 @@ public class FetcherTest {
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private Metrics metrics = new Metrics(time);
-    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST, metrics);
-    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE, metrics);
+    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
@@ -704,8 +704,11 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
+        MetricName maxLagMetric = metrics.metricName("records-lag-max", metricGroup, "");
+        MetricName partitionLagMetric = metrics.metricName(tp + ".records-lag", metricGroup, "");
+
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric recordsFetchLagMax = allMetrics.get(metrics.metricName("records-lag-max", metricGroup, ""));
+        KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
         assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
@@ -714,12 +717,19 @@ public class FetcherTest {
         fetchRecords(MemoryRecords.EMPTY, Errors.NONE.code(), 100L, 0);
         assertEquals(100, recordsFetchLagMax.value(), EPSILON);
 
+        KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
+        assertEquals(100, partitionLag.value(), EPSILON);
+
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE.code(), 200L, 0);
         assertEquals(197, recordsFetchLagMax.value(), EPSILON);
+
+        // verify de-registration of partition lag
+        subscriptions.unsubscribe();
+        assertFalse(allMetrics.containsKey(partitionLagMetric));
     }
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(MemoryRecords records, short error, long hw, int throttleTime) {
