@@ -220,21 +220,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // subscription, if yes we will obey what leader has decided and add these topics
         // into the subscriptions
         //
-        // TODO this part of the logic should be removed once we allow regex on leader assign and remove joinedSubscription
+        // TODO this part of the logic should be removed once we allow regex on leader assign
         Set<String> addedTopics = new HashSet<>();
         for (TopicPartition tp : subscriptions.assignedPartitions()) {
-            if (!subscriptions.subscription().contains(tp.topic()))
+            if (!joinedSubscription.contains(tp.topic()))
                 addedTopics.add(tp.topic());
         }
 
         if (!addedTopics.isEmpty()) {
             Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
-            Set<String> newJoinedSubsciprtion = new HashSet<>(joinedSubscription);
+            Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
             newSubscription.addAll(addedTopics);
-            newJoinedSubsciprtion.addAll(addedTopics);
+            newJoinedSubscription.addAll(addedTopics);
 
             this.subscriptions.subscribeFromPattern(newSubscription);
-            this.joinedSubscription = newJoinedSubsciprtion;
+            this.joinedSubscription = newJoinedSubscription;
         }
 
         // update the metadata and enforce a refresh to make sure the fetcher can start
