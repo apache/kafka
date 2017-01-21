@@ -59,7 +59,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
-    public final static int UNKNOWN = -1;
+    private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
@@ -159,7 +159,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<TaskId, Set<TopicPartition>> activeTasks;
 
-    InternalTopicManager internalTopicManager;
+    private InternalTopicManager internalTopicManager;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -368,9 +368,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // create these topics if necessary
         prepareTopic(repartitionTopicMetadata);
 
-        metadataWithInternalTopics = metadata;
-        if (internalTopicManager != null)
-            metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
+        metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
         log.debug("stream-thread [{}] Created repartition topics {} from the parsed topology.", streamThread.getName(), allRepartitionTopicPartitions.values());
 
@@ -591,55 +589,38 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
-    private void prepareTopic(Map<String, InternalTopicMetadata> topicPartitions) {
+    private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
         log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-        // if ZK is specified, prepare the internal source topic before calling partition grouper
-        if (internalTopicManager != null) {
+        // first construct the topics to make ready
+        Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
+        Set<String> topicNamesToMakeReady = new HashSet<>();
 
-            // first construct the topics to make ready
-            Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
-            Set<String> topicNamesToMakeReady = new HashSet<>();
+        for (InternalTopicMetadata metadata : topicPartitions.values()) {
+            InternalTopicConfig topic = metadata.config;
+            Integer numPartitions = metadata.numPartitions;
 
-            for (InternalTopicMetadata metadata : topicPartitions.values()) {
-                InternalTopicConfig topic = metadata.config;
-                Integer numPartitions = metadata.numPartitions;
-
-                if (numPartitions == NOT_AVAILABLE) {
-                    continue;
-                }
-                if (numPartitions < 0) {
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
-                }
-
-                topicsToMakeReady.put(topic, numPartitions);
-                topicNamesToMakeReady.add(topic.name());
+            if (numPartitions == NOT_AVAILABLE) {
+                continue;
+            }
+            if (numPartitions < 0) {
+                throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
             }
 
-            if (!topicsToMakeReady.isEmpty()) {
-                internalTopicManager.makeReady(topicsToMakeReady);
+            topicsToMakeReady.put(topic, numPartitions);
+            topicNamesToMakeReady.add(topic.name());
+        }
 
-                // wait until each one of the topic metadata has been propagated to at least one broker
-                while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
-                    try {
-                        Thread.sleep(50L);
-                    } catch (InterruptedException e) {
-                        // ignore
-                    }
-                }
-            }
-        } else {
-            List<String> missingTopics = new ArrayList<>();
-            for (String topic : topicPartitions.keySet()) {
-                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                if (partitions == null) {
-                    missingTopics.add(topic);
-                }
-            }
+        if (!topicsToMakeReady.isEmpty()) {
+            internalTopicManager.makeReady(topicsToMakeReady);
 
-            if (!missingTopics.isEmpty()) {
-                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                        streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+            // wait until each one of the topic metadata has been propagated to at least one broker
+            while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
             }
         }
 
@@ -683,6 +664,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                     Arrays.sort(topics);
                     throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
+                }
+            } else {
+                if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
+                    numPartitions = NOT_AVAILABLE;
+                    break;
                 }
             }
         }
