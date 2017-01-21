@@ -46,6 +46,8 @@ public class AbstractConfig {
     /* the parsed values */
     private final Map<String, Object> values;
 
+    private final ConfigDef definition;
+
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
@@ -55,18 +57,13 @@ public class AbstractConfig {
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
+        this.definition = definition;
         if (doLog)
             logAll();
     }
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
-    }
-
-    public AbstractConfig(Map<String, Object> parsedConfig) {
-        this.values = parsedConfig;
-        this.originals = new HashMap<>();
-        this.used = Collections.synchronizedSet(new HashSet<String>());
     }
 
     protected Object get(String key) {
@@ -168,9 +165,13 @@ public class AbstractConfig {
      */
     public Map<String, Object> valuesWithPrefixOverride(String prefix) {
         Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
-        for (Map.Entry<String, ?> entry : values.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
-                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        for (Map.Entry<String, ?> entry : originals().entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                String keyWithNoPrefix = entry.getKey().substring(prefix.length());
+                ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
+                if (configKey != null)
+                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+            }
         }
         return result;
     }
