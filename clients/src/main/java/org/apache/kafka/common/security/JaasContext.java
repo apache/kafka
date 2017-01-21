@@ -49,7 +49,7 @@ public class JaasContext {
      *
      * If both are valid entries in the JAAS configuration, the first option is chosen.
      *
-     * For loginType CLIENT, if JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
+     * For contextType CLIENT, if JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
      * the configuration object is created by parsing the property value. Otherwise, the default Configuration
      * is returned. The context name is always `KafkaClient`.
      *

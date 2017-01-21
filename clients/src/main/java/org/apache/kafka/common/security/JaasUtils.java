@@ -17,8 +17,6 @@
 package org.apache.kafka.common.security;
 
 import javax.security.auth.login.Configuration;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -32,30 +30,6 @@ public class JaasUtils {
 
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
     public static final String ZK_LOGIN_CONTEXT_NAME_KEY = "zookeeper.sasl.clientconfig";
-
-    public static String defaultKerberosRealm()
-        throws ClassNotFoundException, NoSuchMethodException,
-               IllegalArgumentException, IllegalAccessException,
-               InvocationTargetException {
-
-        //TODO Find a way to avoid using these proprietary classes as access to Java 9 will block access by default
-        //due to the Jigsaw module system
-
-        Object kerbConf;
-        Class<?> classRef;
-        Method getInstanceMethod;
-        Method getDefaultRealmMethod;
-        if (System.getProperty("java.vendor").contains("IBM")) {
-            classRef = Class.forName("com.ibm.security.krb5.internal.Config");
-        } else {
-            classRef = Class.forName("sun.security.krb5.Config");
-        }
-        getInstanceMethod = classRef.getMethod("getInstance", new Class[0]);
-        kerbConf = getInstanceMethod.invoke(classRef, new Object[0]);
-        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm",
-                                                           new Class[0]);
-        return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
-    }
 
     public static boolean isZkSecurityEnabled() {
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));

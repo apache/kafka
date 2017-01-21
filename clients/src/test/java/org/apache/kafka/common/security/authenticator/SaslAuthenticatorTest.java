@@ -641,7 +641,8 @@ public class SaslAuthenticatorTest {
         serverOptions.put("user_user1", "user1-secret");
         serverOptions.put("user_user2", "user2-secret");
         TestJaasConfig staticJaasConfig = new TestJaasConfig();
-        staticJaasConfig.createOrUpdateEntry("KafkaServer", PlainLoginModule.class.getName(), serverOptions);
+        staticJaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(),
+                serverOptions);
         staticJaasConfig.setPlainClientOptions("user1", "invalidpassword");
         Configuration.setConfiguration(staticJaasConfig);
         server = createEchoServer(securityProtocol);

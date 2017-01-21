@@ -22,7 +22,6 @@ import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Locale;
 import java.util.Map;
 
 public class ChannelBuilders {
@@ -31,9 +30,9 @@ public class ChannelBuilders {
 
     /**
      * @param securityProtocol the securityProtocol
-     * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
+     * @param contextType the contextType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param config client config
-     * @param listenerName the listenerName if loginType is SERVER or null otherwise
+     * @param listenerName the listenerName if contextType is SERVER or null otherwise
      * @param clientSaslMechanism SASL mechanism if mode is CLIENT, ignored otherwise
      * @param saslHandshakeRequestEnable flag to enable Sasl handshake requests; disabled only for SASL
      *             inter-broker connections with inter-broker protocol version < 0.10
@@ -41,19 +40,19 @@ public class ChannelBuilders {
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
     public static ChannelBuilder clientChannelBuilder(SecurityProtocol securityProtocol,
-            JaasContext.Type loginType,
+            JaasContext.Type contextType,
             AbstractConfig config,
             ListenerName listenerName,
             String clientSaslMechanism,
             boolean saslHandshakeRequestEnable) {
 
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
-            if (loginType == null)
-                throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+            if (contextType == null)
+                throw new IllegalArgumentException("`contextType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
             if (clientSaslMechanism == null)
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
-        return create(securityProtocol, Mode.CLIENT, loginType, config, listenerName, clientSaslMechanism,
+        return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, clientSaslMechanism,
                 saslHandshakeRequestEnable, null);
     }
 
@@ -74,7 +73,7 @@ public class ChannelBuilders {
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
                                         Mode mode,
-                                        JaasContext.Type loginType,
+                                        JaasContext.Type contextType,
                                         AbstractConfig config,
                                         ListenerName listenerName,
                                         String clientSaslMechanism,
@@ -83,10 +82,8 @@ public class ChannelBuilders {
         Map<String, ?> configs;
         if (listenerName == null)
             configs = config.values();
-        else {
-            String prefix = "listener.name." + listenerName.value().toLowerCase(Locale.ROOT) + ".";
-            configs = config.valuesWithPrefixOverride(prefix);
-        }
+        else
+            configs = config.valuesWithPrefixOverride(listenerName.configPrefix());
 
         ChannelBuilder channelBuilder;
         switch (securityProtocol) {
@@ -97,7 +94,7 @@ public class ChannelBuilders {
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
-                JaasContext jaasContext = JaasContext.load(loginType, listenerName, configs);
+                JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
                 channelBuilder = new SaslChannelBuilder(mode, jaasContext, securityProtocol,
                         clientSaslMechanism, saslHandshakeRequestEnable, credentialCache);
                 break;

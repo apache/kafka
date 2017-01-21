@@ -13,6 +13,8 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
@@ -20,7 +22,6 @@ import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.authenticator.LoginManager;
@@ -72,7 +73,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             if (hasKerberos) {
                 String defaultRealm;
                 try {
-                    defaultRealm = JaasUtils.defaultKerberosRealm();
+                    defaultRealm = defaultKerberosRealm();
                 } catch (Exception ke) {
                     defaultRealm = "";
                 }
@@ -126,5 +127,27 @@ public class SaslChannelBuilder implements ChannelBuilder {
         } else {
             return new PlaintextTransportLayer(key);
         }
+    }
+
+    private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,
+            IllegalArgumentException, IllegalAccessException, InvocationTargetException {
+
+        //TODO Find a way to avoid using these proprietary classes as access to Java 9 will block access by default
+        //due to the Jigsaw module system
+
+        Object kerbConf;
+        Class<?> classRef;
+        Method getInstanceMethod;
+        Method getDefaultRealmMethod;
+        if (System.getProperty("java.vendor").contains("IBM")) {
+            classRef = Class.forName("com.ibm.security.krb5.internal.Config");
+        } else {
+            classRef = Class.forName("sun.security.krb5.Config");
+        }
+        getInstanceMethod = classRef.getMethod("getInstance", new Class[0]);
+        kerbConf = getInstanceMethod.invoke(classRef, new Object[0]);
+        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm",
+                new Class[0]);
+        return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
     }
 }
