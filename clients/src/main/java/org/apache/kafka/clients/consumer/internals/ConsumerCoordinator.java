@@ -216,9 +216,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
 
-        // check if the assignment contains some topics that is not in the original
+        // check if the assignment contains some topics that were not in the original
         // subscription, if yes we will obey what leader has decided and add these topics
-        // into the subscriptions
+        // into the subscriptions as long as they still match the subscribed pattern
         //
         // TODO this part of the logic should be removed once we allow regex on leader assign
         Set<String> addedTopics = new HashSet<>();
