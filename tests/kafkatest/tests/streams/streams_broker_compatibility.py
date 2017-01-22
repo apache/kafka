@@ -20,7 +20,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_9, LATEST_0_8_2, KafkaVersion
+from kafkatest.version import TRUNK, LATEST_0_10_1, LATEST_0_10_0, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -57,7 +57,6 @@ class StreamsBrokerCompatibility(Test):
 
     @parametrize(broker_version=str(TRUNK))
     @parametrize(broker_version=str(LATEST_0_10_1))
-    @parametrize(broker_version=str(LATEST_0_10_0))
     def test_compatible_brokers(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
@@ -74,3 +73,18 @@ class StreamsBrokerCompatibility(Test):
 
         assert num_consumed_mgs == 1, \
             "Did expect to read exactly one message but got %d" % num_consumed_mgs
+
+    @parametrize(broker_version=str(LATEST_0_10_0))
+    def test_fail_fast_on_incompatible_brokers(self, broker_version):
+        self.kafka.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        self.processor.start()
+
+        self.processor.node.account.ssh(self.processor.start_cmd(self.processor.node))
+        with self.processor.node.account.monitor_log(self.processor.STDERR_FILE) as monitor:
+            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.StreamsException: Kafka Streams requires broker version 0.10.1.x or higher.',
+                        timeout_sec=60,
+                        err_msg="Never saw 'incompatible broker' error message " + str(self.processor.node.account))
+
+        self.kafka.stop()

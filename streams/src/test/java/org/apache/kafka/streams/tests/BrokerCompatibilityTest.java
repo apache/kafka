@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.smoketest;
+package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.Collections;
@@ -36,14 +37,14 @@ import java.util.Properties;
 
 public class BrokerCompatibilityTest {
 
-    public static final String SOURCE_TOPIC = "brokerCompatibilitySourceTopic";
-    public static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
+    private static final String SOURCE_TOPIC = "brokerCompatibilitySourceTopic";
+    private static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
 
     public static void main(String[] args) throws Exception {
         System.out.println("StreamsTest instance started");
 
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String stateDirStr = args.length > 1 ? args[1] : "/tmp/kafka-streams-system-test";
+        final String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
 
         final File stateDir = new File(stateDirStr);
         stateDir.mkdir();
@@ -62,9 +63,11 @@ public class BrokerCompatibilityTest {
         builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
+        System.out.println("start Kafka Streams");
         streams.start();
 
 
+        System.out.println("send data");
         final Properties producerProperties = new Properties();
         producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -74,6 +77,15 @@ public class BrokerCompatibilityTest {
         producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
 
 
+        System.out.println("wait for result");
+        loopUntilRecordReceived(kafka);
+
+
+        System.out.println("close Kafka Streams");
+        streams.close();
+    }
+
+    private static void loopUntilRecordReceived(final String kafka) {
         final Properties consumerProperties = new Properties();
         consumerProperties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, "broker-compatibility-consumer");
@@ -84,17 +96,15 @@ public class BrokerCompatibilityTest {
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties);
         consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
-        outer: while (true) {
+        while (true) {
             ConsumerRecords<String, String> records = consumer.poll(100);
             for (ConsumerRecord<String, String> record : records) {
                 if (record.key().equals("key") && record.value().equals("value")) {
-                    break outer;
+                    consumer.close();
+                    return;
                 }
             }
         }
-
-
-        streams.close();
     }
 
 }

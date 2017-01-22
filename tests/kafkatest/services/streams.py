@@ -166,5 +166,5 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsBrokerCompatibilityService, self).__init__(test_context,
                                                                 kafka,
-                                                                "org.apache.kafka.streams.smoketest.BrokerCompatibilityTest",
+                                                                "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 "dummy")
