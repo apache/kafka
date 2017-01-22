@@ -782,8 +782,8 @@ public class Utils {
     }
 
     /**
-     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or
-     * the channel has reached end of stream
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer
+     * An IOException will be thrown if read reaches end-of-stream to indicate users of the channel state
      * @param channel File channel containing the data to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred
      * @param position The file position at which the transfer is to begin; must be non-negative
@@ -791,7 +791,7 @@ public class Utils {
      * @throws IllegalArgumentException If position is negative
      * @throws IOException If reaching EOF or an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
      */
-    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+    public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
         if (position < 0) {
             throw new IllegalArgumentException("The file channel position cannot be negative, but we got " + position);
         }
@@ -805,5 +805,27 @@ public class Utils {
             throw new IOException(String.format("Reached EOF before filling up the buffer. Current file channel position = %d, buffer remaining = %d",
                             currentPosition, destinationBuffer.remaining()));
         }
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or
+     * the channel has reached end of stream
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; must be non-negative
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs. See {@link FileChannel#read(ByteBuffer, long)}
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but we got " + position);
+        }
+        long currentPosition = position;
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
+            currentPosition += bytesRead;
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
 }

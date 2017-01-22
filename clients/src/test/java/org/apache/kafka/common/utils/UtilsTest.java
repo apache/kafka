@@ -28,6 +28,7 @@ import java.util.Random;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.junit.Assert;
 import org.junit.Test;
 
 
@@ -166,7 +167,7 @@ public class UtilsTest {
     }
 
     @Test
-    public void testReadFullyWithRealFile() throws IOException {
+    public void testReadFullyOrFailWithRealFile() throws IOException {
         RandomAccessFile raf = new RandomAccessFile(TestUtils.tempFile(), "rw");
         FileChannel channel = raf.getChannel();
         try {
@@ -180,14 +181,14 @@ public class UtilsTest {
             ByteBuffer smallBuffer = ByteBuffer.allocate(2);
             ByteBuffer largeBuffer = ByteBuffer.allocate(msg.length() + 1);
             // Scenario 1: test single read
-            Utils.readFully(channel, perfectBuffer, 0);
+            Utils.readFullyOrFail(channel, perfectBuffer, 0);
             assertTrue("Buffer should be filled up.", !perfectBuffer.hasRemaining());
             // Scenario 2: test multiple reads
-            Utils.readFully(channel, smallBuffer, 0);
+            Utils.readFullyOrFail(channel, smallBuffer, 0);
             assertTrue("Buffer should be filled up.", !smallBuffer.hasRemaining());
             try {
                 // Scenario 3: test end of stream is reached before buffer is filled up
-                Utils.readFully(channel, largeBuffer, 0);
+                Utils.readFullyOrFail(channel, largeBuffer, 0);
                 fail("Expected IOException to be raised");
             } catch (IOException e) {
                 // expected
@@ -196,6 +197,57 @@ public class UtilsTest {
             channel.close();
             raf.close();
         }
+    }
+
+    @Test
+    public void testReadFullyOrFailWithMultiReads() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        final int step = 20;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        final Random random = new Random();
+        int totalMockedBytesRead = 0;
+
+        while (true) {
+            int diff = bufferSize - totalMockedBytesRead;
+            if (diff <= 0) {
+                break;
+            }
+            // If the remaining byte number is less than a step,
+            // directly assign the last mocked bytes read to fix `bufferSize` exactly
+            final int mockedBytesRead = (diff < step) ? diff : random.nextInt(step);
+            EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {
+                @Override
+                public Integer answer() throws Throwable {
+                    ByteBuffer buffer = (ByteBuffer) EasyMock.getCurrentArguments()[0];
+                    Long pos = (Long) EasyMock.getCurrentArguments()[1];
+                    buffer.position(pos.intValue() + mockedBytesRead);
+                    return mockedBytesRead;
+                }
+            });
+            totalMockedBytesRead += mockedBytesRead;
+        }
+
+        EasyMock.replay(channelMock);
+        Utils.readFullyOrFail(channelMock, buffer, 0L);
+        Assert.assertTrue("The buffer should be filled up", !buffer.hasRemaining());
+        EasyMock.verify(channelMock);
+    }
+
+    @Test
+    public void testReadFullyOrFailThrowIOExceptionForEOF() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        ByteBuffer buffer = ByteBuffer.allocate(12);
+        EasyMock.expect(channelMock.read(buffer, 0L)).andReturn(-1);
+        EasyMock.replay(channelMock);
+
+        try {
+            Utils.readFullyOrFail(channelMock, buffer, 0L);
+            fail("Expected IOException to be raised");
+        } catch (IOException e) {
+            // expected
+        }
+        EasyMock.verify(channelMock);
     }
 
     @Test
@@ -229,22 +281,29 @@ public class UtilsTest {
 
         EasyMock.replay(channelMock);
         Utils.readFully(channelMock, buffer, 0L);
+        Assert.assertTrue("The buffer should be filled up", !buffer.hasRemaining());
         EasyMock.verify(channelMock);
     }
 
     @Test
-    public void testReadFullyThrowIOExceptionForEOF() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
-        ByteBuffer buffer = ByteBuffer.allocate(12);
-        EasyMock.expect(channelMock.read(buffer, 0L)).andReturn(-1);
+    public void testReadFullyCanFillUpBuffer() throws IOException {
+        final FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        EasyMock.expect(channelMock.size()).andReturn(20L);
+        EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {
+            @Override
+            public Integer answer() throws Throwable {
+                ByteBuffer buffer = (ByteBuffer) EasyMock.getCurrentArguments()[0];
+                Long pos = (Long) EasyMock.getCurrentArguments()[1];
+                buffer.position(pos.intValue() + 20);
+                return -1;
+            }
+        });
         EasyMock.replay(channelMock);
-
-        try {
-            Utils.readFully(channelMock, buffer, 0L);
-            fail("Expected IOException to be raised");
-        } catch (IOException e) {
-            // expected
-        }
+        Utils.readFully(channelMock, buffer, 0L);
+        Assert.assertTrue("Buffer should has remaining and channel should get EOF",
+                buffer.hasRemaining() && buffer.position() == channelMock.size());
         EasyMock.verify(channelMock);
     }
 

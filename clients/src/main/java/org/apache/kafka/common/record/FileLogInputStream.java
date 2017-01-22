@@ -57,7 +57,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         logHeaderBuffer.rewind();
-        Utils.readFully(channel, logHeaderBuffer, position);
+        Utils.readFullyOrFail(channel, logHeaderBuffer, position);
 
         logHeaderBuffer.rewind();
         long offset = logHeaderBuffer.getLong();
@@ -116,7 +116,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                Utils.readFully(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
+                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);
@@ -133,7 +133,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 return record;
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
-            Utils.readFully(channel, recordBuffer, position + Records.LOG_OVERHEAD);
+            Utils.readFullyOrFail(channel, recordBuffer, position + Records.LOG_OVERHEAD);
 
             recordBuffer.rewind();
             record = new Record(recordBuffer);
