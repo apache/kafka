@@ -307,7 +307,7 @@ public class ConsumerCoordinatorTest {
     public void testNormalJoinGroupLeader() {
         final String consumerId = "leader";
 
-        subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
         // ensure metadata is up-to-date for leader
         metadata.setTopics(singletonList(topic1));
@@ -318,7 +318,7 @@ public class ConsumerCoordinatorTest {
 
         // normal join group
         Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, singletonList(topic1));
-        partitionAssignor.prepare(Collections.singletonMap(consumerId, Arrays.asList(t1p, t2p)));
+        partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(t1p)));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -329,16 +329,16 @@ public class ConsumerCoordinatorTest {
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId);
             }
-        }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE.code()));
+        }, syncGroupResponse(singletonList(t1p), Errors.NONE.code()));
         coordinator.poll(time.milliseconds());
 
         assertFalse(coordinator.needRejoin());
-        assertEquals(2, subscriptions.assignedPartitions().size());
-        assertEquals(2, subscriptions.groupSubscription().size());
+        assertEquals(singleton(t1p), subscriptions.assignedPartitions());
+        assertEquals(singleton(topic1), subscriptions.groupSubscription());
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(Collections.emptySet(), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(2, rebalanceListener.assigned.size());
+        assertEquals(singleton(t1p), rebalanceListener.assigned);
     }
 
     @Test
@@ -509,7 +509,9 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
+        assertEquals(singleton(topic1), subscriptions.groupSubscription());
         assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(Collections.emptySet(), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(singleton(t1p), rebalanceListener.assigned);
     }

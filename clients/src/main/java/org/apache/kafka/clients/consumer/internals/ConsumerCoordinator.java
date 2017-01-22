@@ -343,6 +343,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // and assign their partitions to the members; in this case we would like to update the leader's
         // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
         // when these topics gets updated from metadata refresh.
+        //
+        // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
+        //       we may need to modify the PartitionAssingor API to better support this case.
         Set<String> assignedTopics = new HashSet<>();
         for (Assignment assigned : assignment.values()) {
             for (TopicPartition tp : assigned.partitions())
