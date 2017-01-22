@@ -22,7 +22,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
-import java.util.Iterator;
 
 /**
  * Iterator interface of {@link KeyValue} with key typed {@link Long} used for {@link WindowStore#fetch(Object, long, long)}.
@@ -32,7 +31,7 @@ import java.util.Iterator;
  *
  * @param <E> Type of values
  */
-public interface WindowStoreIterator<E> extends Iterator<KeyValue<Long, E>>, Closeable {
+public interface WindowStoreIterator<V> extends KeyValueIterator<Long, V>, Closeable {
 
     @Override
     void close();

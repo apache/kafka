@@ -22,7 +22,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
 
-public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
     private final String storeName;
     private final KeyValueIterator<K, V> underlying;
     private KeyValue<K, V> next;
@@ -77,5 +77,13 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
     @Override
     public void remove() {
         throw new UnsupportedOperationException("remove not supported");
+    }
+
+    @Override
+    public KeyValue<K, V> peekNext() {
+        if (!hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return next;
     }
 }

@@ -94,10 +94,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         };
 
-        SmokeTestClient streams1 = new SmokeTestClient(createDir(stateDir, "1"), kafka, zookeeper);
-        SmokeTestClient streams2 = new SmokeTestClient(createDir(stateDir, "2"), kafka, zookeeper);
-        SmokeTestClient streams3 = new SmokeTestClient(createDir(stateDir, "3"), kafka, zookeeper);
-        SmokeTestClient streams4 = new SmokeTestClient(createDir(stateDir, "4"), kafka, zookeeper);
+        SmokeTestClient streams1 = new SmokeTestClient(createDir(stateDir, "1"), kafka);
+        SmokeTestClient streams2 = new SmokeTestClient(createDir(stateDir, "2"), kafka);
+        SmokeTestClient streams3 = new SmokeTestClient(createDir(stateDir, "3"), kafka);
+        SmokeTestClient streams4 = new SmokeTestClient(createDir(stateDir, "4"), kafka);
 
         System.out.println("starting the driver");
         driver.start();

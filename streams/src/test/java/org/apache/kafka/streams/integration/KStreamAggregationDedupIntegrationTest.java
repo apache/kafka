@@ -72,7 +72,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     @Before
-    public void before() {
+    public void before() throws InterruptedException {
         testNo++;
         builder = new KStreamBuilder();
         createTopics();
@@ -267,7 +267,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
 
-    private void createTopics() {
+    private void createTopics() throws InterruptedException {
         streamOneInput = "stream-one-" + testNo;
         outputTopic = "output-" + testNo;
         CLUSTER.createTopic(streamOneInput, 3, 1);

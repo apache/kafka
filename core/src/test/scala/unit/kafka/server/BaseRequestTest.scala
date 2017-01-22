@@ -42,7 +42,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }

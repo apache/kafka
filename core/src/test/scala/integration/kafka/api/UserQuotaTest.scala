@@ -29,7 +29,8 @@ class UserQuotaTest extends BaseQuotaTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   override protected val zkSaslEnabled = false
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   override val userPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName2
   override val producerQuotaId = QuotaId(Some(userPrincipal), None)

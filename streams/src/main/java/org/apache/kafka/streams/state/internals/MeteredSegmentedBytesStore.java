@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-class MeteredSegmentedBytesStore implements SegmentedBytesStore {
+class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractWrappedStateStore implements SegmentedBytesStore {
 
     private final SegmentedBytesStore inner;
     private final String metricScope;
@@ -40,15 +40,13 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
     private Sensor getTime;
     private Sensor removeTime;
 
-    MeteredSegmentedBytesStore(final SegmentedBytesStore inner, String metricScope, Time time) {
+    MeteredSegmentedBytesStore(final SegmentedBytesStore inner,
+                               final String metricScope,
+                               final Time time) {
+        super(inner);
         this.inner = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
-    }
-
-    @Override
-    public String name() {
-        return inner.name();
     }
 
     @Override
@@ -69,16 +67,6 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         } finally {
             this.metrics.recordLatency(restoreTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public boolean persistent() {
-        return inner.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return inner.isOpen();
     }
 
     @Override
@@ -114,11 +102,6 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public void close() {
-        inner.close();
     }
 
     @Override

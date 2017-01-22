@@ -35,7 +35,7 @@ import java.util.List;
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
     protected final String metricScope;
@@ -102,15 +102,13 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     };
 
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, String metricScope, Time time) {
+    public MeteredKeyValueStore(final KeyValueStore<K, V> inner,
+                                final String metricScope,
+                                final Time time) {
+        super(inner);
         this.inner = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : Time.SYSTEM;
-    }
-
-    @Override
-    public String name() {
-        return inner.name();
     }
 
     @Override
@@ -131,16 +129,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         // register and possibly restore the state from the logs
         metrics.measureLatencyNs(time, initDelegate, this.restoreTime);
-    }
-
-    @Override
-    public boolean persistent() {
-        return inner.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return inner.isOpen();
     }
 
     @Override
@@ -191,11 +179,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public long approximateNumEntries() {
         return this.inner.approximateNumEntries();
-    }
-
-    @Override
-    public void close() {
-        inner.close();
     }
 
     @Override
