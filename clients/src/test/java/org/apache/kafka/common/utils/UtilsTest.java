@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.RandomAccessFile;
+import java.io.EOFException;
 import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.io.Closeable;
@@ -168,9 +169,7 @@ public class UtilsTest {
 
     @Test
     public void testReadFullyOrFailWithRealFile() throws IOException {
-        RandomAccessFile raf = new RandomAccessFile(TestUtils.tempFile(), "rw");
-        FileChannel channel = raf.getChannel();
-        try {
+        try (FileChannel channel = FileChannel.open(TestUtils.tempFile().toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)) {
             // prepare channel
             String msg = "hello, world";
             channel.write(ByteBuffer.wrap(msg.getBytes()), 0);
@@ -181,22 +180,20 @@ public class UtilsTest {
             ByteBuffer smallBuffer = ByteBuffer.allocate(2);
             ByteBuffer largeBuffer = ByteBuffer.allocate(msg.length() + 1);
             // Scenario 1: test single read
-            Utils.readFullyOrFail(channel, perfectBuffer, 0);
+            Utils.readFullyOrFail(channel, perfectBuffer, 0, "perfect");
             assertTrue("Buffer should be filled up.", !perfectBuffer.hasRemaining());
             // Scenario 2: test multiple reads
-            Utils.readFullyOrFail(channel, smallBuffer, 0);
+            Utils.readFullyOrFail(channel, smallBuffer, 0, "small");
             assertTrue("Buffer should be filled up.", !smallBuffer.hasRemaining());
             try {
                 // Scenario 3: test end of stream is reached before buffer is filled up
-                Utils.readFullyOrFail(channel, largeBuffer, 0);
-                fail("Expected IOException to be raised");
-            } catch (IOException e) {
+                Utils.readFullyOrFail(channel, largeBuffer, 0, "large");
+                fail("Expected EOFException to be raised");
+            } catch (EOFException e) {
                 // expected
             }
-        } finally {
-            channel.close();
-            raf.close();
         }
+
     }
 
     @Test
@@ -229,22 +226,22 @@ public class UtilsTest {
         }
 
         EasyMock.replay(channelMock);
-        Utils.readFullyOrFail(channelMock, buffer, 0L);
+        Utils.readFullyOrFail(channelMock, buffer, 0L, "test");
         Assert.assertTrue("The buffer should be filled up", !buffer.hasRemaining());
         EasyMock.verify(channelMock);
     }
 
     @Test
-    public void testReadFullyOrFailThrowIOExceptionForEOF() throws IOException {
+    public void testReadFullyOrFailThrowEofException() throws IOException {
         FileChannel channelMock = EasyMock.createMock(FileChannel.class);
         ByteBuffer buffer = ByteBuffer.allocate(12);
         EasyMock.expect(channelMock.read(buffer, 0L)).andReturn(-1);
         EasyMock.replay(channelMock);
 
         try {
-            Utils.readFullyOrFail(channelMock, buffer, 0L);
+            Utils.readFullyOrFail(channelMock, buffer, 0L, "test");
             fail("Expected IOException to be raised");
-        } catch (IOException e) {
+        } catch (EOFException e) {
             // expected
         }
         EasyMock.verify(channelMock);
