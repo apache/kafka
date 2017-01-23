@@ -354,9 +354,9 @@ public class KStreamRepartitionJoinTest {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
         streamFourInput = "stream-four-" + testNo;
-        CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput);
-        CLUSTER.createTopic(streamFourInput);
+        CLUSTER.createTopic(streamOneInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamFourInput, 2, 1);
     }
 
 

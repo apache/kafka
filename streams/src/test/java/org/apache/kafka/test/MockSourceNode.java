@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockSourceNode<K, V> extends SourceNode<K, V> {
@@ -36,7 +37,7 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public boolean initialized;
 
     public MockSourceNode(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
-        super(NAME + INDEX.getAndIncrement(), topics, keyDeserializer, valDeserializer);
+        super(NAME + INDEX.getAndIncrement(), Arrays.asList(topics), keyDeserializer, valDeserializer);
     }
 
     @Override
