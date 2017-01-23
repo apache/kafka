@@ -84,7 +84,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
 
             if (partitions == null) {
                 log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
-                maxNumPartitions = StreamPartitionAssignor.NOT_AVAILABLE;
+                return StreamPartitionAssignor.NOT_AVAILABLE;
             } else {
                 int numPartitions = partitions.size();
                 if (numPartitions > maxNumPartitions)
