@@ -148,15 +148,14 @@ object ProducerPerformance extends Logging {
 
     val options = parser.parse(args: _*)
 
-    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
-
-    if (options.has(brokerListOpt) && options.has(bootstrapServer))
+    if (options.has(brokerListOpt) && options.has(bootstrapServerOpt))
       CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $bootstrapServerOpt.")
     else if (options.has(brokerListOpt)) {
       CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
     }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
     ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
 

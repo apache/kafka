@@ -108,8 +108,6 @@ object ReplayLogProducer extends Logging {
 
     val options = parser.parse(args : _*)
 
-    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
-
     if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
     else if (options.has(brokerListOpt)) {
@@ -117,6 +115,7 @@ object ReplayLogProducer extends Logging {
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, inputTopicOpt)
     }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
     ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val zkConnect = options.valueOf(zkConnectOpt)

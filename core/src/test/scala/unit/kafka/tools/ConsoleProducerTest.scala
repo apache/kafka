@@ -19,14 +19,16 @@ package kafka.tools
 
 import kafka.producer.ProducerConfig
 import ConsoleProducer.LineMessageReader
+import kafka.utils.CommandLineUtils
+import kafka.utils.CommandLineUtils.ExitPolicy
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{Assert, Test}
+import org.junit.{Test}
 
 class ConsoleProducerTest {
 
   @Test
-  def shouldParseValidOldProducerValidConfig() {
+  def shouldParseValidOldProducerConfig() {
     //Given
     val args: Array[String] = Array(
       "--broker-list", "localhost:1001,localhost:1002",
@@ -43,7 +45,7 @@ class ConsoleProducerTest {
   }
 
   @Test
-  def shouldParseValidNewProducerValidConfig() {
+  def shouldParseValidNewProducerConfig() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:1001",
@@ -97,19 +99,13 @@ class ConsoleProducerTest {
     new ProducerConfig(ConsoleProducer.getOldProducerProps(config))
   }
 
-  @Test
+  @Test(expected = classOf[joptsimple.OptionException])
   def testInvalidConfigs() {
     val invalidArgs: Array[String] = Array(
       "--t", // not a valid argument
       "t3"
     )
-
-    try {
-      new ConsoleProducer.ProducerConfig(invalidArgs)
-      Assert.fail("Should have thrown an UnrecognizedOptionException")
-    } catch {
-      case _: joptsimple.OptionException => // expected exception
-    }
+    new ConsoleProducer.ProducerConfig(invalidArgs)
   }
 
   @Test
@@ -130,6 +126,21 @@ class ConsoleProducerTest {
     reader.init(System.in,ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testBrokerListAndBootstrapServerOptionMissing(): Unit = {
+    val args: Array[String] = Array(
+      "--topic",
+      "producerTest"
+    )
+
+    CommandLineUtils.exitPolicy(new ExitPolicy {
+      override def exit(msg: String): Nothing = {
+        throw new IllegalArgumentException
+      }
+    })
+    new ConsoleProducer.ProducerConfig(args)
   }
 
 }

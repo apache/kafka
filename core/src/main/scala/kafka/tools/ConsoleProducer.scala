@@ -259,7 +259,6 @@ object ConsoleProducer {
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
 
     val useOldProducer = options.has(useOldProducerOpt)
-    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
 
     if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
       CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
@@ -268,6 +267,7 @@ object ConsoleProducer {
     } else {
       CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
     }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
     ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val topic = options.valueOf(topicOpt)
