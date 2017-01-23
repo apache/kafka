@@ -75,7 +75,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     var producer = new KafkaProducer[Array[Byte],Array[Byte]](props)
-    val consumer = new SimpleConsumer("localhost", server.boundPort(), 100, 1024*1024, "")
+    val consumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 100, 1024*1024, "")
 
     try {
       // create topic

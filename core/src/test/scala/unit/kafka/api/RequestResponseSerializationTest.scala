@@ -17,13 +17,15 @@
 
 package kafka.api
 
-import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError}
 import kafka.common._
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.common.TopicAndPartition
+import kafka.utils.TestUtils
+import TestUtils.createBroker
 import java.nio.ByteBuffer
 
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.utils.Time
 import org.junit._
@@ -74,9 +76,8 @@ object SerializationTestUtils {
     TopicAndPartition(topic2, 3) -> PartitionFetchInfo(4000, 100)
   )
 
-  private val brokers = List(new Broker(0, Map(SecurityProtocol.PLAINTEXT -> EndPoint("localhost", 1011, SecurityProtocol.PLAINTEXT))),
-                             new Broker(1, Map(SecurityProtocol.PLAINTEXT -> EndPoint("localhost", 1012, SecurityProtocol.PLAINTEXT))),
-                             new Broker(2, Map(SecurityProtocol.PLAINTEXT -> EndPoint("localhost", 1013, SecurityProtocol.PLAINTEXT))))
+  private val brokers = List(createBroker(0, "localhost", 1011), createBroker(0, "localhost", 1012),
+    createBroker(0, "localhost", 1013))
 
   def createTestProducerRequest: ProducerRequest = {
     new ProducerRequest(1, "client 1", 0, 1000, topicDataProducerRequest)
@@ -88,13 +89,9 @@ object SerializationTestUtils {
       TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
     ), ProducerRequest.CurrentVersion, 100)
 
-  def createTestFetchRequest: FetchRequest = {
-    new FetchRequest(requestInfo = requestInfos.toVector)
-  }
+  def createTestFetchRequest: FetchRequest = new FetchRequest(requestInfo = requestInfos.toVector)
 
-  def createTestFetchResponse: FetchResponse = {
-    FetchResponse(1, topicDataFetchResponse.toVector)
-  }
+  def createTestFetchResponse: FetchResponse = FetchResponse(1, topicDataFetchResponse.toVector)
 
   def createTestOffsetRequest = new OffsetRequest(
       collection.immutable.Map(TopicAndPartition(topic1, 1) -> PartitionOffsetRequestInfo(1000, 200)),
@@ -153,15 +150,14 @@ object SerializationTestUtils {
     new OffsetFetchResponse(collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", Errors.NONE.code),
       TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-    ))
+    ), errorCode = Errors.NONE.code)
   }
 
-  def createConsumerMetadataRequest: GroupCoordinatorRequest = {
-    GroupCoordinatorRequest("group 1", clientId = "client 1")
-  }
+  def createConsumerMetadataRequest: GroupCoordinatorRequest = GroupCoordinatorRequest("group 1", clientId = "client 1")
 
   def createConsumerMetadataResponse: GroupCoordinatorResponse = {
-    GroupCoordinatorResponse(Some(brokers.head.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), Errors.NONE.code, 0)
+    GroupCoordinatorResponse(Some(
+      brokers.head.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))), Errors.NONE.code, 0)
   }
 }
 
@@ -187,8 +183,8 @@ class RequestResponseSerializationTest extends JUnitSuite {
     val requestsAndResponses =
       collection.immutable.Seq(producerRequest, producerResponse,
                                fetchRequest, offsetRequest, offsetResponse,
-                               offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
-                               offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
+                               offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2, offsetCommitResponse,
+                               offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,
                                consumerMetadataResponseNoCoordinator)
 

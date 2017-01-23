@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore<K, V> {
+class CachingKeyValueStore<K, V> implements WrappedStateStore, KeyValueStore<K, V>, CachedStateStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -232,6 +232,14 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     }
 
     KeyValueStore<Bytes, byte[]> underlying() {
+        return underlying;
+    }
+
+    @Override
+    public StateStore inner() {
+        if (underlying instanceof WrappedStateStore) {
+            return ((WrappedStateStore) underlying).inner();
+        }
         return underlying;
     }
 }

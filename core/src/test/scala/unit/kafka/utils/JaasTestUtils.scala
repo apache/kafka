@@ -58,8 +58,7 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false,
-                              validUsers: Map[String, String] = Map.empty) {
+                              debug: Boolean = false) {
     def toJaasModule: JaasModule = {
       JaasModule(
         "org.apache.kafka.common.security.scram.ScramLoginModule",
@@ -67,7 +66,7 @@ object JaasTestUtils {
         entries = Map(
           "username" -> username,
           "password" -> password
-        ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
+        )
       )
     }
   }
@@ -129,16 +128,16 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
 
-  def writeKafkaFile(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanisms: List[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
+  def writeKafkaFile(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanisms, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections)
     jaasFile.getCanonicalPath
   }
 
-  def writeZkAndKafkaFiles(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanisms: List[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
+  def writeZkAndKafkaFiles(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanisms, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections ++ zkSections)
     jaasFile.getCanonicalPath
   }
@@ -210,9 +209,9 @@ object JaasTestUtils {
   /*
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
-  private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanisms.map(m => 
-      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)))
+  private def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
+    new JaasSection(KafkaClientContextName, mechanism.map(m =>
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =

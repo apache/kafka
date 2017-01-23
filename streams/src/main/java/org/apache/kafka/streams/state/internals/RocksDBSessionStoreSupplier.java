@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -35,13 +37,14 @@ import java.util.Map;
 public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
     private static final int NUM_SEGMENTS = 3;
+    public static final String METRIC_SCOPE = "rocksdb-session-store";
     private final long retentionPeriod;
-    private final boolean enableCaching;
+    private final boolean cached;
 
-    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, Time.SYSTEM, logged, logConfig);
         this.retentionPeriod = retentionPeriod;
-        this.enableCaching = enableCaching;
+        this.cached = cached;
     }
 
     public String name() {
@@ -49,16 +52,41 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     }
 
     public SessionStore<K, V> get() {
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
+        final SessionKeySchema keySchema = new SessionKeySchema();
+        final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     new SessionKeySchema());
-        final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
-                                                                                          : bytesStore, "rocksdb-session-store", time);
-        if (enableCaching) {
-            return new CachingSessionStore<>(metered, keySerde, valueSerde);
+                                                                                     keySchema
+        );
+
+        if (cached && logged) {
+            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
+                                                                                      METRIC_SCOPE, time);
+            final RocksDBSessionStore<Bytes, byte[]> sessionStore
+                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }
-        return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
+
+        if (cached) {
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
+                                                                                      METRIC_SCOPE, time);
+            final RocksDBSessionStore<Bytes, byte[]> sessionStore
+                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
+        }
+
+        if (logged) {
+            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
+                                                                                      METRIC_SCOPE, time);
+            return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
+        }
+
+        return new RocksDBSessionStore<>(
+                new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time), keySerde, valueSerde);
 
     }
 

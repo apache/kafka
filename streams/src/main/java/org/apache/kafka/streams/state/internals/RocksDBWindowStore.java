@@ -20,6 +20,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -33,7 +34,6 @@ import java.util.NoSuchElementException;
 
 class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
-    private final String name;
     private final SegmentedBytesStore bytesStore;
     private final boolean retainDuplicates;
     private final Serde<K> keySerde;
@@ -43,8 +43,15 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private StateSerdes<K, V> serdes;
 
 
-    RocksDBWindowStore(String name, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, final SegmentedBytesStore bytesStore) {
-        this.name = name;
+    static RocksDBWindowStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates) {
+        return new RocksDBWindowStore<>(inner, Serdes.Bytes(), Serdes.ByteArray(), retainDuplicates);
+    }
+
+
+    RocksDBWindowStore(final SegmentedBytesStore bytesStore,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde,
+                       final boolean retainDuplicates) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.retainDuplicates = retainDuplicates;
@@ -54,7 +61,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public String name() {
-        return name;
+        return bytesStore.name();
     }
 
     @Override
@@ -62,7 +69,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         // construct the serde
-        this.serdes = new StateSerdes<>(name,
+        this.serdes = new StateSerdes<>(bytesStore.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
@@ -146,6 +153,14 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         @Override
         public void close() {
             actual.close();
+        }
+
+        @Override
+        public Long peekNextKey() {
+            if (!actual.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return WindowStoreUtils.timestampFromBinaryKey(actual.peekNextKey().get());
         }
     }
 

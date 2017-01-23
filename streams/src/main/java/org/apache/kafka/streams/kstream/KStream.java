@@ -623,7 +623,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier,
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
 
     /**
@@ -706,7 +706,7 @@ public interface KStream<K, V> {
      * {@link org.apache.kafka.streams.processor.Processor Processor} (provided by the given {@link ProcessorSupplier}).
      * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Processor#punctuate(long) Processor.punctuate(long)}
-     * the processing progress can be observed and additional periodic actions get be performed.
+     * the processing progress can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -739,7 +739,7 @@ public interface KStream<K, V> {
      *                 context.schedule(1000); // call #punctuate() each 1000ms
      *             }
      *
-     *             void transform(K key, V value) {
+     *             void process(K key, V value) {
      *                 // can access this.state
      *             }
      *
@@ -1677,8 +1677,8 @@ public interface KStream<K, V> {
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
     <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
-                                         final KeyValueMapper<K, V, GK> keyValueMapper,
-                                         final ValueJoiner<? super V, ? super GV, ? super RV> valueJoiner);
+                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                         final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner);
 
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi join
@@ -1708,6 +1708,6 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
     <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
-                                     final KeyValueMapper<K, V, GK> keyValueMapper,
-                                     final ValueJoiner<? super V, ? super GV, ? super RV> joiner);
+                                     final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                     final ValueJoiner<? super V, ? super GV, ? extends RV> joiner);
 }

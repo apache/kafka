@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.Record
  *
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
- * 
+ *
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
@@ -59,8 +59,10 @@ object ApiVersion {
     "0.10.1-IV1" -> KAFKA_0_10_1_IV1,
     // introduced ListOffsetRequest v1 in KIP-79
     "0.10.1-IV2" -> KAFKA_0_10_1_IV2,
-    "0.10.1" -> KAFKA_0_10_1_IV2
-
+    "0.10.1" -> KAFKA_0_10_1_IV2,
+    // introduced UpdateMetadataRequest v3 in KIP-103
+    "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
+    "0.10.2" -> KAFKA_0_10_2_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -137,4 +139,10 @@ case object KAFKA_0_10_1_IV2 extends ApiVersion {
   val version: String = "0.10.1-IV2"
   val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
   val id: Int = 8
+}
+
+case object KAFKA_0_10_2_IV0 extends ApiVersion {
+  val version: String = "0.10.2-IV0"
+  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val id: Int = 9
 }

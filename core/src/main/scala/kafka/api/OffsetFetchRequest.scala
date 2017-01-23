@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -27,7 +27,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 object OffsetFetchRequest extends Logging {
-  val CurrentVersion: Short = 1
+  val CurrentVersion: Short = 2
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetFetchRequest = {
@@ -59,7 +59,7 @@ case class OffsetFetchRequest(groupId: String,
     extends RequestOrResponse(Some(ApiKeys.OFFSET_FETCH.id)) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
-  
+
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
     buffer.putShort(versionId)
@@ -82,7 +82,7 @@ case class OffsetFetchRequest(groupId: String,
     2 + /* versionId */
     4 + /* correlationId */
     shortStringLength(clientId) +
-    shortStringLength(groupId) + 
+    shortStringLength(groupId) +
     4 + /* topic count */
     requestInfoGroupedByTopic.foldLeft(0)((count, t) => {
       count + shortStringLength(t._1) + /* topic */
@@ -90,13 +90,20 @@ case class OffsetFetchRequest(groupId: String,
       t._2.size * 4 /* partition */
     })
 
-  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val responseMap = requestInfo.map {
-      case (topicAndPartition) => (topicAndPartition, OffsetMetadataAndError(
-        Errors.forException(e).code
-      ))
-    }.toMap
-    val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId)
+  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val requestVersion = request.header.apiVersion
+
+    val thrownError = Errors.forException(e)
+    val responseMap =
+      if (requestVersion < 2) {
+        requestInfo.map {
+          topicAndPartition => (topicAndPartition, OffsetMetadataAndError(thrownError.code))
+        }.toMap
+      } else {
+        Map[kafka.common.TopicAndPartition, kafka.common.OffsetMetadataAndError]()
+      }
+
+    val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId, errorCode=thrownError.code)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
@@ -107,7 +114,7 @@ case class OffsetFetchRequest(groupId: String,
     offsetFetchRequest.append("; CorrelationId: " + correlationId)
     offsetFetchRequest.append("; ClientId: " + clientId)
     offsetFetchRequest.append("; GroupId: " + groupId)
-    if(details)
+    if (details)
       offsetFetchRequest.append("; RequestInfo: " + requestInfo.mkString(","))
     offsetFetchRequest.toString()
   }

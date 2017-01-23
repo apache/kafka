@@ -68,8 +68,7 @@ public class InternalTopicManager {
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
                 return;
             } catch (StreamsException ex) {
-                log.debug("Could not create internal topics: " + ex.getMessage());
-                log.debug("Retry #" + i);
+                log.warn("Could not create internal topics: " + ex.getMessage() + ". Retry #" + i);
             }
         }
         throw new StreamsException("Could not create internal topics.");
@@ -114,7 +113,7 @@ public class InternalTopicManager {
         for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
             if (existingTopicNamesPartitions.get(topic.name()) != null) {
                 if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
-                    throw new StreamsException("Internal topic with invalid partitons. Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before proceesing.");
+                    throw new StreamsException("Internal topic with invalid partitons. Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             }
         }
