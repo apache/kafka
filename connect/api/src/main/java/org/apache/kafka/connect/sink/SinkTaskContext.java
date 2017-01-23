@@ -26,7 +26,7 @@ import java.util.Set;
 /**
  * Context passed to SinkTasks, allowing them to access utilities in the Kafka Connect runtime.
  */
-@InterfaceStability.Unstable
+
 public interface SinkTaskContext {
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets

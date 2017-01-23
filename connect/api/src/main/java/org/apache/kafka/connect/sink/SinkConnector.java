@@ -23,7 +23,7 @@ import org.apache.kafka.connect.connector.Connector;
 /**
  * SinkConnectors implement the Connector interface to send Kafka data to another system.
  */
-@InterfaceStability.Unstable
+
 public abstract class SinkConnector extends Connector {
 
     /**

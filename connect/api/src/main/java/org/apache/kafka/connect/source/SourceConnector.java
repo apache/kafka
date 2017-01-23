@@ -23,7 +23,7 @@ import org.apache.kafka.connect.connector.Connector;
  * SourceConnectors implement the connector interface to pull data from another system and send
  * it to Kafka.
  */
-@InterfaceStability.Unstable
+
 public abstract class SourceConnector extends Connector {
 
 }
