@@ -75,7 +75,8 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
   protected def trustStoreFile: Option[File] = None
-  protected def saslProperties: Option[Properties] = None
+  protected def serverSaslProperties: Option[Properties] = None
+  protected def clientSaslProperties: Option[Properties] = None
 
   @Before
   override def setUp() {

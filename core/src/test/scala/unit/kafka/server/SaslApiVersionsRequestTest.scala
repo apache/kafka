@@ -33,7 +33,8 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected val kafkaClientSaslMechanism = "PLAIN"
   override protected val kafkaServerSaslMechanisms = List("PLAIN")
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   override protected val zkSaslEnabled = false
   override def numBrokers = 1
 
