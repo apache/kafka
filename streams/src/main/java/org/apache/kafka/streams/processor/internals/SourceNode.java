@@ -21,14 +21,17 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+import java.util.List;
+
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
+    private final List<String> topics;
+
+    private ProcessorContext context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
-    private ProcessorContext context;
-    private String[] topics;
 
-    public SourceNode(String name, String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.keyDeserializer = keyDeserializer;
