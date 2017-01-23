@@ -28,7 +28,7 @@ import java.util.Map;
  * and byte[]. Internally, this likely includes an intermediate step to the format used by the serialization
  * layer (e.g. JsonNode, GenericRecord, Message).
  */
-@InterfaceStability.Unstable
+
 public interface Converter {
 
     /**

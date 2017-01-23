@@ -34,7 +34,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.sink.SinkTask}.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public interface Task {
     /**
      * Get the version of this task. Usually this should be the same as the corresponding {@link Connector} class's version.

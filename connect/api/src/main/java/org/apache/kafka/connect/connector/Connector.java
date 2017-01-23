@@ -42,7 +42,7 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public abstract class Connector {
 
     protected ConnectorContext context;

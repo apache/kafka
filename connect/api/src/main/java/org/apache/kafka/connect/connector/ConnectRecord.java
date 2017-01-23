@@ -28,7 +28,7 @@ import org.apache.kafka.connect.data.Schema;
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final String topic;
     private final Integer kafkaPartition;

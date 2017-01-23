@@ -26,7 +26,7 @@ import java.util.List;
  * Utilities that connector implementations might find useful. Contains common building blocks
  * for writing connectors.
  */
-@InterfaceStability.Unstable
+
 public class ConnectorUtils {
     /**
      * Given a list of elements and a target number of groups, generates list of groups of

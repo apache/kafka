@@ -52,7 +52,7 @@ import java.util.Map;
   * </ol>
  *
  */
-@InterfaceStability.Unstable
+
 public abstract class SinkTask implements Task {
 
     /**
