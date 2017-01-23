@@ -545,6 +545,68 @@ public class FetcherTest {
     }
 
     @Test
+    public void testUpdateFetchPositionOfPausedPartitionsRequiringOffsetReset() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.committed(tp, new OffsetAndMetadata(0));
+        subscriptions.pause(tp); // paused partition does not have a valid position
+        subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                               listOffsetResponse(Errors.NONE, 1L, 10L));
+        fetcher.updateFetchPositions(singleton(tp));
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        assertFalse(subscriptions.isFetchable(tp)); // because tp is paused
+        assertTrue(subscriptions.hasValidPosition(tp));
+        assertEquals(10, subscriptions.position(tp).longValue());
+    }
+
+    @Test
+    public void testUpdateFetchPositionOfPausedPartitionsWithoutACommittedOffset() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.pause(tp); // paused partition does not have a valid position
+
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
+                               listOffsetResponse(Errors.NONE, 1L, 0L));
+        fetcher.updateFetchPositions(singleton(tp));
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        assertFalse(subscriptions.isFetchable(tp)); // because tp is paused
+        assertTrue(subscriptions.hasValidPosition(tp));
+        assertEquals(0, subscriptions.position(tp).longValue());
+    }
+
+    @Test
+    public void testUpdateFetchPositionOfPausedPartitionsWithoutAValidPosition() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.committed(tp, new OffsetAndMetadata(0));
+        subscriptions.pause(tp); // paused partition does not have a valid position
+        subscriptions.seek(tp, 10);
+
+        fetcher.updateFetchPositions(singleton(tp));
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        assertFalse(subscriptions.isFetchable(tp)); // because tp is paused
+        assertTrue(subscriptions.hasValidPosition(tp));
+        assertEquals(10, subscriptions.position(tp).longValue());
+    }
+
+    @Test
+    public void testUpdateFetchPositionOfPausedPartitionsWithAValidPosition() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.committed(tp, new OffsetAndMetadata(0));
+        subscriptions.seek(tp, 10);
+        subscriptions.pause(tp); // paused partition already has a valid position
+
+        fetcher.updateFetchPositions(singleton(tp));
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        assertFalse(subscriptions.isFetchable(tp)); // because tp is paused
+        assertTrue(subscriptions.hasValidPosition(tp));
+        assertEquals(10, subscriptions.position(tp).longValue());
+    }
+
+    @Test
     public void testGetAllTopics() {
         // sending response before request, as getTopicMetadata is a blocking call
         client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
