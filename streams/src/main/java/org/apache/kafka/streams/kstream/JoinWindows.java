@@ -46,16 +46,16 @@ import java.util.Map;
 public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
-    public final long before;
+    public final long beforeMs;
     /** Maximum time difference for tuples that are after the join tuple. */
-    public final long after;
+    public final long afterMs;
 
-    private JoinWindows(final long before, final long after) {
-        if (before + after < 0) {
-            throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
+    private JoinWindows(final long beforeMs, final long afterMs) {
+        if (beforeMs + afterMs < 0) {
+            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative");
         }
-        this.after = after;
-        this.before = before;
+        this.afterMs = afterMs;
+        this.beforeMs = beforeMs;
     }
 
     /**
@@ -64,8 +64,8 @@ public class JoinWindows extends Windows<Window> {
      *
      * @param timeDifference    join window interval
      */
-    public static JoinWindows of(final long timeDifference) throws IllegalArgumentException {
-        return new JoinWindows(timeDifference, timeDifference);
+    public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs);
     }
 
     /**
@@ -75,8 +75,8 @@ public class JoinWindows extends Windows<Window> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows before(final long timeDifference) throws IllegalArgumentException {
-        return new JoinWindows(timeDifference, after);
+    public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(timeDifferenceMs, afterMs);
     }
 
     /**
@@ -86,8 +86,8 @@ public class JoinWindows extends Windows<Window> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows after(final long timeDifference) throws IllegalArgumentException {
-        return new JoinWindows(before, timeDifference);
+    public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(beforeMs, timeDifferenceMs);
     }
 
     /**
@@ -100,15 +100,15 @@ public class JoinWindows extends Windows<Window> {
 
     @Override
     public long size() {
-        return after + before;
+        return beforeMs + afterMs;
     }
 
     @Override
-    public JoinWindows until(final long duration) throws IllegalArgumentException {
-        if (duration < size()) {
-            throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window size.");
+    public JoinWindows until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < size()) {
+            throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
         }
-        super.until(duration);
+        super.until(durationMs);
         return this;
     }
 
@@ -127,13 +127,13 @@ public class JoinWindows extends Windows<Window> {
         }
 
         final JoinWindows other = (JoinWindows) o;
-        return before == other.before && after == other.after;
+        return beforeMs == other.beforeMs && afterMs == other.afterMs;
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (before ^ (before >>> 32));
-        result = 31 * result + (int) (after ^ (after >>> 32));
+        int result = (int) (beforeMs ^ (beforeMs >>> 32));
+        result = 31 * result + (int) (afterMs ^ (afterMs >>> 32));
         return result;
     }
 

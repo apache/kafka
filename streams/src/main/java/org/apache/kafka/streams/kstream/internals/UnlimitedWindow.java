@@ -21,8 +21,8 @@ import org.apache.kafka.streams.kstream.Window;
 
 public class UnlimitedWindow extends Window {
 
-    public UnlimitedWindow(final long start) {
-        super(start, Long.MAX_VALUE);
+    public UnlimitedWindow(final long startMs) {
+        super(startMs, Long.MAX_VALUE);
     }
 
     @Override

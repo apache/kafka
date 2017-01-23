@@ -27,15 +27,15 @@ public abstract class Windows<W extends Window> {
 
     private static final int DEFAULT_NUM_SEGMENTS = 3;
 
-    static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L; // one day (if time is represented as ms)
+    static final long DEFAULT_MAINTAIN_DURATION_MS = 24 * 60 * 60 * 1000L; // one day
 
-    private long maintainDuration;
+    private long maintainDurationMs;
 
     public int segments;
 
     protected Windows() {
         segments = DEFAULT_NUM_SEGMENTS;
-        maintainDuration = DEFAULT_MAINTAIN_DURATION;
+        maintainDurationMs = DEFAULT_MAINTAIN_DURATION_MS;
     }
 
     /**
@@ -45,11 +45,11 @@ public abstract class Windows<W extends Window> {
      * @return  itself
      */
     // This should always get overridden to provide the correct return type and thus to avoid a cast
-    public Windows<W> until(final long duration) throws IllegalArgumentException {
-        if (duration < 0) {
-            throw new IllegalArgumentException("Window maintain duration cannot be negative.");
+    public Windows<W> until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < 0) {
+            throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
         }
-        maintainDuration = duration;
+        maintainDurationMs = durationMs;
 
         return this;
     }
@@ -75,7 +75,7 @@ public abstract class Windows<W extends Window> {
      * @return the window maintain duration in milliseconds of streams time
      */
     public long maintainMs() {
-        return maintainDuration;
+        return maintainDurationMs;
     }
 
     /**

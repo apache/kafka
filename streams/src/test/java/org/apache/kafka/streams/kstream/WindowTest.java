@@ -26,8 +26,8 @@ import static org.junit.Assert.assertNotEquals;
 public class WindowTest {
 
     static class TestWindow extends Window {
-        TestWindow(final long start, final long end) {
-            super(start, end);
+        TestWindow(final long startMs, final long endMs) {
+            super(startMs, endMs);
         }
 
         @Override
@@ -37,8 +37,8 @@ public class WindowTest {
     }
 
     static class TestWindow2 extends  Window {
-        TestWindow2(final long start, final long end) {
-            super(start, end);
+        TestWindow2(final long startMs, final long endMs) {
+            super(startMs, endMs);
         }
 
         @Override
@@ -61,7 +61,7 @@ public class WindowTest {
 
     @Test
     public void shouldBeEqualIfStartAndEndSame() {
-        final TestWindow window2 = new TestWindow(window.start, window.end);
+        final TestWindow window2 = new TestWindow(window.startMs, window.endMs);
 
         assertEquals(window, window);
         assertEquals(window, window2);
@@ -70,16 +70,16 @@ public class WindowTest {
 
     @Test
     public void shouldNotBeEqualIfStartOrEndIsDifferent() {
-        assertNotEquals(window, new TestWindow(0, window.end));
-        assertNotEquals(window, new TestWindow(7, window.end));
-        assertNotEquals(window, new TestWindow(window.start, 7));
-        assertNotEquals(window, new TestWindow(window.start, 15));
+        assertNotEquals(window, new TestWindow(0, window.endMs));
+        assertNotEquals(window, new TestWindow(7, window.endMs));
+        assertNotEquals(window, new TestWindow(window.startMs, 7));
+        assertNotEquals(window, new TestWindow(window.startMs, 15));
         assertNotEquals(window, new TestWindow(7, 8));
         assertNotEquals(window, new TestWindow(0, 15));
     }
 
     @Test
     public void shouldNotBeEqualIfDifferentWindowType() {
-        assertNotEquals(window, new TestWindow2(window.start, window.end));
+        assertNotEquals(window, new TestWindow2(window.startMs, window.endMs));
     }
 }

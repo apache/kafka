@@ -27,23 +27,23 @@ import java.util.Map;
  */
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
-    private static final long DEFAULT_START_TIMESTAMP = 0L;
+    private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
     /** The start timestamp of the window. */
-    public final long start;
+    public final long startMs;
 
-    private UnlimitedWindows(final long start) throws IllegalArgumentException {
-        if (start < 0) {
-            throw new IllegalArgumentException("start must be > 0 (you provided " + start + ")");
+    private UnlimitedWindows(final long startMs) throws IllegalArgumentException {
+        if (startMs < 0) {
+            throw new IllegalArgumentException("startMs must be > 0 (you provided " + startMs + ")");
         }
-        this.start = start;
+        this.startMs = startMs;
     }
 
     /**
      * Return an unlimited window starting at timestamp zero.
      */
     public static UnlimitedWindows of() {
-        return new UnlimitedWindows(DEFAULT_START_TIMESTAMP);
+        return new UnlimitedWindows(DEFAULT_START_TIMESTAMP_MS);
     }
 
     /**
@@ -62,8 +62,8 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
         // we cannot use Collections.singleMap since it does not support remove()
         final Map<Long, UnlimitedWindow> windows = new HashMap<>();
-        if (timestamp >= start) {
-            windows.put(start, new UnlimitedWindow(start));
+        if (timestamp >= startMs) {
+            windows.put(startMs, new UnlimitedWindow(startMs));
         }
         return windows;
     }
@@ -84,17 +84,17 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
         }
 
         final UnlimitedWindows other = (UnlimitedWindows) o;
-        return start == other.start;
+        return startMs == other.startMs;
     }
 
     @Override
     public int hashCode() {
-        return (int) (start ^ (start >>> 32));
+        return (int) (startMs ^ (startMs >>> 32));
     }
 
     @Override
-    public UnlimitedWindows until(final long duration) {
-        throw new IllegalArgumentException("Window retention time (duration) cannot be set for UnlimitedWindows.");
+    public UnlimitedWindows until(final long durationMs) {
+        throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
     }
 
     @Override

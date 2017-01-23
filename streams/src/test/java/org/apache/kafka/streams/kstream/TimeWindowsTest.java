@@ -34,13 +34,13 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldSetWindowSize() {
-        assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).size);
+        assertEquals(ANY_SIZE, TimeWindows.of(ANY_SIZE).sizeMs);
     }
 
     @Test
     public void shouldSetWindowAdvance() {
         final long anyAdvance = 4;
-        assertEquals(anyAdvance, TimeWindows.of(ANY_SIZE).advanceBy(anyAdvance).advance);
+        assertEquals(anyAdvance, TimeWindows.of(ANY_SIZE).advanceBy(anyAdvance).advanceMs);
     }
 
     @Test
@@ -50,14 +50,14 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
-        final long windowSize = 2 * Windows.DEFAULT_MAINTAIN_DURATION;
+        final long windowSize = 2 * Windows.DEFAULT_MAINTAIN_DURATION_MS;
         assertEquals(windowSize, TimeWindows.of(windowSize).maintainMs());
     }
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
         TimeWindows w1 = TimeWindows.of(ANY_SIZE);
-        TimeWindows w2 = TimeWindows.of(w1.size);
+        TimeWindows w2 = TimeWindows.of(w1.sizeMs);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -69,7 +69,7 @@ public class TimeWindowsTest {
         assertEquals(w1.hashCode(), w2.hashCode());
 
         // Transitive
-        TimeWindows w3 = TimeWindows.of(w2.size);
+        TimeWindows w3 = TimeWindows.of(w2.sizeMs);
         assertEquals(w2, w3);
         assertEquals(w1, w3);
         assertEquals(w1.hashCode(), w3.hashCode());
@@ -79,10 +79,10 @@ public class TimeWindowsTest {
         assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        TimeWindows differentWindowSize = TimeWindows.of(w1.size + 1);
+        TimeWindows differentWindowSize = TimeWindows.of(w1.sizeMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
-        TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advance - 1);
+        TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advanceMs - 1);
         assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 

@@ -22,8 +22,8 @@ package org.apache.kafka.streams.kstream;
  */
 public abstract class Window {
 
-    protected final long start;
-    protected final long end;
+    protected final long startMs;
+    protected final long endMs;
 
     /**
      * Create a new window for the given start time (inclusive) and end time (exclusive).
@@ -33,29 +33,29 @@ public abstract class Window {
      * @throws IllegalArgumentException if {@code start} or {@code end} is negative or if {@code end} is smaller than
      * {@code start}
      */
-    public Window(long start, long end) throws IllegalArgumentException {
-        if (start < 0) {
-            throw new IllegalArgumentException("Window start time cannot be negative.");
+    public Window(long startMs, long endMs) throws IllegalArgumentException {
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window startMs time cannot be negative.");
         }
-        if (end < start) {
-            throw new IllegalArgumentException("Window end time cannot be smaller than window start time.");
+        if (endMs < startMs) {
+            throw new IllegalArgumentException("Window endMs time cannot be smaller than window startMs time.");
         }
-        this.start = start;
-        this.end = end;
+        this.startMs = startMs;
+        this.endMs = endMs;
     }
 
     /**
      * Return the start timestamp of this window, inclusive
      */
     public long start() {
-        return start;
+        return startMs;
     }
 
     /**
      * Return the end timestamp of this window, exclusive
      */
     public long end() {
-        return end;
+        return endMs;
     }
 
     /**
@@ -77,19 +77,19 @@ public abstract class Window {
         }
 
         final Window other = (Window) obj;
-        return start == other.start && end == other.end;
+        return startMs == other.startMs && endMs == other.endMs;
     }
 
     @Override
     public int hashCode() {
-        return (int) (((start << 32) | end) % 0xFFFFFFFFL);
+        return (int) (((startMs << 32) | endMs) % 0xFFFFFFFFL);
     }
 
     @Override
     public String toString() {
         return "Window{" +
-            "start=" + start +
-            ", end=" + end +
+            "start=" + startMs +
+            ", end=" + endMs +
             '}';
     }
 }

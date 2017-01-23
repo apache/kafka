@@ -21,10 +21,10 @@ import org.apache.kafka.streams.kstream.Window;
 
 public class TimeWindow extends Window {
 
-    public TimeWindow(long start, long end) {
-        super(start, end);
-        if (start == end) {
-            throw new IllegalArgumentException("Window end time must be greater than window start time.");
+    public TimeWindow(long startMs, long endMs) {
+        super(startMs, endMs);
+        if (startMs == endMs) {
+            throw new IllegalArgumentException("Window endMs must be greater than window startMs.");
         }
     }
 
@@ -35,7 +35,7 @@ public class TimeWindow extends Window {
                 + other.getClass());
         }
         final TimeWindow otherWindow = (TimeWindow) other;
-        return start < otherWindow.end && otherWindow.start < end;
+        return startMs < otherWindow.endMs && otherWindow.startMs < endMs;
     }
 
 }

@@ -40,18 +40,18 @@ public class TimeWindows extends Windows<TimeWindow> {
      * The window size's effective time unit is determined by the semantics of the topology's
      * configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      */
-    public final long size;
+    public final long sizeMs;
 
     /**
      * The size of the window's advance interval, i.e. by how much a window moves forward relative
      * to the previous one. The interval's effective time unit is determined by the semantics of
      * the topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      */
-    public final long advance;
+    public final long advanceMs;
 
-    private TimeWindows(final long size, final long advance) throws IllegalArgumentException {
-        this.size = size;
-        this.advance = advance;
+    private TimeWindows(final long sizeMs, final long advanceMs) throws IllegalArgumentException {
+        this.sizeMs = sizeMs;
+        this.advanceMs = advanceMs;
     }
 
     /**
@@ -67,11 +67,11 @@ public class TimeWindows extends Windows<TimeWindow> {
      *             topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public static TimeWindows of(final long size) throws IllegalArgumentException {
-        if (size <= 0) {
-            throw new IllegalArgumentException("Window size must be larger than zero.");
+    public static TimeWindows of(final long sizeMs) throws IllegalArgumentException {
+        if (sizeMs <= 0) {
+            throw new IllegalArgumentException("Window sizeMs must be larger than zero.");
         }
-        return new TimeWindows(size, size);
+        return new TimeWindows(sizeMs, sizeMs);
     }
 
     /**
@@ -87,42 +87,41 @@ public class TimeWindows extends Windows<TimeWindow> {
      *                 {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public TimeWindows advanceBy(final long advance) {
-        if (advance <= 0 || advance > size) {
-            throw new IllegalArgumentException(String.format("Advance must lie within interval (0, %d]", size));
+    public TimeWindows advanceBy(final long advanceMs) {
+        if (advanceMs <= 0 || advanceMs > sizeMs) {
+            throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d]", sizeMs));
         }
-        return new TimeWindows(size, advance);
+        return new TimeWindows(sizeMs, advanceMs);
     }
 
     @Override
     public Map<Long, TimeWindow> windowsFor(final long timestamp) {
-        long windowStart = (Math.max(0, timestamp - size + advance) / advance) * advance;
+        long windowStart = (Math.max(0, timestamp - sizeMs + advanceMs) / advanceMs) * advanceMs;
         final Map<Long, TimeWindow> windows = new HashMap<>();
         while (windowStart <= timestamp) {
-            final TimeWindow window = new TimeWindow(windowStart, windowStart + size);
+            final TimeWindow window = new TimeWindow(windowStart, windowStart + sizeMs);
             windows.put(windowStart, window);
-            windowStart += advance;
+            windowStart += advanceMs;
         }
         return windows;
     }
 
     @Override
     public long size() {
-        return size;
+        return sizeMs;
     }
 
-    public TimeWindows until(final long duration) throws IllegalArgumentException {
-        if (duration < size) {
-            throw new IllegalArgumentException("Window retention time (duration) cannot be smaller than the window " +
-                "size.");
+    public TimeWindows until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < sizeMs) {
+            throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
         }
-        super.until(duration);
+        super.until(durationMs);
         return this;
     }
 
     @Override
     public long maintainMs() {
-        return Math.max(super.maintainMs(), size);
+        return Math.max(super.maintainMs(), sizeMs);
     }
 
     @Override
@@ -134,13 +133,13 @@ public class TimeWindows extends Windows<TimeWindow> {
             return false;
         }
         final TimeWindows other = (TimeWindows) o;
-        return size == other.size && advance == other.advance;
+        return sizeMs == other.sizeMs && advanceMs == other.advanceMs;
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (size ^ (size >>> 32));
-        result = 31 * result + (int) (advance ^ (advance >>> 32));
+        int result = (int) (sizeMs ^ (sizeMs >>> 32));
+        result = 31 * result + (int) (advanceMs ^ (advanceMs >>> 32));
         return result;
     }
 
