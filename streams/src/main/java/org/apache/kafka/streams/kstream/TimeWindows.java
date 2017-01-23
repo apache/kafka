@@ -88,7 +88,7 @@ public class TimeWindows extends Windows<TimeWindow> {
      * @return a new window definition
      */
     public TimeWindows advanceBy(final long advance) {
-        if (!(0 < advance && advance <= size)) {
+        if (advance <= 0 || advance > size) {
             throw new IllegalArgumentException(String.format("Advance must lie within interval (0, %d]", size));
         }
         return new TimeWindows(size, advance);
