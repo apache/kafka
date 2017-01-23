@@ -38,7 +38,7 @@ can upgrade the brokers one at a time: shut down the broker, update the code, an
     <li>Multiple regular expressions separated by commas can be passed to MirrorMaker with the new Java consumer via the --whitelist option. This
         makes the behaviour consistent with MirrorMaker when used the old Scala consumer.</li>
     <li>Zookeeper dependency was removed from the Streams API. Now the Streams API uses Kafka protocol to manage internal topics instead of modifying Zookeeprt directly. This eliminates the need for privilege[s] for accessing Zookeeper directly. If the Kafka cluster is secured the Streams apps require to have proper security privilege[s] to create new topics.</li>
-    <li>Several new fields including SECURITY_PROTOCOL_CONFIG, CONNECTIONS_MAX_IDLE_MS_CONFIG, RETRY_BACKOFF_MS_CONFIG RECONNECT_BACKOFF_MS_CONFIG and REQUEST_TIMEOUT_MS_CONFIG were added to StreamsConfig. User should pay attenntion to the default values and set these if needed.</li>
+    <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to StreamsConfig. User should pay attenntion to the default values and set these if needed. For more details please refer to <a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
 </ul>
 
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
