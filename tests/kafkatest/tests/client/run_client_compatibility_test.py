@@ -20,8 +20,7 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
-from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1,
-V_0_10_1_0, KafkaVersion
+from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
