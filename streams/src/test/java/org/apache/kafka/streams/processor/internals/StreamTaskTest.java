@@ -200,7 +200,7 @@ public class StreamTaskTest {
                 "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
                 "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
         }
     }

@@ -119,10 +119,10 @@ public class ProcessorNodeTest {
                     "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
                 assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
                     "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                     "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
             }
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-qps", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
     }

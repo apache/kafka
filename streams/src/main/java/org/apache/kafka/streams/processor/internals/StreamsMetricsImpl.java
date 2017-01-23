@@ -158,7 +158,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-rate", groupNameFromScope(scopeName),
             "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
     }
 
