@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import time
+from random import randint
+
 from ducktape.mark import parametrize
 from ducktape.tests.test import TestContext
 
@@ -55,7 +59,11 @@ class RunClientCompatibilityTest(Test):
         super(RunClientCompatibilityTest, self).__init__(test_context=test_context)
 
         self.zk = ZookeeperService(test_context, num_nodes=3)
-        self.topics = { "test_topic": {
+
+        # generate a unique topic name
+        topic_name = "client_compat_topic_%d%d" % (int(time.time()), randint(0, 2147483647))
+
+        self.topics = { topic_name: {
             "partitions": 10,
             "replication-factor": 1
             }}
@@ -73,8 +81,9 @@ class RunClientCompatibilityTest(Test):
                                features["offsets-for-times-supported"],
                                features["cluster-id-supported"],
                                self.topics.keys()[0]))
-        ssh_log_file = "%s/%s" % (TestContext.results_dir(self.test_context, 0),
-                                  "compatibility_test_output.txt")
+        results_dir = TestContext.results_dir(self.test_context, 0)
+        os.makedirs(results_dir)
+        ssh_log_file = "%s/%s" % (results_dir, "compatibility_test_output.txt")
         try:
           self.logger.info("Running %s" % cmd)
           run_command(node, cmd, ssh_log_file)
