@@ -149,14 +149,14 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
+        super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "run")
 
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "process")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
+        super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "close-deadlock-test")
