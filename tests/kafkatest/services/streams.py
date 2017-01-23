@@ -118,7 +118,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(state_dir)s %(user_test_args)s" \
+              " %(user_test_args)s %(kafka)s %(state_dir)s" \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
@@ -149,14 +149,14 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "run")
+        super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
 
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "process")
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "org.apache.kafka.streams.smoketest.StreamsSmokeTest", "close-deadlock-test")
+        super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
