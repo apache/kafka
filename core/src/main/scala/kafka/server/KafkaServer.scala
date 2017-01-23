@@ -79,6 +79,14 @@ object KafkaServer {
     logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs)
     logProps
   }
+  // Create a metrics object from the configuration
+  private[server] def metricFromConfig(kafkaConfig : KafkaConfig) : MetricConfig = {
+    val metricConfig: MetricConfig = new MetricConfig()
+      .samples(kafkaConfig.metricNumSamples)
+      .recordLevel(Sensor.RecordingLevel.forName(kafkaConfig.metricRecordingLevel))
+      .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+    metricConfig
+  }
 }
 
 
@@ -100,10 +108,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var metrics: Metrics = null
 
-  private val metricConfig: MetricConfig = new MetricConfig()
-    .samples(config.metricNumSamples)
-    .recordLevel(Sensor.RecordingLevel.forName(config.metricRecordingLevel))
-    .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+  private val metricConfig: MetricConfig = KafkaServer.metricFromConfig(config)
 
   val brokerState: BrokerState = new BrokerState
 

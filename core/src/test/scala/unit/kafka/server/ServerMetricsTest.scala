@@ -39,18 +39,15 @@ class ServerMetricsTest extends ZooKeeperTestHarness {
     for (name <- names) {
       props.put(KafkaConfig.MetricRecordingLevelProp, name)
       val config = KafkaConfig.fromProps(props)
-      val server = new KafkaServer(config)
-      server.startup()
-      assertEquals(server.metrics.config().recordLevel(), Sensor.RecordingLevel.forName(name))
-      server.shutdown()
-      CoreUtils.delete(server.config.logDirs)
+      val metricConfig = KafkaServer.metricFromConfig(config)
+      assertEquals(metricConfig.recordLevel(), Sensor.RecordingLevel.forName(name))
     }
 
     for (illegalName <- illegalNames) {
       intercept[IllegalArgumentException] {
         props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
         val config = KafkaConfig.fromProps(props)
-        val server = new KafkaServer(config)
+        KafkaServer.metricFromConfig(config)
       }
     }
   }
