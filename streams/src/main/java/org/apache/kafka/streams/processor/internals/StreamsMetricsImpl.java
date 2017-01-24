@@ -150,9 +150,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-avg", groupNameFromScope(scopeName),
             "The average latency of " + entityName + " " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-max", groupNameFromScope(scopeName),
             "The max latency of " + entityName + " " + opName + " operation.", tags), new Max());
         addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
     }
