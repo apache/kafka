@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import java.util.Map;
@@ -28,15 +27,15 @@ public abstract class Windows<W extends Window> {
 
     private static final int DEFAULT_NUM_SEGMENTS = 3;
 
-    static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
+    static final long DEFAULT_MAINTAIN_DURATION_MS = 24 * 60 * 60 * 1000L; // one day
 
     private long maintainDurationMs;
 
     public int segments;
 
     protected Windows() {
-        this.segments = DEFAULT_NUM_SEGMENTS;
-        this.maintainDurationMs = DEFAULT_MAINTAIN_DURATION;
+        segments = DEFAULT_NUM_SEGMENTS;
+        maintainDurationMs = DEFAULT_MAINTAIN_DURATION_MS;
     }
 
     /**
@@ -45,8 +44,12 @@ public abstract class Windows<W extends Window> {
      *
      * @return  itself
      */
-    public Windows<W> until(long durationMs) {
-        this.maintainDurationMs = durationMs;
+    // This should always get overridden to provide the correct return type and thus to avoid a cast
+    public Windows<W> until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < 0) {
+            throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
+        }
+        maintainDurationMs = durationMs;
 
         return this;
     }
@@ -57,7 +60,10 @@ public abstract class Windows<W extends Window> {
      *
      * @return  itself
      */
-    protected Windows<W> segments(int segments) {
+    protected Windows<W> segments(final int segments) throws IllegalArgumentException {
+        if (segments < 2) {
+            throw new IllegalArgumentException("Number of segments must be at least 2.");
+        }
         this.segments = segments;
 
         return this;
@@ -69,7 +75,7 @@ public abstract class Windows<W extends Window> {
      * @return the window maintain duration in milliseconds of streams time
      */
     public long maintainMs() {
-        return this.maintainDurationMs;
+        return maintainDurationMs;
     }
 
     /**
@@ -78,7 +84,7 @@ public abstract class Windows<W extends Window> {
      * @param timestamp  the timestamp window should get created for
      * @return  a map of {@code windowStartTimestamp -> Window} entries
      */
-    public abstract Map<Long, W> windowsFor(long timestamp);
+    public abstract Map<Long, W> windowsFor(final long timestamp);
 
     public abstract long size();
 }

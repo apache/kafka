@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.fail;
 
 
 public class JoinWindowsTest {
@@ -44,8 +45,8 @@ public class JoinWindowsTest {
         assertEquals(w2, w1);
         assertEquals(w1.hashCode(), w2.hashCode());
 
-        JoinWindows w3 = JoinWindows.of(w2.after).before(anyOtherSize);
-        JoinWindows w4 = JoinWindows.of(anyOtherSize).after(w2.after);
+        JoinWindows w3 = JoinWindows.of(w2.afterMs).before(anyOtherSize);
+        JoinWindows w4 = JoinWindows.of(anyOtherSize).after(w2.afterMs);
         assertEquals(w3, w4);
         assertEquals(w4, w3);
         assertEquals(w3.hashCode(), w4.hashCode());
@@ -55,13 +56,13 @@ public class JoinWindowsTest {
         assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        JoinWindows differentWindowSize = JoinWindows.of(w1.after + 1);
+        JoinWindows differentWindowSize = JoinWindows.of(w1.afterMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
-        JoinWindows differentWindowSize2 = JoinWindows.of(w1.after).after(w1.after + 1);
+        JoinWindows differentWindowSize2 = JoinWindows.of(w1.afterMs).after(w1.afterMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize2, w1);
 
-        JoinWindows differentWindowSize3 = JoinWindows.of(w1.after).before(w1.before + 1);
+        JoinWindows differentWindowSize3 = JoinWindows.of(w1.afterMs).before(w1.beforeMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize3, w1);
     }
 
@@ -85,14 +86,55 @@ public class JoinWindowsTest {
         JoinWindows.of(-1);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void afterBelowLower() {
-        JoinWindows.of(anySize).after(-anySize - 1);
+    @Test
+    public void endTimeShouldNotBeBeforeStart() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        try {
+            windowSpec.after(-anySize - 1);
+            fail("window end time should not be before window start time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void beforeOverUpper() {
-        JoinWindows.of(anySize).before(-anySize - 1);
+    @Test
+    public void startTimeShouldNotBeAfterEnd() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        try {
+            windowSpec.before(-anySize - 1);
+            fail("window start time should not be after window end time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void untilShouldSetMaintainDuration() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final long windowSize = windowSpec.size();
+        assertEquals(windowSize, windowSpec.until(windowSize).maintainMs());
+    }
+
+    @Test
+    public void shouldUseWindowSizeForMaintainDurationWhenSizeLargerThanDefaultMaintainMs() {
+        final long size = Windows.DEFAULT_MAINTAIN_DURATION_MS;
+
+        final JoinWindows windowSpec = JoinWindows.of(size);
+        final long windowSize = windowSpec.size();
+
+        assertEquals(windowSize, windowSpec.maintainMs());
+    }
+
+    @Test
+    public void retentionTimeMustNoBeSmallerThanWindowSize() {
+        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final long windowSize = windowSpec.size();
+        try {
+            windowSpec.until(windowSize - 1);
+            fail("should not accept retention time smaller than window size");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
     }
 
 }
