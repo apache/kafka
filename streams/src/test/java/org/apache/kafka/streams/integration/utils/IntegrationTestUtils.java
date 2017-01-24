@@ -214,7 +214,7 @@ public class IntegrationTestUtils {
             }
         };
 
-        final String conditionDetails = "Expecting " + expectedNumRecords + " records while only received " + accumData.size() + ": " + accumData;
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records from topic " + topic + " while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
@@ -254,7 +254,7 @@ public class IntegrationTestUtils {
             }
         };
 
-        final String conditionDetails = "Expecting " + expectedNumRecords + " records while only received " + accumData.size() + ": " + accumData;
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records from topic " + topic + " while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
