@@ -40,7 +40,6 @@ public class RecordCollectorImpl implements RecordCollector {
     private static final long SEND_RETRY_BACKOFF = 100L;
 
     private static final Logger log = LoggerFactory.getLogger(RecordCollectorImpl.class);
-
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
@@ -54,8 +53,14 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     @Override
-    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        send(record.topic(), record.key(), record.value(), record.partition(), record.timestamp(), keySerializer, valueSerializer, null);
+    public <K, V> void send(final String topic,
+                            K key,
+                            V value,
+                            Integer partition,
+                            Long timestamp,
+                            Serializer<K> keySerializer,
+                            Serializer<V> valueSerializer) {
+        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer, null);
     }
 
     @Override

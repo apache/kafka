@@ -74,14 +74,14 @@ public class RecordCollectorTest {
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
                 "RecordCollectorTest-TestSpecificPartition");
 
-        collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
-        collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
-        collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
 
-        collector.send(new ProducerRecord<>("topic1", 1, "999", "0"), stringSerializer, stringSerializer);
-        collector.send(new ProducerRecord<>("topic1", 1, "999", "0"), stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 1, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 1, null, stringSerializer, stringSerializer);
 
-        collector.send(new ProducerRecord<>("topic1", 2, "999", "0"), stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", 2, null, stringSerializer, stringSerializer);
 
         Map<TopicPartition, Long> offsets = collector.offsets();
 

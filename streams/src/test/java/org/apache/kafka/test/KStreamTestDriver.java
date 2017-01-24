@@ -17,7 +17,6 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -226,9 +225,15 @@ public class KStreamTestDriver {
         }
 
         @Override
-        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-            // The serialization is skipped.
-            process(record.topic(), record.key(), record.value());
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
+        // The serialization is skipped.
+            process(topic, key, value);
         }
 
         @Override
