@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.ListenerName;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -180,6 +182,49 @@ public class JaasContextTest {
         checkConfiguration(config, "test.testNumericOptionWithQuotes", LoginModuleControlFlag.REQUIRED, options);
     }
 
+    @Test
+    public void testLoadForServerWithListenerNameOverride() throws IOException {
+        writeConfiguration(Arrays.asList(
+                "KafkaServer { test.LoginModuleDefault required; };",
+                "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
+        ));
+        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
+                Collections.<String, Object>emptyMap());
+        assertEquals("plaintext.KafkaServer", context.name());
+        assertEquals(JaasContext.Type.SERVER, context.type());
+        assertEquals(1, context.configurationEntries().size());
+        checkEntry(context.configurationEntries().get(0), "test.LoginModuleOverride",
+                LoginModuleControlFlag.REQUISITE, Collections.<String, Object>emptyMap());
+    }
+
+    @Test
+    public void testLoadForServerWithListenerNameAndFallback() throws IOException {
+        writeConfiguration(Arrays.asList(
+                "KafkaServer { test.LoginModule required; };",
+                "other.KafkaServer { test.LoginModuleOther requisite; };"
+        ));
+        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
+                Collections.<String, Object>emptyMap());
+        assertEquals("KafkaServer", context.name());
+        assertEquals(JaasContext.Type.SERVER, context.type());
+        assertEquals(1, context.configurationEntries().size());
+        checkEntry(context.configurationEntries().get(0), "test.LoginModule", LoginModuleControlFlag.REQUIRED,
+                Collections.<String, Object>emptyMap());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testLoadForServerWithWrongListenerName() throws IOException {
+        writeConfiguration("Server", "test.LoginModule required;");
+        JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
+                Collections.<String, Object>emptyMap());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testLoadForClientWithListenerName() {
+        JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),
+                Collections.<String, Object>emptyMap());
+    }
+
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {
         Map<String, Object> configs = new HashMap<>();
         if (jaasConfigProp != null)
@@ -213,6 +258,10 @@ public class JaasContextTest {
 
     private void writeConfiguration(String contextName, String jaasConfigProp) throws IOException {
         List<String> lines = Arrays.asList(contextName + " { ", jaasConfigProp, "};");
+        writeConfiguration(lines);
+    }
+
+    private void writeConfiguration(List<String> lines) throws IOException {
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
     }

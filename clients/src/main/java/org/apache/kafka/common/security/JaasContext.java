@@ -98,7 +98,7 @@ public class JaasContext {
     }
 
     private static JaasContext defaultContext(JaasContext.Type contextType, String listenerContextName,
-                                                 String globalContextName) {
+                                              String globalContextName) {
         String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
         if (jaasConfigFile == null) {
             LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' and Kafka SASL property '" +
@@ -121,7 +121,7 @@ public class JaasContext {
 
         if (configEntries == null) {
             String listenerNameText = listenerContextName == null ? "" : " or '" + listenerContextName + "'";
-            String errorMessage = "Could not find a '" + globalContextName + "'" + listenerNameText + " entry in the JAAS" +
+            String errorMessage = "Could not find a '" + globalContextName + "'" + listenerNameText + " entry in the JAAS " +
                     "configuration. System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " +
                     (jaasConfigFile == null ? "not set" : jaasConfigFile);
             throw new IllegalArgumentException(errorMessage);
