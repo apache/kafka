@@ -263,7 +263,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
@@ -593,9 +592,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
         log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-        for (final Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
-            final InternalTopicConfig topic = entry.getValue().config;
-            final Integer numPartitions = entry.getValue().numPartitions;
+        // first construct the topics to make ready
+        Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
+        Set<String> topicNamesToMakeReady = new HashSet<>();
+
+        for (InternalTopicMetadata metadata : topicPartitions.values()) {
+            InternalTopicConfig topic = metadata.config;
+            Integer numPartitions = metadata.numPartitions;
 
             if (numPartitions == NOT_AVAILABLE) {
                 continue;
@@ -604,16 +607,35 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
             }
 
-            internalTopicManager.makeReady(topic, numPartitions);
+            topicsToMakeReady.put(topic, numPartitions);
+            topicNamesToMakeReady.add(topic.name());
+        }
 
-            // wait until the topic metadata has been propagated to all brokers
-            List<PartitionInfo> partitions;
-            do {
-                partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
-            } while (partitions == null || partitions.size() != numPartitions);
+        if (!topicsToMakeReady.isEmpty()) {
+            internalTopicManager.makeReady(topicsToMakeReady);
+
+            // wait until each one of the topic metadata has been propagated to at least one broker
+            while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+            }
         }
 
         log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
+    }
+
+    private boolean allTopicsCreated(final Set<String> topicNamesToMakeReady, final Map<InternalTopicConfig, Integer> topicsToMakeReady) {
+        final Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicNamesToMakeReady);
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsToMakeReady.entrySet()) {
+            final Integer numPartitions = partitions.get(entry.getKey().name());
+            if (numPartitions == null || !numPartitions.equals(entry.getValue())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
