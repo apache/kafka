@@ -94,7 +94,10 @@ public final class RecordBatch {
                   topicPartition,
                   baseOffset,
                   exception);
+
+        // set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(topicPartition, baseOffset, responseTimestamp, exception);
+
         // execute callbacks
         for (Thunk thunk : thunks) {
             try {

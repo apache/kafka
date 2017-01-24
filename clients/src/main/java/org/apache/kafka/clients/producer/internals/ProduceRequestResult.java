@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Record;
 
@@ -40,11 +41,12 @@ public final class ProduceRequestResult {
     }
 
     /**
-     * Mark this request as complete and unblock any threads waiting on its completion.
+     * Set the result of the produce request.
+     * 
      * @param topicPartition The topic and partition to which this record set was sent was sent
      * @param baseOffset The base offset assigned to the record
      * @param responseTimestamp The timestamp returned by the broker
-     * @param error The error that occurred if there was one, or null.
+     * @param error The error that occurred if there was one, or null
      */
     public void set(TopicPartition topicPartition, long baseOffset, long responseTimestamp, RuntimeException error) {
         this.topicPartition = topicPartition;
