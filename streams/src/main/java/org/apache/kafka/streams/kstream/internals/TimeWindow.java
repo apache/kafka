@@ -21,18 +21,21 @@ import org.apache.kafka.streams.kstream.Window;
 
 public class TimeWindow extends Window {
 
-    public TimeWindow(long start, long end) {
-        super(start, end);
+    public TimeWindow(long startMs, long endMs) {
+        super(startMs, endMs);
+        if (startMs == endMs) {
+            throw new IllegalArgumentException("Window endMs must be greater than window startMs.");
+        }
     }
 
     @Override
-    public boolean overlap(Window other) {
+    public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {
             throw new IllegalArgumentException("Cannot compare windows of different type. Other window has type "
                 + other.getClass());
         }
         final TimeWindow otherWindow = (TimeWindow) other;
-        return start < otherWindow.end && otherWindow.start < end;
+        return startMs < otherWindow.endMs && otherWindow.startMs < endMs;
     }
 
 }
