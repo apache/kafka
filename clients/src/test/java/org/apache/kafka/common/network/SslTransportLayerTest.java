@@ -149,6 +149,45 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
+
+    /**
+     * Tests that disabling client authentication as a listener override has the desired effect.
+     */
+    @Test
+    public void testListenerConfigOverride() throws Exception {
+        String node = "0";
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put("listener.name.client." + SslConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+
+        // `client` listener is not configured at this point, so client auth should be required
+        server = createEchoServer(SecurityProtocol.SSL);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Connect with client auth should work fine
+        createSelector(sslClientConfigs);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        selector.close();
+
+        // Remove client auth, so connection should fail
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+        createSelector(sslClientConfigs);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(selector, node);
+        selector.close();
+        server.close();
+
+        // Listener-specific config should be used and client auth should be disabled
+        server = createEchoServer(new ListenerName("client"), SecurityProtocol.SSL);
+        addr = new InetSocketAddress("localhost", server.port());
+
+        // Connect without client auth should work fine now
+        createSelector(sslClientConfigs);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
     
     /**
      * Tests that server does not accept connections from clients with an untrusted certificate
@@ -184,7 +223,6 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-//        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         NetworkTestUtils.waitForChannelClose(selector, node);
     }
     
@@ -464,6 +502,10 @@ public class SslTransportLayerTest {
         };
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+    }
+
+    private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs));
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
