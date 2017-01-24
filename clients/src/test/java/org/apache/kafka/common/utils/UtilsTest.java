@@ -272,7 +272,7 @@ public class UtilsTest {
                 break;
             }
             // If the remaining byte number is less than a step,
-            // directly assign the last mocked bytes read to fix `bufferSize` exactly
+            // directly assign the last mocked bytes read to fit `bufferSize` exactly
             final int mockedBytesRead = (diff < step) ? diff : random.nextInt(step);
             final StringBuffer sb = new StringBuffer();
             EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {

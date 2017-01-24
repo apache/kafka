@@ -789,7 +789,7 @@ public class Utils {
      * @param channel File channel containing the data to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred
      * @param position The file position at which the transfer is to begin; it must be non-negative
-     * @param description A description of what is being read, this will be included in the EOFException if we
+     * @param description A description of what is being read, this will be included in the EOFException
      *
      * @throws IllegalArgumentException If position is negative
      * @throws EOFException If the end of the file is reached while there are remaining bytes in the destination buffer
