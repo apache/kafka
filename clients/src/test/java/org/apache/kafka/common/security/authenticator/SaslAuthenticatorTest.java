@@ -19,6 +19,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
@@ -229,15 +230,12 @@ public class SaslAuthenticatorTest {
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
-        selector.close();
 
         String node3 = "3";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createSelector(securityProtocol, saslClientConfigs);
         selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
-        selector.close();
-        selector = null;
     }
 
     /**
@@ -324,7 +322,6 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createClientConnection(securityProtocol, node);
         NetworkTestUtils.waitForChannelClose(selector, node);
-        selector.close();
 
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
         createAndCheckClientConnection(securityProtocol, "2");
@@ -674,6 +671,47 @@ public class SaslAuthenticatorTest {
         }
     }
 
+    @Test
+    public void testJaasConfigurationForListener() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        saslServerConfigs.put(SaslConfigs.SASL_ENABLED_MECHANISMS, Arrays.asList("PLAIN"));
+
+        TestJaasConfig staticJaasConfig = new TestJaasConfig();
+
+        Map<String, Object> globalServerOptions = new HashMap<>();
+        globalServerOptions.put("user_global1", "gsecret1");
+        globalServerOptions.put("user_global2", "gsecret2");
+        staticJaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(),
+                globalServerOptions);
+
+        Map<String, Object> clientListenerServerOptions = new HashMap<>();
+        clientListenerServerOptions.put("user_client1", "csecret1");
+        clientListenerServerOptions.put("user_client2", "csecret2");
+        String clientJaasEntryName = "client." + TestJaasConfig.LOGIN_CONTEXT_SERVER;
+        staticJaasConfig.createOrUpdateEntry(clientJaasEntryName, PlainLoginModule.class.getName(), clientListenerServerOptions);
+        Configuration.setConfiguration(staticJaasConfig);
+
+        // Listener-specific credentials
+        server = createEchoServer(new ListenerName("client"), securityProtocol);
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "client1", "csecret1"));
+        createAndCheckClientConnection(securityProtocol, "1");
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "global1", "gsecret1"));
+        createAndCheckClientConnectionFailure(securityProtocol, "2");
+        server.close();
+
+        // Global credentials as there is no listener-specific JAAS entry
+        server = createEchoServer(new ListenerName("other"), securityProtocol);
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "global1", "gsecret1"));
+        createAndCheckClientConnection(securityProtocol, "3");
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "client1", "csecret1"));
+        createAndCheckClientConnectionFailure(securityProtocol, "4");
+    }
+
     /**
      * Tests that Kafka ApiVersionsRequests are handled by the SASL server authenticator
      * prior to SASL handshake flow and that subsequent authentication succeeds
@@ -748,6 +786,11 @@ public class SaslAuthenticatorTest {
     }
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
+        if (selector != null) {
+            selector.close();
+            selector = null;
+        }
+
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
                 new TestSecurityConfig(clientConfigs), null, saslMechanism, true);
@@ -756,6 +799,11 @@ public class SaslAuthenticatorTest {
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(securityProtocol, new TestSecurityConfig(saslServerConfigs));
+    }
+
+    private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
+                new TestSecurityConfig(saslServerConfigs));
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
