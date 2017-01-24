@@ -23,47 +23,55 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Arrays;
-import java.util.ArrayList;
 
 import static org.apache.kafka.streams.processor.internals.InternalTopicManager.WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
 
 public class InternalTopicManagerTest {
 
-    private String userEndPoint = "localhost:2171";
-    StreamsConfig config;
-    MockStreamKafkaClient streamsKafkaClient;
+    private final String topic = "test_topic";
+    private final String userEndPoint = "localhost:2171";
+    private MockStreamKafkaClient streamsKafkaClient;
 
     @Before
     public void init() {
-        config = new StreamsConfig(configProps());
+        final StreamsConfig config = new StreamsConfig(configProps());
         streamsKafkaClient = new MockStreamKafkaClient(config);
+    }
+
+    @After
+    public void shutdown() throws IOException {
+        streamsKafkaClient.close();
+    }
+
+    @Test
+    public void shouldReturnCorrectPartitionCounts() throws Exception {
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-
-        streamsKafkaClient.setReturnCorrectTopic(true);
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
-        internalTopicManager.makeReady(new InternalTopicConfig("test_topic", Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1);
+        internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
     }
 
     @Test
     public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
-
-        streamsKafkaClient.setReturnCorrectTopic(true);
         InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
         boolean exceptionWasThrown = false;
         try {
-            internalTopicManager.makeReady(new InternalTopicConfig("test_topic", Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 2);
+            internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 2));
         } catch (StreamsException e) {
             exceptionWasThrown = true;
         }
@@ -82,43 +90,21 @@ public class InternalTopicManagerTest {
     }
 
     private class MockStreamKafkaClient extends StreamsKafkaClient {
-        public MockStreamKafkaClient(final StreamsConfig streamsConfig) {
+
+        MockStreamKafkaClient(final StreamsConfig streamsConfig) {
             super(streamsConfig);
         }
 
-        public boolean isReturnCorrectTopic() {
-            return returnCorrectTopic;
-        }
-
-        public void setReturnCorrectTopic(boolean returnCorrectTopic) {
-            this.returnCorrectTopic = returnCorrectTopic;
-        }
-
-        boolean returnCorrectTopic = false;
-
-
         @Override
         public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
-
-        }
-
-        @Override
-        public MetadataResponse.TopicMetadata fetchTopicMetadata(final String topic) {
-
-            if (returnCorrectTopic) {
-                MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, null, new ArrayList<Node>(), new ArrayList<Node>());
-                MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Arrays.asList(partitionMetadata));
-                return topicMetadata;
-            }
-            return null;
+            // do nothing
         }
 
         @Override
         public Collection<MetadataResponse.TopicMetadata> fetchTopicsMetadata() {
-            if (returnCorrectTopic) {
-                return Arrays.asList(fetchTopicMetadata("test_topic"));
-            }
-            return null;
+            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, null, new ArrayList<Node>(), new ArrayList<Node>());
+            MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Collections.singletonList(partitionMetadata));
+            return Collections.singleton(topicMetadata);
         }
     }
 }
