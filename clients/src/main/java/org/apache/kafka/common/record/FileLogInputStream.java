@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -56,9 +57,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         logHeaderBuffer.rewind();
-        channel.read(logHeaderBuffer, position);
-        if (logHeaderBuffer.hasRemaining())
-            return null;
+        Utils.readFullyOrFail(channel, logHeaderBuffer, position, "log header");
 
         logHeaderBuffer.rewind();
         long offset = logHeaderBuffer.getLong();
@@ -117,9 +116,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                channel.read(buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
-                if (buf.hasRemaining())
-                    throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
+                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET, "magic byte");
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);
@@ -136,9 +133,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 return record;
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
-            channel.read(recordBuffer, position + Records.LOG_OVERHEAD);
-            if (recordBuffer.hasRemaining())
-                throw new IOException("Failed to read full record from channel " + channel);
+            Utils.readFullyOrFail(channel, recordBuffer, position + Records.LOG_OVERHEAD, "full record");
 
             recordBuffer.rewind();
             record = new Record(recordBuffer);
