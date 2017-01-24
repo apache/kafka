@@ -160,10 +160,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             node.version = version
 
     def _worker(self, idx, node):
-        if node not in self.event_handlers:
-            self.event_handlers[node] = ConsumerEventHandler(node)
+        with self.lock:
+            if node not in self.event_handlers:
+                self.event_handlers[node] = ConsumerEventHandler(node)
+            handler = self.event_handlers[node]
 
-        handler = self.event_handlers[node]
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
@@ -266,7 +267,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
-        self.event_handlers[node].handle_kill_process(clean_shutdown)
+        with self.lock:
+            self.event_handlers[node].handle_kill_process(clean_shutdown)
 
     def stop_node(self, node, clean_shutdown=True):
         self.kill_node(node, clean_shutdown=clean_shutdown)
@@ -292,10 +294,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
                 return None
 
     def owner(self, tp):
-        for handler in self.event_handlers.itervalues():
-            if tp in handler.current_assignment():
-                return handler.node
-        return None
+        with self.lock:
+            for handler in self.event_handlers.itervalues():
+                if tp in handler.current_assignment():
+                    return handler.node
+            return None
 
     def last_commit(self, tp):
         with self.lock:
