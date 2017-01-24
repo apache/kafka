@@ -40,6 +40,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private static final long SEND_RETRY_BACKOFF = 100L;
 
     private static final Logger log = LoggerFactory.getLogger(RecordCollectorImpl.class);
+    
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
