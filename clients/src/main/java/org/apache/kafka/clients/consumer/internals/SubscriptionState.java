@@ -183,9 +183,16 @@ public class SubscriptionState {
         Set<TopicPartition> newAssignment = new HashSet<>(assignments);
         removeAllLagSensors(newAssignment);
 
-        for (TopicPartition tp : assignments)
-            if (!this.subscription.contains(tp.topic()))
-                throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
+        if (this.subscribedPattern != null) {
+            for (TopicPartition tp : assignments) {
+                if (!this.subscribedPattern.matcher(tp.topic()).matches())
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic regex pattern; subscription pattern is " + this.subscribedPattern);
+            }
+        } else {
+            for (TopicPartition tp : assignments)
+                if (!this.subscription.contains(tp.topic()))
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic; subscription is " + this.subscription);
+        }
 
         // after rebalancing, we always reinitialize the assignment value
         this.assignment.set(partitionToStateMap(assignments));
