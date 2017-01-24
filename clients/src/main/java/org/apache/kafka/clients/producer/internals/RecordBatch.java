@@ -105,7 +105,7 @@ public final class RecordBatch {
                     thunk.callback.onCompletion(null, exception);
                 }
             } catch (Exception e) {
-                log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
+                log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
             }
         }
         this.produceFuture.done();
