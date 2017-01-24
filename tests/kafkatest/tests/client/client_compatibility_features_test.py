@@ -20,7 +20,6 @@ from random import randint
 from ducktape.mark import parametrize
 from ducktape.tests.test import TestContext
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
@@ -48,20 +47,20 @@ def run_command(node, cmd, ssh_log_file):
             raise e
 
 
-class RunClientCompatibilityTest(Test):
+class ClientCompatibilityFeaturesTest(Test):
     """
-    Test running the ClientCompatibilityTest.  It will test for the presence or
-    absence of specific features.
+    Tests clients for the presence or absence of specific features when communicating with brokers with various
+    versions. Relies on ClientCompatibilityTest.java for much of the functionality.
     """
 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(RunClientCompatibilityTest, self).__init__(test_context=test_context)
+        super(ClientCompatibilityFeaturesTest, self).__init__(test_context=test_context)
 
         self.zk = ZookeeperService(test_context, num_nodes=3)
 
         # Generate a unique topic name
-        topic_name = "client_compat_topic_%d%d" % (int(time.time()), randint(0, 2147483647))
+        topic_name = "client_compat_features_topic_%d%d" % (int(time.time()), randint(0, 2147483647))
         self.topics = { topic_name: {
             "partitions": 1, # Use only one partition to avoid worrying about ordering
             "replication-factor": 3
@@ -82,7 +81,7 @@ class RunClientCompatibilityTest(Test):
                                self.topics.keys()[0]))
         results_dir = TestContext.results_dir(self.test_context, 0)
         os.makedirs(results_dir)
-        ssh_log_file = "%s/%s" % (results_dir, "compatibility_test_output.txt")
+        ssh_log_file = "%s/%s" % (results_dir, "client_compatibility_test_output.txt")
         try:
           self.logger.info("Running %s" % cmd)
           run_command(node, cmd, ssh_log_file)

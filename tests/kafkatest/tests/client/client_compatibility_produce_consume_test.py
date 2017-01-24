@@ -24,15 +24,14 @@ from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
 from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1, KafkaVersion
 
-class TestProducerConsumerCompat(ProduceConsumeValidateTest):
+class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
-    These tests validate that we can use a new client to consume from older
-    brokers.
+    These tests validate that we can use a new client to produce and consume from older brokers.
     """
 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(TestProducerConsumerCompat, self).__init__(test_context=test_context)
+        super(ClientCompatibilityProduceConsumeTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=3)
@@ -51,7 +50,7 @@ class TestProducerConsumerCompat(ProduceConsumeValidateTest):
 
     def min_cluster_size(self):
         # Override this since we're adding services outside of the constructor
-        return super(TestProducerConsumerCompat, self).min_cluster_size() + self.num_producers + self.num_consumers
+        return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
     @parametrize(broker_version=str(TRUNK))
     @parametrize(broker_version=str(LATEST_0_10_0))

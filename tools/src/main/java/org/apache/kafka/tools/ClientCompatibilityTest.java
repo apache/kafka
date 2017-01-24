@@ -54,9 +54,9 @@ import java.util.Properties;
 import java.util.concurrent.Future;
 
 /**
- * ClientCompatibilityTest is invoked by the ducktape test run_compatibility_test.py to validate
- * client behavior when various broker versions are in use.  It runs various
- * client operations and tests whether they are supported or not.
+ * ClientCompatibilityTest is invoked by the ducktape test client_compatibility_features_test.py to validate
+ * client behavior when various broker versions are in use.  It runs various client operations and tests whether they
+ * are supported or not.
  */
 public class ClientCompatibilityTest {
     private static final Logger log = LoggerFactory.getLogger(ClientCompatibilityTest.class);
@@ -77,9 +77,9 @@ public class ClientCompatibilityTest {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("compatibility-test")
+            .newArgumentParser("client-compatibility-test")
             .defaultHelp(true)
-            .description("This tool is used to verify compatibility guarantees.");
+            .description("This tool is used to verify client compatibility guarantees.");
         parser.addArgument("--topic")
             .action(store())
             .required(true)
@@ -148,7 +148,7 @@ public class ClientCompatibilityTest {
 
     private static String toHexString(byte[] buf) {
         StringBuilder bld = new StringBuilder();
-        for (byte b: buf) {
+        for (byte b : buf) {
             bld.append(String.format("%02x", b));
         }
         return bld.toString();
@@ -156,8 +156,7 @@ public class ClientCompatibilityTest {
 
     private static void compareArrays(byte[] a, byte[] b) {
         if (!Arrays.equals(a, b)) {
-            throw new RuntimeException("Arrays did not match: expected " + toHexString(a) +
-                ", got " + toHexString(b));
+            throw new RuntimeException("Arrays did not match: expected " + toHexString(a) + ", got " + toHexString(b));
         }
     }
 
@@ -186,9 +185,9 @@ public class ClientCompatibilityTest {
         ByteArraySerializer serializer = new ByteArraySerializer();
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
         ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(testConfig.topic, message1);
-        Future<RecordMetadata> future1 = producer.send(record1, null);
+        Future<RecordMetadata> future1 = producer.send(record1);
         ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(testConfig.topic, message2);
-        Future<RecordMetadata> future2 = producer.send(record2, null);
+        Future<RecordMetadata> future2 = producer.send(record2);
         producer.flush();
         future1.get();
         future2.get();
@@ -230,13 +229,11 @@ public class ClientCompatibilityTest {
         public void onUpdate(ClusterResource clusterResource) {
             if (expectClusterId) {
                 if (clusterResource.clusterId() == null) {
-                    throw new RuntimeException("expected cluster id to be " +
-                        "supported, but it was null.");
+                    throw new RuntimeException("Expected cluster id to be supported, but it was null.");
                 }
             } else {
                 if (clusterResource.clusterId() != null) {
-                    throw new RuntimeException("expected cluster id to be " +
-                        "null, but it was supported.");
+                    throw new RuntimeException("Expected cluster id to be null, but it was supported.");
                 }
             }
         }
@@ -247,14 +244,13 @@ public class ClientCompatibilityTest {
         consumerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
         ClientCompatibilityTestDeserializer deserializer =
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
-        final KafkaConsumer<byte[], byte[]> consumer =
-                new KafkaConsumer<byte[], byte[]>(consumerProps, deserializer, deserializer);
+        final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
         final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
         if (partitionInfos.size() < 1)
-            throw new RuntimeException("expected at least one partition for topic " + testConfig.topic);
+            throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
         final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();
-        for (PartitionInfo partitionInfo: partitionInfos) {
+        for (PartitionInfo partitionInfo : partitionInfos) {
             TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
             timestampsToSearch.put(topicPartition, prodTimeMs);
             topicPartitions.add(topicPartition);
@@ -328,16 +324,16 @@ public class ClientCompatibilityTest {
             compareArrays(message1, next);
             log.debug("Found first message...");
         } catch (RuntimeException e) {
-            throw new RuntimeException("The first message in this topic was not ours.  Please use a new " +
-                "topic when running this program.\n");
+            throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
+                    "running this program.");
         }
         next = iter.next();
         try {
             compareArrays(message2, next);
             log.debug("Found second message...");
         } catch (RuntimeException e) {
-            throw new RuntimeException("The second message in this topic was not ours.  Please use a new " +
-                "topic when running this program.\n");
+            throw new RuntimeException("The second message in this topic was not ours. Please use a new topic when " +
+                    "running this program.");
         }
         log.debug("Closing consumer.");
         consumer.close();
@@ -351,14 +347,12 @@ public class ClientCompatibilityTest {
         } catch (ObsoleteBrokerException e) {
             log.info("Got ObsoleteBrokerException when attempting to use feature {}", featureName);
             if (supported) {
-                throw new RuntimeException("Expected " + featureName +
-                        " to be supported, but it wasn't.", e);
+                throw new RuntimeException("Expected " + featureName + " to be supported, but it wasn't.", e);
             }
             return;
         }
         if (!supported) {
-            throw new RuntimeException("Did not expect " + featureName +
-                    " to be supported, but it was.");
+            throw new RuntimeException("Did not expect " + featureName + " to be supported, but it was.");
         }
         resultTester.run();
     }
