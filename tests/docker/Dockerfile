@@ -28,6 +28,7 @@ ENV MIRROR="http://apache.cs.utah.edu/"
 RUN wget -q "${MIRROR}kafka/0.8.2.2/kafka_2.10-0.8.2.2.tgz" -O "/tmp/kafka_2.10-0.8.2.2.tgz" && tar xfz /tmp/kafka_2.10-0.8.2.2.tgz -C /opt && mv "/opt/kafka_2.10-0.8.2.2" "/opt/kafka-0.8.2.2"
 RUN wget -q "${MIRROR}kafka/0.9.0.1/kafka_2.10-0.9.0.1.tgz" -O "/tmp/kafka_2.10-0.9.0.1.tgz" && tar xfz /tmp/kafka_2.10-0.9.0.1.tgz -C /opt && mv "/opt/kafka_2.10-0.9.0.1" "/opt/kafka-0.9.0.1"
 RUN wget -q "${MIRROR}kafka/0.10.0.1/kafka_2.10-0.10.0.1.tgz" -O "/tmp/kafka_2.10-0.10.0.1.tgz" && tar xfz /tmp/kafka_2.10-0.10.0.1.tgz -C /opt && mv "/opt/kafka_2.10-0.10.0.1" "/opt/kafka-0.10.0.1"
+RUN wget -q "${MIRROR}kafka/0.10.1.1/kafka_2.10-0.10.1.1.tgz" -O "/tmp/kafka_2.10-0.10.1.1.tgz" && tar xfz /tmp/kafka_2.10-0.10.1.1.tgz -C /opt && mv "/opt/kafka_2.10-0.10.1.1" "/opt/kafka-0.10.1.1"
 
 RUN rm /tmp/kafka_*.tgz
 ADD ssh /root/.ssh
