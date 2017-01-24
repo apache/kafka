@@ -187,13 +187,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       def onCompletion(metadata: RecordMetadata, exception: Exception) {
         if (exception == null) {
-          assertEquals(offset, metadata.offset())
-          assertEquals(topic, metadata.topic())
+          assertEquals(offset, metadata.offset)
+          assertEquals(topic, metadata.topic)
           if (timestampType == TimestampType.CREATE_TIME)
-            assertEquals(baseTimestamp + timestampDiff, metadata.timestamp())
+            assertEquals(baseTimestamp + timestampDiff, metadata.timestamp)
           else
-            assertTrue(metadata.timestamp() >= startTime && metadata.timestamp() <= System.currentTimeMillis())
-          assertEquals(partition, metadata.partition())
+            assertTrue(metadata.timestamp >= startTime && metadata.timestamp <= System.currentTimeMillis())
+          assertEquals(partition, metadata.partition)
           offset += 1
           timestampDiff += 1
         } else {
@@ -211,11 +211,18 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "CreateTime")
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
 
-      for (i <- 1 to numRecords) {
-        val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
-        producer.send(record, callback)
+      val recordAndFutures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord(topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
+        (record, producer.send(record, callback))
       }
       producer.close(20000L, TimeUnit.MILLISECONDS)
+      recordAndFutures.foreach { case (record, future) =>
+        val recordMetadata = future.get
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+          assertTrue(recordMetadata.timestamp >= startTime && recordMetadata.timestamp <= System.currentTimeMillis())
+        else
+          assertEquals(record.timestamp, recordMetadata.timestamp)
+      }
       assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()
