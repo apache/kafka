@@ -386,7 +386,7 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
-    zkUtils.zkClient.exists(getTopicPath(topic))
+    zkUtils.pathExists(getTopicPath(topic))
 
   def getBrokerMetadatas(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                         brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
@@ -425,10 +425,8 @@ object AdminUtils extends Logging with AdminUtilities {
     // validate arguments
     Topic.validate(topic)
 
-    val topicPath = getTopicPath(topic)
-
     if (!update) {
-      if (zkUtils.zkClient.exists(topicPath))
+      if (topicExists(zkUtils, topic))
         throw new TopicExistsException(s"Topic '$topic' already exists.")
       else if (Topic.hasCollisionChars(topic)) {
         val allTopics = zkUtils.getAllTopics()
