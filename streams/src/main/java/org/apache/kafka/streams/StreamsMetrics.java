@@ -47,7 +47,7 @@ public interface StreamsMetrics {
      * @param tags Additional tags of the sensor.
      * @return The added sensor.
      */
-    Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags);
+    Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags);
 
     /**
      * Record the given latency value of the sensor.
@@ -81,7 +81,7 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor.
      * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
      * metric name well-formedness and conformity with the rest of the streams code base. However,
      * if the above two methods are not sufficient, this method can also be used.
      * @param name Name of the sensor.
@@ -92,7 +92,7 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor with parent sensors.
      * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
      * metric name well-formedness and conformity with the rest of the streams code base. However,
      * if the above two methods are not sufficient, this method can also be used.
      * @param name Name of the sensor.

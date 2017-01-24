@@ -113,7 +113,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
+    public Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
         Map<String, String> tagMap = tagMap(tags);
 
         // first add the global operation metrics if not yet, with the global tags only
