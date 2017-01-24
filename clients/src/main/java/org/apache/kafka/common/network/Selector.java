@@ -369,6 +369,9 @@ public class Selector implements Selectable {
                 if (!key.isValid())
                     close(channel, true);
 
+            } catch (InvalidTransportLayerException e) {
+                close(channel, true);
+                throw e;
             } catch (Exception e) {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException)

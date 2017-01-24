@@ -15,6 +15,7 @@ package org.apache.kafka.common.network;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -405,6 +406,21 @@ public class SslTransportLayerTest {
         testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
     }
 
+    @Test(expected = InvalidTransportLayerException.class)
+    public void testInvalidTransportLayer() throws Exception {
+        String node = "0";
+        server = NetworkTestUtils.createEchoServer(SecurityProtocol.SSL, sslServerConfigs);
+        createPlaintextSelector();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        Send send = new NetworkSend(node, ByteBuffer.wrap("test".getBytes()));
+        selector.send(send);
+        int secondsLeft = 10;
+        while (secondsLeft-- > 0) {
+            selector.poll(1000L);
+        }
+    }
+
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
         String node = "0";
         server = NetworkTestUtils.createEchoServer(securityProtocol, sslServerConfigs);
@@ -460,7 +476,14 @@ public class SslTransportLayerTest {
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
     }
-    
+
+    private void createPlaintextSelector() {
+        this.channelBuilder = new PlaintextChannelBuilder();
+        Map<String, Object> emptyConfig = new HashMap<>();
+        this.channelBuilder.configure(emptyConfig);
+        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+    }
+
     /**
      * SSLTransportLayer with overrides for packet and application buffer size to test buffer resize
      * code path. The overridden buffer size starts with a small value and increases in size when the buffer
