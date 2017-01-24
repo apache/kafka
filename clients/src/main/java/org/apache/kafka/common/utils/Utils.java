@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Closeable;
@@ -803,4 +804,55 @@ public class Utils {
         return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer. If the end
+     * of the file is reached while there are bytes remaining in the buffer, an EOFException is thrown.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     * @param description A description of what is being read, this will be included in the EOFException if it is thrown
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws EOFException If the end of the file is reached while there are remaining bytes in the destination buffer
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position,
+                                       String description) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        int expectedReadBytes = destinationBuffer.remaining();
+        readFully(channel, destinationBuffer, position);
+        if (destinationBuffer.hasRemaining()) {
+            throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
+                    "but reached end of file after reading %d bytes. Started read from position %d.",
+                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+        }
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or the end
+     * of the file has been reached.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        long currentPosition = position;
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
+            currentPosition += bytesRead;
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
 }
