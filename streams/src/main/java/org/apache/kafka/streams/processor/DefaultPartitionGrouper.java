@@ -21,6 +21,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +84,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
 
             if (partitions == null) {
                 log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
+                return StreamPartitionAssignor.NOT_AVAILABLE;
             } else {
                 int numPartitions = partitions.size();
                 if (numPartitions > maxNumPartitions)

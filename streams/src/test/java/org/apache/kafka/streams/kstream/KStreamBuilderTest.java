@@ -133,9 +133,8 @@ public class KStreamBuilderTest {
 
         final KStream<String, String> merged = builder.merge(processedSource1, processedSource2, source3);
         merged.groupByKey().count("my-table");
-        final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
-
-        assertEquals(Utils.mkSet("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
+        final Map<String, List<String>> actual = builder.stateStoreNameToSourceTopics();
+        assertEquals(Utils.mkList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -227,12 +226,11 @@ public class KStreamBuilderTest {
         final KStream<String, String> playEvents = builder.stream("events");
 
         final KTable<String, String> table = builder.table("table-topic", "table-store");
-        assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
+        assertEquals(Collections.singletonList("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
 
         final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count("count");
-
-        assertEquals(Collections.singleton("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
-        assertEquals(Collections.singleton(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
+        assertEquals(Collections.singletonList("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
+        assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
     }
 }

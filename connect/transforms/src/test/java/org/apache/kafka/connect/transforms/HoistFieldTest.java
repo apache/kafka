@@ -25,12 +25,25 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
-public class HoistToStructTest {
+public class HoistFieldTest {
 
     @Test
-    public void sanityCheck() {
-        final HoistToStruct<SinkRecord> xform = new HoistToStruct.Key<>();
+    public void schemaless() {
+        final HoistField<SinkRecord> xform = new HoistField.Key<>();
+        xform.configure(Collections.singletonMap("field", "magic"));
+
+        final SinkRecord record = new SinkRecord("test", 0, null, 42, null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertEquals(Collections.singletonMap("magic", 42), transformedRecord.key());
+    }
+
+    @Test
+    public void withSchema() {
+        final HoistField<SinkRecord> xform = new HoistField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);

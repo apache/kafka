@@ -63,9 +63,9 @@ public class SessionWindows {
     private final long gapMs;
     private long maintainDurationMs;
 
-    private SessionWindows(final long gapMs, final long maintainDurationMs) {
+    private SessionWindows(final long gapMs) {
         this.gapMs = gapMs;
-        this.maintainDurationMs = maintainDurationMs;
+        maintainDurationMs = Windows.DEFAULT_MAINTAIN_DURATION_MS;
     }
 
     /**
@@ -75,7 +75,10 @@ public class SessionWindows {
      * and default maintain duration
      */
     public static SessionWindows with(final long inactivityGapMs) {
-        return new SessionWindows(inactivityGapMs, Windows.DEFAULT_MAINTAIN_DURATION);
+        if (inactivityGapMs < 1) {
+            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
+        }
+        return new SessionWindows(inactivityGapMs);
     }
 
     /**
@@ -84,8 +87,12 @@ public class SessionWindows {
      *
      * @return  itself
      */
-    public SessionWindows until(final long durationMs) {
-        this.maintainDurationMs = durationMs;
+    public SessionWindows until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < gapMs) {
+            throw new IllegalArgumentException("Window retentin time (durationMs) cannot be smaller than window gap.");
+        }
+        maintainDurationMs = durationMs;
+
         return this;
     }
 
@@ -100,6 +107,6 @@ public class SessionWindows {
      * @return the minimum amount of time a window will be maintained for.
      */
     public long maintainMs() {
-        return maintainDurationMs;
+        return Math.max(maintainDurationMs, gapMs);
     }
 }

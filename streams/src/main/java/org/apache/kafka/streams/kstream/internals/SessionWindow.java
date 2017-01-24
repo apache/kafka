@@ -35,8 +35,8 @@ public final class SessionWindow extends Window {
      * @param start  the start timestamp of the window
      * @param end    the end timestamp of the window
      */
-    public SessionWindow(final long start, final long end) {
-        super(start, end);
+    public SessionWindow(final long startMs, final long endMs) {
+        super(startMs, endMs);
     }
 
     /**
@@ -52,7 +52,7 @@ public final class SessionWindow extends Window {
                 + other.getClass());
         }
         final SessionWindow otherWindow = (SessionWindow) other;
-        return !(otherWindow.end < start || end < otherWindow.start);
+        return !(otherWindow.endMs < startMs || endMs < otherWindow.startMs);
     }
 
 }

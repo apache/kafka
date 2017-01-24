@@ -1584,9 +1584,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // the user is manually assigning partitions and managing their own offsets).
         fetcher.resetOffsetsIfNeeded(partitions);
 
-        if (!subscriptions.hasAllFetchPositions()) {
-            // if we still don't have offsets for all partitions, then we should either seek
-            // to the last committed position or reset using the auto reset policy
+        if (!subscriptions.hasAllFetchPositions(partitions)) {
+            // if we still don't have offsets for the given partitions, then we should either
+            // seek to the last committed position or reset using the auto reset policy
 
             // first refresh commits for all assigned partitions
             coordinator.refreshCommittedOffsetsIfNeeded();
