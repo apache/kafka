@@ -25,7 +25,7 @@ import java.util.Map;
  * maintain duration.
  * <p>
  * If not explicitly specified, the default maintain duration is 1 day.
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @param <W> type of the window instance
  * @see TimeWindows

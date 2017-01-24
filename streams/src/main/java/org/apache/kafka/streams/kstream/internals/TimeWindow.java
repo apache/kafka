@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Window;
  * It is a fixed size window, i.e., all instances (of a single {@link org.apache.kafka.streams.kstream.TimeWindows
  * window specification}) will have the same size.
  * <p>
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see SessionWindow
  * @see UnlimitedWindow

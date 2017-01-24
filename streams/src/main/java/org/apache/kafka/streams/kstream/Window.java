@@ -24,7 +24,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * window implementations.
  * <p>
  * To specify how {@link Window} boundaries are defined use {@link Windows}.
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see Windows
  * @see org.apache.kafka.streams.kstream.internals.TimeWindow

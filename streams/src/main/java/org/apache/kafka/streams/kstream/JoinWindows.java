@@ -43,14 +43,14 @@ import java.util.Map;
  * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
  * a join specification on the second stream with flipped before and after values.
  * <p>
- * Both values (before and after) must not result in an "inverse" window, i.e., upper-interval-bound cannot be smaller
+ * Both values (before and after) must not result in an "inverse" window, i.e., upper-interval bound cannot be smaller
  * than lower-interval bound.
  * <p>
  * {@link JoinWindows} are sliding windows, thus, they are aligned to the actual record timestamps.
  * This implies, that each input record defines its own window with start and end time being relative to the record's
  * timestamp.
  * <p>
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindows
  * @see UnlimitedWindows
@@ -92,8 +92,8 @@ public class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Changes the start window boundary to {@code timeDifferenceMs} but keep the end window boundary as-is.
-     * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is max
+     * Changes the start window boundary to {@code timeDifferenceMs} but keep the end window boundary as is.
+     * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifferenceMs} earlier than the timestamp of the record from the primary stream.
      * {@code timeDifferenceMs} can be negative but it's absolute value must not be larger than current window "after"
      * value (which would result in a negative window size).
@@ -106,8 +106,8 @@ public class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Changes the end window boundary to {@code timeDifferenceMs} but keep the start window boundary as-is.
-     * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is max
+     * Changes the end window boundary to {@code timeDifferenceMs} but keep the start window boundary as is.
+     * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifferenceMs} later than the timestamp of the record from the primary stream.
      * {@code timeDifferenceMs} can be negative but it's absolute value must not be larger than current window "before"
      * value (which would result in a negative window size).

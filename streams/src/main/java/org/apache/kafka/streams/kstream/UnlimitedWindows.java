@@ -30,7 +30,7 @@ import java.util.Map;
  * It has a fixed starting point while its window end is defined as infinite.
  * With this regard, it is a fixed-size window with infinite window size.
  * <p>
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindows
  * @see SessionWindows

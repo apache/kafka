@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Window;
  * same start time.
  * To make the window size "infinite" end time is set to {@link Long#MAX_VALUE}.
  * <p>
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindow
  * @see SessionWindow

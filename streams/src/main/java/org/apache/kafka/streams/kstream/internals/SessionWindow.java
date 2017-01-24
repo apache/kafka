@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.Window;
 /**
  * A session window covers a closed time interval with its start and end timestamp both being an inclusive boundary.
  * <p>
- * For time semantics, compare {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindow
  * @see UnlimitedWindow
