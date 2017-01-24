@@ -26,6 +26,7 @@ readonly ARGS="$@"
 AWS=false
 PARALLEL=true
 MAX_PARALLEL=5
+DEBUG=false
 
 readonly USAGE="Usage: $PROG_NAME [-h | --help] [--aws [--no-parallel] [--max-parallel MAX]]"
 readonly HELP="$(cat <<EOF
@@ -35,7 +36,7 @@ Tool to bring up a vagrant cluster on local machine or aws.
     --aws                   Use if you are running in aws
     --no-parallel           Bring up machines not in parallel. Only applicable on aws
     --max-parallel  MAX     Maximum number of machines to bring up in parallel. Note: only applicable on test worker machines on aws. default: $MAX_PARALLEL
-
+    --debug                 Enable debug information for vagrant
 Approximately speaking, this wrapper script essentially wraps 2 commands:
     vagrant up
     vagrant hostmanager
@@ -70,6 +71,9 @@ while [[ $# > 0 ]]; do
         --max-parallel)
             MAX_PARALLEL="$2"
             shift
+            ;;
+        --debug)
+            DEBUG=true
             ;;
         *)
             # unknown option
@@ -200,7 +204,14 @@ function bring_up_aws {
     local parallel="$1"
     local max_parallel="$2"
     local machines="$(read_vagrant_machines)"
-
+    case "$3" in
+          true)
+            local debug="--debug"
+            ;;
+          false)
+            local debug=""
+            ;;
+    esac
     zk_broker_machines=$(zk_broker "$machines")
     worker_machines=$(worker "$machines")
 
@@ -208,18 +219,18 @@ function bring_up_aws {
         if [[ ! -z "$zk_broker_machines" ]]; then
             # We still have to bring up zookeeper/broker nodes serially
             echo "Bringing up zookeeper/broker machines serially"
-            vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines
+            vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines $debug
             vagrant hostmanager
             vagrant provision
         fi
 
         if [[ ! -z "$worker_machines" ]]; then
             echo "Bringing up test worker machines in parallel"
-            vagrant_batch_command "vagrant up --provider=aws" "$worker_machines" "$max_parallel"
+            vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
             vagrant hostmanager
         fi
     else
-        vagrant up --provider=aws --no-parallel --no-provision
+        vagrant up --provider=aws --no-parallel --no-provision $debug
         vagrant hostmanager
         vagrant provision
     fi
@@ -227,7 +238,7 @@ function bring_up_aws {
 
 function main {
     if [[ "$AWS" == "true" ]]; then
-        bring_up_aws "$PARALLEL" "$MAX_PARALLEL"
+        bring_up_aws "$PARALLEL" "$MAX_PARALLEL" "$DEBUG"
     else
         bring_up_local
     fi

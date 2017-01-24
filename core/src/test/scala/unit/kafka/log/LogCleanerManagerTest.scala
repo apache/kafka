@@ -6,7 +6,7 @@
   * (the "License"); you may not use this file except in compliance with
   * the License.  You may obtain a copy of the License at
   *
-  * http://www.apache.org/licenses/LICENSE-2.0
+  *    http://www.apache.org/licenses/LICENSE-2.0
   *
   * Unless required by applicable law or agreed to in writing, software
   * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,27 +14,36 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
+
 package kafka.log
 
 import java.io.File
 import java.util.Properties
 
-import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
-import kafka.utils.{MockTime, Pool, TestUtils}
+import kafka.utils._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
 
-class LogCleanerManagerTest extends JUnitSuite {
+/**
+  * Unit tests for the log cleaning logic
+  */
+class LogCleanerManagerTest extends JUnitSuite with Logging {
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val time = new MockTime()
+  val logProps = new Properties()
+  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+  val logConfig = LogConfig(logProps)
+  val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Utils.delete(tmpDir)
   }
 
@@ -44,9 +53,9 @@ class LogCleanerManagerTest extends JUnitSuite {
     * as they are handled by the LogManager
     */
   @Test
-  def testLogsWithSegmentsToDeleteShouldNotConsiderCleanupPolicyDeleteLogs() {
-    val messageSet = TestUtils.singleMessageSet("test".getBytes)
-    val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Delete)
+  def testLogsWithSegmentsToDeleteShouldNotConsiderCleanupPolicyDeleteLogs(): Unit = {
+    val records = TestUtils.singletonRecords("test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val readyToDelete = cleanerManager.deletableLogs().size
@@ -58,8 +67,8 @@ class LogCleanerManagerTest extends JUnitSuite {
     */
   @Test
   def testLogsWithSegmentsToDeleteShouldConsiderCleanupPolicyCompactDeleteLogs(): Unit = {
-    val messageSet = TestUtils.singleMessageSet("test".getBytes, key="test".getBytes)
-    val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Compact + "," + LogConfig.Delete)
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact + "," + LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val readyToDelete = cleanerManager.deletableLogs().size
@@ -72,32 +81,99 @@ class LogCleanerManagerTest extends JUnitSuite {
     */
   @Test
   def testLogsWithSegmentsToDeleteShouldNotConsiderCleanupPolicyCompactLogs(): Unit = {
-    val messageSet = TestUtils.singleMessageSet("test".getBytes, key="test".getBytes)
-    val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Compact)
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 1 logs ready to be deleted", 0, readyToDelete)
   }
 
+  /**
+    * Test computation of cleanable range with no minimum compaction lag settings active
+    */
+  @Test
+  def testCleanableOffsetsForNone(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
-  def createCleanerManager(log: Log): LogCleanerManager = {
-    val logs = new Pool[TopicAndPartition, Log]()
-    logs.put(TopicAndPartition("log", 0), log)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    while(log.numberOfSegments < 8)
+      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = time.milliseconds))
+
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
+    assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+  }
+
+  /**
+    * Test computation of cleanable range with a minimum compaction lag time
+    */
+  @Test
+  def testCleanableOffsetsForTime(): Unit = {
+    val compactionLag = 60 * 60 * 1000
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val t0 = time.milliseconds
+    while(log.numberOfSegments < 4)
+      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t0))
+
+    val activeSegAtT0 = log.activeSegment
+
+    time.sleep(compactionLag + 1)
+    val t1 = time.milliseconds
+
+    while (log.numberOfSegments < 8)
+      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t1))
+
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
+    assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
+  }
+
+  /**
+    * Test computation of cleanable range with a minimum compaction lag time that is small enough that
+    * the active segment contains it.
+    */
+  @Test
+  def testCleanableOffsetsForShortTime(): Unit = {
+    val compactionLag = 60 * 60 * 1000
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val t0 = time.milliseconds
+    while (log.numberOfSegments < 8)
+      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t0))
+
+    time.sleep(compactionLag + 1)
+
+    val topicPartition = new TopicPartition("log", 0)
+    val lastClean = Map(topicPartition -> 0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
+    assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+  }
+
+  private def createCleanerManager(log: Log): LogCleanerManager = {
+    val logs = new Pool[TopicPartition, Log]()
+    logs.put(new TopicPartition("log", 0), log)
     val cleanerManager = new LogCleanerManager(Array(logDir), logs)
     cleanerManager
   }
 
-  def appendMessagesAndExpireSegments(set: ByteBufferMessageSet, log: Log): Unit = {
-    // append some messages to create some segments
-    for (i <- 0 until 100)
-      log.append(set)
-
-    // expire all segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
-  }
-
-  def createLog(segmentSize: Int, cleanupPolicy: String = "delete"): Log = {
+  private def createLog(segmentSize: Int, cleanupPolicy: String = "delete"): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
     logProps.put(LogConfig.RetentionMsProp, 1: Integer)
@@ -113,5 +189,10 @@ class LogCleanerManagerTest extends JUnitSuite {
     log
   }
 
+  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
+    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+
+  private def logEntries(key: Int, value: Int, timestamp: Long) =
+    MemoryRecords.withRecords(Record.create(timestamp, key.toString.getBytes, value.toString.getBytes))
 
 }

@@ -37,7 +37,7 @@ public final class KafkaMetric implements Metric {
         this.time = time;
     }
 
-    MetricConfig config() {
+    public MetricConfig config() {
         return this.config;
     }
 

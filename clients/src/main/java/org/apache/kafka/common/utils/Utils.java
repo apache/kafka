@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Closeable;
@@ -51,7 +52,7 @@ public class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%.:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -234,6 +235,10 @@ public class Utils {
         return min;
     }
 
+    public static short min(short first, short second) {
+        return (short) Math.min(first, second);
+    }
+
     /**
      * Get the length for UTF8-encoding a string without encoding it first
      *
@@ -263,6 +268,24 @@ public class Utils {
      */
     public static byte[] toArray(ByteBuffer buffer) {
         return toArray(buffer, 0, buffer.limit());
+    }
+
+    /**
+     * Convert a ByteBuffer to a nullable array.
+     * @param buffer The buffer to convert
+     * @return The resulting array or null if the buffer is null
+     */
+    public static byte[] toNullableArray(ByteBuffer buffer) {
+        return buffer == null ? null : toArray(buffer);
+    }
+
+    /**
+     * Wrap an array as a nullable ByteBuffer.
+     * @param array The nullable array to wrap
+     * @return The wrapping ByteBuffer or null if array is null
+     */
+    public static ByteBuffer wrapNullable(byte[] array) {
+        return array == null ? null : ByteBuffer.wrap(array);
     }
 
     /**
@@ -303,6 +326,7 @@ public class Utils {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             // this is okay, we just wake up early
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -435,6 +459,24 @@ public class Utils {
                 sb.append(seperator);
         }
         return sb.toString();
+    }
+
+    public static <K, V> String mkString(Map<K, V> map) {
+        return mkString(map, "{", "}", "=", " ,");
+    }
+
+    public static <K, V> String mkString(Map<K, V> map, String begin, String end,
+                                         String keyValueSeparator, String elementSeperator) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(begin);
+        String prefix = "";
+        for (Map.Entry<K, V> entry : map.entrySet()) {
+            bld.append(prefix).append(entry.getKey()).
+                    append(keyValueSeparator).append(entry.getValue());
+            prefix = elementSeperator;
+        }
+        bld.append(end);
+        return bld.toString();
     }
 
     /**
@@ -587,7 +629,6 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-
     /*
      * Create a string from a collection
      * @param coll the collection
@@ -727,5 +768,91 @@ public class Utils {
      */
     public static int toPositive(int number) {
         return number & 0x7fffffff;
+    }
+
+    public static int longHashcode(long value) {
+        return (int) (value ^ (value >>> 32));
+    }
+
+    /**
+     * Read a size-delimited byte buffer starting at the given offset.
+     * @param buffer Buffer containing the size and data
+     * @param start Offset in the buffer to read from
+     * @return A slice of the buffer containing only the delimited data (excluding the size)
+     */
+    public static ByteBuffer sizeDelimited(ByteBuffer buffer, int start) {
+        int size = buffer.getInt(start);
+        if (size < 0) {
+            return null;
+        } else {
+            ByteBuffer b = buffer.duplicate();
+            b.position(start + 4);
+            b = b.slice();
+            b.limit(size);
+            b.rewind();
+            return b;
+        }
+    }
+
+    /**
+     * Compute the checksum of a range of data
+     * @param buffer Buffer containing the data to checksum
+     * @param start Offset in the buffer to read from
+     * @param size The number of bytes to include
+     */
+    public static long computeChecksum(ByteBuffer buffer, int start, int size) {
+        return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer. If the end
+     * of the file is reached while there are bytes remaining in the buffer, an EOFException is thrown.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     * @param description A description of what is being read, this will be included in the EOFException if it is thrown
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws EOFException If the end of the file is reached while there are remaining bytes in the destination buffer
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position,
+                                       String description) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        int expectedReadBytes = destinationBuffer.remaining();
+        readFully(channel, destinationBuffer, position);
+        if (destinationBuffer.hasRemaining()) {
+            throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
+                    "but reached end of file after reading %d bytes. Started read from position %d.",
+                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+        }
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or the end
+     * of the file has been reached.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        long currentPosition = position;
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
+            currentPosition += bytesRead;
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
 }

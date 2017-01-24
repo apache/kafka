@@ -16,9 +16,9 @@
 import json
 import os
 import signal
-import subprocess
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
@@ -148,8 +148,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
         self.prop_file = ""
-        self.security_config = kafka.security_config.client_config(self.prop_file)
-        self.prop_file += str(self.security_config)
         self.stop_timeout_sec = stop_timeout_sec
 
         self.event_handlers = {}
@@ -171,6 +169,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
+        self.security_config = self.kafka.security_config.client_config(self.prop_file, node)
+        self.security_config.setup_node(node)
+        self.prop_file += str(self.security_config)
         self.logger.info("verifiable_consumer.properties:")
         self.logger.info(self.prop_file)
         node.account.create_file(VerifiableConsumer.CONFIG_FILE, self.prop_file)
@@ -243,7 +244,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             cmd = "jps | grep -i VerifiableConsumer | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def try_parse_json(self, string):

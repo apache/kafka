@@ -16,7 +16,9 @@
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError
 from ducktape.utils.util import wait_until
-import subprocess
+from ducktape.mark.resource import cluster
+from ducktape.cluster.remoteaccount import RemoteCommandError
+
 import json
 import itertools
 
@@ -29,8 +31,8 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
-    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file'}
-    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file'}
+    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file', 'transforms'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file', 'transforms'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
@@ -57,6 +59,7 @@ class ConnectRestApiTest(KafkaTest):
 
         self.cc = ConnectDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.INPUT_FILE2, self.OUTPUT_FILE])
 
+    @cluster(num_nodes=4)
     def test_rest_api(self):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
@@ -171,10 +174,10 @@ class ConnectRestApiTest(KafkaTest):
 
     def file_contents(self, node, file):
         try:
-            # Convert to a list here or the CalledProcessError may be returned during a call to the generator instead of
+            # Convert to a list here or the RemoteCommandError may be returned during a call to the generator instead of
             # immediately
             return list(node.account.ssh_capture("cat " + file))
-        except subprocess.CalledProcessError:
+        except RemoteCommandError:
             return []
 
     def _config_dict_from_props(self, connector_props):

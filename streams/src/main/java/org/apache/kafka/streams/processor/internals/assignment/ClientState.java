@@ -22,11 +22,12 @@ import java.util.Set;
 
 public class ClientState<T> {
 
-    public final static double COST_ACTIVE = 0.1;
-    public final static double COST_STANDBY  = 0.2;
-    public final static double COST_LOAD = 0.5;
+    final static double COST_ACTIVE = 0.1;
+    final static double COST_STANDBY  = 0.2;
+    final static double COST_LOAD = 0.5;
 
     public final Set<T> activeTasks;
+    public final Set<T> standbyTasks;
     public final Set<T> assignedTasks;
     public final Set<T> prevActiveTasks;
     public final Set<T> prevAssignedTasks;
@@ -39,11 +40,12 @@ public class ClientState<T> {
     }
 
     public ClientState(double capacity) {
-        this(new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), capacity);
+        this(new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), capacity);
     }
 
-    private ClientState(Set<T> activeTasks, Set<T> assignedTasks, Set<T> prevActiveTasks, Set<T> prevAssignedTasks, double capacity) {
+    private ClientState(Set<T> activeTasks, Set<T> standbyTasks, Set<T> assignedTasks, Set<T> prevActiveTasks, Set<T> prevAssignedTasks, double capacity) {
         this.activeTasks = activeTasks;
+        this.standbyTasks = standbyTasks;
         this.assignedTasks = assignedTasks;
         this.prevActiveTasks = prevActiveTasks;
         this.prevAssignedTasks = prevAssignedTasks;
@@ -52,13 +54,15 @@ public class ClientState<T> {
     }
 
     public ClientState<T> copy() {
-        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<>(assignedTasks),
+        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
                 new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
     }
 
     public void assign(T taskId, boolean active) {
         if (active)
             activeTasks.add(taskId);
+        else
+            standbyTasks.add(taskId);
 
         assignedTasks.add(taskId);
 

@@ -43,7 +43,7 @@ public class DistributedConfig extends WorkerConfig {
      * <code>session.timeout.ms</code>
      */
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect worker failures." +
+    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect worker failures. " +
             "The worker sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are " +
             "received by the broker before the expiration of this session timeout, then the broker will remove the " +
             "worker from the group and initiate a rebalance. Note that the value must be in the allowable range as " +
@@ -105,7 +105,10 @@ public class DistributedConfig extends WorkerConfig {
 
     static {
         CONFIG = baseConfigDef()
-                .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, GROUP_ID_DOC)
+                .define(GROUP_ID_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        GROUP_ID_DOC)
                 .define(SESSION_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
                         10000,

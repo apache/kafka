@@ -17,10 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -33,6 +29,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -48,6 +45,10 @@ import org.junit.Test;
 
 import java.io.File;
 import java.util.Properties;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class ProcessorTopologyTest {
 
@@ -135,6 +136,7 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5", partition);
     }
 
+
     @Test
     public void testDrivingMultiplexingTopology() {
         driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology());
@@ -196,6 +198,24 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDriveGlobalStore() throws Exception {
+        final StateStoreSupplier storeSupplier = Stores.create("my-store")
+                .withStringKeys().withStringValues().inMemory().disableLogging().build();
+        final String global = "global";
+        final String topic = "topic";
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) storeSupplier.get();
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+                .addGlobalStore(globalStore, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder, "my-store");
+        driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertEquals("value1", globalStore.get("key1"));
+        assertEquals("value2", globalStore.get("key2"));
+    }
+
     @Test
     public void testDrivingSimpleMultiSourceTopology() {
         int partition = 10;
@@ -209,6 +229,8 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
+
+
 
     protected void assertNextOutputRecord(String topic, String key, String value) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
@@ -230,10 +252,10 @@ public class ProcessorTopologyTest {
         assertNull(driver.readOutput(topic));
     }
 
-    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<K, V>() {
+    protected StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<Object, Object>() {
             @Override
-            public Integer partition(K key, V value, int numPartitions) {
+            public Integer partition(Object key, Object value, int numPartitions) {
                 return partition;
             }
         };
@@ -269,6 +291,7 @@ public class ProcessorTopologyTest {
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+
     protected TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return new TopologyBuilder().addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
@@ -277,6 +300,7 @@ public class ProcessorTopologyTest {
                 .addProcessor("processor-2", define(new ForwardingProcessor()), "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
+
 
     /**
      * A processor that simply forwards all messages to all children.
@@ -401,7 +425,7 @@ public class ProcessorTopologyTest {
 
     public static class CustomTimestampExtractor implements TimestampExtractor {
         @Override
-        public long extract(ConsumerRecord<Object, Object> record) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
             return timestamp;
         }
     }

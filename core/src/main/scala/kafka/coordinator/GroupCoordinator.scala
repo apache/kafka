@@ -267,14 +267,14 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              delayedGroupStore = Some(groupManager.prepareStoreGroup(group, assignment, (errorCode: Short) => {
+              delayedGroupStore = groupManager.prepareStoreGroup(group, assignment, (error: Errors) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
                   // so we must ensure we are still in the AwaitingSync state and the same generation
                   // when it gets invoked. if we have transitioned to another state, then do nothing
                   if (group.is(AwaitingSync) && generationId == group.generationId) {
-                    if (errorCode != Errors.NONE.code) {
-                      resetAndPropagateAssignmentError(group, errorCode)
+                    if (error != Errors.NONE) {
+                      resetAndPropagateAssignmentError(group, error)
                       maybePrepareRebalance(group)
                     } else {
                       setAndPropagateAssignment(group, assignment)
@@ -282,7 +282,7 @@ class GroupCoordinator(val brokerId: Int,
                     }
                   }
                 }
-              }))
+              })
             }
 
           case Stable =>
@@ -422,7 +422,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def doCommitOffsets(group: GroupMetadata,
+  private def doCommitOffsets(group: GroupMetadata,
                       memberId: String,
                       generationId: Int,
                       offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
@@ -434,8 +434,8 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID.code))
       } else if (generationId < 0 && group.is(Empty)) {
         // the group is only using Kafka to store offsets
-        delayedOffsetStore = Some(groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback))
+        delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
+          offsetMetadata, responseCallback)
       } else if (group.is(AwaitingSync)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS.code))
       } else if (!group.has(memberId)) {
@@ -445,8 +445,8 @@ class GroupCoordinator(val brokerId: Int,
       } else {
         val member = group.get(memberId)
         completeAndScheduleNextHeartbeatExpiration(group, member)
-        delayedOffsetStore = Some(groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback))
+        delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
+          offsetMetadata, responseCallback)
       }
     }
 
@@ -454,23 +454,19 @@ class GroupCoordinator(val brokerId: Int,
     delayedOffsetStore.foreach(groupManager.store)
   }
 
-
   def handleFetchOffsets(groupId: String,
-                         partitions: Seq[TopicPartition]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
-    if (!isActive.get) {
-      partitions.map { case topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))}.toMap
-    } else if (!isCoordinatorForGroup(groupId)) {
+                         partitions: Option[Seq[TopicPartition]] = None): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
+    if (!isActive.get)
+      (Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Map())
+    else if (!isCoordinatorForGroup(groupId)) {
       debug("Could not fetch offsets for group %s (not group coordinator).".format(groupId))
-      partitions.map { case topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NOT_COORDINATOR_FOR_GROUP.code))}.toMap
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
-      partitions.map { case topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.GROUP_LOAD_IN_PROGRESS.code))}.toMap
-    } else {
+      (Errors.NOT_COORDINATOR_FOR_GROUP, Map())
+    } else if (isCoordinatorLoadingInProgress(groupId))
+      (Errors.GROUP_LOAD_IN_PROGRESS, Map())
+    else {
       // return offsets blindly regardless the current group state since the group may be using
       // Kafka commit storage without automatic group management
-      groupManager.getOffsets(groupId, partitions)
+      (Errors.NONE, groupManager.getOffsets(groupId, partitions))
     }
   }
 
@@ -549,19 +545,19 @@ class GroupCoordinator(val brokerId: Int,
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
     assert(group.is(AwaitingSync))
     group.allMemberMetadata.foreach(member => member.assignment = assignment(member.memberId))
-    propagateAssignment(group, Errors.NONE.code)
+    propagateAssignment(group, Errors.NONE)
   }
 
-  private def resetAndPropagateAssignmentError(group: GroupMetadata, errorCode: Short) {
+  private def resetAndPropagateAssignmentError(group: GroupMetadata, error: Errors) {
     assert(group.is(AwaitingSync))
     group.allMemberMetadata.foreach(_.assignment = Array.empty[Byte])
-    propagateAssignment(group, errorCode)
+    propagateAssignment(group, error)
   }
 
-  private def propagateAssignment(group: GroupMetadata, errorCode: Short) {
+  private def propagateAssignment(group: GroupMetadata, error: Errors) {
     for (member <- group.allMemberMetadata) {
       if (member.awaitingSyncCallback != null) {
-        member.awaitingSyncCallback(member.assignment, errorCode)
+        member.awaitingSyncCallback(member.assignment, error.code)
         member.awaitingSyncCallback = null
 
         // reset the session timeout for members after propagating the member's assignment.
@@ -645,7 +641,7 @@ class GroupCoordinator(val brokerId: Int,
   private def prepareRebalance(group: GroupMetadata) {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(AwaitingSync))
-      resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS.code)
+      resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
     group.transitionTo(PreparingRebalance)
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
@@ -692,14 +688,14 @@ class GroupCoordinator(val brokerId: Int,
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty")
 
-          delayedStore = Some(groupManager.prepareStoreGroup(group, Map.empty, errorCode => {
-            if (errorCode != Errors.NONE.code) {
+          delayedStore = groupManager.prepareStoreGroup(group, Map.empty, error => {
+            if (error != Errors.NONE) {
               // we failed to write the empty group metadata. If the broker fails before another rebalance,
               // the previous generation written to the log will become active again (and most likely timeout).
               // This should be safe since there are no active members in an empty generation, so we just warn.
-              warn(s"Failed to write empty metadata for group ${group.groupId}: ${Errors.forCode(errorCode).message()}")
+              warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
-          }))
+          })
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId}")
 
@@ -776,22 +772,26 @@ object GroupCoordinator {
     apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
+  private[coordinator] def offsetConfig(config: KafkaConfig) = OffsetConfig(
+    maxMetadataSize = config.offsetMetadataMaxSize,
+    loadBufferSize = config.offsetsLoadBufferSize,
+    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
+    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
+    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
+    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+    offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  )
+
   def apply(config: KafkaConfig,
             zkUtils: ZkUtils,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time): GroupCoordinator = {
-    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 

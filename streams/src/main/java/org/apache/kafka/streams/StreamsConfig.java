@@ -25,9 +25,11 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -38,6 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Configuration for Kafka Streams. Documentation for these configurations can be found in the <a
@@ -119,6 +122,9 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>metrics.num.samples</code> */
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
+    /** <code>metrics.record.level</code> */
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
@@ -128,117 +134,212 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
+    /** <code>rocksdb.config.setter</code> */
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class that implements the <code>RocksDBConfigSetter</code> interface";
 
+    /** <code>windowstore.changelog.additional.retention.ms</code> */
+    public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
+    public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
+    /** <code>cache.max.bytes.buffering</code> */
+    public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
+
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+    public static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
+    public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
+
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+    public static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
+
+    public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+
+    public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
+    public static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
+
+    public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+    public static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
+
+    public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
+    public static final String SEND_BUFFER_DOC = CommonClientConfigs.SEND_BUFFER_DOC;
+
+    public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
+    public static final String RECEIVE_BUFFER_DOC = CommonClientConfigs.RECEIVE_BUFFER_DOC;
+
+    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    public static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
-                                        Type.STRING,
-                                        Importance.HIGH,
-                                        StreamsConfig.APPLICATION_ID_DOC)
-                                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
-                                        Type.LIST,
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_ID_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.HIGH,
-                                        CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(ZOOKEEPER_CONNECT_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.HIGH,
-                                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
-                                .define(STATE_DIR_CONFIG,
-                                        Type.STRING,
-                                        "/tmp/kafka-streams",
-                                        Importance.MEDIUM,
-                                        STATE_DIR_DOC)
-                                .define(REPLICATION_FACTOR_CONFIG,
-                                        Type.INT,
-                                        1,
-                                        Importance.MEDIUM,
-                                        REPLICATION_FACTOR_DOC)
-                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        ConsumerRecordTimestampExtractor.class.getName(),
-                                        Importance.MEDIUM,
-                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
-                                .define(PARTITION_GROUPER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        DefaultPartitionGrouper.class.getName(),
-                                        Importance.MEDIUM,
-                                        PARTITION_GROUPER_CLASS_DOC)
-                                .define(KEY_SERDE_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Serdes.ByteArraySerde.class.getName(),
-                                        Importance.MEDIUM,
-                                        KEY_SERDE_CLASS_DOC)
-                                .define(VALUE_SERDE_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Serdes.ByteArraySerde.class.getName(),
-                                        Importance.MEDIUM,
-                                        VALUE_SERDE_CLASS_DOC)
-                                .define(COMMIT_INTERVAL_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        Importance.LOW,
-                                        COMMIT_INTERVAL_MS_DOC)
-                                .define(POLL_MS_CONFIG,
-                                        Type.LONG,
-                                        100,
-                                        Importance.LOW,
-                                        POLL_MS_DOC)
-                                .define(NUM_STREAM_THREADS_CONFIG,
-                                        Type.INT,
-                                        1,
-                                        Importance.LOW,
-                                        NUM_STREAM_THREADS_DOC)
-                                .define(NUM_STANDBY_REPLICAS_CONFIG,
-                                        Type.INT,
-                                        0,
-                                        Importance.LOW,
-                                        NUM_STANDBY_REPLICAS_DOC)
-                                .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                                        Type.INT,
-                                        1000,
-                                        Importance.LOW,
-                                        BUFFERED_RECORDS_PER_PARTITION_DOC)
-                                .define(STATE_CLEANUP_DELAY_MS_CONFIG,
-                                        Type.LONG,
-                                        60000,
-                                        Importance.LOW,
-                                        STATE_CLEANUP_DELAY_MS_DOC)
-                                .define(METRIC_REPORTER_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        "",
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG,
-                                        Type.INT,
-                                        2,
-                                        atLeast(1),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(APPLICATION_SERVER_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.LOW,
-                                        APPLICATION_SERVER_DOC)
-                                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        null,
-                                        Importance.LOW,
-                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC);
+                Type.STRING,
+                Importance.HIGH,
+                StreamsConfig.APPLICATION_ID_DOC)
+                .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
+                        Type.LIST,
+                        Importance.HIGH,
+                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                .define(CLIENT_ID_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.HIGH,
+                        CommonClientConfigs.CLIENT_ID_DOC)
+                .define(ZOOKEEPER_CONNECT_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.HIGH,
+                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
+                .define(STATE_DIR_CONFIG,
+                        Type.STRING,
+                        "/tmp/kafka-streams",
+                        Importance.MEDIUM,
+                        STATE_DIR_DOC)
+                .define(REPLICATION_FACTOR_CONFIG,
+                        Type.INT,
+                        1,
+                        Importance.MEDIUM,
+                        REPLICATION_FACTOR_DOC)
+                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                        Type.CLASS,
+                        FailOnInvalidTimestamp.class.getName(),
+                        Importance.MEDIUM,
+                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                .define(PARTITION_GROUPER_CLASS_CONFIG,
+                        Type.CLASS,
+                        DefaultPartitionGrouper.class.getName(),
+                        Importance.MEDIUM,
+                        PARTITION_GROUPER_CLASS_DOC)
+                .define(KEY_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        Serdes.ByteArraySerde.class.getName(),
+                        Importance.MEDIUM,
+                        KEY_SERDE_CLASS_DOC)
+                .define(VALUE_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        Serdes.ByteArraySerde.class.getName(),
+                        Importance.MEDIUM,
+                        VALUE_SERDE_CLASS_DOC)
+                .define(COMMIT_INTERVAL_MS_CONFIG,
+                        Type.LONG,
+                        30000,
+                        Importance.LOW,
+                        COMMIT_INTERVAL_MS_DOC)
+                .define(POLL_MS_CONFIG,
+                        Type.LONG,
+                        100,
+                        Importance.LOW,
+                        POLL_MS_DOC)
+                .define(NUM_STREAM_THREADS_CONFIG,
+                        Type.INT,
+                        1,
+                        Importance.LOW,
+                        NUM_STREAM_THREADS_DOC)
+                .define(NUM_STANDBY_REPLICAS_CONFIG,
+                        Type.INT,
+                        0,
+                        Importance.LOW,
+                        NUM_STANDBY_REPLICAS_DOC)
+                .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                        Type.INT,
+                        1000,
+                        Importance.LOW,
+                        BUFFERED_RECORDS_PER_PARTITION_DOC)
+                .define(STATE_CLEANUP_DELAY_MS_CONFIG,
+                        Type.LONG,
+                        60000,
+                        Importance.LOW,
+                        STATE_CLEANUP_DELAY_MS_DOC)
+                .define(METRIC_REPORTER_CLASSES_CONFIG,
+                        Type.LIST,
+                        "",
+                        Importance.LOW,
+                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                        Type.LONG,
+                        30000,
+                        atLeast(0),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+                .define(METRICS_NUM_SAMPLES_CONFIG,
+                        Type.INT,
+                        2,
+                        atLeast(1),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                .define(METRICS_RECORDING_LEVEL_CONFIG,
+                        Type.STRING,
+                        Sensor.RecordingLevel.INFO.toString(),
+                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+                .define(APPLICATION_SERVER_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.LOW,
+                        APPLICATION_SERVER_DOC)
+                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                        Type.CLASS,
+                        null,
+                        Importance.LOW,
+                        ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+                .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+                        Type.LONG,
+                        24 * 60 * 60 * 1000,
+                        Importance.MEDIUM,
+                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        Type.LONG,
+                        10 * 1024 * 1024L,
+                        atLeast(0),
+                        Importance.LOW,
+                        CACHE_MAX_BYTES_BUFFERING_DOC)
+                .define(SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        DEFAULT_SECURITY_PROTOCOL,
+                        Importance.MEDIUM,
+                        SECURITY_PROTOCOL_DOC)
+                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        9 * 60 * 1000,
+                        ConfigDef.Importance.MEDIUM,
+                        CONNECTIONS_MAX_IDLE_MS_DOC)
+                .define(RETRY_BACKOFF_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        100L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        RETRY_BACKOFF_MS_DOC)
+                .define(METADATA_MAX_AGE_CONFIG,
+                        ConfigDef.Type.LONG,
+                        5 * 60 * 1000,
+                        atLeast(0),
+                        ConfigDef.Importance.LOW,
+                        METADATA_MAX_AGE_DOC)
+                .define(RECONNECT_BACKOFF_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        50L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        RECONNECT_BACKOFF_MS_DOC)
+                .define(SEND_BUFFER_CONFIG,
+                        ConfigDef.Type.INT,
+                        128 * 1024,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        SEND_BUFFER_DOC)
+                .define(RECEIVE_BUFFER_CONFIG,
+                        ConfigDef.Type.INT,
+                        32 * 1024,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        RECEIVE_BUFFER_DOC)
+                .define(REQUEST_TIMEOUT_MS_CONFIG,
+                        ConfigDef.Type.INT,
+                        40 * 1000,
+                        atLeast(0),
+                        ConfigDef.Importance.MEDIUM,
+                        REQUEST_TIMEOUT_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -302,34 +403,38 @@ public class StreamsConfig extends AbstractConfig {
      * @throws ConfigException
      */
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
-        final Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
+
+        final Map<String, Object> consumerProps = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
+
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
-        // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), consumerProps, CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(clientProvidedProps);
 
         // bootstrap.servers should be from StreamsConfig
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix, and group id
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
-        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
-            props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
+        consumerProps.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        consumerProps.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
+        consumerProps.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
+        consumerProps.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals("")) {
+            consumerProps.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
+        }
 
-        props.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
-        return props;
+        consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
+        return consumerProps;
     }
 
 
@@ -342,28 +447,29 @@ public class StreamsConfig extends AbstractConfig {
      * @throws ConfigException
      */
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
-        Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
+        Map<String, Object> consumerProps = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
+
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
-        // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), consumerProps, CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(clientProvidedProps);
 
         // bootstrap.servers should be from StreamsConfig
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
 
         // no need to set group id for a restore consumer
-        props.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        consumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
 
         // add client id with stream client id prefix
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
-        return props;
+        return consumerProps;
     }
 
 
@@ -377,7 +483,9 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Map<String, Object> getProducerConfigs(String clientId) {
         // generate producer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ProducerConfig.configNames(), getClientPropsWithPrefix(PRODUCER_PREFIX), PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> props = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
+        props.putAll(getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames()));
+
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
@@ -385,44 +493,46 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    private Map<String, Object> getClientPropsWithPrefix(final String prefix) {
-        // To be backward compatible we first get all the originals.
-        final Map<String, Object> props = this.originals();
+    private Map<String, Object> getClientPropsWithPrefix(final String prefix, final Set<String> configNames) {
+        final Map<String, Object> props = clientProps(configNames, originals());
         props.putAll(this.originalsWithPrefix(prefix));
         return props;
     }
 
     public Serde keySerde() {
-        Serde<?> serde = getConfiguredInstance(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serde.class);
-        serde.configure(originals(), true);
-
-        return serde;
+        try {
+            Serde<?> serde = getConfiguredInstance(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serde.class);
+            serde.configure(originals(), true);
+            return serde;
+        } catch (Exception e) {
+            throw new StreamsException(String.format("Failed to configure key serde %s", get(StreamsConfig.KEY_SERDE_CLASS_CONFIG)), e);
+        }
     }
 
     public Serde valueSerde() {
-        Serde<?> serde = getConfiguredInstance(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serde.class);
-        serde.configure(originals(), false);
-
-        return serde;
+        try {
+            Serde<?> serde = getConfiguredInstance(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            serde.configure(originals(), false);
+            return serde;
+        } catch (Exception e) {
+            throw new StreamsException(String.format("Failed to configure value serde %s", get(StreamsConfig.VALUE_SERDE_CLASS_CONFIG)), e);
+        }
     }
 
     /**
-     * Filter configs that are not defined in the given set of configuration names.
+     * Override any client properties in the original configs with overrides
      *
      * @param configNames The given set of configuration names.
      * @param originals The original configs to be filtered.
-     * @param overrides The default overridden values.
-     * @return Filtered configs.
+     * @return client config with any overrides
      */
-    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals, Map<String, Object> overrides) {
+    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals) {
         // iterate all client config names, filter out non-client configs from the original
         // property map and use the overridden values when they are not specified by users
         Map<String, Object> parsed = new HashMap<>();
         for (String configName: configNames) {
             if (originals.containsKey(configName)) {
                 parsed.put(configName, originals.get(configName));
-            } else if (overrides.containsKey(configName)) {
-                parsed.put(configName, overrides.get(configName));
             }
         }
 

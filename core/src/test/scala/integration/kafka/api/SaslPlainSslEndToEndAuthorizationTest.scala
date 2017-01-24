@@ -16,12 +16,11 @@
   */
 package kafka.api
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.JaasTestUtils
 
-class SaslPlainSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
-  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
-  override val clientPrincipal = "testuser"
-  override val kafkaPrincipal = "admin"
+  override val clientPrincipal = JaasTestUtils.KafkaPlainUser
+  override val kafkaPrincipal = JaasTestUtils.KafkaPlainAdmin
 }

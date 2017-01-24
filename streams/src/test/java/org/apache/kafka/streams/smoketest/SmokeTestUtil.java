@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -36,14 +37,14 @@ public class SmokeTestUtil {
     public final static long START_TIME = 60000L * 60 * 24 * 365 * 30;
     public final static int END = Integer.MAX_VALUE;
 
-    public static <T> ProcessorSupplier<String, T> printProcessorSupplier(final String topic) {
+    public static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, false);
     }
 
-    public static <T> ProcessorSupplier<String, T> printProcessorSupplier(final String topic, final boolean printOffset) {
-        return new ProcessorSupplier<String, T>() {
-            public Processor<String, T> get() {
-                return new Processor<String, T>() {
+    public static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final boolean printOffset) {
+        return new ProcessorSupplier<Object, Object>() {
+            public Processor<Object, Object> get() {
+                return new AbstractProcessor<Object, Object>() {
                     private int numRecordsProcessed = 0;
                     private ProcessorContext context;
 
@@ -55,7 +56,7 @@ public class SmokeTestUtil {
                     }
 
                     @Override
-                    public void process(String key, T value) {
+                    public void process(Object key, Object value) {
                         if (printOffset) System.out.println(">>> " + context.offset());
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {

@@ -70,9 +70,21 @@ public class ConfigDef {
 
     public static final Object NO_DEFAULT_VALUE = new String("");
 
-    private final Map<String, ConfigKey> configKeys = new HashMap<>();
-    private final List<String> groups = new LinkedList<>();
+    private final Map<String, ConfigKey> configKeys;
+    private final List<String> groups;
     private Set<String> configsWithNoParent;
+
+    public ConfigDef() {
+        configKeys = new HashMap<>();
+        groups = new LinkedList<>();
+        configsWithNoParent = null;
+    }
+
+    public ConfigDef(ConfigDef base) {
+        configKeys = new HashMap<>(base.configKeys);
+        groups = new LinkedList<>(base.groups);
+        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+    }
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -81,6 +93,17 @@ public class ConfigDef {
      */
     public Set<String> names() {
         return Collections.unmodifiableSet(configKeys.keySet());
+    }
+
+    public ConfigDef define(ConfigKey key) {
+        if (configKeys.containsKey(key.name)) {
+            throw new ConfigException("Configuration " + key.name + " is defined twice.");
+        }
+        if (key.group != null && !groups.contains(key.group)) {
+            groups.add(key.group);
+        }
+        configKeys.put(key.name, key);
+        return this;
     }
 
     /**
@@ -101,15 +124,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        if (configKeys.containsKey(name)) {
-            throw new ConfigException("Configuration " + name + " is defined twice.");
-        }
-        if (group != null && !groups.contains(group)) {
-            groups.add(group);
-        }
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
-        return this;
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
     }
 
     /**
@@ -438,6 +453,10 @@ public class ConfigDef {
      * the current configuration values.
      */
     public List<ConfigValue> validate(Map<String, String> props) {
+        return new ArrayList<>(validateAll(props).values());
+    }
+
+    public Map<String, ConfigValue> validateAll(Map<String, String> props) {
         Map<String, ConfigValue> configValues = new HashMap<>();
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
@@ -466,12 +485,12 @@ public class ConfigDef {
     }
 
 
-    private List<ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
+    private Map<String, ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
         Set<String> configsWithNoParent = getConfigsWithNoParent();
         for (String name: configsWithNoParent) {
             validate(name, parsed, configValues);
         }
-        return new LinkedList<>(configValues.values());
+        return configValues;
     }
 
     private List<String> undefinedDependentConfigs() {
@@ -485,7 +504,7 @@ public class ConfigDef {
                 }
             }
         }
-        return new LinkedList<>(undefinedConfigKeys);
+        return new ArrayList<>(undefinedConfigKeys);
     }
 
     private Set<String> getConfigsWithNoParent() {
@@ -580,7 +599,7 @@ public class ConfigDef {
      * @param type  The expected type
      * @return The parsed object
      */
-    private Object parseType(String name, Object value, Type type) {
+    public static Object parseType(String name, Object value, Type type) {
         try {
             if (value == null) return null;
 
@@ -878,11 +897,11 @@ public class ConfigDef {
                          List<String> dependents, Recommender recommender) {
             this.name = name;
             this.type = type;
-            this.defaultValue = defaultValue;
+            this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null && this.hasDefault())
-                this.validator.ensureValid(name, defaultValue);
+            if (this.validator != null && hasDefault())
+                this.validator.ensureValid(name, this.defaultValue);
             this.documentation = documentation;
             this.dependents = dependents;
             this.group = group;
@@ -913,10 +932,11 @@ public class ConfigDef {
                 if (key.hasDefault()) {
                     if (key.defaultValue == null)
                         return "null";
-                    else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
+                    String defaultValueStr = convertToString(key.defaultValue, key.type);
+                    if (defaultValueStr.isEmpty())
                         return "\"\"";
                     else
-                        return key.defaultValue.toString();
+                        return defaultValueStr;
                 } else
                     return "";
             case "Valid Values":
@@ -927,7 +947,7 @@ public class ConfigDef {
                 throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
         }
     }
-    
+
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
@@ -959,68 +979,191 @@ public class ConfigDef {
      * documentation.
      */
     public String toRst() {
-        List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
-
-        for (ConfigKey def : configs) {
-            b.append("``");
-            b.append(def.name);
-            b.append("``\n");
-            for (String docLine : def.documentation.split("\n")) {
-                if (docLine.length() == 0) {
-                    continue;
-                }
-                b.append("  ");
-                b.append(docLine);
-                b.append("\n\n");
-            }
-            b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
+        for (ConfigKey def : sortedConfigs()) {
+            getConfigKeyRst(def, b);
             b.append("\n");
-            if (def.defaultValue != null) {
-                b.append("  * Default: ");
-                if (def.type == Type.STRING) {
-                    b.append("\"");
-                    b.append(def.defaultValue);
-                    b.append("\"");
-                } else {
-                    b.append(def.defaultValue);
-                }
-                b.append("\n");
-            }
-            b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("\n\n");
         }
         return b.toString();
     }
 
     /**
-     * Get a list of configs sorted into "natural" order: listing required fields first, then
-     * ordering by importance, and finally by name.
+     * Configs with new metadata (group, orderInGroup, dependents) formatted with reStructuredText, suitable for embedding in Sphinx
+     * documentation.
      */
-    protected List<ConfigKey> sortedConfigs() {
-        // sort first required fields, then by importance, then name
-        List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                // first take anything with no default value
-                if (!k1.hasDefault() && k2.hasDefault()) {
-                    return -1;
-                } else if (!k2.hasDefault() && k1.hasDefault()) {
-                    return 1;
-                }
+    public String toEnrichedRst() {
+        StringBuilder b = new StringBuilder();
 
-                // then sort by importance
-                int cmp = k1.importance.compareTo(k2.importance);
-                if (cmp == 0) {
-                    // then sort in alphabetical order
-                    return k1.name.compareTo(k2.name);
-                } else {
-                    return cmp;
+        String lastKeyGroupName = "";
+        for (ConfigKey def : sortedConfigs()) {
+            if (def.group != null) {
+                if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
+                    b.append(def.group).append("\n");
+
+                    char[] underLine = new char[def.group.length()];
+                    Arrays.fill(underLine, '^');
+                    b.append(new String(underLine)).append("\n\n");
                 }
+                lastKeyGroupName = def.group;
+            }
+
+            getConfigKeyRst(def, b);
+
+            if (def.dependents != null && def.dependents.size() > 0) {
+                int j = 0;
+                b.append("  * Dependents: ");
+                for (String dependent : def.dependents) {
+                    b.append("``");
+                    b.append(dependent);
+                    if (++j == def.dependents.size())
+                        b.append("``");
+                    else
+                        b.append("``, ");
+                }
+                b.append("\n");
+            }
+            b.append("\n");
+        }
+        return b.toString();
+    }
+
+    /**
+     * Shared content on Rst and Enriched Rst.
+     */
+    private void getConfigKeyRst(ConfigKey def, StringBuilder b) {
+        b.append("``").append(def.name).append("``").append("\n");
+        for (String docLine : def.documentation.split("\n")) {
+            if (docLine.length() == 0) {
+                continue;
+            }
+            b.append("  ").append(docLine).append("\n\n");
+        }
+        b.append("  * Type: ").append(getConfigValue(def, "Type")).append("\n");
+        if (def.hasDefault()) {
+            b.append("  * Default: ").append(getConfigValue(def, "Default")).append("\n");
+        }
+        if (def.validator != null) {
+            b.append("  * Valid Values: ").append(getConfigValue(def, "Valid Values")).append("\n");
+        }
+        b.append("  * Importance: ").append(getConfigValue(def, "Importance")).append("\n");
+    }
+
+    /**
+     * Get a list of configs sorted taking the 'group' and 'orderInGroup' into account.
+     *
+     * If grouping is not specified, the result will reflect "natural" order: listing required fields first, then ordering by importance, and finally by name.
+     */
+    private List<ConfigKey> sortedConfigs() {
+        final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
+        int ord = 0;
+        for (String group: groups) {
+            groupOrd.put(group, ord++);
+        }
+
+        List<ConfigKey> configs = new ArrayList<>(configKeys.values());
+        Collections.sort(configs, new Comparator<ConfigKey>() {
+            @Override
+            public int compare(ConfigKey k1, ConfigKey k2) {
+                int cmp = k1.group == null
+                        ? (k2.group == null ? 0 : -1)
+                        : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
+                if (cmp == 0) {
+                    cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
+                    if (cmp == 0) {
+                        // first take anything with no default value
+                        if (!k1.hasDefault() && k2.hasDefault()) {
+                            cmp = -1;
+                        } else if (!k2.hasDefault() && k1.hasDefault()) {
+                            cmp = 1;
+                        } else {
+                            cmp = k1.importance.compareTo(k2.importance);
+                            if (cmp == 0) {
+                                return k1.name.compareTo(k2.name);
+                            }
+                        }
+                    }
+                }
+                return cmp;
             }
         });
         return configs;
     }
+
+    public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
+        int orderInGroup = startingOrd;
+        for (ConfigDef.ConfigKey key : child.sortedConfigs()) {
+            define(new ConfigDef.ConfigKey(
+                    keyPrefix + key.name,
+                    key.type,
+                    key.defaultValue,
+                    embeddedValidator(keyPrefix, key.validator),
+                    key.importance,
+                    key.documentation,
+                    groupPrefix + (key.group == null ? "" : ": " + key.group),
+                    orderInGroup++,
+                    key.width,
+                    key.displayName,
+                    embeddedDependents(keyPrefix, key.dependents),
+                    embeddedRecommender(keyPrefix, key.recommender)
+            ));
+        }
+    }
+
+    /**
+     * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
+     */
+    private static ConfigDef.Validator embeddedValidator(final String keyPrefix, final ConfigDef.Validator base) {
+        if (base == null) return null;
+        return new ConfigDef.Validator() {
+            @Override
+            public void ensureValid(String name, Object value) {
+                base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+        };
+    }
+
+    /**
+     * Updated list of dependent configs with the specified {@code prefix} added.
+     */
+    private static List<String> embeddedDependents(final String keyPrefix, final List<String> dependents) {
+        if (dependents == null) return null;
+        final List<String> updatedDependents = new ArrayList<>(dependents.size());
+        for (String dependent : dependents) {
+            updatedDependents.add(keyPrefix + dependent);
+        }
+        return updatedDependents;
+    }
+
+    /**
+     * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
+     */
+    private static ConfigDef.Recommender embeddedRecommender(final String keyPrefix, final ConfigDef.Recommender base) {
+        if (base == null) return null;
+        return new ConfigDef.Recommender() {
+            private String unprefixed(String k) {
+                return k.substring(keyPrefix.length());
+            }
+
+            private Map<String, Object> unprefixed(Map<String, Object> parsedConfig) {
+                final Map<String, Object> unprefixedParsedConfig = new HashMap<>(parsedConfig.size());
+                for (Map.Entry<String, Object> e : parsedConfig.entrySet()) {
+                    if (e.getKey().startsWith(keyPrefix)) {
+                        unprefixedParsedConfig.put(unprefixed(e.getKey()), e.getValue());
+                    }
+                }
+                return unprefixedParsedConfig;
+            }
+
+            @Override
+            public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                return base.validValues(unprefixed(name), unprefixed(parsedConfig));
+            }
+
+            @Override
+            public boolean visible(String name, Map<String, Object> parsedConfig) {
+                return base.visible(unprefixed(name), unprefixed(parsedConfig));
+            }
+        };
+    }
+
 }

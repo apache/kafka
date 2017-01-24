@@ -13,27 +13,27 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
-import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
+import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
+import org.apache.kafka.common.requests.OffsetFetchResponse
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
@@ -42,10 +42,10 @@ class AdminClient(val time: Time,
 
   private def send(target: Node,
                    api: ApiKeys,
-                   request: AbstractRequest): Struct = {
+                   request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     var future: RequestFuture[ClientResponse] = null
 
-    future = client.send(target, api, request)
+    future = client.send(target, request)
     client.poll(future)
 
     if (future.succeeded())
@@ -54,56 +54,57 @@ class AdminClient(val time: Time,
       throw future.exception()
   }
 
-  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Struct = {
-    bootstrapBrokers.foreach {
-      case broker =>
-        try {
-          return send(broker, api, request)
-        } catch {
-          case e: Exception =>
-            debug(s"Request $api failed against node $broker", e)
-        }
+  private def sendAnyNode(api: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
+    bootstrapBrokers.foreach { broker =>
+      try {
+        return send(broker, api, request)
+      } catch {
+        case e: Exception =>
+          debug(s"Request $api failed against node $broker", e)
+      }
     }
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  private def findCoordinator(groupId: String): Node = {
-    val request = new GroupCoordinatorRequest(groupId)
-    val responseBody = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request)
-    val response = new GroupCoordinatorResponse(responseBody)
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.node()
+  def findCoordinator(groupId: String): Node = {
+    val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
+    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.node
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
-    val responseBody = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest())
-    val response = new ListGroupsResponse(responseBody)
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.groups().map(group => GroupOverview(group.groupId(), group.protocolType())).toList
+    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
+  }
+
+  def getApiVersions(node: Node): List[ApiVersion] = {
+    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.apiVersions.asScala.toList
   }
 
   private def findAllBrokers(): List[Node] = {
-    val request = new MetadataRequest(List[String]())
-    val responseBody = sendAnyNode(ApiKeys.METADATA, request)
-    val response = new MetadataResponse(responseBody)
-    val errors = response.errors()
+    val request = MetadataRequest.Builder.allTopics()
+    val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
+    val errors = response.errors
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
-    response.cluster().nodes().asScala.toList
+    response.cluster.nodes.asScala.toList
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map {
-      case broker =>
-        broker -> {
-          try {
-            listGroups(broker)
-          } catch {
-            case e: Exception =>
-              debug(s"Failed to find groups from broker $broker", e)
-              List[GroupOverview]()
-          }
+    findAllBrokers.map { broker =>
+      broker -> {
+        try {
+          listGroups(broker)
+        } catch {
+          case e: Exception =>
+            debug(s"Failed to find groups from broker $broker", e)
+            List[GroupOverview]()
         }
+      }
     }.toMap
   }
 
@@ -121,44 +122,60 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
-  def describeGroup(groupId: String): GroupSummary = {
+  def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
     val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
-    val response = new DescribeGroupsResponse(responseBody)
-    val metadata = response.groups().get(groupId)
-    if (metadata == null)
-      throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
-
-    Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map { member =>
-      val metadata = Utils.readBytes(member.memberMetadata())
-      val assignment = Utils.readBytes(member.memberAssignment())
-      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
-    }.toList
-    GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
+    val responseBody = send(coordinator, ApiKeys.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
+    val response = responseBody.asInstanceOf[OffsetFetchResponse]
+    if (response.hasError)
+      throw response.error.exception
+    response.maybeThrowFirstPartitionError
+    response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
-  case class ConsumerSummary(memberId: String,
+  def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
+    findAllBrokers.map { broker =>
+      broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+    }.toMap
+
+  /**
+   * Case class used to represent a consumer of a consumer group
+   */
+  case class ConsumerSummary(consumerId: String,
                              clientId: String,
-                             clientHost: String,
+                             host: String,
                              assignment: List[TopicPartition])
 
-  def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
-    val group = describeGroup(groupId)
-    if (group.state == "Dead")
-      return None
+  /**
+   * Case class used to represent group metadata (including the group coordinator) for the DescribeGroup API
+   */
+  case class ConsumerGroupSummary(state: String,
+                                  assignmentStrategy: String,
+                                  consumers: Option[List[ConsumerSummary]],
+                                  coordinator: Node)
 
-    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
+  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
+    val coordinator = findCoordinator(groupId)
+    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
+        new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
+    val response = responseBody.asInstanceOf[DescribeGroupsResponse]
+    val metadata = response.groups.get(groupId)
+    if (metadata == null)
+      throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
+    if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
 
-    if (group.state == "Stable") {
-      Some(group.members.map { member =>
-        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-        new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
+    Errors.forCode(metadata.errorCode()).maybeThrow()
+    val consumers = metadata.members.asScala.map { consumer =>
+      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
+        case "Stable" =>
+          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
+          assignment.partitions.asScala.toList
+        case _ =>
+          List()
       })
-    } else {
-      Some(List.empty)
-    }
+    }.toList
+
+    ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
   def close() {
@@ -194,7 +211,7 @@ object AdminClient {
     config
   }
 
-  class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals, false)
+  class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
 
   def createSimplePlaintext(brokerUrl: String): AdminClient = {
     val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)
@@ -206,7 +223,7 @@ object AdminClient {
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 
   def create(config: AdminConfig): AdminClient = {
-    val time = new SystemTime
+    val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata
     val channelBuilder = ClientUtils.createChannelBuilder(config.values())
@@ -232,7 +249,8 @@ object AdminClient {
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       DefaultRequestTimeoutMs,
-      time)
+      time,
+      true)
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,
@@ -245,6 +263,6 @@ object AdminClient {
       time,
       DefaultRequestTimeoutMs,
       highLevelClient,
-      bootstrapCluster.nodes().asScala.toList)
+      bootstrapCluster.nodes.asScala.toList)
   }
 }

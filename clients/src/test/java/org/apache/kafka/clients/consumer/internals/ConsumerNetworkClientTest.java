@@ -15,18 +15,19 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
@@ -37,7 +38,7 @@ import static org.junit.Assert.fail;
 public class ConsumerNetworkClientTest {
 
     private String topicName = "test";
-    private MockTime time = new MockTime();
+    private MockTime time = new MockTime(1);
     private MockClient client = new MockClient(time);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
@@ -47,7 +48,7 @@ public class ConsumerNetworkClientTest {
     @Test
     public void send() {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
-        RequestFuture<ClientResponse> future = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future.isDone());
@@ -57,7 +58,7 @@ public class ConsumerNetworkClientTest {
         assertTrue(future.succeeded());
 
         ClientResponse clientResponse = future.value();
-        HeartbeatResponse response = new HeartbeatResponse(clientResponse.responseBody());
+        HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE.code(), response.errorCode());
     }
 
@@ -65,19 +66,83 @@ public class ConsumerNetworkClientTest {
     public void multiSend() {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
-        RequestFuture<ClientResponse> future1 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
-        RequestFuture<ClientResponse> future2 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
+        RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
 
-        consumerClient.awaitPendingRequests(node);
+        consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
     }
 
     @Test
+    public void doNotBlockIfPollConditionIsSatisfied() {
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+
+        // expect poll, but with no timeout
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return false;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void blockWhenPollConditionNotSatisfied() {
+        long timeout = 4000L;
+
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(timeout, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void blockOnlyForRetryBackoffIfNoInflightRequests() {
+        long retryBackoffMs = 100L;
+
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
+
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
     public void wakeup() {
-        RequestFuture<ClientResponse> future = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.wakeup();
         try {
             consumerClient.poll(0);
@@ -88,6 +153,11 @@ public class ConsumerNetworkClientTest {
         client.respond(heartbeatResponse(Errors.NONE.code()));
         consumerClient.poll(future);
         assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testAwaitForMetadataUpdateWithTimeout() {
+        assertFalse(consumerClient.awaitMetadataUpdate(10L));
     }
 
     @Test
@@ -110,13 +180,13 @@ public class ConsumerNetworkClientTest {
         };
         // Queue first send, sleep long enough for this to expire and then queue second send
         consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, unsentExpiryMs);
-        RequestFuture<ClientResponse> future1 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future1.isDone());
 
         time.sleep(unsentExpiryMs + 1);
-        RequestFuture<ClientResponse> future2 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertFalse(future2.isDone());
@@ -134,12 +204,12 @@ public class ConsumerNetworkClientTest {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
         consumerClient.poll(future2);
         ClientResponse clientResponse = future2.value();
-        HeartbeatResponse response = new HeartbeatResponse(clientResponse.responseBody());
+        HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE.code(), response.errorCode());
 
         // Disable ready flag to delay send and queue another send. Disconnection should remove pending send
         isReady.set(false);
-        RequestFuture<ClientResponse> future3 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future3 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         disconnected.set(true);
@@ -150,13 +220,12 @@ public class ConsumerNetworkClientTest {
         assertEquals(0, consumerClient.pendingRequestCount(node));
     }
 
-    private HeartbeatRequest heartbeatRequest() {
-        return new HeartbeatRequest("group", 1, "memberId");
+    private HeartbeatRequest.Builder heartbeat() {
+        return new HeartbeatRequest.Builder("group", 1, "memberId");
     }
 
-    private Struct heartbeatResponse(short error) {
-        HeartbeatResponse response = new HeartbeatResponse(error);
-        return response.toStruct();
+    private HeartbeatResponse heartbeatResponse(short error) {
+        return new HeartbeatResponse(error);
     }
 
 }

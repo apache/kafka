@@ -17,99 +17,63 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
-
-import java.io.File;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import java.util.Collections;
 import java.util.Map;
 
-public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
-    private final TaskId id;
-    private final String applicationId;
-    private final StreamsMetrics metrics;
-    private final ProcessorStateManager stateMgr;
+    private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
 
-    private final StreamsConfig config;
-    private final Serde<?> keySerde;
-    private final Serde<?> valSerde;
+        }
 
-    private boolean initialized;
+        @Override
+        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<? super K, ? super V> partitioner) {
 
-    public StandbyContextImpl(TaskId id,
-                              String applicationId,
-                              StreamsConfig config,
-                              ProcessorStateManager stateMgr,
-                              StreamsMetrics metrics) {
-        this.id = id;
-        this.applicationId = applicationId;
-        this.metrics = metrics;
-        this.stateMgr = stateMgr;
+        }
 
-        this.config = config;
-        this.keySerde = config.keySerde();
-        this.valSerde = config.valueSerde();
+        @Override
+        public void flush() {
 
-        this.initialized = false;
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public Map<TopicPartition, Long> offsets() {
+            return Collections.emptyMap();
+        }
+    };
+
+    public StandbyContextImpl(final TaskId id,
+                       final String applicationId,
+                       final StreamsConfig config,
+                       final ProcessorStateManager stateMgr,
+                       final StreamsMetrics metrics) {
+        super(id, applicationId, config, metrics, stateMgr, new ThreadCache("zeroCache", 0, metrics));
     }
 
-    public void initialized() {
-        this.initialized = true;
-    }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
-    }
-
-    @Override
-    public TaskId taskId() {
-        return id;
-    }
-
-    @Override
-    public String applicationId() {
-        return applicationId;
+    StateManager getStateMgr() {
+        return stateManager;
     }
 
     @Override
     public RecordCollector recordCollector() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Serde<?> keySerde() {
-        return this.keySerde;
-    }
-
-    @Override
-    public Serde<?> valueSerde() {
-        return this.valSerde;
-    }
-
-    @Override
-    public File stateDir() {
-        return stateMgr.baseDir();
-    }
-
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
-    }
-
-    /**
-     * @throws IllegalStateException
-     */
-    @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
-
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
+        return NO_OP_COLLECTOR;
     }
 
     /**
@@ -192,13 +156,25 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 
+
     @Override
-    public Map<String, Object> appConfigs() {
-        return config.originals();
+    public RecordContext recordContext() {
+        throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
     }
 
     @Override
-    public Map<String, Object> appConfigsWithPrefix(String prefix) {
-        return config.originalsWithPrefix(prefix);
+    public void setRecordContext(final RecordContext recordContext) {
+        throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
+    }
+
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        // no-op. can't throw as this is called on commit when the StateStores get flushed.
+    }
+
+    @Override
+    public ProcessorNode currentNode() {
+        throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 }

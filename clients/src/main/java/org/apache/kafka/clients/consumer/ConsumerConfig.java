@@ -17,6 +17,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
@@ -113,6 +114,17 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive. Setting this to something greater than 1 will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
 
     /**
+     * <code>fetch.max.bytes</code>
+     */
+    public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
+    private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
+            "This is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than " +
+            "this value, the message will still be returned to ensure that the consumer can make progress. " +
+            "The maximum message size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+    public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
+
+    /**
      * <code>fetch.max.wait.ms</code>
      */
     public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
@@ -125,7 +137,11 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>max.partition.fetch.bytes</code>
      */
     public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
-    private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server will return. The maximum total memory used for a request will be <code>#partitions * max.partition.fetch.bytes</code>. This size must be at least as large as the maximum message size the server allows or else it is possible for the producer to send messages larger than the consumer can fetch. If that happens, the consumer can get stuck trying to fetch a large message on a certain partition.";
+    private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
+            "will return. If the first message in the first non-empty partition of the fetch is larger than this limit, the " +
+            "message will still be returned to ensure that the consumer can make progress. The maximum message size " +
+            "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
@@ -158,6 +174,11 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>metrics.num.samples</code>
      */
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
+
+    /**
+     * <code>metrics.log.level</code>
+     */
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     /**
      * <code>metric.reporters</code>
@@ -265,6 +286,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.HIGH,
                                         FETCH_MIN_BYTES_DOC)
+                                .define(FETCH_MAX_BYTES_CONFIG,
+                                        Type.INT,
+                                        DEFAULT_FETCH_MAX_BYTES,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        FETCH_MAX_BYTES_DOC)
                                 .define(FETCH_MAX_WAIT_MS_CONFIG,
                                         Type.INT,
                                         500,
@@ -306,6 +333,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                                .define(METRICS_RECORDING_LEVEL_CONFIG,
+                                        Type.STRING,
+                                        Sensor.RecordingLevel.INFO.toString(),
+                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                                        Importance.LOW,
+                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         "",

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,7 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
@@ -45,14 +47,19 @@ public class StateDirectory {
     private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
     private final HashMap<TaskId, FileLock> locks = new HashMap<>();
 
+    private FileChannel globalStateChannel;
+    private FileLock globalStateLock;
+
     public StateDirectory(final String applicationId, final String stateDirConfig) {
         final File baseDir = new File(stateDirConfig);
-        if (!baseDir.exists()) {
-            baseDir.mkdir();
+        if (!baseDir.exists() && !baseDir.mkdirs()) {
+            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
+                                                            stateDirConfig));
         }
         stateDir = new File(baseDir, applicationId);
-        if (!stateDir.exists()) {
-            stateDir.mkdir();
+        if (!stateDir.exists() && !stateDir.mkdir()) {
+            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
+                                                            stateDir.getPath()));
         }
 
     }
@@ -64,10 +71,20 @@ public class StateDirectory {
      */
     public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
-        if (!taskDir.exists()) {
-            taskDir.mkdir();
+        if (!taskDir.exists() && !taskDir.mkdir()) {
+            throw new ProcessorStateException(String.format("task directory [%s] doesn't exist and couldn't be created",
+                                                            taskDir.getPath()));
         }
         return taskDir;
+    }
+
+    public File globalStateDir() {
+        final File dir = new File(stateDir, "global");
+        if (!dir.exists() && !dir.mkdir()) {
+            throw new ProcessorStateException(String.format("global state directory [%s] doesn't exist and couldn't be created",
+                                                            dir.getPath()));
+        }
+        return dir;
     }
 
     /**
@@ -83,8 +100,61 @@ public class StateDirectory {
             return true;
         }
         final File lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
-        final FileChannel channel = getOrCreateFileChannel(taskId, lockFile.toPath());
 
+        final FileChannel channel;
+
+        try {
+            channel = getOrCreateFileChannel(taskId, lockFile.toPath());
+        } catch (NoSuchFileException e) {
+            // FileChannel.open(..) could throw NoSuchFileException when there is another thread
+            // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
+            // file, in this case we will return immediately indicating locking failed.
+            return false;
+        }
+
+        final FileLock lock = tryLock(retry, channel);
+        if (lock != null) {
+            locks.put(taskId, lock);
+        }
+        return lock != null;
+    }
+
+    public boolean lockGlobalState(final int retry) throws IOException {
+        if (globalStateLock != null) {
+            return true;
+        }
+
+        final File lockFile = new File(globalStateDir(), LOCK_FILE_NAME);
+        final FileChannel channel;
+        try {
+            channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        } catch (NoSuchFileException e) {
+            // FileChannel.open(..) could throw NoSuchFileException when there is another thread
+            // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
+            // file, in this case we will return immediately indicating locking failed.
+            return false;
+        }
+        final FileLock fileLock = tryLock(retry, channel);
+        if (fileLock == null) {
+            channel.close();
+            return false;
+        }
+        globalStateChannel = channel;
+        globalStateLock = fileLock;
+        return true;
+    }
+
+    public void unlockGlobalState() throws IOException {
+        if (globalStateLock == null) {
+            return;
+        }
+        globalStateLock.release();
+        globalStateChannel.close();
+        globalStateLock = null;
+        globalStateChannel = null;
+    }
+
+    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
         FileLock lock = tryAcquireLock(channel);
         while (lock == null && retry > 0) {
             try {
@@ -95,11 +165,10 @@ public class StateDirectory {
             retry--;
             lock = tryAcquireLock(channel);
         }
-        if (lock != null) {
-            locks.put(taskId, lock);
-        }
-        return lock != null;
+        return lock;
     }
+
+
 
     /**
      * Unlock the state directory for the given {@link TaskId}
@@ -155,7 +224,7 @@ public class StateDirectory {
 
     /**
      * List all of the task directories
-     * @return
+     * @return The list of all the existing local directories for stream tasks
      */
     public File[] listTaskDirectories() {
         return stateDir.listFiles(new FileFilter() {
@@ -181,4 +250,7 @@ public class StateDirectory {
             return null;
         }
     }
+
+
+
 }

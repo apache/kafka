@@ -14,7 +14,8 @@
 # limitations under the License.
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix, ignore
+from ducktape.mark import parametrize, matrix
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -110,8 +111,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         wait_until(lambda: self.producer.num_acked > n_messages, timeout_sec=10,
                      err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
+    @cluster(num_nodes=7)
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'], new_consumer=[True])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], new_consumer=[True])
+    @cluster(num_nodes=8)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], new_consumer=[True])
     def test_simple_end_to_end(self, security_protocol, new_consumer):
         """
         Test end-to-end behavior under non-failure conditions.
@@ -140,8 +144,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 
+    @cluster(num_nodes=7)
     @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
-    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
+    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL'])
+    @cluster(num_nodes=8)
+    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
     def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True, security_protocol='PLAINTEXT'):
         """
         Test end-to-end behavior under failure conditions.

@@ -18,19 +18,19 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The windowed key interface used in {@link KTable}, used for representing a windowed table result from windowed stream aggregations,
- * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde,
- * org.apache.kafka.common.serialization.Serde)}
+ * Used to represent windowed stream aggregations (e.g. as returned by
+ * {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)}),
+ * which have the type {@code <Windowed<K>, V>}.
  *
  * @param <K> Type of the key
  */
 public class Windowed<K> {
 
-    private K key;
+    private final K key;
 
-    private Window window;
+    private final Window window;
 
-    public Windowed(K key, Window window) {
+    public Windowed(final K key, final Window window) {
         this.key = key;
         this.window = window;
     }
@@ -59,21 +59,20 @@ public class Windowed<K> {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this)
             return true;
 
         if (!(obj instanceof Windowed))
             return false;
 
-        Windowed<?> that = (Windowed) obj;
-
-        return this.window.equals(that.window) && this.key.equals(that.key);
+        final Windowed<?> that = (Windowed) obj;
+        return window.equals(that.window) && key.equals(that.key);
     }
 
     @Override
     public int hashCode() {
-        long n = ((long) window.hashCode() << 32) | key.hashCode();
+        final long n = ((long) window.hashCode() << 32) | key.hashCode();
         return (int) (n % 0xFFFFFFFFL);
     }
 }

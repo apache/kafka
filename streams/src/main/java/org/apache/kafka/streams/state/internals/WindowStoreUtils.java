@@ -39,7 +39,10 @@ public class WindowStoreUtils {
 
     public static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);
+        return toBinaryKey(serializedKey, timestamp, seqnum);
+    }
 
+    static byte[] toBinaryKey(byte[] serializedKey, final long timestamp, final int seqnum) {
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
         buf.put(serializedKey);
         buf.putLong(timestamp);
@@ -54,6 +57,14 @@ public class WindowStoreUtils {
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
 
         return serdes.keyFrom(bytes);
+    }
+
+    public static Bytes bytesKeyFromBinaryKey(byte[] binaryKey) {
+        byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
+
+        System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
+
+        return Bytes.wrap(bytes);
     }
 
     public static long timestampFromBinaryKey(byte[] binaryKey) {

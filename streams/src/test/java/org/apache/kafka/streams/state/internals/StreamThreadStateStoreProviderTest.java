@@ -18,11 +18,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -30,12 +30,14 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -62,6 +64,7 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
+    private boolean storesAvailable;
 
     @Before
     public void before() throws IOException {
@@ -76,7 +79,7 @@ public class StreamThreadStateStoreProviderTest {
                                   .withStringKeys()
                                   .withStringValues()
                                   .persistent()
-                                  .windowed(10, 2, false).build(), "the-processor");
+                                  .windowed(10, 10, 2, false).build(), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -105,13 +108,20 @@ public class StreamThreadStateStoreProviderTest {
         tasks.put(new TaskId(0, 1),
                   taskTwo);
 
+        storesAvailable = true;
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime(), new StreamsMetadataState(builder)) {
+                                  Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                                  0) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
+            }
+
+            @Override
+            public boolean isInitialized() {
+                return storesAvailable;
             }
         };
         provider = new StreamThreadStateStoreProvider(thread);
@@ -163,17 +173,22 @@ public class StreamThreadStateStoreProviderTest {
                                                               QueryableStoreTypes.keyValueStore()));
     }
 
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
+        storesAvailable = false;
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
+    }
+
     private StreamTask createStreamsTask(final String applicationId,
                                          final StreamsConfig streamsConfig,
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         return new StreamTask(taskId, applicationId, Collections
-            .singletonList(new TopicPartition("topic", taskId.partition)), topology,
+                .singletonList(new TopicPartition("topic", taskId.partition)), topology,
                               clientSupplier.consumer,
-                              clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory) {
+                              streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
             protected void initializeOffsetLimits() {
 
@@ -206,21 +221,5 @@ public class StreamThreadStateStoreProviderTest {
             .updateBeginningOffsets(offsets);
         clientSupplier.restoreConsumer
             .updateEndOffsets(offsets);
-    }
-
-    private static class TheStreamMetrics implements StreamsMetrics {
-
-        @Override
-        public Sensor addLatencySensor(final String scopeName,
-                                       final String entityName,
-                                       final String operationName,
-                                       final String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-        }
     }
 }

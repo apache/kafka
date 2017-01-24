@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -32,9 +33,13 @@ import java.util.Map;
 public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>, StateStore {
 
     private final Map<Long, Map<K, V>> data = new HashMap<>();
+    private boolean open  = true;
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        if (!open) {
+            throw new InvalidStateStoreException("Store is not open");
+        }
         final List<KeyValue<Long, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
             final Map<K, V> kvMap = data.get(now);
@@ -79,7 +84,11 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public boolean isOpen() {
-        return false;
+        return open;
+    }
+
+    public void setOpen(final boolean open) {
+        this.open = open;
     }
 
     private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {
@@ -93,6 +102,11 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         @Override
         public void close() {
 
+        }
+
+        @Override
+        public Long peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey not supported in stub");
         }
 
         @Override

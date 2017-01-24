@@ -27,36 +27,23 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.tools.MockConnector;
-import org.apache.kafka.connect.tools.MockSinkConnector;
-import org.apache.kafka.connect.tools.MockSourceConnector;
-import org.apache.kafka.connect.tools.SchemaSourceConnector;
-import org.apache.kafka.connect.tools.VerifiableSinkConnector;
-import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ReflectionsUtil;
-import org.reflections.Reflections;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -88,13 +75,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
-    private static List<ConnectorPluginInfo> validConnectorPlugins;
-    private static final Object LOCK = new Object();
     private Thread classPathTraverser;
-    private static final List<Class<? extends Connector>> EXCLUDES = Arrays.asList(
-        VerifiableSourceConnector.class, VerifiableSinkConnector.class,
-        MockConnector.class, MockSourceConnector.class, MockSinkConnector.class,
-        SchemaSourceConnector.class);
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -237,55 +218,44 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-
-    @Override
-    public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
-        Connector connector = getConnector(connType);
-        ConfigDef connectorConfigDef;
-        if (connector instanceof SourceConnector) {
-            connectorConfigDef = SourceConnectorConfig.configDef();
-        } else {
-            connectorConfigDef = SinkConnectorConfig.configDef();
-        }
-        List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-        
-        Config config = connector.validate(connectorConfig);
-        ConfigDef configDef = connector.config();
-        Map<String, ConfigKey> configKeys = configDef.configKeys();
-        List<ConfigValue> configValues = config.configValues();
-
-        Map<String, ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
-        resultConfigKeys.putAll(connectorConfigDef.configKeys());
-        configValues.addAll(connectorConfigValues);
-
-        List<String> allGroups = new LinkedList<>(connectorConfigDef.groups());
-        List<String> groups = configDef.groups();
-        allGroups.addAll(groups);
-
-        return generateResult(connType, resultConfigKeys, configValues, allGroups);
+    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
+                                                                    ConfigDef configDef,
+                                                                    Map<String, String> config) {
+        return configDef.validateAll(config);
     }
 
-    public static List<ConnectorPluginInfo> connectorPlugins() {
-        synchronized (LOCK) {
-            if (validConnectorPlugins != null) {
-                return validConnectorPlugins;
-            }
-            ReflectionsUtil.registerUrlTypes();
-            ConfigurationBuilder builder = new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath());
-            Reflections reflections = new Reflections(builder);
+    @Override
+    public ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig) {
+        String connType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        if (connType == null)
+            throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
-            Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
-            connectorClasses.removeAll(EXCLUDES);
-            List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
-            for (Class<? extends Connector> connectorClass : connectorClasses) {
-                int mod = connectorClass.getModifiers();
-                if (!Modifier.isAbstract(mod) && !Modifier.isInterface(mod)) {
-                    connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
-                }
-            }
-            validConnectorPlugins = connectorPlugins;
-            return connectorPlugins;
-        }
+        Connector connector = getConnector(connType);
+
+        final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
+                (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
+                connectorConfig,
+                false
+        );
+
+        List<ConfigValue> configValues = new ArrayList<>();
+        Map<String, ConfigKey> configKeys = new HashMap<>();
+        List<String> allGroups = new ArrayList<>();
+
+        // do basic connector validation (name, connector type, etc.)
+        Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(connector, connectorConfigDef, connectorConfig);
+        configValues.addAll(validatedConnectorConfig.values());
+        configKeys.putAll(connectorConfigDef.configKeys());
+        allGroups.addAll(connectorConfigDef.groups());
+
+        // do custom connector-specific validation
+        Config config = connector.validate(connectorConfig);
+        ConfigDef configDef = connector.config();
+        configKeys.putAll(configDef.configKeys());
+        allGroups.addAll(configDef.groups());
+        configValues.addAll(config.configValues());
+
+        return generateResult(connType, configKeys, configValues, allGroups);
     }
 
     // public for testing
@@ -357,11 +327,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }
 
-    private Connector getConnector(String connType) {
+    protected Connector getConnector(String connType) {
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {
-            Connector connector = worker.getConnector(connType);
+            Connector connector = worker.getConnectorFactory().newConnector(connType);
             tempConnectors.put(connType, connector);
             return connector;
         }
@@ -381,7 +351,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         classPathTraverser = new Thread(new Runnable() {
             @Override
             public void run() {
-                connectorPlugins();
+                PluginDiscovery.scanClasspathForPlugins();
             }
         }, "CLASSPATH traversal thread.");
         classPathTraverser.start();

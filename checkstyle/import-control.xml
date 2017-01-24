@@ -27,6 +27,7 @@
   <allow pkg="javax.management" />
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
+  <allow pkg="org.hamcrest" />
   <allow pkg="org.easymock" />
   <allow pkg="org.powermock" />
   <allow pkg="java.security" />
@@ -76,16 +77,24 @@
         <allow pkg="org.apache.kafka.common.errors" />
         <allow pkg="org.apache.kafka.clients" />
       </subpackage>
+      <subpackage name="scram">
+        <allow pkg="javax.crypto" />
+        <allow pkg="javax.xml.bind" />
+        <allow pkg="org.apache.kafka.common.errors" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
+      <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 
     <subpackage name="record">
       <allow pkg="net.jpountz" />
       <allow pkg="org.apache.kafka.common.record" />
+      <allow pkg="org.apache.kafka.common.network" />
+      <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
 
     <subpackage name="requests">
@@ -116,6 +125,12 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="server">
+    <allow pkg="org.slf4j" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -141,6 +156,7 @@
     
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
+      <allow pkg="kafka.api" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
@@ -149,7 +165,6 @@
       <allow pkg="scala" />
       <allow pkg="scala.collection" />
       <allow pkg="org.I0Itec.zkclient" />
-      <allow pkg="org.hamcrest" />
     </subpackage>
 
     <subpackage name="state">
@@ -175,6 +190,7 @@
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
+    <allow pkg="javax.xml.bind" />
   </subpackage>
 
   <subpackage name="connect">
@@ -247,6 +263,13 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
+    <subpackage name="transforms">
+      <allow class="org.apache.kafka.connect.connector.ConnectRecord" />
+      <allow class="org.apache.kafka.connect.source.SourceRecord" />
+      <allow class="org.apache.kafka.connect.sink.SinkRecord" />
+      <allow pkg="org.apache.kafka.connect.transforms.util" />
     </subpackage>
   </subpackage>
 

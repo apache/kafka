@@ -18,13 +18,14 @@
 package kafka.utils
 
 import java.io.IOException
+
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.requests.AbstractRequest
+import org.apache.kafka.common.utils.Time
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-
-import org.apache.kafka.common.utils.{Time => JTime}
 
 object NetworkClientBlockingOps {
   implicit def networkClientBlockingOps(client: NetworkClient): NetworkClientBlockingOps =
@@ -51,7 +52,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     * This method can be used to check the status of a connection prior to calling `blockingReady` to be able
     * to tell whether the latter completed a new connection.
     */
-  def isReady(node: Node)(implicit time: JTime): Boolean = {
+  def isReady(node: Node)(implicit time: Time): Boolean = {
     val currentTime = time.milliseconds()
     client.poll(0, currentTime)
     client.isReady(node, currentTime)
@@ -69,7 +70,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
+  def blockingReady(node: Node, timeout: Long)(implicit time: Time): Boolean = {
     require(timeout >=0, "timeout should be >= 0")
 
     val startTime = time.milliseconds()
@@ -102,22 +103,20 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  def blockingSendAndReceive(request: ClientRequest)(implicit time: JTime): ClientResponse = {
+  def blockingSendAndReceive(request: ClientRequest)(implicit time: Time): ClientResponse = {
     client.send(request, time.milliseconds())
-
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.request.request.header.correlationId == request.request.header.correlationId
+        response.requestHeader.correlationId == request.correlationId
       }
       response.foreach { r =>
-        if (r.wasDisconnected) {
-          val destination = request.request.destination
-          throw new IOException(s"Connection to $destination was disconnected before the response was read")
-        }
+        if (r.wasDisconnected)
+          throw new IOException(s"Connection to ${request.destination} was disconnected before the response was read")
+        else if (r.versionMismatch() != null)
+          throw r.versionMismatch();
       }
       response
     }
-
   }
 
   /**
@@ -128,7 +127,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
     * care.
     */
-  private def pollContinuously[T](collect: Seq[ClientResponse] => Option[T])(implicit time: JTime): T = {
+  private def pollContinuously[T](collect: Seq[ClientResponse] => Option[T])(implicit time: Time): T = {
 
     @tailrec
     def recursivePoll: T = {

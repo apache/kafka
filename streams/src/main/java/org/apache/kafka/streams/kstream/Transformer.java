@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
- * A stateful {@link Transformer} interface for transform a key-value pair into a new value.
+ * A stateful {@link Transformer} interface to transform a key-value pair into a new value.
  *
  * @param <K>   key type
  * @param <V>   value type
@@ -37,7 +37,7 @@ public interface Transformer<K, V, R> {
      *
      * @param context the context; may not be null
      */
-    void init(ProcessorContext context);
+    void init(final ProcessorContext context);
 
     /**
      * Transform the record with the given key and value.
@@ -46,16 +46,16 @@ public interface Transformer<K, V, R> {
      * @param value the value for the record
      * @return new value; if null no key-value pair will be forwarded to down stream
      */
-    R transform(K key, V value);
+    R transform(final K key, final V value);
 
     /**
-     * Perform any periodic operations and possibly generate a key, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * Perform any periodic operations and possibly generate a key, if this processor {@link ProcessorContext#schedule(long) schedules itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      *
      * @param timestamp the stream time when this method is being called
      * @return new value; if null it will not be forwarded to down stream
      */
-    R punctuate(long timestamp);
+    R punctuate(final long timestamp);
 
     /**
      * Close this processor and clean up any resources.

@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class MetadataResponse extends AbstractRequestResponse {
+public class MetadataResponse extends AbstractResponse {
 
     private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.METADATA.id);
     private static final String BROKERS_KEY_NAME = "brokers";
@@ -43,6 +43,8 @@ public class MetadataResponse extends AbstractRequestResponse {
 
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     public static final int NO_CONTROLLER_ID = -1;
+
+    private static final String CLUSTER_ID_KEY_NAME = "cluster_id";
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
@@ -78,23 +80,24 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Collection<Node> brokers;
     private final Node controller;
     private final List<TopicMetadata> topicMetadata;
+    private final String clusterId;
 
     /**
      * Constructor for the latest version
      */
-    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata) {
-        this(brokers, controllerId, topicMetadata, CURRENT_VERSION);
+    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata) {
+        this(brokers, clusterId, controllerId, topicMetadata, CURRENT_VERSION);
     }
 
     /**
      * Constructor for a specific version
      */
-    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata, int version) {
+    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata, int version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version)));
-
         this.brokers = brokers;
         this.controller = getControllerNode(controllerId, brokers);
         this.topicMetadata = topicMetadata;
+        this.clusterId = clusterId;
 
         List<Struct> brokerArray = new ArrayList<>();
         for (Node node : brokers) {
@@ -112,6 +115,10 @@ public class MetadataResponse extends AbstractRequestResponse {
         // This field only exists in v1+
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
+
+        // This field only exists in v2+
+        if (struct.hasField(CLUSTER_ID_KEY_NAME))
+            struct.set(CLUSTER_ID_KEY_NAME, clusterId);
 
         List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
         for (TopicMetadata metadata : topicMetadata) {
@@ -166,6 +173,13 @@ public class MetadataResponse extends AbstractRequestResponse {
         int controllerId = NO_CONTROLLER_ID;
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
+
+        // This field only exists in v2+
+        if (struct.hasField(CLUSTER_ID_KEY_NAME)) {
+            this.clusterId = struct.getString(CLUSTER_ID_KEY_NAME);
+        } else {
+            this.clusterId = null;
+        }
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
@@ -268,7 +282,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             }
         }
 
-        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
+        return new Cluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
     }
 
     /**
@@ -293,6 +307,14 @@ public class MetadataResponse extends AbstractRequestResponse {
      */
     public Node controller() {
         return controller;
+    }
+
+    /**
+     * The cluster identifier returned in the metadata response.
+     * @return cluster identifier if it is present in the response, null otherwise.
+     */
+    public String clusterId() {
+        return this.clusterId;
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {

@@ -22,10 +22,8 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -47,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
+    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
@@ -59,7 +59,7 @@ public class ConsumerNetworkClient implements Closeable {
     private int wakeupDisabledCount = 0;
 
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
-    // is to avoid invoking them while holding the lock above.
+    // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
     private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
 
     // this flag allows the client to be safely woken up without waiting on the lock above. It is
@@ -85,26 +85,21 @@ public class ConsumerNetworkClient implements Closeable {
      * Use the returned future to obtain the result of the send. Note that there is no
      * need to check for disconnects explicitly on the {@link ClientResponse} object;
      * instead, the future will be failed with a {@link DisconnectException}.
+     *
      * @param node The destination of the request
-     * @param api The Kafka API call
-     * @param request The request payload
+     * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
     public RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              AbstractRequest request) {
-        return send(node, api, ProtoUtils.latestVersion(api.id), request);
-    }
-
-    private RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              short version,
-                                              AbstractRequest request) {
+                                              AbstractRequest.Builder<?> requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
-        RequestHeader header = client.nextRequestHeader(api, version);
-        RequestSend send = new RequestSend(node.idString(), header, request.toStruct());
-        put(node, new ClientRequest(now, true, send, completionHandler));
+        ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                completionHandler);
+        put(node, clientRequest);
+
+        // wakeup the client in case it is blocking in poll so that we can send the queued request
+        client.wakeup();
         return completionHandler.future;
     }
 
@@ -129,10 +124,21 @@ public class ConsumerNetworkClient implements Closeable {
      * Block until the metadata has been refreshed.
      */
     public void awaitMetadataUpdate() {
+        awaitMetadataUpdate(Long.MAX_VALUE);
+    }
+
+    /**
+     * Block waiting on the metadata refresh with a timeout.
+     *
+     * @return true if update succeeded, false otherwise.
+     */
+    public boolean awaitMetadataUpdate(long timeout) {
+        long startMs = time.milliseconds();
         int version = this.metadata.requestUpdate();
         do {
-            poll(Long.MAX_VALUE);
-        } while (this.metadata.version() == version);
+            poll(timeout);
+        } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
+        return this.metadata.version() > version;
     }
 
     /**
@@ -159,10 +165,11 @@ public class ConsumerNetworkClient implements Closeable {
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(Long.MAX_VALUE);
+            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
     }
 
     /**
@@ -171,13 +178,14 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timeout The maximum duration (in ms) to wait for the request
      * @return true if the future is done, false otherwise
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
         long begin = time.milliseconds();
         long remaining = timeout;
         long now = begin;
         do {
-            poll(remaining, now);
+            poll(remaining, now, future);
             now = time.milliseconds();
             long elapsed = now - begin;
             remaining = timeout - elapsed;
@@ -189,9 +197,10 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO.
      * @param timeout The maximum time to wait for an IO event.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(long timeout) {
-        poll(timeout, time.milliseconds());
+        poll(timeout, time.milliseconds(), null);
     }
 
     /**
@@ -199,7 +208,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timeout timeout in milliseconds
      * @param now current time in milliseconds
      */
-    public void poll(long timeout, long now) {
+    public void poll(long timeout, long now, PollCondition pollCondition) {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
@@ -207,10 +216,18 @@ public class ConsumerNetworkClient implements Closeable {
             // send all the requests we can send now
             trySend(now);
 
-            // ensure we don't poll any longer than the deadline for
-            // the next scheduled task
-            client.poll(timeout, now);
-            now = time.milliseconds();
+            // check whether the poll is still needed by the caller. Note that if the expected completion
+            // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
+            // handler), the client will be woken up.
+            if (pollCondition == null || pollCondition.shouldBlock()) {
+                // if there are no requests in flight, do not block longer than the retry backoff
+                if (client.inFlightRequestCount() == 0)
+                    timeout = Math.min(timeout, retryBackoffMs);
+                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
+                now = time.milliseconds();
+            } else {
+                client.poll(0, now);
+            }
 
             // handle any disconnects by failing the active requests. note that disconnects must
             // be checked immediately following poll since any subsequent call to client.ready()
@@ -220,6 +237,9 @@ public class ConsumerNetworkClient implements Closeable {
             // trigger wakeups after checking for disconnects so that the callbacks will be ready
             // to be fired on the next call to poll()
             maybeTriggerWakeup();
+            
+            // throw InterruptException if this thread is interrupted
+            maybeThrowInterruptException();
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
@@ -240,7 +260,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void pollNoWakeup() {
         disableWakeups();
         try {
-            poll(0, time.milliseconds());
+            poll(0, time.milliseconds(), null);
         } finally {
             enableWakeups();
         }
@@ -249,10 +269,19 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
+     * @param timeoutMs The maximum time in milliseconds to block
+     * @return true If all requests finished, false if the timeout expired first
      */
-    public void awaitPendingRequests(Node node) {
-        while (pendingRequestCount(node) > 0)
-            poll(retryBackoffMs);
+    public boolean awaitPendingRequests(Node node, long timeoutMs) {
+        long startMs = time.milliseconds();
+        long remainingMs = timeoutMs;
+
+        while (pendingRequestCount(node) > 0 && remainingMs > 0) {
+            poll(remainingMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+        }
+
+        return pendingRequestCount(node) == 0;
     }
 
     /**
@@ -284,13 +313,19 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private void firePendingCompletedRequests() {
+        boolean completedRequestsFired = false;
         for (;;) {
             RequestFutureCompletionHandler completionHandler = pendingCompletion.poll();
             if (completionHandler == null)
                 break;
 
             completionHandler.fireCompletion();
+            completedRequestsFired = true;
         }
+
+        // wakeup the client in case it is blocking in poll for this future's completion
+        if (completedRequestsFired)
+            client.wakeup();
     }
 
     private void checkDisconnects(long now) {
@@ -307,9 +342,9 @@ public class ConsumerNetworkClient implements Closeable {
                 // coordinator failures traversing the unsent list again.
                 iterator.remove();
                 for (ClientRequest request : requestEntry.getValue()) {
-                    RequestFutureCompletionHandler handler =
-                            (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request, now, true, null));
+                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                    handler.onComplete(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                            request.createdTimeMs(), now, true, null, null));
                 }
             }
         }
@@ -340,8 +375,8 @@ public class ConsumerNetworkClient implements Closeable {
         synchronized (this) {
             List<ClientRequest> unsentRequests = unsent.remove(node);
             if (unsentRequests != null) {
-                for (ClientRequest request : unsentRequests) {
-                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                for (ClientRequest unsentRequest : unsentRequests) {
+                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                     handler.onFailure(e);
                 }
             }
@@ -373,6 +408,12 @@ public class ConsumerNetworkClient implements Closeable {
         if (wakeupDisabledCount == 0 && wakeup.get()) {
             wakeup.set(false);
             throw new WakeupException();
+        }
+    }
+    
+    private void maybeThrowInterruptException() {
+        if (Thread.interrupted()) {
+            throw new InterruptException(new InterruptedException());
         }
     }
 
@@ -439,13 +480,14 @@ public class ConsumerNetworkClient implements Closeable {
             if (e != null) {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
-                ClientRequest request = response.request();
-                RequestSend send = request.request();
-                ApiKeys api = ApiKeys.forId(send.header().apiKey());
-                int correlation = send.header().correlationId();
+                RequestHeader requestHeader = response.requestHeader();
+                ApiKeys api = ApiKeys.forId(requestHeader.apiKey());
+                int correlation = requestHeader.correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, request, correlation, send.destination());
+                        api, requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
+            } else if (response.versionMismatch() != null) {
+                future.raise(response.versionMismatch());
             } else {
                 future.complete(response);
             }
@@ -462,4 +504,21 @@ public class ConsumerNetworkClient implements Closeable {
             pendingCompletion.add(this);
         }
     }
+
+    /**
+     * When invoking poll from a multi-threaded environment, it is possible that the condition that
+     * the caller is awaiting has already been satisfied prior to the invocation of poll. We therefore
+     * introduce this interface to push the condition checking as close as possible to the invocation
+     * of poll. In particular, the check will be done while holding the lock used to protect concurrent
+     * access to {@link org.apache.kafka.clients.NetworkClient}, which means implementations must be
+     * very careful about locking order if the callback must acquire additional locks.
+     */
+    public interface PollCondition {
+        /**
+         * Return whether the caller is still awaiting an IO event.
+         * @return true if so, false otherwise.
+         */
+        boolean shouldBlock();
+    }
+
 }

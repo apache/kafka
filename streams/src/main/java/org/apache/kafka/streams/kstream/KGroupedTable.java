@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * {@link KGroupedTable} is an abstraction of a <i>grouped changelog stream</i> from a primary-keyed table,
@@ -51,6 +53,21 @@ public interface KGroupedTable<K, V> {
                         String storeName);
 
     /**
+     * Combine updating values of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
+     *
+     * @param adder         the instance of {@link Reducer} for addition
+     * @param subtractor    the instance of {@link Reducer} for subtraction
+     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
+     *         containing aggregated values for each key
+     */
+    KTable<K, V> reduce(Reducer<V> adder,
+                        Reducer<V> subtractor,
+                        final StateStoreSupplier<KeyValueStore> storeSupplier);
+
+    /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
@@ -59,7 +76,7 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param subtractor    the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param storeName     the name of the underlying {@link KTable} state store
@@ -68,8 +85,8 @@ public interface KGroupedTable<K, V> {
      *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> substractor,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
                                Serde<T> aggValueSerde,
                                String storeName);
 
@@ -83,16 +100,35 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param subtractor   the instance of {@link Aggregator} for subtraction
      * @param storeName     the name of the underlying {@link KTable} state store
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                               Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> substractor,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
                                String storeName);
+
+    /**
+     * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
+     * using default serializers and deserializers.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
+     *
+     * @param initializer   the instance of {@link Initializer}
+     * @param adder         the instance of {@link Aggregator} for addition
+     * @param subtractor    the instance of {@link Aggregator} for subtraction
+     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @param <T>           the value type of the aggregated {@link KTable}
+     * @return a {@link KTable} with same key and aggregated value type {@code T},
+     *         containing aggregated values for each key
+     */
+    <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                               Aggregator<? super K, ? super V, T> adder,
+                               Aggregator<? super K, ? super V, T> subtractor,
+                               final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
@@ -106,5 +142,16 @@ public interface KGroupedTable<K, V> {
      *         containing the number of values for each key
      */
     KTable<K, Long> count(String storeName);
+
+    /**
+     * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
+     *
+     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
+     * containing the number of values for each key
+     */
+    KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
 }

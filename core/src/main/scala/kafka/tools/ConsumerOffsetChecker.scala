@@ -32,6 +32,7 @@ import kafka.client.ClientUtils
 import kafka.network.BlockingChannel
 import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.apache.kafka.common.network.ListenerName
 
 object ConsumerOffsetChecker extends Logging {
 
@@ -42,7 +43,7 @@ object ConsumerOffsetChecker extends Logging {
   private def getConsumer(zkUtils: ZkUtils, bid: Int): Option[SimpleConsumer] = {
     try {
       zkUtils.getBrokerInfo(bid)
-        .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+        .map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
         .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerOffsetChecker"))
         .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid)))
     } catch {

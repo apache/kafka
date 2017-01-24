@@ -24,8 +24,8 @@ import java.util.Objects;
 
 /**
  * Standard error format for all REST API failures. These are generated automatically by
- * {@link ConnectExceptionMapper} in response to uncaught
- * {@link ConnectException}s.
+ * {@link org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper} in response to uncaught
+ * {@link org.apache.kafka.connect.errors.ConnectException}s.
  */
 public class ErrorMessage {
     private final int errorCode;
