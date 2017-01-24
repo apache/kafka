@@ -27,24 +27,23 @@ import java.util.Map;
  */
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
-    private static final long DEFAULT_START_TIMESTAMP = 0L;
+    private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
     /** The start timestamp of the window. */
-    public final long start;
+    public final long startMs;
 
-    private UnlimitedWindows(long start) {
-        super();
-        if (start < 0) {
-            throw new IllegalArgumentException("start must be > 0 (you provided " + start + ")");
+    private UnlimitedWindows(final long startMs) throws IllegalArgumentException {
+        if (startMs < 0) {
+            throw new IllegalArgumentException("startMs must be > 0 (you provided " + startMs + ")");
         }
-        this.start = start;
+        this.startMs = startMs;
     }
 
     /**
      * Return an unlimited window starting at timestamp zero.
      */
     public static UnlimitedWindows of() {
-        return new UnlimitedWindows(DEFAULT_START_TIMESTAMP);
+        return new UnlimitedWindows(DEFAULT_START_TIMESTAMP_MS);
     }
 
     /**
@@ -53,18 +52,18 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @param start  the window start time
      * @return       a new unlimited window that starts at {@code start}
      */
-    public UnlimitedWindows startOn(long start) {
+    public UnlimitedWindows startOn(final long start) throws IllegalArgumentException {
         return new UnlimitedWindows(start);
     }
 
     @Override
-    public Map<Long, UnlimitedWindow> windowsFor(long timestamp) {
+    public Map<Long, UnlimitedWindow> windowsFor(final long timestamp) {
         // always return the single unlimited window
 
         // we cannot use Collections.singleMap since it does not support remove()
-        Map<Long, UnlimitedWindow> windows = new HashMap<>();
-        if (timestamp >= start) {
-            windows.put(start, new UnlimitedWindow(start));
+        final Map<Long, UnlimitedWindow> windows = new HashMap<>();
+        if (timestamp >= startMs) {
+            windows.put(startMs, new UnlimitedWindow(startMs));
         }
         return windows;
     }
@@ -75,7 +74,7 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public final boolean equals(Object o) {
+    public final boolean equals(final Object o) {
         if (o == this) {
             return true;
         }
@@ -84,13 +83,18 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
             return false;
         }
 
-        UnlimitedWindows other = (UnlimitedWindows) o;
-        return this.start == other.start;
+        final UnlimitedWindows other = (UnlimitedWindows) o;
+        return startMs == other.startMs;
     }
 
     @Override
     public int hashCode() {
-        return (int) (start ^ (start >>> 32));
+        return (int) (startMs ^ (startMs >>> 32));
+    }
+
+    @Override
+    public UnlimitedWindows until(final long durationMs) {
+        throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
     }
 
     @Override
