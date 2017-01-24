@@ -22,8 +22,8 @@ package org.apache.kafka.streams.kstream;
  */
 public abstract class Window {
 
-    protected final long start;
-    protected final long end;
+    protected final long startMs;
+    protected final long endMs;
 
     /**
      * Create a new window for the given start time (inclusive) and end time (exclusive).
@@ -33,32 +33,29 @@ public abstract class Window {
      * @throws IllegalArgumentException if {@code start} or {@code end} is negative or if {@code end} is smaller than
      * {@code start}
      */
-    public Window(long start, long end) throws IllegalArgumentException {
-        if (start < 0) {
-            throw new IllegalArgumentException("Window start time cannot be negative.");
+    public Window(long startMs, long endMs) throws IllegalArgumentException {
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window startMs time cannot be negative.");
         }
-        if (end < 0) {
-            throw new IllegalArgumentException("Window end time cannot be negative.");
+        if (endMs < startMs) {
+            throw new IllegalArgumentException("Window endMs time cannot be smaller than window startMs time.");
         }
-        if (end < start) {
-            throw new IllegalArgumentException("Window end time cannot be smaller than window start time.");
-        }
-        this.start = start;
-        this.end = end;
+        this.startMs = startMs;
+        this.endMs = endMs;
     }
 
     /**
      * Return the start timestamp of this window, inclusive
      */
     public long start() {
-        return start;
+        return startMs;
     }
 
     /**
      * Return the end timestamp of this window, exclusive
      */
     public long end() {
-        return end;
+        return endMs;
     }
 
     /**
@@ -67,10 +64,10 @@ public abstract class Window {
      * @param other  another window
      * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      */
-    public abstract boolean overlap(Window other);
+    public abstract boolean overlap(final Window other);
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this) {
             return true;
         }
@@ -79,21 +76,20 @@ public abstract class Window {
             return false;
         }
 
-        Window other = (Window) obj;
-        return this.start == other.start && this.end == other.end;
+        final Window other = (Window) obj;
+        return startMs == other.startMs && endMs == other.endMs;
     }
 
     @Override
     public int hashCode() {
-        long n = (this.start << 32) | this.end;
-        return (int) (n % 0xFFFFFFFFL);
+        return (int) (((startMs << 32) | endMs) % 0xFFFFFFFFL);
     }
 
     @Override
     public String toString() {
         return "Window{" +
-                "start=" + start +
-                ", end=" + end +
-                '}';
+            "start=" + startMs +
+            ", end=" + endMs +
+            '}';
     }
 }

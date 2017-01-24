@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
-
 import java.util.Map;
 
 /**
@@ -45,21 +43,19 @@ import java.util.Map;
  * Both values (before and after) must not result in an "inverse" window,
  * i.e., lower-interval-bound must not be larger than upper-interval.bound.
  */
-public class JoinWindows extends Windows<TimeWindow> {
+public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
-    public final long before;
+    public final long beforeMs;
     /** Maximum time difference for tuples that are after the join tuple. */
-    public final long after;
+    public final long afterMs;
 
-    private JoinWindows(long before, long after) {
-        super();
-
-        if (before + after < 0) {
-            throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
+    private JoinWindows(final long beforeMs, final long afterMs) {
+        if (beforeMs + afterMs < 0) {
+            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative");
         }
-        this.after = after;
-        this.before = before;
+        this.afterMs = afterMs;
+        this.beforeMs = beforeMs;
     }
 
     /**
@@ -68,8 +64,8 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public static JoinWindows of(long timeDifference) {
-        return new JoinWindows(timeDifference, timeDifference);
+    public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs);
     }
 
     /**
@@ -79,8 +75,8 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows before(long timeDifference) {
-        return new JoinWindows(timeDifference, this.after);
+    public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(timeDifferenceMs, afterMs);
     }
 
     /**
@@ -90,25 +86,39 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows after(long timeDifference) {
-        return new JoinWindows(this.before, timeDifference);
+    public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
+        return new JoinWindows(beforeMs, timeDifferenceMs);
     }
 
     /**
      * Not supported by {@link JoinWindows}. Throws {@link UnsupportedOperationException}.
      */
     @Override
-    public Map<Long, TimeWindow> windowsFor(long timestamp) {
+    public Map<Long, Window> windowsFor(final long timestamp) {
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }
 
     @Override
     public long size() {
-        return after + before;
+        return beforeMs + afterMs;
     }
 
     @Override
-    public final boolean equals(Object o) {
+    public JoinWindows until(final long durationMs) throws IllegalArgumentException {
+        if (durationMs < size()) {
+            throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
+        }
+        super.until(durationMs);
+        return this;
+    }
+
+    @Override
+    public long maintainMs() {
+        return Math.max(super.maintainMs(), size());
+    }
+
+    @Override
+    public final boolean equals(final Object o) {
         if (o == this) {
             return true;
         }
@@ -116,14 +126,14 @@ public class JoinWindows extends Windows<TimeWindow> {
             return false;
         }
 
-        JoinWindows other = (JoinWindows) o;
-        return this.before == other.before && this.after == other.after;
+        final JoinWindows other = (JoinWindows) o;
+        return beforeMs == other.beforeMs && afterMs == other.afterMs;
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (before ^ (before >>> 32));
-        result = 31 * result + (int) (after ^ (after >>> 32));
+        int result = (int) (beforeMs ^ (beforeMs >>> 32));
+        result = 31 * result + (int) (afterMs ^ (afterMs >>> 32));
         return result;
     }
 

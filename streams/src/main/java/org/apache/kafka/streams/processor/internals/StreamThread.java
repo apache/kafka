@@ -180,14 +180,13 @@ public class StreamThread extends Thread {
 
     protected final StreamsConfig config;
     protected final TopologyBuilder builder;
-    protected final Set<String> sourceTopics;
-    protected final Pattern topicPattern;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
     private final String logPrefix;
     private final String threadClientId;
+    private final Pattern sourceTopicPattern;
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
@@ -200,6 +199,7 @@ public class StreamThread extends Thread {
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final StreamsMetricsThreadImpl streamsMetrics;
+    // TODO: this is not private only for tests, should be better refactored
     final StateDirectory stateDirectory;
     private String originalReset;
     private StreamPartitionAssignor partitionAssignor = null;
@@ -291,8 +291,7 @@ public class StreamThread extends Thread {
         String threadName = getName();
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics();
-        this.topicPattern = builder.sourceTopicPattern();
+        this.sourceTopicPattern = builder.sourceTopicPattern();
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -566,11 +565,7 @@ public class StreamThread extends Thread {
         boolean requiresPoll = true;
         boolean polledRecords = false;
 
-        if (topicPattern != null) {
-            consumer.subscribe(topicPattern, rebalanceListener);
-        } else {
-            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
-        }
+        consumer.subscribe(sourceTopicPattern, rebalanceListener);
 
         while (stillRunning()) {
             this.timerStartedMs = time.milliseconds();

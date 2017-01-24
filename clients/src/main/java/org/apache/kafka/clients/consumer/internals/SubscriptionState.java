@@ -183,9 +183,16 @@ public class SubscriptionState {
         Set<TopicPartition> newAssignment = new HashSet<>(assignments);
         removeAllLagSensors(newAssignment);
 
-        for (TopicPartition tp : assignments)
-            if (!this.subscription.contains(tp.topic()))
-                throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
+        if (this.subscribedPattern != null) {
+            for (TopicPartition tp : assignments) {
+                if (!this.subscribedPattern.matcher(tp.topic()).matches())
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic regex pattern; subscription pattern is " + this.subscribedPattern);
+            }
+        } else {
+            for (TopicPartition tp : assignments)
+                if (!this.subscription.contains(tp.topic()))
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic; subscription is " + this.subscription);
+        }
 
         // after rebalancing, we always reinitialize the assignment value
         this.assignment.set(partitionToStateMap(assignments));
@@ -357,11 +364,15 @@ public class SubscriptionState {
         return assignedState(partition).resetStrategy;
     }
 
-    public boolean hasAllFetchPositions() {
-        for (TopicPartitionState state : assignment.partitionStateValues())
-            if (!state.hasValidPosition())
+    public boolean hasAllFetchPositions(Collection<TopicPartition> partitions) {
+        for (TopicPartition partition : partitions)
+            if (!hasValidPosition(partition))
                 return false;
         return true;
+    }
+
+    public boolean hasAllFetchPositions() {
+        return hasAllFetchPositions(this.assignedPartitions());
     }
 
     public Set<TopicPartition> missingFetchPositions() {
@@ -383,6 +394,10 @@ public class SubscriptionState {
 
     public boolean isFetchable(TopicPartition tp) {
         return isAssigned(tp) && assignedState(tp).isFetchable();
+    }
+
+    public boolean hasValidPosition(TopicPartition tp) {
+        return isAssigned(tp) && assignedState(tp).hasValidPosition();
     }
 
     public void pause(TopicPartition tp) {
