@@ -60,12 +60,11 @@ class RunClientCompatibilityTest(Test):
 
         self.zk = ZookeeperService(test_context, num_nodes=3)
 
-        # generate a unique topic name
+        # Generate a unique topic name
         topic_name = "client_compat_topic_%d%d" % (int(time.time()), randint(0, 2147483647))
-
         self.topics = { topic_name: {
-            "partitions": 10,
-            "replication-factor": 1
+            "partitions": 1, # Use only one partition to avoid worrying about ordering
+            "replication-factor": 3
             }}
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
 
