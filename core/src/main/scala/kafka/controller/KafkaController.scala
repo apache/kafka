@@ -1163,9 +1163,14 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     @throws[Exception]
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
-      onControllerResignation()
-      inLock(controllerContext.controllerLock) {
-        controllerElector.elect
+      if (controllerElector.getControllerID() != config.brokerId) {
+        onControllerResignation()
+        inLock(controllerContext.controllerLock) {
+          controllerElector.elect
+        }
+      } else {
+        //maybe create by current session or the previous zk session's ephemeral node is not deleted
+        info("ZK expired, but the current controller id %d is the same as this broker id, skip re-elect".format(config.brokerId))
       }
     }
 
