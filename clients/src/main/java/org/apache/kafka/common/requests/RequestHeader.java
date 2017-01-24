@@ -16,7 +16,6 @@ import static org.apache.kafka.common.protocol.Protocol.REQUEST_HEADER;
 
 import java.nio.ByteBuffer;
 
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -42,10 +41,6 @@ public class RequestHeader extends AbstractRequestResponse {
         apiVersion = struct.getShort(API_VERSION_FIELD);
         clientId = struct.getString(CLIENT_ID_FIELD);
         correlationId = struct.getInt(CORRELATION_ID_FIELD);
-    }
-
-    public RequestHeader(short apiKey, String client, int correlation) {
-        this(apiKey, ProtoUtils.latestVersion(apiKey), client, correlation);
     }
 
     public RequestHeader(short apiKey, short version, String client, int correlation) {

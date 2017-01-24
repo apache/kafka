@@ -27,37 +27,23 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.tools.MockConnector;
-import org.apache.kafka.connect.tools.MockSinkConnector;
-import org.apache.kafka.connect.tools.MockSourceConnector;
-import org.apache.kafka.connect.tools.SchemaSourceConnector;
-import org.apache.kafka.connect.tools.VerifiableSinkConnector;
-import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ReflectionsUtil;
-import org.reflections.Reflections;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -89,13 +75,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
-    private static List<ConnectorPluginInfo> validConnectorPlugins;
-    private static final Object LOCK = new Object();
     private Thread classPathTraverser;
-    private static final List<Class<? extends Connector>> EXCLUDES = Arrays.asList(
-        VerifiableSourceConnector.class, VerifiableSinkConnector.class,
-        MockConnector.class, MockSourceConnector.class, MockSinkConnector.class,
-        SchemaSourceConnector.class);
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -251,12 +231,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        ConfigDef connectorConfigDef;
-        if (connector instanceof SourceConnector) {
-            connectorConfigDef = SourceConnectorConfig.configDef();
-        } else {
-            connectorConfigDef = SinkConnectorConfig.configDef();
-        }
+
+        final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
+                (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
+                connectorConfig,
+                false
+        );
 
         List<ConfigValue> configValues = new ArrayList<>();
         Map<String, ConfigKey> configKeys = new HashMap<>();
@@ -276,29 +256,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         configValues.addAll(config.configValues());
 
         return generateResult(connType, configKeys, configValues, allGroups);
-    }
-
-    public static List<ConnectorPluginInfo> connectorPlugins() {
-        synchronized (LOCK) {
-            if (validConnectorPlugins != null) {
-                return validConnectorPlugins;
-            }
-            ReflectionsUtil.registerUrlTypes();
-            ConfigurationBuilder builder = new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath());
-            Reflections reflections = new Reflections(builder);
-
-            Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
-            connectorClasses.removeAll(EXCLUDES);
-            List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();
-            for (Class<? extends Connector> connectorClass : connectorClasses) {
-                int mod = connectorClass.getModifiers();
-                if (!Modifier.isAbstract(mod) && !Modifier.isInterface(mod)) {
-                    connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
-                }
-            }
-            validConnectorPlugins = connectorPlugins;
-            return connectorPlugins;
-        }
     }
 
     // public for testing
@@ -394,7 +351,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         classPathTraverser = new Thread(new Runnable() {
             @Override
             public void run() {
-                connectorPlugins();
+                PluginDiscovery.scanClasspathForPlugins();
             }
         }, "CLASSPATH traversal thread.");
         classPathTraverser.start();

@@ -33,15 +33,15 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val timeout = 10000
     // Single topic
     TestUtils.createTopic(zkUtils, "topic-1", 1, 1, servers)
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest(Set("topic-1").asJava, timeout))
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout).build())
     // Multi topic
     TestUtils.createTopic(zkUtils, "topic-3", 5, 2, servers)
     TestUtils.createTopic(zkUtils, "topic-4", 1, 2, servers)
-    validateValidDeleteTopicRequests(new DeleteTopicsRequest(Set("topic-3", "topic-4").asJava, timeout))
+    validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout).build())
   }
 
   private def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
-    val response = sendDeleteTopicsRequest(request, 0)
+    val response = sendDeleteTopicsRequest(request)
 
     val error = response.errors.values.asScala.find(_ != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
@@ -57,14 +57,14 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val timeoutTopic = "invalid-timeout"
 
     // Basic
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set("invalid-topic").asJava, timeout),
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("invalid-topic").asJava, timeout).build(),
       Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
     TestUtils.createTopic(zkUtils, "partial-topic-1", 1, 1, servers)
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set(
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(
       "partial-topic-1",
-      "partial-invalid-topic").asJava, timeout),
+      "partial-invalid-topic").asJava, timeout).build(),
       Map(
         "partial-topic-1" -> Errors.NONE,
         "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
@@ -74,7 +74,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     // Timeout
     TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set(timeoutTopic).asJava, 0),
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0).build(),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
     TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
@@ -82,7 +82,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
-    val response = sendDeleteTopicsRequest(request, 0)
+    val response = sendDeleteTopicsRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
@@ -97,22 +97,23 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
   @Test
   def testNotController() {
-    val request = new DeleteTopicsRequest(Set("not-controller").asJava, 1000)
-    val response = sendDeleteTopicsRequest(request, 0, notControllerSocketServer)
+    val request = new DeleteTopicsRequest.Builder(Set("not-controller").asJava, 1000).build()
+    val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2
     assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER, error)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
-    val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
+    val metadata = sendMetadataRequest(new MetadataRequest.
+        Builder(List(topic).asJava).build).topicMetadata.asScala
     TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE),
       s"The topic $topic should not exist")
   }
 
-  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, version: Short, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = send(request, ApiKeys.DELETE_TOPICS, Some(version), socketServer)
-    DeleteTopicsResponse.parse(response, version)
+  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+    val response = send(request, ApiKeys.DELETE_TOPICS, socketServer)
+    DeleteTopicsResponse.parse(response, request.version)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {

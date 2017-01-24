@@ -59,7 +59,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
 
-    public final static int UNKNOWN = -1;
+    private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
@@ -159,7 +159,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<TaskId, Set<TopicPartition>> activeTasks;
 
-    InternalTopicManager internalTopicManager;
+    private InternalTopicManager internalTopicManager;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -205,16 +205,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
-            internalTopicManager = new InternalTopicManager(
-                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
-                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
-                    configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
-                            (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
-        } else {
-            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        }
+        internalTopicManager = new InternalTopicManager(
+                new StreamsKafkaClient(this.streamThread.config),
+                configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
+                configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
+                        (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
     }
 
     @Override
@@ -340,7 +336,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                 }
                             }
                         }
-
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
                         if (numPartitions == UNKNOWN)
@@ -374,9 +369,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // create these topics if necessary
         prepareTopic(repartitionTopicMetadata);
 
-        metadataWithInternalTopics = metadata;
-        if (internalTopicManager != null)
-            metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
+        metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
         log.debug("stream-thread [{}] Created repartition topics {} from the parsed topology.", streamThread.getName(), allRepartitionTopicPartitions.values());
 
@@ -535,7 +528,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-
                 i++;
             }
         }
@@ -598,43 +590,27 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
-    private void prepareTopic(Map<String, InternalTopicMetadata> topicPartitions) {
+    private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
         log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-        // if ZK is specified, prepare the internal source topic before calling partition grouper
-        if (internalTopicManager != null) {
-            for (Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
-                InternalTopicConfig topic = entry.getValue().config;
-                Integer numPartitions = entry.getValue().numPartitions;
+        for (final Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
+            final InternalTopicConfig topic = entry.getValue().config;
+            final Integer numPartitions = entry.getValue().numPartitions;
 
-                if (numPartitions == NOT_AVAILABLE) {
-                    continue;
-                }
-                if (numPartitions < 0) {
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
-                }
-
-                internalTopicManager.makeReady(topic, numPartitions);
-
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
-                } while (partitions == null || partitions.size() != numPartitions);
+            if (numPartitions == NOT_AVAILABLE) {
+                continue;
             }
-        } else {
-            List<String> missingTopics = new ArrayList<>();
-            for (String topic : topicPartitions.keySet()) {
-                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                if (partitions == null) {
-                    missingTopics.add(topic);
-                }
+            if (numPartitions < 0) {
+                throw new TopologyBuilderException(String.format("stream-thread [%s] Topic [%s] number of partitions not defined", streamThread.getName(), topic.name()));
             }
 
-            if (!missingTopics.isEmpty()) {
-                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                        streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-            }
+            internalTopicManager.makeReady(topic, numPartitions);
+
+            // wait until the topic metadata has been propagated to all brokers
+            List<PartitionInfo> partitions;
+            do {
+                partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
+            } while (partitions == null || partitions.size() != numPartitions);
         }
 
         log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
@@ -667,6 +643,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     Arrays.sort(topics);
                     throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
                 }
+            } else {
+                if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
+                    numPartitions = NOT_AVAILABLE;
+                    break;
+                }
             }
         }
 
@@ -682,7 +663,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
             }
         }
-
         // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
         for (Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
             if (copartitionGroup.contains(entry.getKey())) {
@@ -752,4 +732,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
+    public void close() {
+        internalTopicManager.close();
+    }
 }

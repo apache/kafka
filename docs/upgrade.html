@@ -33,8 +33,12 @@ can upgrade the brokers one at a time: shut down the broker, update the code, an
 <ul>
     <li>Several methods on the Java consumer may now throw <code>InterruptException</code> if the calling thread is interrupted.
         Please refer to the <code>KafkaConsumer</code> Javadoc for a more in-depth explanation of this change.</li>
+    <li>Java consumer now shuts down gracefully. By default, the consumer waits up to 30 seconds to complete pending requests.
+        A new close API with timeout has been added to <code>KafkaConsumer</code> to control the maximum wait time.</li>
     <li>Multiple regular expressions separated by commas can be passed to MirrorMaker with the new Java consumer via the --whitelist option. This
         makes the behaviour consistent with MirrorMaker when used the old Scala consumer.</li>
+    <li>Zookeeper dependency was removed from the Streams API. Now the Streams API uses Kafka protocol to manage internal topics instead of modifying Zookeeper directly. This eliminates the need for privilege[s] to access Zookeeper directly and "StreamsConfig.ZOOKEEPER_CONFIG" should not be set in the streams app anymore. If the Kafka cluster is secured, the Streams apps require to have proper security privilege[s] to create new topics.</li>
+    <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to StreamsConfig class. User should pay attenntion to the default values and set these if needed. For more details please refer to <a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
 </ul>
 
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>

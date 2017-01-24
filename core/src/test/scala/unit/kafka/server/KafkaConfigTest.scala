@@ -20,9 +20,12 @@ package kafka.server
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
+import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.metrics.Sensor
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -84,6 +87,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
+
   @Test
   def testLogRetentionUnlimited() {
     val props1 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
@@ -149,7 +153,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.PortProp, port)
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
     assertEquals(endpoint.port, port.toInt)
   }
@@ -165,7 +169,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
@@ -182,7 +186,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, port.toInt)
@@ -199,7 +203,7 @@ class KafkaConfigTest {
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, hostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
@@ -213,15 +217,15 @@ class KafkaConfigTest {
 
     // listeners with duplicate port
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
 
     // listeners with duplicate protocol
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
 
     // advertised listeners with duplicate port
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
   }
 
   @Test
@@ -231,7 +235,96 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     props.put(KafkaConfig.ListenersProp, "BAD://localhost:9091")
 
-    assert(!isValidKafkaConfig(props))
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testListenerNamesWithAdvertisedListenerUnset(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "CLIENT://localhost:9091,REPLICATION://localhost:9092,INTERNAL://localhost:9093")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CLIENT:SSL,REPLICATION:SSL,INTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    val config = KafkaConfig.fromProps(props)
+    val expectedListeners = Seq(
+      EndPoint("localhost", 9091, new ListenerName("CLIENT"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
+    assertEquals(expectedListeners, config.listeners)
+    assertEquals(expectedListeners, config.advertisedListeners)
+    val expectedSecurityProtocolMap = Map(
+      new ListenerName("CLIENT") -> SecurityProtocol.SSL,
+      new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+    )
+    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+  }
+
+  @Test
+  def testListenerAndAdvertisedListenerNames(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:9091,INTERNAL://localhost:9093")
+    props.put(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://lb1.example.com:9000,INTERNAL://host1:9093")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:SSL,INTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
+    val config = KafkaConfig.fromProps(props)
+
+    val expectedListeners = Seq(
+      EndPoint("localhost", 9091, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
+      EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+    )
+    assertEquals(expectedListeners, config.listeners)
+
+    val expectedAdvertisedListeners = Seq(
+      EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
+      EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+    )
+    assertEquals(expectedAdvertisedListeners, config.advertisedListeners)
+
+    val expectedSecurityProtocolMap = Map(
+      new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
+      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+    )
+    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+  }
+
+  @Test
+  def testListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091,REPLICATION://localhost:9092")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "SSL")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testInterBrokerListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testInterBrokerListenerNameAndSecurityProtocolSet(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9091")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "SSL")
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, "SSL")
+    assertFalse(isValidKafkaConfig(props))
   }
 
   @Test
@@ -240,9 +333,14 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     props.put(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
-
-    assert(isValidKafkaConfig(props))
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(_.connectionString))
+    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(_.connectionString))
   }
+
+  def listenerListToEndPoints(listenerList: String,
+                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = EndPoint.DefaultSecurityProtocolMap) =
+    CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
   def testListenerDefaults() {
@@ -255,22 +353,22 @@ class KafkaConfigTest {
     props.put(KafkaConfig.PortProp, "1111")
 
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
 
     // configuration with null host
     props.remove(KafkaConfig.HostNameProp)
 
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
-    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertEquals(null, conf2.listeners(SecurityProtocol.PLAINTEXT).host)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
+    assertEquals(null, conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
 
     // configuration with advertised host and port, and no advertised listeners
     props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
     props.put(KafkaConfig.AdvertisedPortProp, "2222")
 
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(conf3.advertisedListeners, CoreUtils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+    assertEquals(conf3.advertisedListeners, listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
   }
 
   @Test
@@ -295,7 +393,7 @@ class KafkaConfigTest {
     assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assert(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
+    assertTrue(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -303,7 +401,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
       true
     } catch {
-      case _: IllegalArgumentException => false
+      case _: IllegalArgumentException | _: ConfigException => false
     }
   }
 
@@ -450,6 +548,7 @@ class KafkaConfigTest {
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
+        case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
         case KafkaConfig.PortProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.HostNameProp => // ignore string
@@ -532,6 +631,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
+        case KafkaConfig.MetricRecordingLevelProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
@@ -585,6 +685,8 @@ class KafkaConfigTest {
     //For LogFlushIntervalMsProp
     defaults.put(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
     defaults.put(KafkaConfig.OffsetsTopicCompressionCodecProp, SnappyCompressionCodec.codec.toString)
+    // For MetricRecordingLevelProp
+    defaults.put(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString)
 
     val config = KafkaConfig.fromProps(defaults)
     assertEquals("127.0.0.1:2181", config.zkConnect)
@@ -602,6 +704,7 @@ class KafkaConfigTest {
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
+    assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {

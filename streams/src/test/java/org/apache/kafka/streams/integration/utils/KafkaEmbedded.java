@@ -29,6 +29,7 @@ import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -110,7 +111,7 @@ public class KafkaEmbedded {
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        return kafka.config().hostName() + ":" + kafka.boundPort(SecurityProtocol.PLAINTEXT);
+        return kafka.config().hostName() + ":" + kafka.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
     }
 
 
@@ -201,4 +202,7 @@ public class KafkaEmbedded {
         zkClient.close();
     }
 
+    public KafkaServer kafkaServer() {
+        return kafka;
+    }
 }

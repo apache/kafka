@@ -6,6 +6,31 @@ This directory contains Kafka system integration and performance tests.
 (ducktape is a distributed testing framework which provides test runner,
 result reporter and utilities to pull up and tear down services.)
 
+Running tests using docker
+--------------------------
+Docker containers can be used for running kafka system tests locally.
+* Requirements
+  - Docker 1.12.3 is installed and running on the machine.
+  - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions.
+   This can be done by running ./gradlew clean releaseTarGz  
+* Run all tests
+```
+bash tests/docker/run_tests.sh
+```
+* Run all tests with debug on (warning will produce log of logs)
+```
+_DUCKTAPE_OPTIONS="--debug" bash tests/docker/run_tests.sh | tee debug_logs.txt
+```
+* Run a subset of tests
+```
+TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
+```
+* Notes
+  - The scripts to run tests creates and destroys docker network named *knw*.
+   This network can't be used for any other purpose.
+  - The docker containers are named knode01, knode02 etc.
+   These nodes can't be used for any other purpose.
+
 Local Quickstart
 ----------------
 This quickstart will help you run the Kafka system tests on your local machine. Note this requires bringing up a cluster of virtual machines on your local computer, which is memory intensive; it currently requires around 10G RAM.

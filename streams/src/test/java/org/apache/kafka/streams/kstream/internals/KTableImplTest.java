@@ -349,7 +349,7 @@ public class KTableImplTest {
 
         KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
                 .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "mock-result1");
+                .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
 
 
         KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1
@@ -436,7 +436,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
-        table.join(null, MockValueJoiner.STRING_JOINER);
+        table.join(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -446,7 +446,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnOuterJoin() throws Exception {
-        table.outerJoin(null, MockValueJoiner.STRING_JOINER);
+        table.outerJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -461,7 +461,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnLeftJoin() throws Exception {
-        table.leftJoin(null, MockValueJoiner.STRING_JOINER);
+        table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
 }

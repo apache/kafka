@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Collections;
@@ -30,6 +31,7 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     public int numReceived = 0;
 
     public final MockProcessorSupplier<K, V> supplier;
+    public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
         this(new MockProcessorSupplier<K, V>(scheduleInterval));
@@ -39,6 +41,12 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
         super(NAME + INDEX.getAndIncrement(), supplier.get(), Collections.<String>emptySet());
 
         this.supplier = supplier;
+    }
+
+    @Override
+    public void init(final ProcessorContext context) {
+        super.init(context);
+        initialized = true;
     }
 
     @Override

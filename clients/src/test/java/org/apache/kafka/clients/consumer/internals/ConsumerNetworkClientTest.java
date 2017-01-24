@@ -19,7 +19,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -49,7 +48,7 @@ public class ConsumerNetworkClientTest {
     @Test
     public void send() {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
-        RequestFuture<ClientResponse> future = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future.isDone());
@@ -67,12 +66,12 @@ public class ConsumerNetworkClientTest {
     public void multiSend() {
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
         client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
-        RequestFuture<ClientResponse> future1 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
-        RequestFuture<ClientResponse> future2 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
+        RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
 
-        consumerClient.awaitPendingRequests(node);
+        consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
     }
@@ -143,7 +142,7 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void wakeup() {
-        RequestFuture<ClientResponse> future = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.wakeup();
         try {
             consumerClient.poll(0);
@@ -181,13 +180,13 @@ public class ConsumerNetworkClientTest {
         };
         // Queue first send, sleep long enough for this to expire and then queue second send
         consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, unsentExpiryMs);
-        RequestFuture<ClientResponse> future1 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future1.isDone());
 
         time.sleep(unsentExpiryMs + 1);
-        RequestFuture<ClientResponse> future2 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertFalse(future2.isDone());
@@ -210,7 +209,7 @@ public class ConsumerNetworkClientTest {
 
         // Disable ready flag to delay send and queue another send. Disconnection should remove pending send
         isReady.set(false);
-        RequestFuture<ClientResponse> future3 = consumerClient.send(node, ApiKeys.METADATA, heartbeatRequest());
+        RequestFuture<ClientResponse> future3 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         disconnected.set(true);
@@ -221,8 +220,8 @@ public class ConsumerNetworkClientTest {
         assertEquals(0, consumerClient.pendingRequestCount(node));
     }
 
-    private HeartbeatRequest heartbeatRequest() {
-        return new HeartbeatRequest("group", 1, "memberId");
+    private HeartbeatRequest.Builder heartbeat() {
+        return new HeartbeatRequest.Builder("group", 1, "memberId");
     }
 
     private HeartbeatResponse heartbeatResponse(short error) {

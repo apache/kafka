@@ -22,32 +22,40 @@ package org.apache.kafka.streams.kstream;
  */
 public abstract class Window {
 
-    private long start;
-    private long end;
+    protected final long startMs;
+    protected final long endMs;
 
     /**
      * Create a new window for the given start time (inclusive) and end time (exclusive).
      *
      * @param start  the start timestamp of the window (inclusive)
      * @param end    the end timestamp of the window (exclusive)
+     * @throws IllegalArgumentException if {@code start} or {@code end} is negative or if {@code end} is smaller than
+     * {@code start}
      */
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
+    public Window(long startMs, long endMs) throws IllegalArgumentException {
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window startMs time cannot be negative.");
+        }
+        if (endMs < startMs) {
+            throw new IllegalArgumentException("Window endMs time cannot be smaller than window startMs time.");
+        }
+        this.startMs = startMs;
+        this.endMs = endMs;
     }
 
     /**
      * Return the start timestamp of this window, inclusive
      */
     public long start() {
-        return start;
+        return startMs;
     }
 
     /**
      * Return the end timestamp of this window, exclusive
      */
     public long end() {
-        return end;
+        return endMs;
     }
 
     /**
@@ -56,12 +64,10 @@ public abstract class Window {
      * @param other  another window
      * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      */
-    public boolean overlap(Window other) {
-        return this.start() < other.end() || other.start() < this.end();
-    }
+    public abstract boolean overlap(final Window other);
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this) {
             return true;
         }
@@ -70,14 +76,20 @@ public abstract class Window {
             return false;
         }
 
-        Window other = (Window) obj;
-        return this.start == other.start && this.end == other.end;
+        final Window other = (Window) obj;
+        return startMs == other.startMs && endMs == other.endMs;
     }
 
     @Override
     public int hashCode() {
-        long n = (this.start << 32) | this.end;
-        return (int) (n % 0xFFFFFFFFL);
+        return (int) (((startMs << 32) | endMs) % 0xFFFFFFFFL);
     }
 
+    @Override
+    public String toString() {
+        return "Window{" +
+            "start=" + startMs +
+            ", end=" + endMs +
+            '}';
+    }
 }

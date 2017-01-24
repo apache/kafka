@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.List;
 
-class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
+class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
 
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -48,15 +48,11 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde,
                        final long windowSize) {
+        super(underlying);
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.windowSize = windowSize;
-    }
-
-    @Override
-    public String name() {
-        return underlying.name();
     }
 
     @SuppressWarnings("unchecked")
@@ -79,12 +75,13 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    final byte[] binaryKey = entry.key().get();
-                    final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryKey);
-                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
-                    final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryKey, serdes),
+                    final byte[] binaryWindowKey = entry.key().get();
+                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
+
+                    final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
                                                                    new TimeWindow(timestamp, timestamp + windowSize));
-                    maybeForward(entry, key, timestamp, windowedKey, (InternalProcessorContext) context);
+                    final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryWindowKey);
+                    maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
                     underlying.put(key, entry.newValue(), timestamp);
                 }
             }
@@ -94,7 +91,6 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
 
     private void maybeForward(final ThreadCache.DirtyEntry entry,
                               final Bytes key,
-                              final long timestamp,
                               final Windowed<K> windowedKey,
                               final InternalProcessorContext context) {
         if (flushListener != null) {
@@ -102,7 +98,7 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
             context.setRecordContext(entry.recordContext());
             try {
                 flushListener.apply(windowedKey,
-                                    serdes.valueFrom(entry.newValue()), fetchPrevious(key, timestamp));
+                                    serdes.valueFrom(entry.newValue()), fetchPrevious(key, windowedKey.window().start()));
             } finally {
                 context.setRecordContext(current);
             }
@@ -128,16 +124,6 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
     }
 
     @Override
-    public boolean persistent() {
-        return underlying.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return underlying.isOpen();
-    }
-
-    @Override
     public synchronized void put(final K key, final V value) {
         put(key, value, context.timestamp());
     }
@@ -160,21 +146,19 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
-        return new MergedSortedCachedWindowStoreIterator<>(cacheIterator, new DelegatingPeekingWindowIterator<>(underlyingIterator), serdes);
+        return new MergedSortedCacheWindowStoreIterator<>(cacheIterator,
+                                                          underlyingIterator,
+                                                          new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
     }
+
 
     private V fetchPrevious(final Bytes key, final long timestamp) {
-        try (final WindowStoreIterator<byte[]> iterator = underlying.fetch(key, timestamp, timestamp)) {
-            if (!iterator.hasNext()) {
+        try (final WindowStoreIterator<byte[]> iter = underlying.fetch(key, timestamp, timestamp)) {
+            if (!iter.hasNext()) {
                 return null;
+            } else {
+                return serdes.valueFrom(iter.next().value);
             }
-            return serdes.valueFrom(iterator.next().value);
-        }
-    }
-
-    private void validateStoreOpen() {
-        if (!isOpen()) {
-            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
         }
     }
 }

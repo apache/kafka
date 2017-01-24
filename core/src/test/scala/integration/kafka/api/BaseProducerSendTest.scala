@@ -43,7 +43,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
@@ -69,7 +69,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   protected def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      saslProperties = saslProperties, retries = retries, lingerMs = lingerMs, props = props)
+      saslProperties = clientSaslProperties, retries = retries, lingerMs = lingerMs, props = props)
     registerProducer(producer)
   }
 

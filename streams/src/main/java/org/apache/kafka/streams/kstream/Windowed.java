@@ -26,11 +26,11 @@ package org.apache.kafka.streams.kstream;
  */
 public class Windowed<K> {
 
-    private K key;
+    private final K key;
 
-    private Window window;
+    private final Window window;
 
-    public Windowed(K key, Window window) {
+    public Windowed(final K key, final Window window) {
         this.key = key;
         this.window = window;
     }
@@ -59,21 +59,20 @@ public class Windowed<K> {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this)
             return true;
 
         if (!(obj instanceof Windowed))
             return false;
 
-        Windowed<?> that = (Windowed) obj;
-
-        return this.window.equals(that.window) && this.key.equals(that.key);
+        final Windowed<?> that = (Windowed) obj;
+        return window.equals(that.window) && key.equals(that.key);
     }
 
     @Override
     public int hashCode() {
-        long n = ((long) window.hashCode() << 32) | key.hashCode();
+        final long n = ((long) window.hashCode() << 32) | key.hashCode();
         return (int) (n % 0xFFFFFFFFL);
     }
 }

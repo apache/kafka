@@ -21,7 +21,6 @@ import java.security.Permission
 import java.util
 
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.types.Password
 import org.junit.{After, Before, Test}
 import org.junit.Assert._

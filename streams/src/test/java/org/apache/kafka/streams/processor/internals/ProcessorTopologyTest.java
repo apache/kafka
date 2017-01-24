@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -135,6 +136,7 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5", partition);
     }
 
+
     @Test
     public void testDrivingMultiplexingTopology() {
         driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology());
@@ -196,6 +198,24 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDriveGlobalStore() throws Exception {
+        final StateStoreSupplier storeSupplier = Stores.create("my-store")
+                .withStringKeys().withStringValues().inMemory().disableLogging().build();
+        final String global = "global";
+        final String topic = "topic";
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) storeSupplier.get();
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+                .addGlobalStore(globalStore, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder, "my-store");
+        driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertEquals("value1", globalStore.get("key1"));
+        assertEquals("value2", globalStore.get("key2"));
+    }
+
     @Test
     public void testDrivingSimpleMultiSourceTopology() {
         int partition = 10;
@@ -209,6 +229,7 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
+
 
 
     protected void assertNextOutputRecord(String topic, String key, String value) {
@@ -231,10 +252,10 @@ public class ProcessorTopologyTest {
         assertNull(driver.readOutput(topic));
     }
 
-    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<K, V>() {
+    protected StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<Object, Object>() {
             @Override
-            public Integer partition(K key, V value, int numPartitions) {
+            public Integer partition(Object key, Object value, int numPartitions) {
                 return partition;
             }
         };
