@@ -367,7 +367,6 @@ public class KTableKTableLeftJoinTest {
         };
         final KTable<Long, String> seven = one.mapValues(mapper);
 
-
         final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
         aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)

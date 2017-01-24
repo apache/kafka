@@ -355,6 +355,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (!open) {
             return;
         }
+
+        System.out.println("!!! " + name + " is being closed !!!");
+
         open = false;
         closeOpenIterators();
         options.close();
