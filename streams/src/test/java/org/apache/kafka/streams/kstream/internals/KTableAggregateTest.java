@@ -220,7 +220,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.flushState();
@@ -256,7 +256,7 @@ public class KTableAggregateTest {
             .toStream()
             .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -309,7 +309,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "11", "A");
         driver.flushState();
@@ -378,7 +378,7 @@ public class KTableAggregateTest {
                     }
                 });
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver = new KStreamTestDriver(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));
         driver.process("tableOne", "2", "2");
         // this should trigger eviction on the reducer-store topic

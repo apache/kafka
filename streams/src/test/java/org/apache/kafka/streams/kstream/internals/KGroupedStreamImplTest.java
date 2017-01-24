@@ -32,12 +32,14 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -56,11 +58,20 @@ public class KGroupedStreamImplTest {
     private static final String TOPIC = "topic";
     private final KStreamBuilder builder = new KStreamBuilder();
     private KGroupedStream<String, String> groupedStream;
+    private KStreamTestDriver driver = null;
 
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
         groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
+    }
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test(expected = NullPointerException.class)
@@ -70,14 +81,12 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnReduce() throws Exception {
-        String storeName = null;
-        groupedStream.reduce(MockReducer.STRING_ADDER, storeName);
+        groupedStream.reduce(MockReducer.STRING_ADDER, (String) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
-        StateStoreSupplier storeSupplier = null;
-        groupedStream.reduce(MockReducer.STRING_ADDER, storeSupplier);
+        groupedStream.reduce(MockReducer.STRING_ADDER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -92,8 +101,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameWithWindowedReduce() throws Exception {
-        String storeName = null;
-        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), storeName);
+        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), (String) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -108,8 +116,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
-        String storeName = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), storeName);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -129,14 +136,12 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
-        String storeName = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), storeName);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
-        StateStoreSupplier storeSupplier = null;
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), storeSupplier);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), null);
     }
 
     @Test
@@ -165,7 +170,7 @@ public class KGroupedStreamImplTest {
                     }
                 });
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -194,7 +199,7 @@ public class KGroupedStreamImplTest {
                         results.put(key, value);
                     }
                 });
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -230,7 +235,7 @@ public class KGroupedStreamImplTest {
                         results.put(key, value);
                     }
                 });
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "A");
         driver.setTime(15);
@@ -357,7 +362,7 @@ public class KGroupedStreamImplTest {
                     }
                 });
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
+        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
         driver.setTime(0);
         driver.process(TOPIC, "1", "A");
         driver.process(TOPIC, "2", "B");
