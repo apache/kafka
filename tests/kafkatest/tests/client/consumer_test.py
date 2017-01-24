@@ -113,7 +113,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer.stop_all()
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True, False], bounce_mode=["all", "rolling"])
@@ -188,16 +189,19 @@ class OffsetValidationTest(VerifiableConsumerTest):
             # if the total records consumed matches the current position, we haven't seen any duplicates
             # this can only be guaranteed with a clean shutdown
             assert consumer.current_position(partition) == consumer.total_consumed(), \
-                "Total consumed records did not match consumed position"
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
         else:
             # we may have duplicates in a hard failure
             assert consumer.current_position(partition) <= consumer.total_consumed(), \
-                "Current position greater than the total number of consumed records"
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
 
         # if autocommit is not turned on, we can also verify the last committed offset
         if not enable_autocommit:
             assert consumer.last_commit(partition) == consumer.current_position(partition), \
-                "Last committed offset did not match last consumed position"
+                "Last committed offset %d did not match last consumed position %d" % \
+                (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
@@ -227,12 +231,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # if the total records consumed matches the current position, we haven't seen any duplicates
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
         # if autocommit is not turned on, we can also verify the last committed offset
         if not enable_autocommit:
             assert consumer.last_commit(partition) == consumer.current_position(partition), \
-                "Last committed offset did not match last consumed position"
+                "Last committed offset %d did not match last consumed position %d" % \
+                (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
     def test_group_consumption(self):
@@ -267,11 +273,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_consumed_messages(consumer)
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
         assert consumer.last_commit(partition) == consumer.current_position(partition), \
-            "Last committed offset did not match last consumed position"
-
+            "Last committed offset %d did not match last consumed position %d" % \
+            (consumer.last_commit(partition), consumer.current_position(partition))
 
 class AssignmentValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
