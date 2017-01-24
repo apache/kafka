@@ -99,7 +99,7 @@ public class SimpleBenchmark {
 
     public static void main(String[] args) throws Exception {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory("kafka-stream-system-test/kafka-streams-simple-benchmark").getAbsolutePath();
+        String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
         numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
         endKey = numRecords - 1;
 

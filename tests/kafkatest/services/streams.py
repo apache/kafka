@@ -143,7 +143,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, command):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
-                                                          "org.apache.kafka.streams.systemtest.StreamsSmokeTest",
+                                                          "org.apache.kafka.streams.tests.StreamsSmokeTest",
                                                           command)
 
 

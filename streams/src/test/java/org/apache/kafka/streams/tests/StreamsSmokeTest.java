@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.systemtest;
+package org.apache.kafka.streams.tests;
 
 import java.io.File;
 import java.util.Map;
