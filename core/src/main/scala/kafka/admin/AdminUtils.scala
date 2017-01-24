@@ -429,12 +429,16 @@ object AdminUtils extends Logging with AdminUtilities {
 
     if (!update) {
       if (zkUtils.zkClient.exists(topicPath))
-        throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+        throw new TopicExistsException(s"Topic '$topic' already exists.")
       else if (Topic.hasCollisionChars(topic)) {
         val allTopics = zkUtils.getAllTopics()
-        val collidingTopics = allTopics.filter(t => Topic.hasCollision(topic, t))
+        // check again in case the topic was created in the meantime, otherwise the
+        // topic could potentially collide with itself
+        if (allTopics.contains(topic))
+          throw new TopicExistsException(s"Topic '$topic' already exists.")
+        val collidingTopics = allTopics.filter(Topic.hasCollision(topic, _))
         if (collidingTopics.nonEmpty) {
-          throw new InvalidTopicException("Topic \"%s\" collides with existing topics: %s".format(topic, collidingTopics.mkString(", ")))
+          throw new InvalidTopicException(s"Topic '$topic' collides with existing topics: ${collidingTopics.mkString(", ")}")
         }
       }
     }
