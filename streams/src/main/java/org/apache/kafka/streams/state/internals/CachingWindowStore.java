@@ -148,8 +148,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
         return new MergedSortedCacheWindowStoreIterator<>(cacheIterator,
-                underlyingIterator,
-                new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
+                                                          underlyingIterator,
+                                                          new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
     }
 
     private V fetchPrevious(final Bytes key, final long timestamp) {

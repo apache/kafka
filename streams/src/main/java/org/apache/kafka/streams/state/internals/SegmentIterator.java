@@ -50,12 +50,12 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
     }
 
     public void close() {
-        super.close();
-
         if (currentIterator != null) {
             currentIterator.close();
             currentIterator = null;
         }
+
+        super.close();
     }
 
     @Override

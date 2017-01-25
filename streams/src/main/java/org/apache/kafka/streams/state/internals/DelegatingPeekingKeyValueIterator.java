@@ -24,11 +24,12 @@ import java.util.NoSuchElementException;
 /**
  * Optimized {@link KeyValueIterator} used when the same element could be peeked multiple times.
  */
-class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator<K, V> {
+class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> implements PeekingKeyValueIterator<K, V> {
     private final KeyValueIterator<K, V> underlying;
     private KeyValue<K, V> next;
 
-    public DelegatingPeekingKeyValueIterator(KeyValueIterator<K, V> underlying) {
+    public DelegatingPeekingKeyValueIterator(String storeName, KeyValueIterator<K, V> underlying) {
+        super(storeName);
         this.underlying = underlying;
     }
 
@@ -43,10 +44,13 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
     @Override
     public synchronized void close() {
         underlying.close();
+        super.close();
     }
 
     @Override
     public synchronized boolean hasNext() {
+        validateIsOpen();
+
         if (next != null) {
             return true;
         }
@@ -67,11 +71,6 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
         final KeyValue<K, V> result = next;
         next = null;
         return result;
-    }
-
-    @Override
-    public void remove() {
-        throw new UnsupportedOperationException("remove() not supported in DelegatingPeekingKeyValueIterator.");
     }
 
     @Override

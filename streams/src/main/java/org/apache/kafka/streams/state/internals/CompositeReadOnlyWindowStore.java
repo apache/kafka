@@ -73,11 +73,6 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
             }
 
             @Override
-            public Long peekNextKey() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
             public KeyValue<Long, V> next() {
                 throw new NoSuchElementException();
             }

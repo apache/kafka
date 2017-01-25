@@ -56,8 +56,8 @@ class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyV
         innerBytes.init(context, root);
 
         this.serdes = new StateSerdes<>(innerBytes.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @Override
@@ -106,8 +106,8 @@ class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyV
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
         return new SerializedKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
-                Bytes.wrap(serdes.rawKey(to))),
-                serdes);
+                                                                 Bytes.wrap(serdes.rawKey(to))),
+                                                                 serdes);
     }
 
     @Override

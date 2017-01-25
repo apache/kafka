@@ -87,7 +87,8 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
             if (flushListener != null) {
 
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
-                        serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
+                                    serdes.valueFrom(entry.newValue()),
+                                    serdes.valueFrom(underlying.get(entry.key())));
 
             }
             underlying.put(entry.key(), entry.newValue());
