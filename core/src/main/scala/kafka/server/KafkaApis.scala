@@ -359,20 +359,20 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val mergedResponseStatus = responseStatus ++
         unauthorizedForWriteRequestInfo.mapValues(_ =>
-           new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Record.NO_TIMESTAMP)) ++
+           new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED, -1, Record.NO_TIMESTAMP)) ++
         nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ =>
-           new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, -1, Record.NO_TIMESTAMP))
+           new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, -1, Record.NO_TIMESTAMP))
 
       var errorInResponse = false
 
       mergedResponseStatus.foreach { case (topicPartition, status) =>
-        if (status.errorCode != Errors.NONE.code) {
+        if (status.error != Errors.NONE) {
           errorInResponse = true
           debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,
             request.header.clientId,
             topicPartition,
-            Errors.forCode(status.errorCode).exceptionName))
+            status.error.exceptionName))
         }
       }
 
@@ -383,7 +383,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
             val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
-              topicPartition -> Errors.forCode(status.errorCode).exceptionName
+              topicPartition -> status.error.exceptionName
             }.mkString(", ")
             info(
               s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
@@ -480,7 +480,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V0))
           } else data
 
-          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
+          tp -> new FetchResponse.PartitionData(convertedData.error.code, convertedData.hw, convertedData.records)
         }
       }
 

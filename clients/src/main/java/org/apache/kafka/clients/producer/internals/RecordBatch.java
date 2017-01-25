@@ -83,18 +83,18 @@ public final class RecordBatch {
     }
 
     /**
-     * Complete the request
+     * Complete the request.
      * 
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param responseTimestamp The timestamp returned by the broker.
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param exception The exception that occurred (or null if the request was successful)
      */
-    public void done(long baseOffset, long responseTimestamp, RuntimeException exception) {
+    public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition, baseOffset, exception);
 
         // set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
-        produceFuture.set(baseOffset, responseTimestamp, exception);
+        produceFuture.set(baseOffset, logAppendTime, exception);
 
         // execute callbacks
         for (Thunk thunk : thunks) {

@@ -20,7 +20,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -132,7 +131,7 @@ public class ProduceRequest extends AbstractRequest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
 
         for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet()) {
-            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET, Record.NO_TIMESTAMP));
+            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e)));
         }
 
         short versionId = version();

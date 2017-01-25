@@ -160,16 +160,15 @@ class GroupMetadataManager(val brokerId: Int,
           // construct the error status in the propagated assignment response
           // in the cache
           val status = responseStatus(groupMetadataPartition)
-          val statusError = Errors.forCode(status.errorCode)
 
-          val responseError = if (statusError == Errors.NONE) {
+          val responseError = if (status.error == Errors.NONE) {
             Errors.NONE
           } else {
             debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
-              s"due to ${statusError.exceptionName}")
+              s"due to ${status.error.exceptionName}")
 
             // transform the log append error code to the corresponding the commit status error code
-            statusError match {
+            status.error match {
               case Errors.UNKNOWN_TOPIC_OR_PARTITION
                    | Errors.NOT_ENOUGH_REPLICAS
                    | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
@@ -186,13 +185,13 @@ class GroupMetadataManager(val brokerId: Int,
                    | Errors.INVALID_FETCH_SIZE =>
 
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
-                  s"${statusError.exceptionName}, returning UNKNOWN error code to the client")
+                  s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
 
                 Errors.UNKNOWN
 
               case other =>
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed " +
-                  s"due to unexpected error: ${statusError.exceptionName}")
+                  s"due to unexpected error: ${status.error.exceptionName}")
 
                 other
             }
@@ -254,11 +253,10 @@ class GroupMetadataManager(val brokerId: Int,
           // construct the commit response status and insert
           // the offset and metadata to cache if the append status has no error
           val status = responseStatus(offsetTopicPartition)
-          val statusError = Errors.forCode(status.errorCode)
 
           val responseCode =
             group synchronized {
-              if (statusError == Errors.NONE) {
+              if (status.error == Errors.NONE) {
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
                     group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
@@ -273,10 +271,10 @@ class GroupMetadataManager(val brokerId: Int,
                 }
 
                 debug(s"Offset commit $filteredOffsetMetadata from group ${group.groupId}, consumer $consumerId " +
-                  s"with generation $generationId failed when appending to log due to ${statusError.exceptionName}")
+                  s"with generation $generationId failed when appending to log due to ${status.error.exceptionName}")
 
                 // transform the log append error code to the corresponding the commit status error code
-                val responseError = statusError match {
+                val responseError = status.error match {
                   case Errors.UNKNOWN_TOPIC_OR_PARTITION
                        | Errors.NOT_ENOUGH_REPLICAS
                        | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>

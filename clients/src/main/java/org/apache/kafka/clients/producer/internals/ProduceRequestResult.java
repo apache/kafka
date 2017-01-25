@@ -35,7 +35,7 @@ public final class ProduceRequestResult {
     private final TopicPartition topicPartition;
 
     private volatile long baseOffset = -1L;
-    private volatile long responseTimestamp = Record.NO_TIMESTAMP;
+    private volatile long logAppendTime = Record.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
     /**
@@ -51,12 +51,12 @@ public final class ProduceRequestResult {
      * Set the result of the produce request.
      *
      * @param baseOffset The base offset assigned to the record
-     * @param responseTimestamp The timestamp returned by the broker
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param error The error that occurred if there was one, or null
      */
-    public void set(long baseOffset, long responseTimestamp, RuntimeException error) {
+    public void set(long baseOffset, long logAppendTime, RuntimeException error) {
         this.baseOffset = baseOffset;
-        this.responseTimestamp = responseTimestamp;
+        this.logAppendTime = logAppendTime;
         this.error = error;
     }
 
@@ -92,10 +92,17 @@ public final class ProduceRequestResult {
     }
 
     /**
-     * The timestamp returned by the broker. NO_TIMESTAMP means that CreateTime is being used.
+     * Return true if log append time is being used for this topic
      */
-    public long responseTimestamp() {
-        return responseTimestamp;
+    public boolean hasLogAppendTime() {
+        return logAppendTime != Record.NO_TIMESTAMP;
+    }
+
+    /**
+     * The log append time or -1 if CreateTime is being used
+     */
+    public long logAppendTime() {
+        return logAppendTime;
     }
 
     /**

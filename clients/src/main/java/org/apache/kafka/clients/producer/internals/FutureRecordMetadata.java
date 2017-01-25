@@ -18,7 +18,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.record.Record;
 
 /**
  * The future result of a record send
@@ -78,11 +77,8 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
                                   timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
 
-    /**
-     * If the timestamp returned by server is NO_TIMESTAMP, CreateTime is being used. Otherwise LogAppendTime is being used.
-     */
     private long timestamp() {
-        return result.responseTimestamp() == Record.NO_TIMESTAMP ? createTimestamp : result.responseTimestamp();
+        return result.hasLogAppendTime() ? result.logAppendTime() : createTimestamp;
     }
 
     @Override
