@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -335,8 +336,8 @@ public class FetcherTest {
         try {
             List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
             assertEquals(0, consumerRecords.size());
-            fail("RecordTooLargeException should have been raised");
-        } catch (RuntimeException e) {
+            fail("UnknownServerException should have been raised");
+        } catch (UnknownServerException e) {
             assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
             // the position should not advance since no data has been returned
             assertEquals(0, subscriptions.position(tp).longValue());

@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -766,8 +767,9 @@ public class Fetcher<K, V> {
                                 recordTooLargePartitions);
                     } else {
                         // This should not happen with brokers that support KIP-74.
-                        throw new RuntimeException("Failed to make progress reading messages at " + tp + "=" +
-                            fetchOffset + ".");
+                        throw new UnknownServerException("Failed to make progress reading messages at " + tp + "=" +
+                            fetchOffset + ".  Received a non-empty fetch response from the server, but no " +
+                            "complete records were found.");
                     }
                 }
 
