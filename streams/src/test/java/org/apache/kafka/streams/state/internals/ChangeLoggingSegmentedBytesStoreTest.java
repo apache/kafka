@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -48,8 +47,14 @@ public class ChangeLoggingSegmentedBytesStoreTest {
     public void setUp() throws Exception {
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
-            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-                sent.put(record.key(), record.value());
+            public <K, V> void send(final String topic,
+                                    K key,
+                                    V value,
+                                    Integer partition,
+                                    Long timestamp,
+                                    Serializer<K> keySerializer,
+                                    Serializer<V> valueSerializer) {
+                sent.put(key, value);
             }
         };
         final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
