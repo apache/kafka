@@ -17,8 +17,10 @@
 
 package kafka.coordinator
 
-import collection.mutable
+import collection.{Seq, mutable, immutable}
+
 import java.util.UUID
+
 import kafka.common.OffsetAndMetadata
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.TopicPartition
@@ -264,7 +266,9 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
   }
 
   def completePendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
-    offsets.put(topicPartition, offset)
+    if (pendingOffsetCommits.contains(topicPartition))
+      offsets.put(topicPartition, offset)
+
     pendingOffsetCommits.get(topicPartition) match {
       case Some(stagedOffset) if offset == stagedOffset => pendingOffsetCommits.remove(topicPartition)
       case _ =>
@@ -282,12 +286,23 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
     pendingOffsetCommits ++= offsets
   }
 
+  def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
+    val removedOffsetMap = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
+    for (topicPartition <- topicPartitions) {
+      pendingOffsetCommits.remove(topicPartition)
+      val removedOffsets = offsets.remove(topicPartition)
+      if (!removedOffsets.isEmpty)
+        removedOffsetMap.put(topicPartition, removedOffsets.get)
+    }
+    removedOffsetMap.toMap
+  }
+
   def removeExpiredOffsets(startMs: Long) = {
     val expiredOffsets = offsets.filter {
       case (topicPartition, offset) => offset.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
     }
     offsets --= expiredOffsets.keySet
-    expiredOffsets
+    expiredOffsets.toMap
   }
 
   def allOffsets = offsets.toMap

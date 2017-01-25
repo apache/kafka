@@ -40,8 +40,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
     private final SessionKeySchema keySchema;
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
-
-    private String name;
+    private String cacheName;
     private ThreadCache cache;
     private StateSerdes<K, AGG> serdes;
     private InternalProcessorContext context;
@@ -58,23 +57,27 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
     }
 
     @SuppressWarnings("unchecked")
-    @Override
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
+        initInternal((InternalProcessorContext) context);
+    }
 
-        this.context = (InternalProcessorContext) context;
+    @SuppressWarnings("unchecked")
+    private void initInternal(final InternalProcessorContext context) {
+        this.context = context;
 
         this.serdes = new StateSerdes<>(bytesStore.name(),
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 
-        this.name = context.taskId() + "-" + bytesStore.name();
+
+        this.cacheName = context.taskId() + "-" + bytesStore.name();
         this.cache = this.context.getCache();
-        cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
+        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    putAndMaybeForward(entry, (InternalProcessorContext) context);
+                    putAndMaybeForward(entry, context);
                 }
             }
         });
@@ -84,9 +87,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
                                                            final long earliestSessionEndTime,
                                                            final long latestSessionStartTime) {
         validateStoreOpen();
-
-        final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(name, key));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name,
+        final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(this.name(), key));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
                                                                                   keySchema.lowerRange(binarySessionId, earliestSessionEndTime),
                                                                                   keySchema.upperRange(binarySessionId, latestSessionStartTime));
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
@@ -109,8 +111,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
         validateStoreOpen();
         final Bytes binaryKey = SessionKeySerde.toBinary(key, keySerde.serializer());
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
-                key.window().end(), context.partition(), context.topic());
-        cache.put(name, binaryKey, entry);
+                                                      key.window().end(), context.partition(), context.topic());
+        cache.put(cacheName, binaryKey, entry);
     }
 
     @Override
@@ -147,13 +149,13 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
     }
 
     public void flush() {
-        cache.flush(name);
+        cache.flush(cacheName);
         bytesStore.flush();
     }
 
     public void close() {
         flush();
-        cache.close(name);
+        cache.close(cacheName);
         bytesStore.close();
     }
 

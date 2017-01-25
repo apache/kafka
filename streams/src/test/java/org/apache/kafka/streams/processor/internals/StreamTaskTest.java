@@ -196,11 +196,11 @@ public class StreamTaskTest {
         assertNotNull(metrics.getSensor(name + "-" + operation));
 
         for (String entity : entities) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
                 "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
                 "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
         }
     }

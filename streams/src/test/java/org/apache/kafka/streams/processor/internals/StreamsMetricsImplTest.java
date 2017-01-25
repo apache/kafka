@@ -61,7 +61,7 @@ public class StreamsMetricsImplTest {
         Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
 
-        Sensor sensor2 = streamsMetrics.addLatencySensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
 
         Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
@@ -77,7 +77,7 @@ public class StreamsMetricsImplTest {
         Map<String, String> tags = new HashMap<>();
         StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
 
-        Sensor sensor1 = streamsMetrics.addLatencySensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
         Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         // 6 metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor

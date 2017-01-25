@@ -36,7 +36,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private CacheFlushListener<K, V> flushListener;
-    private String name;
+    private String cacheName;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
@@ -65,9 +65,9 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.name = context.taskId() + "-" + underlying.name();
+        this.cacheName = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
-        cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
+        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
@@ -103,7 +103,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
 
     @Override
     public synchronized void flush() {
-        cache.flush(name);
+        cache.flush(cacheName);
         underlying.flush();
     }
 
@@ -111,7 +111,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
     public void close() {
         flush();
         underlying.close();
-        cache.close(name);
+        cache.close(cacheName);
     }
 
     @Override
@@ -136,7 +136,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
 
     private V get(final byte[] rawKey) {
         final Bytes key = Bytes.wrap(rawKey);
-        final LRUCacheEntry entry = cache.get(name, key);
+        final LRUCacheEntry entry = cache.get(cacheName, key);
         if (entry == null) {
             final byte[] rawValue = underlying.get(key);
             if (rawValue == null) {
@@ -145,7 +145,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
             // only update the cache if this call is on the streamThread
             // as we don't want other threads to trigger an eviction/flush
             if (Thread.currentThread().equals(streamThread)) {
-                cache.put(name, key, new LRUCacheEntry(rawValue));
+                cache.put(cacheName, key, new LRUCacheEntry(rawValue));
             }
             return serdes.valueFrom(rawValue);
         }
@@ -163,15 +163,15 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
         final Bytes origFrom = Bytes.wrap(serdes.rawKey(from));
         final Bytes origTo = Bytes.wrap(serdes.rawKey(to));
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(origFrom, origTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, origFrom, origTo);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(name, underlying.all());
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), underlying.all());
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
@@ -189,8 +189,8 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
 
     private synchronized void put(final byte[] rawKey, final V value) {
         final byte[] rawValue = serdes.rawValue(value);
-        cache.put(name, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
-                context.timestamp(), context.partition(), context.topic()));
+        cache.put(cacheName, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
+                  context.timestamp(), context.partition(), context.topic()));
     }
 
     @Override
@@ -217,7 +217,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
         final byte[] rawKey = serdes.rawKey(key);
         final Bytes bytesKey = Bytes.wrap(rawKey);
         final V v = get(rawKey);
-        cache.delete(name, bytesKey);
+        cache.delete(cacheName, bytesKey);
         underlying.delete(bytesKey);
         return v;
     }
