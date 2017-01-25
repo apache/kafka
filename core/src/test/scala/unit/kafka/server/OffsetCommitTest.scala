@@ -30,6 +30,8 @@ import org.junit.Assert._
 import java.util.Properties
 import java.io.File
 
+import kafka.admin.AdminUtils
+
 import scala.util.Random
 import scala.collection._
 
@@ -46,7 +48,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, zkConnect)
+    val config: Properties = createBrokerConfig(1, zkConnect,  enableDeleteTopic = true)
     config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     val logDirPath = config.getProperty("log.dir")
@@ -304,4 +306,29 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
     assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
   }
+
+  @Test
+  def testOffsetsDeleteAfterTopicDeletion() {
+    // set up topic partition
+    val topic = "topic"
+    val topicPartition = TopicAndPartition(topic, 0)
+    createTopic(zkUtils, topic, servers = Seq(server), numPartitions = 1)
+
+    val commitRequest = OffsetCommitRequest(group, immutable.Map(topicPartition -> OffsetAndMetadata(offset = 42L)))
+    val commitResponse = simpleConsumer.commitOffsets(commitRequest)
+
+    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(topicPartition).get)
+
+    // start topic deletion
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, Seq(server))
+    Thread.sleep(retentionCheckInterval * 2)
+
+    // check if offsets deleted
+    val fetchRequest = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)))
+    val offsetMetadataAndErrorMap = simpleConsumer.fetchOffsets(fetchRequest)
+    val offsetMetadataAndError = offsetMetadataAndErrorMap.requestInfo(topicPartition)
+    assertEquals(OffsetMetadataAndError.NoOffset, offsetMetadataAndError)
+  }
+
 }
