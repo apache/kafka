@@ -35,8 +35,8 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ObsoleteBrokerException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
@@ -362,8 +362,8 @@ public class ClientCompatibilityTest {
         try {
             invoker.run();
             log.info("Successfully used feature {}", featureName);
-        } catch (ObsoleteBrokerException e) {
-            log.info("Got ObsoleteBrokerException when attempting to use feature {}", featureName);
+        } catch (UnsupportedVersionException e) {
+            log.info("Got UnsupportedVersionException when attempting to use feature {}", featureName);
             if (supported) {
                 throw new RuntimeException("Expected " + featureName + " to be supported, but it wasn't.", e);
             }

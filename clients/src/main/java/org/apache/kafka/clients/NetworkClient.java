@@ -14,7 +14,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.OutdatedBrokerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
@@ -299,7 +298,7 @@ public class NetworkClient implements KafkaClient {
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             request = builder.build();
-        } catch (OutdatedBrokerException | UnsupportedVersionException e) {
+        } catch (UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
             log.debug("Version mismatch when attempting to send {} to {}",

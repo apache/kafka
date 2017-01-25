@@ -13,7 +13,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OutdatedBrokerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -60,7 +60,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         @Override
         public OffsetFetchRequest build() {
             if (isAllTopicPartitions() && version() < 2)
-                throw new OutdatedBrokerException("The broker is too old to send this request.");
+                throw new UnsupportedVersionException("The broker is too old to understand this request.");
             return new OffsetFetchRequest(groupId, partitions, version());
         }
 

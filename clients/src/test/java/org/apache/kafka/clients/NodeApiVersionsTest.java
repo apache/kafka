@@ -53,6 +53,8 @@ public class NodeApiVersionsTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
                 versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
+            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+                versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
             } else {
                 versionList.add(new ApiVersion(apiKey.id,
                         ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
@@ -64,7 +66,9 @@ public class NodeApiVersionsTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix);
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                bld.append("ControlledShutdown(7): 0 [usable: NONE]");
+                bld.append("ControlledShutdown(7): 0 [unusable: node too old]");
+            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+                bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
             } else {
                 bld.append(apiKey.name).append("(").
                         append(apiKey.id).append("): ");

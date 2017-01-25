@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OutdatedBrokerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -88,7 +87,7 @@ public class ListOffsetRequest extends AbstractRequest {
         public ListOffsetRequest build() {
             short version = version();
             if (version < minVersion) {
-                throw new OutdatedBrokerException("The broker is too old to send this request.");
+                throw new UnsupportedVersionException("The broker is too old to understand this request.");
             }
             if (version == 0) {
                 if (offsetData == null) {

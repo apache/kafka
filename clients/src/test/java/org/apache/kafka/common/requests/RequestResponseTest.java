@@ -15,9 +15,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OutdatedBrokerException;
 import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -269,7 +269,7 @@ public class RequestResponseTest {
         assertEquals("", deserialized.clientId()); // null is defaulted to ""
     }
 
-    @Test(expected = OutdatedBrokerException.class)
+    @Test(expected = UnsupportedVersionException.class)
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
         createCreateTopicRequest(0, true);
     }
