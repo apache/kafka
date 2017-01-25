@@ -249,7 +249,6 @@ public class StreamsKafkaClient {
         }
 
         final ApiVersionsResponse apiVersionsResponse =  (ApiVersionsResponse) clientResponse.responseBody();
-        System.out.println(apiVersionsResponse.apiVersions());
 
         if (apiVersionsResponse.apiVersion(ApiKeys.CREATE_TOPICS.id) == null) {
             throw new StreamsException("Kafka Streams requires broker version 0.10.1.x or higher.");
