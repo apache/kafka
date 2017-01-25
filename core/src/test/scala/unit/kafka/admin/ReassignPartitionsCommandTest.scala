@@ -58,6 +58,32 @@ class ReassignPartitionsCommandTest extends Logging {
   }
 
   @Test
+  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given we have more existing partitions than we are proposing
+    val existingSuperset = Map(
+      TopicAndPartition("topic1", 0) -> Seq(100, 101),
+      TopicAndPartition("topic1", 1) -> Seq(100, 102),
+      TopicAndPartition("topic2", 0) -> Seq(100, 101, 102)
+    )
+    val proposedSubset = Map(TopicAndPartition("topic1", 0) -> Seq(101, 102))
+
+    val mock = new TestAdminUtils {
+      override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
+        assertEquals("0:102", configChange.get(FollowerReplicationThrottledReplicasProp))
+        assertEquals("0:100,0:101", configChange.get(LeaderReplicationThrottledReplicasProp))
+        assertEquals("topic1", topic)
+        calls += 1
+      }
+    }
+
+    //Then replicas should assign correctly (based on the proposed map)
+    assigner.assignThrottledReplicas(existingSuperset, proposedSubset, mock)
+    assertEquals(1, calls)
+  }
+
+  @Test
   def shouldFindMovingReplicasMultiplePartitions() {
     val control = TopicAndPartition("topic1", 2) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null)
