@@ -48,6 +48,11 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     }
 
     @Override
+    public boolean isCancelled() {
+        return false;
+    }
+
+    @Override
     public RecordMetadata get() throws InterruptedException, ExecutionException {
         this.result.await();
         return valueOrError();
@@ -72,37 +77,12 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
                                   timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
-    
-    public long relativeOffset() {
-        return this.relativeOffset;
-    }
-
-    public long createTimestamp() {
-        return this.createTimestamp;
-    }
 
     /**
      * If the timestamp returned by server is NO_TIMESTAMP, CreateTime is being used. Otherwise LogAppendTime is being used.
      */
-    public long timestamp() {
-        return result.responseTimestamp() == Record.NO_TIMESTAMP ? createTimestamp() : result.responseTimestamp();
-    }
-
-    public long checksum() {
-        return this.checksum;
-    }
-
-    public int serializedKeySize() {
-        return this.serializedKeySize;
-    }
-
-    public int serializedValueSize() {
-        return this.serializedValueSize;
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return false;
+    private long timestamp() {
+        return result.responseTimestamp() == Record.NO_TIMESTAMP ? createTimestamp : result.responseTimestamp();
     }
 
     @Override
