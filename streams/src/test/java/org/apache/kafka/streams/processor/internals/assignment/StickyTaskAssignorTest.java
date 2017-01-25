@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -39,10 +40,12 @@ public class StickyTaskAssignorTest {
     private final TaskId task00 = new TaskId(0, 0);
     private final TaskId task01 = new TaskId(0, 1);
     private final TaskId task02 = new TaskId(0, 2);
+    private final TaskId task03 = new TaskId(0, 3);
     private final Map<Integer, ClientState<TaskId>> clients = new TreeMap<>();
     private final Integer p1 = 1;
     private final Integer p2 = 2;
     private final Integer p3 = 3;
+    private final Integer p4 = 4;
 
     @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() throws Exception {
@@ -161,54 +164,31 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(p2).activeTasks(), equalTo(Utils.mkSet(task02, task01)));
     }
 
-
-    @Test
-    public void shouldAssignToClientWithStandbyIfProcessWithPreviousReachedCapacity() throws Exception {
-        final ClientState<TaskId> client = createClientWithPreviousActiveTasks(p1, 1, task00, task01);
-        client.assign(task02, true);
-        createClient(p2, 1);
-        final ClientState<TaskId> c3 = createClientWithPreviousActiveTasks(p3, 1);
-        c3.addPreviousStandbyTasks(Utils.mkSet(task00));
-
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task01, task00);
-
-        taskAssignor.assign(0);
-
-        assertThat(clients.get(p3).activeTasks(), equalTo(Collections.singleton(task00)));
-        assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task01)));
-    }
-
     @Test
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssingedTo() throws Exception {
-        final TaskId task03 = new TaskId(0, 3);
-        final int p4 = 4;
-        createClientWithActiveTasks(p1, 1, task00);
-        createClientWithActiveTasks(p2, 1, task01);
-        createClientWithActiveTasks(p3, 1, task02);
-        createClientWithActiveTasks(p4, 1, task03);
+        createClientWithPreviousActiveTasks(p1, 1, task00);
+        createClientWithPreviousActiveTasks(p2, 1, task01);
+        createClientWithPreviousActiveTasks(p3, 1, task02);
+        createClientWithPreviousActiveTasks(p4, 1, task03);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02, task03);
-
-        taskAssignor.assignStandby(1);
+        taskAssignor.assign(1);
 
         assertThat(clients.get(p1).standbyTasks(), not(hasItems(task00)));
-        assertThat(clients.get(p1).standbyTasks().size(), equalTo(1));
         assertThat(clients.get(p2).standbyTasks(), not(hasItems(task01)));
-        assertThat(clients.get(p2).standbyTasks().size(), equalTo(1));
         assertThat(clients.get(p3).standbyTasks(), not(hasItems(task02)));
-        assertThat(clients.get(p3).standbyTasks().size(), equalTo(1));
         assertThat(clients.get(p4).standbyTasks(), not(hasItems(task03)));
-        assertThat(clients.get(p4).standbyTasks().size(), equalTo(1));
+        assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
 
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() throws Exception {
-        createClientWithActiveTasks(p1, 1, task00);
-        createClientWithActiveTasks(p2, 1, task01);
-        createClientWithActiveTasks(p3, 1, task02);
+        createClientWithPreviousActiveTasks(p1, 1, task00);
+        createClientWithPreviousActiveTasks(p2, 1, task01);
+        createClientWithPreviousActiveTasks(p3, 1, task02);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assignStandby(2);
+        taskAssignor.assign(2);
 
         assertThat(clients.get(p1).standbyTasks(), equalTo(Utils.mkSet(task01, task02)));
         assertThat(clients.get(p2).standbyTasks(), equalTo(Utils.mkSet(task02, task00)));
@@ -217,23 +197,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientHasCapacityLeftOver() throws Exception {
-        createClientWithActiveTasks(p1, 1, task00);
+        createClient(p1, 1);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00);
-        taskAssignor.assignStandby(1);
+        taskAssignor.assign(1);
         assertThat(clients.get(p1).standbyTasks().size(), equalTo(0));
-    }
-
-    @Test
-    public void shouldAssignStandbyToClientWithPreviousActiveTaskWhenDoesntHaveSameActiveTask() throws Exception {
-        createClientWithPreviousActiveTasks(p1, 1, task02);
-        createClientWithPreviousActiveTasks(p2, 1, task01);
-
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task01, task02);
-
-        taskAssignor.assignStandby(1);
-
-        assertThat(clients.get(p1).standbyTasks(), equalTo(Collections.singleton(task02)));
-        assertThat(clients.get(p2).standbyTasks(), equalTo(Collections.singleton(task01)));
     }
 
     @Test
@@ -268,7 +235,7 @@ public class StickyTaskAssignorTest {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
-        createClient(4, 1);
+        createClient(p4, 1);
         createClient(5, 1);
         createClient(6, 1);
 
@@ -283,7 +250,7 @@ public class StickyTaskAssignorTest {
         createClient(p1, 1);
         createClient(p2, 1);
         createClient(p3, 1);
-        createClient(4, 1);
+        createClient(p4, 1);
         createClient(5, 1);
         createClient(6, 1);
 
@@ -312,9 +279,131 @@ public class StickyTaskAssignorTest {
                    clients.get(p2).assignedTaskCount() > clients.get(p1).assignedTaskCount());
     }
 
-    private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId...tasks) {
+
+    @Test
+    public void shouldNotHaveSameAssignmentOnAnyTwoHosts() throws Exception {
+        createClient(p1, 1);
+        createClient(p2, 1);
+        createClient(p3, 1);
+        createClient(p4, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(1);
+
+        for (int i = p1; i <= p4; i++) {
+            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            for (int j = p1; j <= p4; j++) {
+                if (j != i) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+                               not(equalTo(taskIds)));
+                }
+            }
+
+        }
+    }
+
+    @Test
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() throws Exception {
+        createClientWithPreviousActiveTasks(p1, 1, task01, task02);
+        createClientWithPreviousActiveTasks(p2, 1, task03);
+        createClientWithPreviousActiveTasks(p3, 1, task00);
+        createClient(p4, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(1);
+
+        for (int i = p1; i <= p4; i++) {
+            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            for (int j = p1; j <= p4; j++) {
+                if (j != i) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+                               not(equalTo(taskIds)));
+                }
+            }
+
+        }
+    }
+
+    @Test
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() throws Exception {
+        final ClientState<TaskId> c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task02);
+        c1.addPreviousStandbyTasks(Utils.mkSet(task03, task00));
+        final ClientState<TaskId> c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task00);
+        c2.addPreviousStandbyTasks(Utils.mkSet(task01, task02));
+
+        createClient(p3, 1);
+        createClient(p4, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(1);
+
+        for (int i = p1; i <= p4; i++) {
+            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            for (int j = p1; j <= p4; j++) {
+                if (j != i) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
+                               not(equalTo(taskIds)));
+                }
+            }
+
+        }
+    }
+
+    @Test
+    public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() throws Exception {
+        createClientWithPreviousActiveTasks(p3, 1, task00, task01, task02, task03);
+        createClient(p1, 1);
+        createClient(p2, 1);
+        createClient(p4, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p1).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(p3).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(p4).assignedTaskCount(), equalTo(1));
+    }
+
+    @Test
+    public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() throws Exception {
+        createClientWithPreviousActiveTasks(p3, 1, task00, task01, task02, task03);
+        createClient(p1, 1);
+        createClient(p2, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p3).assignedTaskCount(), equalTo(2));
+        assertThat(clients.get(p1).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
+    }
+
+
+    @Test
+    public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() throws Exception {
+        final Set<TaskId> p1PrevTasks = Utils.mkSet(task00, task02);
+        final Set<TaskId> p2PrevTasks = Utils.mkSet(task01, task03);
+
+        createClientWithPreviousActiveTasks(p1, 1, task00, task02);
+        createClientWithPreviousActiveTasks(p2, 1, task01, task03);
+        createClientWithPreviousActiveTasks(p3, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
+        taskAssignor.assign(0);
+
+        final Set<TaskId> p3ActiveTasks = clients.get(p3).activeTasks();
+        assertThat(p3ActiveTasks.size(), equalTo(1));
+        if (p1PrevTasks.removeAll(p3ActiveTasks)) {
+            assertThat(clients.get(p2).activeTasks(), equalTo(p2PrevTasks));
+        } else {
+            assertThat(clients.get(p1).activeTasks(), equalTo(p1PrevTasks));
+        }
+    }
+
+    private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
         return new StickyTaskAssignor<>(clients,
-                                      new HashSet<>(Arrays.asList(tasks)));
+                                        new HashSet<>(Arrays.asList(tasks)));
     }
 
     private List<TaskId> allActiveTasks() {
@@ -336,7 +425,7 @@ public class StickyTaskAssignorTest {
     }
 
     private ClientState<TaskId> createClient(final Integer processId, final int capacity) {
-        return createClientWithActiveTasks(processId, capacity);
+        return createClientWithPreviousActiveTasks(processId, capacity);
     }
 
     private ClientState<TaskId> createClientWithPreviousActiveTasks(final Integer processId, final int capacity, final TaskId... taskIds) {
@@ -346,12 +435,4 @@ public class StickyTaskAssignorTest {
         return clientState;
     }
 
-    private ClientState<TaskId> createClientWithActiveTasks(final Integer processId, final int capacity, final TaskId... taskIds) {
-        final ClientState<TaskId> clientState = new ClientState<>(capacity);
-        for (final TaskId id : taskIds) {
-            clientState.assign(id, true);
-        }
-        clients.put(processId, clientState);
-        return clientState;
-    }
 }

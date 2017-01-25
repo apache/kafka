@@ -94,8 +94,8 @@ public class ClientState<T> {
     @Override
     public String toString() {
         return "[activeTasks: (" + activeTasks +
-            ") assignedTasks: (" + assignedTasks +
             ") standbyTasks: (" + standbyTasks +
+            ") assignedTasks: (" + assignedTasks +
             ") prevActiveTasks: (" + prevActiveTasks +
             ") prevAssignedTasks: (" + prevAssignedTasks +
             ") capacity: " + capacity +
