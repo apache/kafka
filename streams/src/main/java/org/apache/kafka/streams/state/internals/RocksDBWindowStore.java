@@ -40,7 +40,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     protected final boolean retainDuplicates;
 
     private ProcessorContext context;
-    private StateSerdes<K, V> serdes;
+    protected StateSerdes<K, V> serdes;
     protected int seqnum = 0;
 
     // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
@@ -61,7 +61,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         @Override
         public WindowStoreIterator<byte[]> fetch(Bytes key, long timeFrom, long timeTo) {
             final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, timeFrom, timeTo);
-            return TheWindowStoreIterator.bytesIterator(bytesIterator);
+            return TimeWindowStoreIterator.bytesIterator(bytesIterator, serdes);
         }
     }
 
@@ -133,21 +133,24 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        return new TheWindowStoreIterator<>(bytesIterator, serdes);
+        return new TimeWindowStoreIterator<>(bytesIterator, serdes);
     }
 
-    private static class TheWindowStoreIterator<V> implements WindowStoreIterator<V> {
+    // TODO: this iterator may need to be extracted out of RocksDBWindowStore to be used for other underlying window store implementation
+    private static class TimeWindowStoreIterator<V> extends AbstractKeyValueIterator<Long, V> implements WindowStoreIterator<V> {
         protected final KeyValueIterator<Bytes, byte[]> actual;
         private final StateSerdes<?, V> serdes;
 
         // this is optimizing the case when underlying is already a bytes store iterator, in which we can avoid Bytes.wrap() costs
-        private static class TheWindowStoreBytesIterator extends TheWindowStoreIterator<byte[]> {
-            TheWindowStoreBytesIterator(final KeyValueIterator<Bytes, byte[]> underlying) {
-                super(underlying, null);
+        private static class TimeWindowStoreBytesIterator extends TimeWindowStoreIterator<byte[]> {
+            TimeWindowStoreBytesIterator(final KeyValueIterator<Bytes, byte[]> underlying,
+                                         final StateSerdes<Bytes, byte[]> serdes) {
+                super(underlying, serdes);
             }
 
             @Override
             public KeyValue<Long, byte[]> next() {
+                validateIsOpen();
                 if (!actual.hasNext()) {
                     throw new NoSuchElementException();
                 }
@@ -159,17 +162,20 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             }
         }
 
-        static TheWindowStoreIterator<byte[]> bytesIterator(final KeyValueIterator<Bytes, byte[]> underlying) {
-            return new TheWindowStoreBytesIterator(underlying);
+        static TimeWindowStoreIterator<byte[]> bytesIterator(final KeyValueIterator<Bytes, byte[]> underlying,
+                                                             final StateSerdes<Bytes, byte[]> serdes) {
+            return new TimeWindowStoreBytesIterator(underlying, serdes);
         }
 
-        TheWindowStoreIterator(final KeyValueIterator<Bytes, byte[]> actual, final StateSerdes<?, V> serdes) {
+        TimeWindowStoreIterator(final KeyValueIterator<Bytes, byte[]> actual, final StateSerdes<?, V> serdes) {
+            super(serdes.stateName());
             this.actual = actual;
             this.serdes = serdes;
         }
 
         @Override
         public boolean hasNext() {
+            validateIsOpen();
             return actual.hasNext();
         }
 
@@ -178,6 +184,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
          */
         @Override
         public KeyValue<Long, V> next() {
+            validateIsOpen();
             if (!actual.hasNext()) {
                 throw new NoSuchElementException();
             }
@@ -188,17 +195,14 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public void close() {
             actual.close();
+            super.close();
         }
 
         @Override
         public Long peekNextKey() {
+            validateIsOpen();
             if (!actual.hasNext()) {
                 throw new NoSuchElementException();
             }

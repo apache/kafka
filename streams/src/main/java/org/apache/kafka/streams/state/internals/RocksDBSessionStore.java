@@ -45,6 +45,16 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         this.aggSerde = aggSerde;
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public void init(final ProcessorContext context, final StateStore root) {
+        this.serdes = new StateSerdes<>(bytesStore.name(),
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
+
+        bytesStore.init(context, root);
+    }
+
     // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
     private static class RocksDBSessionBytesStore extends RocksDBSessionStore<Bytes, byte[]> {
         RocksDBSessionBytesStore(final SegmentedBytesStore inner) {
@@ -54,7 +64,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
             final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, earliestSessionEndTime, latestSessionStartTime);
-            return SessionStoreIterator.bytesIterator(bytesIterator);
+            return SessionStoreIterator.bytesIterator(bytesIterator, serdes);
         }
 
         @Override
@@ -99,16 +109,6 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public void init(final ProcessorContext context, final StateStore root) {
-        this.serdes = new StateSerdes<>(bytesStore.name(),
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
-
-        bytesStore.init(context, root);
-    }
-
-    @Override
     public void flush() {
         bytesStore.flush();
     }
@@ -128,19 +128,22 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         return bytesStore.isOpen();
     }
 
-    private static class SessionStoreIterator<K, AGG> implements KeyValueIterator<Windowed<K>, AGG> {
+    private static class SessionStoreIterator<K, AGG> extends AbstractKeyValueIterator<Windowed<K>, AGG> {
 
         protected final KeyValueIterator<Bytes, byte[]> bytesIterator;
         private final StateSerdes<K, AGG> serdes;
 
         // this is optimizing the case when underlying is already a bytes store iterator, in which we can avoid Bytes.wrap() costs
         private static class SessionStoreBytesIterator extends SessionStoreIterator<Bytes, byte[]> {
-            SessionStoreBytesIterator(final KeyValueIterator<Bytes, byte[]> underlying) {
-                super(underlying, null);
+            SessionStoreBytesIterator(final KeyValueIterator<Bytes, byte[]> underlying,
+                                      final StateSerdes<Bytes, byte[]> serdes) {
+                super(underlying, serdes);
             }
 
             @Override
             public Windowed<Bytes> peekNextKey() {
+                validateIsOpen();
+
                 final Bytes key = bytesIterator.peekNextKey();
 
                 return SessionKeySerde.fromBytes(key);
@@ -148,16 +151,20 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
             @Override
             public KeyValue<Windowed<Bytes>, byte[]> next() {
+                validateIsOpen();
+
                 final KeyValue<Bytes, byte[]> next = bytesIterator.next();
                 return KeyValue.pair(SessionKeySerde.fromBytes(next.key), next.value);
             }
         }
 
-        static SessionStoreIterator<Bytes, byte[]> bytesIterator(final KeyValueIterator<Bytes, byte[]> underlying) {
-            return new SessionStoreBytesIterator(underlying);
+        static SessionStoreIterator<Bytes, byte[]> bytesIterator(final KeyValueIterator<Bytes, byte[]> underlying,
+                                                                 final StateSerdes<Bytes, byte[]> serdes) {
+            return new SessionStoreBytesIterator(underlying, serdes);
         }
 
         SessionStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator, final StateSerdes<K, AGG> serdes) {
+            super(serdes.stateName());
             this.bytesIterator = bytesIterator;
             this.serdes = serdes;
         }
@@ -165,28 +172,30 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         @Override
         public void close() {
             bytesIterator.close();
+            super.close();
         }
 
         @Override
         public Windowed<K> peekNextKey() {
+            validateIsOpen();
+
             final Bytes bytes = bytesIterator.peekNextKey();
             return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer());
         }
 
         @Override
         public boolean hasNext() {
+            validateIsOpen();
+
             return bytesIterator.hasNext();
         }
 
         @Override
         public KeyValue<Windowed<K>, AGG> next() {
+            validateIsOpen();
+
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
             return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer()), serdes.valueFrom(next.value));
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() not supported by SessionStoreIterator.");
         }
     }
 }

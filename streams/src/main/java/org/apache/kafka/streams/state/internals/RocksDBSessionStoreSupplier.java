@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
@@ -51,53 +52,42 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     }
 
     public SessionStore<K, V> get() {
-        SessionStore<K, V> store;
-
-        // for session stores, the key schema needs to be used in both
-        // underlying segmented bytes store as well as in caching
-        SessionKeySchema keySchema = new SessionKeySchema();
-
-        SegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name, retentionPeriod, NUM_SEGMENTS, keySchema);
+        final SessionKeySchema keySchema = new SessionKeySchema();
+        final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
+                                                                                     retentionPeriod,
+                                                                                     NUM_SEGMENTS,
+                                                                                     keySchema
+        );
 
         if (cached && logged) {
-            // logging wrapper
-            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
+            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
+                                                                                      METRIC_SCOPE, time);
+            final RocksDBSessionStore<Bytes, byte[]> sessionStore
+                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
 
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
-
-            // sessioned
-            SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
-
-            // caching wrapper
-            store = new CachingSessionStore<>(bytes, keySerde, valueSerde);
-        } else if (cached) {
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
-
-            // windowed
-            SessionStore<Bytes, byte[]> bytes = RocksDBSessionStore.bytesStore(segmented);
-
-            // caching wrapper
-            store = new CachingSessionStore<>(bytes, keySerde, valueSerde);
-        } else if (logged) {
-            // logging wrapper
-            segmented = new ChangeLoggingSegmentedBytesStore(segmented);
-
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
-
-            // windowed
-            store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);
-        } else {
-            // metering wrapper, currently enforced
-            segmented = new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time);
-
-            // windowed
-            store = new RocksDBSessionStore<>(segmented, keySerde, valueSerde);
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }
 
-        return store;
+        if (cached) {
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
+                                                                                      METRIC_SCOPE, time);
+            final RocksDBSessionStore<Bytes, byte[]> sessionStore
+                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
+        }
+
+        if (logged) {
+            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
+            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
+                                                                                      METRIC_SCOPE, time);
+            return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
+        }
+
+        return new RocksDBSessionStore<>(
+                new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time), keySerde, valueSerde);
+
     }
 
     public long retentionPeriod() {

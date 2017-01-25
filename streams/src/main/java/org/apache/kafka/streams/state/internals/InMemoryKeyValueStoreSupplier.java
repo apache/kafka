@@ -181,7 +181,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
         private static class MemoryStoreIterator<K, V> implements KeyValueIterator<K, V> {
             private final Iterator<Map.Entry<K, V>> iter;
 
-            public MemoryStoreIterator(Iterator<Map.Entry<K, V>> iter) {
+            private MemoryStoreIterator(Iterator<Map.Entry<K, V>> iter) {
                 this.iter = iter;
             }
 
@@ -202,7 +202,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
             }
 
             @Override
-            public void close() {}
+            public void close() {
+                // do nothing
+            }
 
             @Override
             public K peekNextKey() {

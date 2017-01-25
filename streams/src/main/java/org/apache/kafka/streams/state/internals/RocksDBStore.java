@@ -414,16 +414,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public synchronized void close() {
-            super.close();
             openIterators.remove(this);
             iter.close();
+            super.close();
         }
 
         @Override
         public K peekNextKey() {
-            if (!hasNext())
+            if (!hasNext()) {
                 throw new NoSuchElementException();
-
+            }
             return serdes.keyFrom(iter.key());
         }
     }

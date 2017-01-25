@@ -35,23 +35,23 @@ import java.util.Map;
 
 public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
 
-    private final boolean cached;
-    private final long windowSize;
-    private final int numSegments;
     private final long retentionPeriod;
     private final boolean retainDuplicates;
+    private final int numSegments;
+    private final long windowSize;
+    private final boolean enableCaching;
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean cached) {
-        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize, logged, logConfig, cached);
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize, logged, logConfig, enableCaching);
     }
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean cached) {
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
-        this.retainDuplicates = retainDuplicates;
         this.retentionPeriod = retentionPeriod;
+        this.retainDuplicates = retainDuplicates;
         this.numSegments = numSegments;
         this.windowSize = windowSize;
-        this.cached = cached;
+        this.enableCaching = enableCaching;
     }
 
     public String name() {
@@ -67,6 +67,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
                                 numSegments,
                                 new WindowKeySchema()
                         )));
+
     }
 
     @Override
@@ -83,7 +84,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
 
     private WindowStore<K, V> maybeWrapCaching(final SegmentedBytesStore inner) {
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(inner, "rocksdb-window", time);
-        if (!cached) {
+        if (!enableCaching) {
             return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates);
         }
         final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates);

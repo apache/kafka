@@ -45,11 +45,11 @@ abstract class AbstractStoreSupplier<K, V, T extends StateStore> implements Stat
         return name;
     }
 
-    public boolean loggingEnabled() {
-        return logged;
-    }
-
     public Map<String, String> logConfig() {
         return logConfig;
+    }
+
+    public boolean loggingEnabled() {
+        return logged;
     }
 }

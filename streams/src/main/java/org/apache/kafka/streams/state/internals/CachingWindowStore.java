@@ -60,11 +60,16 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
+        initInternal(context);
+    }
 
+    @SuppressWarnings("unchecked")
+    private void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
         this.name = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
 
@@ -77,7 +82,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
                     final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
 
                     final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
-                                                                   new TimeWindow(timestamp, timestamp + windowSize));
+                            new TimeWindow(timestamp, timestamp + windowSize));
                     final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryWindowKey);
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
                     underlying.put(key, entry.newValue(), timestamp);

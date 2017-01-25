@@ -60,10 +60,18 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
+        initInternal(context);
+        // save the stream thread as we only ever want to trigger a flush
+        // when the stream thread is the the current thread.
+        streamThread = Thread.currentThread();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.cacheName = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
@@ -75,9 +83,6 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
                 }
             }
         });
-        // save the stream thread as we only ever want to trigger a flush
-        // when the stream thread is the the current thread.
-        streamThread = Thread.currentThread();
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {

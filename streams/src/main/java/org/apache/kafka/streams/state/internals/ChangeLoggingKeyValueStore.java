@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final ChangeLoggingKeyValueBytesStore innerBytes;
@@ -105,13 +106,74 @@ class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyV
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new SerializedKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
-                                                                 Bytes.wrap(serdes.rawKey(to))),
-                                                                 serdes);
+        return new ChangeLoggingKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
+                                                                    Bytes.wrap(serdes.rawKey(to))),
+                                                                    serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new SerializedKeyValueIterator<>(innerBytes.all(), serdes);
+        return new ChangeLoggingKeyValueIterator<>(innerBytes.all(), serdes);
+    }
+
+    private static class ChangeLoggingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> {
+
+        private final KeyValueIterator<Bytes, byte[]> underlying;
+        private final StateSerdes<K, V> serdes;
+
+        // delegating peeks to optimize for cases when each element is peeked multiple times
+        private KeyValue<Bytes, byte[]> rawNext;
+
+        ChangeLoggingKeyValueIterator(final KeyValueIterator<Bytes, byte[]> underlying, final StateSerdes<K, V> serdes) {
+            super(serdes.stateName());
+
+            this.underlying = underlying;
+            this.serdes = serdes;
+
+            this.rawNext = null;
+        }
+
+        @Override
+        public boolean hasNext() {
+            validateIsOpen();
+
+            if (rawNext == null && underlying.hasNext())
+                rawNext = underlying.next();
+
+            return rawNext != null;
+        }
+
+        /**
+         * @throws NoSuchElementException if no next element exists
+         */
+        @Override
+        public KeyValue<K, V> next() {
+            validateIsOpen();
+
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+
+            final K key = serdes.keyFrom(rawNext.key.get());
+            final V value = serdes.valueFrom(rawNext.value);
+            return KeyValue.pair(key, value);
+        }
+
+        @Override
+        public K peekNextKey() {
+            validateIsOpen();
+
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+
+            return serdes.keyFrom(rawNext.key.get());
+        }
+
+        @Override
+        public void close() {
+            underlying.close();
+            super.close();
+        }
     }
 }

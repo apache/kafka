@@ -60,6 +60,8 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
 
     @Override
     public Bytes peekNextKey() {
+        validateIsOpen();
+
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
@@ -85,6 +87,8 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
     }
 
     public KeyValue<Bytes, byte[]> next() {
+        validateIsOpen();
+
         if (!hasNext()) {
             throw new NoSuchElementException();
         }

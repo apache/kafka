@@ -88,7 +88,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
         @Override
         public K peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() is not supported");
+            throw new UnsupportedOperationException("peekNextKey not supported");
         }
     }
 }

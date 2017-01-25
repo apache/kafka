@@ -114,8 +114,9 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
     private KeyValue<K, V> nextStoreValue(KS nextStoreKey) {
         final KeyValue<KS, byte[]> next = storeIterator.next();
 
-        if (!next.key.equals(nextStoreKey))
+        if (!next.key.equals(nextStoreKey)) {
             throw new IllegalStateException("Next record key is not the peeked key value; this should not happen");
+        }
 
         return deserializeStorePair(next);
     }
@@ -123,8 +124,9 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
     private KeyValue<K, V> nextCacheValue(Bytes nextCacheKey) {
         final KeyValue<Bytes, LRUCacheEntry> next = cacheIterator.next();
 
-        if (!next.key.equals(nextCacheKey))
+        if (!next.key.equals(nextCacheKey)) {
             throw new IllegalStateException("Next record key is not the peeked key value; this should not happen");
+        }
 
         return KeyValue.pair(deserializeCacheKey(next.key), serdes.valueFrom(next.value.value));
     }

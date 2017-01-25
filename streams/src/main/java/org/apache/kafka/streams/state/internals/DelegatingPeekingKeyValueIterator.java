@@ -28,7 +28,7 @@ class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K
     private final KeyValueIterator<K, V> underlying;
     private KeyValue<K, V> next;
 
-    public DelegatingPeekingKeyValueIterator(String storeName, KeyValueIterator<K, V> underlying) {
+    public DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
         super(storeName);
         this.underlying = underlying;
     }
