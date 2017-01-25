@@ -479,8 +479,9 @@ public class SubscriptionState {
 
     public interface Listener {
         /**
-         * Fired after a new assignment is received (after a group rebalance or
-         * when the user manually changes the assignment).
+         * Fired after a new assignment is received (after a group rebalance or when the user manually changes the
+         * assignment).
+         *
          * @param assignment The topic partitions assigned to the consumer
          */
         void onAssignment(Set<TopicPartition> assignment);

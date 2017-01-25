@@ -502,7 +502,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
                 if (partitionLag != null)
-                    this.sensors.recordPartitionFetchLag(partitionRecords.partition, partitionLag);
+                    this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
 
                 return partRecords;
             } else {
@@ -1078,7 +1078,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             this.assignedPartitions = assignedPartitions;
         }
 
-        private void recordPartitionFetchLag(TopicPartition tp, long lag) {
+        private void recordPartitionLag(TopicPartition tp, long lag) {
             this.recordsFetchLag.record(lag);
 
             String name = partitionLagMetricName(tp);
