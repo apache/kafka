@@ -46,6 +46,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -98,7 +99,7 @@ public class SimpleBenchmark {
 
     public static void main(String[] args) throws Exception {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        String stateDirStr = args.length > 1 ? args[1] : "/tmp/kafka-streams-simple-benchmark";
+        String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
         numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
         endKey = numRecords - 1;
 
@@ -128,11 +129,11 @@ public class SimpleBenchmark {
         // simple stream performance source->cache->store
         benchmark.processStreamWithCachedStateStore(SOURCE_TOPIC);
         // simple streams performance KSTREAM-KTABLE join
-        benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "kStreamKTable", JOIN_TOPIC_2_PREFIX + "kStreamKTable");
+        benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
         // simple streams performance KSTREAM-KSTREAM join
-        benchmark.kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "kStreamKStream", JOIN_TOPIC_2_PREFIX + "kStreamKStream");
+        benchmark.kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
         // simple streams performance KTABLE-KTABLE join
-        benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "kTableKTable", JOIN_TOPIC_2_PREFIX + "kTableKTable");
+        benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
     }
 
     private Properties setJoinProperties(final String applicationId) {
