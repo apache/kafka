@@ -73,6 +73,7 @@ class ReassignPartitionsCommandTest extends Logging {
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         assertEquals("0:102", configChange.get(FollowerReplicationThrottledReplicasProp))
         assertEquals("0:100,0:101", configChange.get(LeaderReplicationThrottledReplicasProp))
+        assertEquals("topic1", topic)
         calls += 1
       }
     }
