@@ -419,17 +419,35 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotMoveAnyTasksWhenNewTaskAdded() throws Exception {
+    public void shouldNotMoveAnyTasksWhenNewTasksAdded() throws Exception {
         final TaskId task04 = new TaskId(0, 4);
+        final TaskId task05 = new TaskId(0, 5);
 
         createClientWithPreviousActiveTasks(p1, 1, task00, task01);
         createClientWithPreviousActiveTasks(p2, 1, task02, task03);
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00, task05);
         taskAssignor.assign(0);
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task00, task01));
         assertThat(clients.get(p2).activeTasks(), hasItems(task02, task03));
+    }
+
+    @Test
+    public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() throws Exception {
+        final TaskId task04 = new TaskId(0, 4);
+        final TaskId task05 = new TaskId(0, 5);
+
+        createClientWithPreviousActiveTasks(p1, 1, task02, task01);
+        createClientWithPreviousActiveTasks(p2, 1, task00, task03);
+        createClient(p3, 1);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00, task05);
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p1).activeTasks(), hasItems(task02, task01));
+        assertThat(clients.get(p2).activeTasks(), hasItems(task00, task03));
+        assertThat(clients.get(p3).activeTasks(), hasItems(task04, task05));
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
