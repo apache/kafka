@@ -156,8 +156,9 @@ public class SslTransportLayerTest {
     @Test
     public void testListenerConfigOverride() throws Exception {
         String node = "0";
+        ListenerName clientListenerName = new ListenerName("client");
         sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        sslServerConfigs.put("listener.name.client." + SslConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+        sslServerConfigs.put(clientListenerName.configPrefix() + SslConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
 
         // `client` listener is not configured at this point, so client auth should be required
         server = createEchoServer(SecurityProtocol.SSL);
@@ -180,7 +181,7 @@ public class SslTransportLayerTest {
         server.close();
 
         // Listener-specific config should be used and client auth should be disabled
-        server = createEchoServer(new ListenerName("client"), SecurityProtocol.SSL);
+        server = createEchoServer(clientListenerName, SecurityProtocol.SSL);
         addr = new InetSocketAddress("localhost", server.port());
 
         // Connect without client auth should work fine now

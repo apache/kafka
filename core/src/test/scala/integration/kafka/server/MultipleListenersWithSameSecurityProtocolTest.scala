@@ -28,6 +28,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert.assertEquals
@@ -62,9 +63,11 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
       props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
 
       // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
-      props.put("listener.name.secure_internal.ssl.keystore.location", props.get("ssl.keystore.location"))
-      props.put("listener.name.secure_external.ssl.keystore.location", props.get("ssl.keystore.location"))
-      props.put("ssl.keystore.location", "invalid/file/path")
+      Seq("SECURE_INTERNAL", "SECURE_EXTERNAL").foreach { listenerName =>
+        props.put(new ListenerName(listenerName).configPrefix + SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+          props.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+      }
+      props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
 
       servers += TestUtils.createServer(KafkaConfig.fromProps(props))
     }
