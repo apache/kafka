@@ -166,7 +166,7 @@ object TestUtils extends Logging {
   def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
     servers.map { s =>
       val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener with name $listenerName"))
+        sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
   }
