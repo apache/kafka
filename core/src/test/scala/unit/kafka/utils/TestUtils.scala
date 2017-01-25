@@ -1418,13 +1418,10 @@ object TestUtils extends Logging {
    */
   def grabConsoleOutput(unit: () => Unit) : String = {
     val baos = new ByteArrayOutputStream();
-    val oldConsole = scala.Console.out;
-    scala.Console.setOut(new PrintStream(baos));
     try {
-      unit()
+      scala.Console.withOut(baos)(unit());
     } finally {
       scala.Console.out.flush();
-      scala.Console.setOut(oldConsole);
     }
     return baos.toString()
   }
