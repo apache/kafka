@@ -367,7 +367,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private def preRebalanceReplicaForMovingPartitions(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    def moving(before: Seq[Int], after: Seq[Int]) = before.toSet != after.toSet
+    def moving(before: Seq[Int], after: Seq[Int]) = (after.toSet -- before.toSet).nonEmpty
     //For any moving partition, throttle all the original (pre move) replicas (as any one might be a leader)
     existing.filter { case (tp, preMoveReplicas) =>
       proposed.contains(tp) && moving(preMoveReplicas, proposed(tp))
