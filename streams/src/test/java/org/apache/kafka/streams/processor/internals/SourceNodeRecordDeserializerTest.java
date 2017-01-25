@@ -22,6 +22,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Test;
 
+import java.util.Collections;
+
 import static org.junit.Assert.assertEquals;
 
 public class SourceNodeRecordDeserializerTest {
@@ -82,7 +84,7 @@ public class SourceNodeRecordDeserializerTest {
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", new String[0], null, null);
+            super("", Collections.EMPTY_LIST, null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;

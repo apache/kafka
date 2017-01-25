@@ -160,7 +160,6 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
 
-
     private ExpectedOutputOnTopic mapMapJoin() throws Exception {
         final KStream<Integer, Integer> mapMapStream = streamOne.map(
             new KeyValueMapper<Long, Integer, KeyValue<Long, Integer>>() {
@@ -178,8 +177,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-
-    public ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
+    private ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
 
         final KStream<Integer, Integer> keySelected =
             streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
@@ -188,7 +186,6 @@ public class KStreamRepartitionJoinTest {
         doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
-
 
     private ExpectedOutputOnTopic flatMapJoin() throws Exception {
         final KStream<Integer, Integer> flatMapped = streamOne.flatMap(
@@ -221,7 +218,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
     }
 
-    public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
+    private ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
@@ -312,7 +309,6 @@ public class KStreamRepartitionJoinTest {
 
     }
 
-
     private void produceStreamTwoInputTo(final String streamTwoInput)
         throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -354,9 +350,9 @@ public class KStreamRepartitionJoinTest {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
         streamFourInput = "stream-four-" + testNo;
-        CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput);
-        CLUSTER.createTopic(streamFourInput);
+        CLUSTER.createTopic(streamOneInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamFourInput, 2, 1);
     }
 
 

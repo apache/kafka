@@ -18,41 +18,47 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.Window;
 
 /**
  * A session window covers a closed time interval with its start and end timestamp both being an inclusive boundary.
+ * <p>
+ * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindow
  * @see UnlimitedWindow
  * @see org.apache.kafka.streams.kstream.SessionWindows
+ * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
+@InterfaceStability.Unstable
 public final class SessionWindow extends Window {
 
     /**
      * Create a new window for the given start time and end time (both inclusive).
      *
-     * @param start  the start timestamp of the window
-     * @param end    the end timestamp of the window
+     * @param startMs the start timestamp of the window
+     * @param endMs   the end timestamp of the window
+     * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
      */
-    public SessionWindow(final long start, final long end) {
-        super(start, end);
+    public SessionWindow(final long startMs, final long endMs) throws IllegalArgumentException {
+        super(startMs, endMs);
     }
 
     /**
      * Check if the given window overlaps with this window.
      *
-     * @param other  another window
-     * @return       {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
+     * @param other another window
+     * @return {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      * @throws IllegalArgumentException if the {@code other} window has a different type than {@link this} window
      */
     public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {
             throw new IllegalArgumentException("Cannot compare windows of different type. Other window has type "
-                + other.getClass());
+                + other.getClass() + ".");
         }
         final SessionWindow otherWindow = (SessionWindow) other;
-        return !(otherWindow.end < start || end < otherWindow.start);
+        return !(otherWindow.endMs < startMs || endMs < otherWindow.startMs);
     }
 
 }

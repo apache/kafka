@@ -16,6 +16,7 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
 import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
@@ -28,11 +29,11 @@ import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
@@ -68,37 +69,42 @@ class AdminClient(val time: Time,
   def findCoordinator(groupId: String): Node = {
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
     val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.node()
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.node
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
     val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
+  }
+
+  def getApiVersions(node: Node): List[ApiVersion] = {
+    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    Errors.forCode(response.errorCode).maybeThrow()
+    response.apiVersions.asScala.toList
   }
 
   private def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
-    val errors = response.errors()
+    val errors = response.errors
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
-    response.cluster().nodes().asScala.toList
+    response.cluster.nodes.asScala.toList
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map {
-      case broker =>
-        broker -> {
-          try {
-            listGroups(broker)
-          } catch {
-            case e: Exception =>
-              debug(s"Failed to find groups from broker $broker", e)
-              List[GroupOverview]()
-          }
+    findAllBrokers.map { broker =>
+      broker -> {
+        try {
+          listGroups(broker)
+        } catch {
+          case e: Exception =>
+            debug(s"Failed to find groups from broker $broker", e)
+            List[GroupOverview]()
         }
+      }
     }.toMap
   }
 
@@ -123,8 +129,13 @@ class AdminClient(val time: Time,
     if (response.hasError)
       throw response.error.exception
     response.maybeThrowFirstPartitionError
-    response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
+    response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
+
+  def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
+    findAllBrokers.map { broker =>
+      broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+    }.toMap
 
   /**
    * Case class used to represent a consumer of a consumer group
@@ -252,6 +263,6 @@ object AdminClient {
       time,
       DefaultRequestTimeoutMs,
       highLevelClient,
-      bootstrapCluster.nodes().asScala.toList)
+      bootstrapCluster.nodes.asScala.toList)
   }
 }

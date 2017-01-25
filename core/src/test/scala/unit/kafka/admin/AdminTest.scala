@@ -20,6 +20,7 @@ import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
@@ -156,6 +157,21 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     intercept[InvalidTopicException] {
       // shouldn't be able to create a topic that collides
       AdminUtils.createTopic(zkUtils, collidingTopic, 3, 1)
+    }
+  }
+
+  @Test
+  def testConcurrentTopicCreation() {
+    val topic = "test.topic"
+
+    // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
+    val zkMock = EasyMock.createNiceMock(classOf[ZkUtils])
+    EasyMock.expect(zkMock.pathExists(s"/brokers/topics/$topic")).andReturn(false)
+    EasyMock.expect(zkMock.getAllTopics).andReturn(Seq("some.topic", topic, "some.other.topic"))
+    EasyMock.replay(zkMock)
+
+    intercept[TopicExistsException] {
+      AdminUtils.validateCreateOrUpdateTopic(zkMock, topic, Map.empty, new Properties, update = false)
     }
   }
 

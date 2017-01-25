@@ -106,8 +106,10 @@ class NamedCache {
     private void flush(final LRUNode evicted) {
         numFlushes++;
 
-        log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
-                  name, hits(), misses(), overwrites(), flushes());
+        if (log.isTraceEnabled()) {
+            log.trace("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
+                      name, hits(), misses(), overwrites(), flushes());
+        }
 
         if (listener == null) {
             throw new IllegalArgumentException("No listener for namespace " + name + " registered with cache");

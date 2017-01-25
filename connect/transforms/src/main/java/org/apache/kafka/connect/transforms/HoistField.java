@@ -27,15 +27,21 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.util.Collections;
 import java.util.Map;
 
-public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String FIELD_CONFIG = "field";
+    public static final String OVERVIEW_DOC =
+            "Wrap data using the specified field name in a Struct when schema present, or a Map in the case of schemaless data."
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
+                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    private static final String FIELD_CONFIG = "field";
+
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-                    "Field name for the single field that will be created in the resulting Struct.");
+                    "Field name for the single field that will be created in the resulting Struct or Map.");
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -53,15 +59,19 @@ public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Trans
         final Schema schema = operatingSchema(record);
         final Object value = operatingValue(record);
 
-        Schema updatedSchema = schemaUpdateCache.get(schema);
-        if (updatedSchema == null) {
-            updatedSchema = SchemaBuilder.struct().field(fieldName, schema).build();
-            schemaUpdateCache.put(schema, updatedSchema);
+        if (schema == null) {
+            return newRecord(record, null, Collections.singletonMap(fieldName, value));
+        } else {
+            Schema updatedSchema = schemaUpdateCache.get(schema);
+            if (updatedSchema == null) {
+                updatedSchema = SchemaBuilder.struct().field(fieldName, schema).build();
+                schemaUpdateCache.put(schema, updatedSchema);
+            }
+
+            final Struct updatedValue = new Struct(updatedSchema).put(fieldName, value);
+
+            return newRecord(record, updatedSchema, updatedValue);
         }
-
-        final Struct updatedValue = new Struct(updatedSchema).put(fieldName, value);
-
-        return newRecord(record, updatedSchema, updatedValue);
     }
 
     @Override
@@ -80,11 +90,7 @@ public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Trans
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    /**
-     * Wraps the record key in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
-     */
-    public static class Key<R extends ConnectRecord<R>> extends HoistToStruct<R> {
-
+    public static class Key<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -99,14 +105,9 @@ public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Trans
         protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
         }
-
     }
 
-    /**
-     * Wraps the record value in a {@link org.apache.kafka.connect.data.Struct} with specified field name.
-     */
-    public static class Value<R extends ConnectRecord<R>> extends HoistToStruct<R> {
-
+    public static class Value<R extends ConnectRecord<R>> extends HoistField<R> {
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();
@@ -121,7 +122,6 @@ public abstract class HoistToStruct<R extends ConnectRecord<R>> implements Trans
         protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
         }
-
     }
 
 }

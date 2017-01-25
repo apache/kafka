@@ -386,7 +386,7 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
-    zkUtils.zkClient.exists(getTopicPath(topic))
+    zkUtils.pathExists(getTopicPath(topic))
 
   def getBrokerMetadatas(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                         brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
@@ -425,16 +425,18 @@ object AdminUtils extends Logging with AdminUtilities {
     // validate arguments
     Topic.validate(topic)
 
-    val topicPath = getTopicPath(topic)
-
     if (!update) {
-      if (zkUtils.zkClient.exists(topicPath))
-        throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+      if (topicExists(zkUtils, topic))
+        throw new TopicExistsException(s"Topic '$topic' already exists.")
       else if (Topic.hasCollisionChars(topic)) {
         val allTopics = zkUtils.getAllTopics()
-        val collidingTopics = allTopics.filter(t => Topic.hasCollision(topic, t))
+        // check again in case the topic was created in the meantime, otherwise the
+        // topic could potentially collide with itself
+        if (allTopics.contains(topic))
+          throw new TopicExistsException(s"Topic '$topic' already exists.")
+        val collidingTopics = allTopics.filter(Topic.hasCollision(topic, _))
         if (collidingTopics.nonEmpty) {
-          throw new InvalidTopicException("Topic \"%s\" collides with existing topics: %s".format(topic, collidingTopics.mkString(", ")))
+          throw new InvalidTopicException(s"Topic '$topic' collides with existing topics: ${collidingTopics.mkString(", ")}")
         }
       }
     }
@@ -484,7 +486,7 @@ object AdminUtils extends Logging with AdminUtilities {
       }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
-      case _: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
+      case _: ZkNodeExistsException => throw new TopicExistsException(s"Topic '$topic' already exists.")
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
