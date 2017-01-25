@@ -798,7 +798,7 @@ public class SaslAuthenticatorTest {
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(securityProtocol, new TestSecurityConfig(saslServerConfigs));
+        return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {

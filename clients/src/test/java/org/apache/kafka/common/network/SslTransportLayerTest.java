@@ -510,7 +510,7 @@ public class SslTransportLayerTest {
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(securityProtocol, new TestSecurityConfig(sslServerConfigs));
+        return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
     }
     
     /**

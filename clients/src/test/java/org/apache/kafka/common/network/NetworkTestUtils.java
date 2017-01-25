@@ -30,11 +30,6 @@ import org.apache.kafka.test.TestUtils;
  */
 public class NetworkTestUtils {
 
-    public static NioEchoServer createEchoServer(SecurityProtocol securityProtocol,
-                                                 AbstractConfig serverConfig) throws Exception {
-        return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol, serverConfig);
-    }
-
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
                                                  AbstractConfig serverConfig) throws Exception {
         NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost");
