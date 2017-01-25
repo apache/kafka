@@ -57,7 +57,7 @@ public class MeteredSegmentedBytesStoreTest {
             }
 
             @Override
-            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
+            public Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordLevel, String... tags) {
                 return metrics.sensor(operationName);
             }
 

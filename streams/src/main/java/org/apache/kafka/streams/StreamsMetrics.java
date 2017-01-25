@@ -37,7 +37,7 @@ public interface StreamsMetrics {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * Add a latency sensor and default associated metrics. Metrics include both latency ones
+     * Add a latency and throughput sensor and default associated metrics. Metrics include both latency ones
      * (average and max latency) and throughput ones (operations/time unit).
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
@@ -47,10 +47,13 @@ public interface StreamsMetrics {
      * @param tags Additional tags of the sensor.
      * @return The added sensor.
      */
-    Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags);
+    Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags);
 
     /**
-     * Record the given latency value of the sensor.
+     * Record the given latency value of the sensor. If the passed sensor includes throughput metrics,
+     * e.g., when created by the {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
+     * method, then the throughput metrics will also be recorded from this event.
+     *
      * @param sensor sensor whose latency we are recording.
      * @param startNs start of measurement time in nanoseconds.
      * @param endNs end of measurement time in nanoseconds.
@@ -59,7 +62,8 @@ public interface StreamsMetrics {
 
     /**
      * Add a throughput sensor and default associated metrics. Metrics include throughput ones
-     * (operations/time unit).
+     * (operations/time unit). This sensor is a strict subset of the sensor created by
+     * {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}.
      *
      * @param scopeName Name of the scope, could be the type of the state store, etc.
      * @param entityName Name of the entity, could be the name of the state store instance, etc.
@@ -81,7 +85,7 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor.
      * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
      * metric name well-formedness and conformity with the rest of the streams code base. However,
      * if the above two methods are not sufficient, this method can also be used.
      * @param name Name of the sensor.
@@ -92,7 +96,7 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor with parent sensors.
      * Note that for most cases it is advisable to use {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencySensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
+     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
      * metric name well-formedness and conformity with the rest of the streams code base. However,
      * if the above two methods are not sufficient, this method can also be used.
      * @param name Name of the sensor.
