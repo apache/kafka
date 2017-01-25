@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -173,7 +174,8 @@ public class Fetcher<K, V> {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
-                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator));
+                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
+                                        request.version()));
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
@@ -753,17 +755,20 @@ public class Fetcher<K, V> {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
                 } else if (!skippedRecords && (partition.records.sizeInBytes() > 0)) {
-                    // We did not read a single message from a non-empty buffer, because that message's size is
-                    // larger than the fetch size.
-                    Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                    throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
-                                                + recordTooLargePartitions
-                                                + " whose size is larger than the fetch size "
-                                                + this.fetchSize
-                                                + " and hence cannot be ever returned."
-                                                + " Increase the fetch size on the client (using max.partition.fetch.bytes),"
-                                                + " or decrease the maximum message size the broker will allow (using message.max.bytes).",
-                                                recordTooLargePartitions);
+                    if (completedFetch.responseVersion < 3) {
+                        // Implement the pre-KIP-74 behavior of throwing a RecordTooLargeException.
+                        Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
+                        throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
+                                recordTooLargePartitions + " whose size is larger than the fetch size " + this.fetchSize +
+                                " and hence cannot be returned.  Please considering upgrading your broker to 0.10.0.1 or " +
+                                "newer to avoid this issue.  Alternately, increase the fetch size on the client (using " +
+                                ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
+                                recordTooLargePartitions);
+                    } else {
+                        // This should not happen with brokers that support KIP-74.
+                        throw new RuntimeException("Failed to make progress reading messages at " + tp + "=" +
+                            fetchOffset + ".");
+                    }
                 }
 
                 if (partition.highWatermark >= 0) {
@@ -897,15 +902,18 @@ public class Fetcher<K, V> {
         private final long fetchedOffset;
         private final FetchResponse.PartitionData partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
+        private final short responseVersion;
 
         public CompletedFetch(TopicPartition partition,
                               long fetchedOffset,
                               FetchResponse.PartitionData partitionData,
-                              FetchResponseMetricAggregator metricAggregator) {
+                              FetchResponseMetricAggregator metricAggregator,
+                              short responseVersion) {
             this.partition = partition;
             this.fetchedOffset = fetchedOffset;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
+            this.responseVersion = responseVersion;
         }
     }
 
