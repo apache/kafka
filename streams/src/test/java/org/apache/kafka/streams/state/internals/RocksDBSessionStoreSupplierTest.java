@@ -65,8 +65,14 @@ public class RocksDBSessionStoreSupplierTest {
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
-            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-                logged.add(record);
+            public <K, V> void send(final String topic,
+                                    K key,
+                                    V value,
+                                    Integer partition,
+                                    Long timestamp,
+                                    Serializer<K> keySerializer,
+                                    Serializer<V> valueSerializer) {
+                logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
             }
         };
         final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
@@ -86,8 +92,14 @@ public class RocksDBSessionStoreSupplierTest {
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
-            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-                logged.add(record);
+            public <K, V> void send(final String topic,
+                                    K key,
+                                    V value,
+                                    Integer partition,
+                                    Long timestamp,
+                                    Serializer<K> keySerializer,
+                                    Serializer<V> valueSerializer) {
+                logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
             }
         };
         final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
