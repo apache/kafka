@@ -497,6 +497,10 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
+  def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
+    groupManager.cleanupGroupMetadata(Some(topicPartitions))
+  }
+
   private def onGroupUnloaded(group: GroupMetadata) {
     group synchronized {
       info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
