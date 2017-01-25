@@ -28,7 +28,6 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -203,20 +202,32 @@ public class KeyValueStoreTestDriver<K, V> {
         this.recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
             @SuppressWarnings("unchecked")
             @Override
-            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                // for byte arrays we need to wrap it for comparison
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            // for byte arrays we need to wrap it for comparison
 
-                K key = serdes.keyFrom(keySerializer.serialize(record.topic(), record.key()));
-                V value = serdes.valueFrom(valueSerializer.serialize(record.topic(), record.value()));
+                K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
+                V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
 
-                recordFlushed(key, value);
+                recordFlushed(keyTest, valueTest);
             }
 
             @Override
-            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
-                                    StreamPartitioner<? super K1, ? super V1> partitioner) {
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer,
+                                      StreamPartitioner<? super K1, ? super V1> partitioner) {
                 // ignore partitioner
-                send(record, keySerializer, valueSerializer);
+                send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
             }
         };
         this.stateDir = TestUtils.tempDirectory();
