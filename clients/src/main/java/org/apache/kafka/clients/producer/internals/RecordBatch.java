@@ -35,27 +35,27 @@ public final class RecordBatch {
 
     private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
 
-    public int recordCount = 0;
-    public int maxRecordSize = 0;
-    public volatile int attempts = 0;
-    public final long createdMs;
-    public long drainedMs;
-    public long lastAttemptMs;
-    public final TopicPartition topicPartition;
-    public final ProduceRequestResult produceFuture;
-    public long lastAppendTime;
-    private final List<Thunk> thunks;
-    private boolean retry;
+    final long createdMs;
+    final TopicPartition topicPartition;
+    final ProduceRequestResult produceFuture;
+
+    private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
+
+    volatile int attempts;
+    int recordCount;
+    int maxRecordSize;
+    long drainedMs;
+    long lastAttemptMs;
+    long lastAppendTime;
+    private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
         this.lastAttemptMs = now;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
-        this.thunks = new ArrayList<>();
         this.lastAppendTime = createdMs;
-        this.retry = false;
         this.produceFuture = new ProduceRequestResult(topicPartition);
     }
 
@@ -91,9 +91,7 @@ public final class RecordBatch {
      */
     public void done(long baseOffset, long responseTimestamp, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
-                  topicPartition,
-                  baseOffset,
-                  exception);
+                  topicPartition, baseOffset, exception);
 
         // set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, responseTimestamp, exception);
@@ -166,7 +164,7 @@ public final class RecordBatch {
     /**
      * Returns if the batch is been retried for sending to kafka
      */
-    public boolean inRetry() {
+    private boolean inRetry() {
         return this.retry;
     }
 
