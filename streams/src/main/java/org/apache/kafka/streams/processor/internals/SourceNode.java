@@ -68,7 +68,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        nodeMetrics.nodeThroughputSensor.record();
+        nodeMetrics.sourceNodeForwardSensor.record();
     }
 
     /**
