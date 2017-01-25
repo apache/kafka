@@ -196,8 +196,11 @@ public class KStreamTestDriver {
     }
 
     private void closeState() {
+        // we need to first flush all stores before trying to close any one
+        // of them since the flushing could cause eviction and hence tries to access other stores
+        flushState();
+
         for (StateStore stateStore : context.allStateStores().values()) {
-            stateStore.flush();
             stateStore.close();
         }
     }

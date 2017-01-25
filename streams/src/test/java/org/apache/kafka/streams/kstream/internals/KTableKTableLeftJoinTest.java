@@ -367,7 +367,6 @@ public class KTableKTableLeftJoinTest {
         };
         final KTable<Long, String> seven = one.mapValues(mapper);
 
-
         final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
         aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
@@ -378,7 +377,7 @@ public class KTableKTableLeftJoinTest {
                 .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
                 .mapValues(mapper);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 250);
+        driver = new KStreamTestDriver(builder, stateDir, 250);
 
         final String[] values = {"a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
                                  "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
@@ -387,7 +386,7 @@ public class KTableKTableLeftJoinTest {
         final Random random = new Random();
         for (int i = 0; i < 1000; i++) {
             for (String input : inputs) {
-                final Long key = Long.valueOf(random.nextInt(1000));
+                final Long key = (long) random.nextInt(1000);
                 final String value = values[random.nextInt(values.length)];
                 driver.process(input, key, value);
             }
