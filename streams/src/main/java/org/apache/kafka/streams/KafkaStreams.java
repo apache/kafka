@@ -381,9 +381,8 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        checkBrokerVersionCompatibility();
-
         if (state == KafkaStreams.State.CREATED) {
+            checkBrokerVersionCompatibility();
             setState(KafkaStreams.State.RUNNING);
 
             if (globalStreamThread != null) {
