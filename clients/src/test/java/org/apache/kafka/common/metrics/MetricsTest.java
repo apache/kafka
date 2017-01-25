@@ -307,6 +307,17 @@ public class MetricsTest {
     }
 
     @Test
+    public void testNonNegativeInitValuesForMax() {
+        Max max = new Max(0.0);
+        long windowMs = 100;
+        int samples = 2;
+        MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
+        max.record(config, 50, time.milliseconds());
+        time.sleep(samples * windowMs);
+        assertEquals(0.0, max.measure(config, time.milliseconds()), EPS);
+    }
+
+    @Test
     public void testOldDataHasNoEffect() {
         Max max = new Max();
         long windowMs = 100;

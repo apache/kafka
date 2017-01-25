@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit;
  * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
  * sensor.add(metricName, new Avg());
  * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
- * sensor.add(metricName, new Max());
+ * sensor.add(metricName, new Max(0.0));
  * 
  * // as messages are sent we record the sizes
  * sensor.record(messageSize);

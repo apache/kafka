@@ -21,6 +21,10 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public final class Max extends SampledStat {
 
+    public Max(double initValue) {
+        super(initValue);
+    }
+
     public Max() {
         super(Double.NEGATIVE_INFINITY);
     }
@@ -32,7 +36,7 @@ public final class Max extends SampledStat {
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double max = Double.NEGATIVE_INFINITY;
+        double max = initialValue;
         for (int i = 0; i < samples.size(); i++)
             max = Math.max(max, samples.get(i).value);
         return max;

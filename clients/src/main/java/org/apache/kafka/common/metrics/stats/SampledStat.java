@@ -30,9 +30,9 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public abstract class SampledStat implements MeasurableStat {
 
-    private double initialValue;
+    protected final double initialValue;
     private int current = 0;
-    protected List<Sample> samples;
+    protected final List<Sample> samples;
 
     public SampledStat(double initialValue) {
         this.initialValue = initialValue;
