@@ -44,7 +44,7 @@ public class RecordSendTest {
      */
     @Test
     public void testTimeout() throws Exception {
-        ProduceRequestResult request = new ProduceRequestResult();
+        ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
                                                                Record.NO_TIMESTAMP, 0, 0, 0);
         assertFalse("Request is not completed", future.isDone());
@@ -54,7 +54,7 @@ public class RecordSendTest {
         } catch (TimeoutException e) { /* this is good */
         }
 
-        request.set(topicPartition, baseOffset, Record.NO_TIMESTAMP, null);
+        request.set(baseOffset, Record.NO_TIMESTAMP, null);
         request.done();
         assertTrue(future.isDone());
         assertEquals(baseOffset + relOffset, future.get().offset());
@@ -82,12 +82,12 @@ public class RecordSendTest {
 
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
-        final ProduceRequestResult request = new ProduceRequestResult();
+        final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         Thread thread = new Thread() {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.set(topicPartition, baseOffset, Record.NO_TIMESTAMP, error);
+                    request.set(baseOffset, Record.NO_TIMESTAMP, error);
                     request.done();
                 } catch (InterruptedException e) {
                     e.printStackTrace();

@@ -53,10 +53,10 @@ public final class RecordBatch {
         this.lastAttemptMs = now;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
-        this.produceFuture = new ProduceRequestResult();
         this.thunks = new ArrayList<>();
         this.lastAppendTime = createdMs;
         this.retry = false;
+        this.produceFuture = new ProduceRequestResult(topicPartition);
     }
 
     /**
@@ -96,7 +96,7 @@ public final class RecordBatch {
                   exception);
 
         // set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
-        produceFuture.set(topicPartition, baseOffset, responseTimestamp, exception);
+        produceFuture.set(baseOffset, responseTimestamp, exception);
 
         // execute callbacks
         for (Thunk thunk : thunks) {

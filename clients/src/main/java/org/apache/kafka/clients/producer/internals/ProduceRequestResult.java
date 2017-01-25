@@ -32,24 +32,29 @@ import org.apache.kafka.common.record.Record;
 public final class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
-    private volatile TopicPartition topicPartition;
+    private final TopicPartition topicPartition;
+
     private volatile long baseOffset = -1L;
     private volatile long responseTimestamp = Record.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
-    public ProduceRequestResult() {
+    /**
+     * Create an instance of this class.
+     *
+     * @param topicPartition The topic and partition to which this record set was sent was sent
+     */
+    public ProduceRequestResult(TopicPartition topicPartition) {
+        this.topicPartition = topicPartition;
     }
 
     /**
      * Set the result of the produce request.
-     * 
-     * @param topicPartition The topic and partition to which this record set was sent was sent
+     *
      * @param baseOffset The base offset assigned to the record
      * @param responseTimestamp The timestamp returned by the broker
      * @param error The error that occurred if there was one, or null
      */
-    public void set(TopicPartition topicPartition, long baseOffset, long responseTimestamp, RuntimeException error) {
-        this.topicPartition = topicPartition;
+    public void set(long baseOffset, long responseTimestamp, RuntimeException error) {
         this.baseOffset = baseOffset;
         this.responseTimestamp = responseTimestamp;
         this.error = error;
