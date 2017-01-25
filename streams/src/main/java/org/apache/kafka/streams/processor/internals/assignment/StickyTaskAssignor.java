@@ -36,6 +36,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
     private final TaskPairs taskPairs;
     private final int availableCapacity;
+    private final boolean hasNewTasks;
 
     public StickyTaskAssignor(final Map<ID, ClientState<TaskId>> clients, final Set<TaskId> taskIds) {
         this.clients = clients;
@@ -43,6 +44,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         this.availableCapacity = sumCapacity(clients.values());
         taskPairs = new TaskPairs(taskIds.size() * (taskIds.size() - 1) * 2);
         mapPreviousTaskAssignment(clients);
+        this.hasNewTasks = !previousActiveTaskAssignment.keySet().containsAll(taskIds);
     }
 
     @Override
@@ -125,7 +127,8 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     }
 
     private boolean shouldBalanceLoad(final ClientState<TaskId> client) {
-        return client.reachedCapacity()
+        return !hasNewTasks
+                && client.reachedCapacity()
                 && availableCapacity <= taskIds.size()
                 && hasClientsWithZeroTasks();
     }

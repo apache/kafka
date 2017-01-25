@@ -116,19 +116,36 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldKeepActiveTaskStickynessWhenMoreClientThanActiveTasks() {
+        final int p5 = 5;
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task02);
         createClientWithPreviousActiveTasks(p3, 1, task01);
-        createClient(4, 1);
-        createClient(5, 1);
+        createClient(p4, 1);
+        createClient(p5, 1);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-
         taskAssignor.assign(0);
 
         assertThat(clients.get(p1).activeTasks(), equalTo(Collections.singleton(task00)));
         assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task02)));
         assertThat(clients.get(p3).activeTasks(), equalTo(Collections.singleton(task01)));
+
+        // change up the assignment and make sure it is still sticky
+        clients.clear();
+        createClient(p1, 1);
+        createClientWithPreviousActiveTasks(p2, 1, task00);
+        createClient(p3, 1);
+        createClientWithPreviousActiveTasks(p4, 1, task02);
+        createClientWithPreviousActiveTasks(p5, 1, task01);
+
+        final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
+        secondAssignor.assign(0);
+
+        assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task00)));
+        assertThat(clients.get(p4).activeTasks(), equalTo(Collections.singleton(task02)));
+        assertThat(clients.get(p5).activeTasks(), equalTo(Collections.singleton(task01)));
+
+
     }
 
     @Test
@@ -399,6 +416,20 @@ public class StickyTaskAssignorTest {
         } else {
             assertThat(clients.get(p1).activeTasks(), equalTo(p1PrevTasks));
         }
+    }
+
+    @Test
+    public void shouldNotMoveAnyTasksWhenNewTaskAdded() throws Exception {
+        final TaskId task04 = new TaskId(0, 4);
+
+        createClientWithPreviousActiveTasks(p1, 1, task00, task01);
+        createClientWithPreviousActiveTasks(p2, 1, task02, task03);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task03, task01, task04, task02, task00);
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p1).activeTasks(), hasItems(task00, task01));
+        assertThat(clients.get(p2).activeTasks(), hasItems(task02, task03));
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
