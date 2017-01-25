@@ -170,7 +170,7 @@ class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueSt
     @Override
     public KeyValueIterator<K, V> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(name, underlying.all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
