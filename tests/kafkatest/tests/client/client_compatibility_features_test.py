@@ -30,9 +30,11 @@ def get_broker_features(broker_version):
     if (broker_version < V_0_10_1_0):
         features["offsets-for-times-supported"] = False
         features["cluster-id-supported"] = False
+        features["expect-record-too-large-exception"] = True
     else:
         features["offsets-for-times-supported"] = True
         features["cluster-id-supported"] = True
+        features["expect-record-too-large-exception"] = False
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -74,10 +76,12 @@ class ClientCompatibilityFeaturesTest(Test):
                "--bootstrap-server %s "
                "--offsets-for-times-supported %s "
                "--cluster-id-supported %s "
+               "--expect-record-too-large-exception %s "
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                features["offsets-for-times-supported"],
                                features["cluster-id-supported"],
+                               features["expect-record-too-large-exception"],
                                self.topics.keys()[0]))
         results_dir = TestContext.results_dir(self.test_context, 0)
         os.makedirs(results_dir)
