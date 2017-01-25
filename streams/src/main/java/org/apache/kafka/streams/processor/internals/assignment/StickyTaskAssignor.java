@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -25,14 +28,17 @@ import java.util.Set;
 
 public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
+    private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
     private final Map<ID, ClientState<TaskId>> clients;
     private final Set<TaskId> taskIds;
     private final Map<TaskId, ID> previousActiveTaskAssignment = new HashMap<>();
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
+    private final int availableCapacity;
 
     public StickyTaskAssignor(final Map<ID, ClientState<TaskId>> clients, final Set<TaskId> taskIds) {
         this.clients = clients;
         this.taskIds = taskIds;
+        this.availableCapacity = sumCapacity(clients.values());
         mapPreviousTaskAssignment(clients);
     }
 
@@ -48,6 +54,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             for (final TaskId taskId : taskIds) {
                 final Set<ID> ids = findClientsWithoutAssignedTask(taskId);
                 if (ids.isEmpty()) {
+                    log.warn("Unable to assign replica for task [{}]", taskId);
                     continue;
                 }
                 final ClientState<TaskId> client = findClient(taskId, ids);
@@ -80,13 +87,13 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             return clients.get(clientsWithin.iterator().next());
         }
 
-        final ClientState<TaskId> previous = clientWithPreviousAssignment(taskId, clientsWithin);
+        final ClientState<TaskId> previous = findClientsWithPreviousAssignedTask(taskId, clientsWithin);
         if (previous == null) {
             return leastLoaded(clientsWithin);
         }
 
-        if (previous.reachedCapacity()) {
-            final ClientState<TaskId> standby = findLeastLoadedClientWithStandby(taskId, clientsWithin);
+        if (overCapacity(previous)) {
+            final ClientState<TaskId> standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
             if (standby == null || standby.reachedCapacity()) {
                 return leastLoaded(clientsWithin);
             }
@@ -96,22 +103,26 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         return previous;
     }
 
-    private ClientState<TaskId> clientWithPreviousAssignment(final TaskId taskId, final Set<ID> clientsWithin) {
+    private boolean overCapacity(final ClientState<TaskId> previous) {
+        return previous.reachedCapacity() && taskIds.size() <= availableCapacity;
+    }
+
+    private ClientState<TaskId> findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<ID> clientsWithin) {
         final ID previous = previousActiveTaskAssignment.get(taskId);
         if (previous != null && clientsWithin.contains(previous)) {
             return clients.get(previous);
         }
-        return findLeastLoadedClientWithStandby(taskId, clientsWithin);
+        return findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
     }
 
-    private ClientState<TaskId> findLeastLoadedClientWithStandby(final TaskId taskId, final Set<ID> clientsWithin) {
+    private ClientState<TaskId> findLeastLoadedClientWithPreviousStandByTask(final TaskId taskId, final Set<ID> clientsWithin) {
         final Set<ID> ids = previousStandbyTaskAssignment.get(taskId);
         if (ids == null) {
             return null;
         }
         final HashSet<ID> constrainTo = new HashSet<>(ids);
         constrainTo.retainAll(clientsWithin);
-        return leastLoaded(ids);
+        return leastLoaded(constrainTo);
     }
 
     private ClientState<TaskId> leastLoaded(final Set<ID> clientIds) {
@@ -141,5 +152,13 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 previousStandbyTaskAssignment.get(prevAssignedTask).add(clientState.getKey());
             }
         }
+    }
+
+    private int sumCapacity(final Collection<ClientState<TaskId>> values) {
+        int capacity = 0;
+        for (ClientState<TaskId> client : values) {
+            capacity += client.capacity();
+        }
+        return capacity;
     }
 }

@@ -141,4 +141,8 @@ public class ClientState<T> {
     Set<T> previousAssignedTasks() {
         return prevAssignedTasks;
     }
+
+    int capacity() {
+        return capacity;
+    }
 }

@@ -63,11 +63,24 @@ public class StickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
 
-        final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
-        taskAssignor.assign(0);
+        final StickyTaskAssignor firstAssignor = createTaskAssignor(task00, task01, task02);
+        firstAssignor.assign(0);
 
         assertThat(clients.get(p1).activeTasks(), hasItems(task00));
         assertThat(clients.get(p2).activeTasks(), hasItems(task01));
+        assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
+
+        clients.clear();
+
+        // flip the previous active tasks assignment around.
+        createClientWithPreviousActiveTasks(p1, 1, task01);
+        createClientWithPreviousActiveTasks(p2, 1, task02);
+
+        final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
+        secondAssignor.assign(0);
+
+        assertThat(clients.get(p1).activeTasks(), hasItems(task01));
+        assertThat(clients.get(p2).activeTasks(), hasItems(task02));
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
 
@@ -81,7 +94,7 @@ public class StickyTaskAssignorTest {
 
         taskAssignor.assign(0);
 
-        assertThat(clients.get(p2).activeTasks(), hasItems(task01));
+        assertThat(clients.get(p2).activeTasks(), equalTo(Collections.singleton(task01)));
         assertThat(clients.get(p1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(p3).activeTasks().size(), equalTo(1));
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
@@ -152,11 +165,8 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignToClientWithStandbyIfProcessWithPreviousReachedCapacity() throws Exception {
         final ClientState<TaskId> client = createClientWithPreviousActiveTasks(p1, 1, task00, task01);
-        // give p1 assignment so already at capacity
         client.assign(task02, true);
-        // p2 nothing assigned yet
         createClient(p2, 1);
-        // p3 nothing assigned but has previous standbyTask
         final ClientState<TaskId> c3 = createClientWithPreviousActiveTasks(p3, 1);
         c3.addPreviousStandbyTasks(Utils.mkSet(task00));
 
@@ -169,12 +179,13 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignStandbyTasksToClientThatDontHaveSameActiveTask() throws Exception {
+    public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssingedTo() throws Exception {
         final TaskId task03 = new TaskId(0, 3);
+        final int p4 = 4;
         createClientWithActiveTasks(p1, 1, task00);
         createClientWithActiveTasks(p2, 1, task01);
         createClientWithActiveTasks(p3, 1, task02);
-        createClientWithActiveTasks(4 , 1, task03);
+        createClientWithActiveTasks(p4, 1, task03);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02, task03);
 
@@ -186,8 +197,8 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(p2).standbyTasks().size(), equalTo(1));
         assertThat(clients.get(p3).standbyTasks(), not(hasItems(task02)));
         assertThat(clients.get(p3).standbyTasks().size(), equalTo(1));
-        assertThat(clients.get(4).standbyTasks(), not(hasItems(task03)));
-        assertThat(clients.get(4).standbyTasks().size(), equalTo(1));
+        assertThat(clients.get(p4).standbyTasks(), not(hasItems(task03)));
+        assertThat(clients.get(p4).standbyTasks().size(), equalTo(1));
     }
 
     @Test
@@ -205,7 +216,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotAssignStandbyTaskReplicasWhenAllClientAlreadyHaveTask() throws Exception {
+    public void shouldNotAssignStandbyTaskReplicasWhenNoClientHasCapacityLeftOver() throws Exception {
         createClientWithActiveTasks(p1, 1, task00);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00);
         taskAssignor.assignStandby(1);
@@ -241,9 +252,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible() throws Exception {
-        // add a process with 3 threads
         createClient(p1, 3);
-        // rest only have a single thread
         createClient(p2, 1);
         createClient(p3, 1);
 
@@ -299,7 +308,8 @@ public class StickyTaskAssignorTest {
                                                                             new TaskId(1, 2));
 
         taskAssignor.assign(0);
-        assertTrue("expected client 2 to have more assigned tasks than client 1", clients.get(p2).assignedTaskCount() > clients.get(p1).assignedTaskCount());
+        assertTrue("expected client 2 to have more assigned tasks than client 1",
+                   clients.get(p2).assignedTaskCount() > clients.get(p1).assignedTaskCount());
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId...tasks) {
