@@ -107,9 +107,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
-
-        System.out.println("!!! " + name + " is being initialized !!!");
-
         // initialize the default rocksdb options
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
@@ -355,8 +352,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (!open) {
             return;
         }
-
-        System.out.println("!!! " + name + " is being closed !!!");
 
         open = false;
         closeOpenIterators();
