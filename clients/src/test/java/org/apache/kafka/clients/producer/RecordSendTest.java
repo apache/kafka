@@ -35,9 +35,9 @@ import org.junit.Test;
 
 public class RecordSendTest {
 
-    private TopicPartition topicPartition = new TopicPartition("test", 0);
-    private long baseOffset = 45;
-    private long relOffset = 5;
+    private final TopicPartition topicPartition = new TopicPartition("test", 0);
+    private final long baseOffset = 45;
+    private final long relOffset = 5;
 
     /**
      * Test that waiting on a request that never completes times out
@@ -89,9 +89,7 @@ public class RecordSendTest {
                     sleep(timeout);
                     request.set(baseOffset, Record.NO_TIMESTAMP, error);
                     request.done();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                } catch (InterruptedException e) { }
             }
         };
         thread.start();

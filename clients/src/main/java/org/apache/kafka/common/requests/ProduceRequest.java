@@ -129,10 +129,10 @@ public class ProduceRequest extends AbstractRequest {
             return null;
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
+        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
 
-        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet()) {
-            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e)));
-        }
+        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
+            responseMap.put(entry.getKey(), partitionResponse);
 
         short versionId = version();
         switch (versionId) {
