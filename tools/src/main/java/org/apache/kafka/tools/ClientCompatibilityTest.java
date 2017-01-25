@@ -175,7 +175,7 @@ public class ClientCompatibilityTest {
         this.message1 = buf.array();
 
         ByteBuffer buf2 = ByteBuffer.allocate(4096);
-        for (long i = 0; i < buf2.capacity(); i+=8) {
+        for (long i = 0; i < buf2.capacity(); i += 8) {
             buf2.putLong(curTime + i);
         }
         this.message2 = buf2.array();
