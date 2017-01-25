@@ -93,8 +93,8 @@ public final class RecordBatch {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition, baseOffset, exception);
 
-        // set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
-        produceFuture.set(baseOffset, logAppendTime, exception);
+        // Complete the future before invoking the callbacks as we rely on its state for the `onCompletion` call
+        produceFuture.done(baseOffset, logAppendTime, exception);
 
         // execute callbacks
         for (Thunk thunk : thunks) {
@@ -109,7 +109,7 @@ public final class RecordBatch {
                 log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
             }
         }
-        this.produceFuture.done();
+
     }
 
     /**

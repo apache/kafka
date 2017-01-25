@@ -48,22 +48,16 @@ public final class ProduceRequestResult {
     }
 
     /**
-     * Set the result of the produce request.
+     * Mark this request as complete and unblock any threads waiting on its completion.
      *
      * @param baseOffset The base offset assigned to the record
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param error The error that occurred if there was one, or null
      */
-    public void set(long baseOffset, long logAppendTime, RuntimeException error) {
+    public void done(long baseOffset, long logAppendTime, RuntimeException error) {
         this.baseOffset = baseOffset;
         this.logAppendTime = logAppendTime;
         this.error = error;
-    }
-
-    /**
-     * Mark this request as complete and unblock any threads waiting on its completion.
-     */
-    public void done() {
         this.latch.countDown();
     }
 

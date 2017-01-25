@@ -54,8 +54,7 @@ public class RecordSendTest {
         } catch (TimeoutException e) { /* this is good */
         }
 
-        request.set(baseOffset, Record.NO_TIMESTAMP, null);
-        request.done();
+        request.done(baseOffset, Record.NO_TIMESTAMP, null);
         assertTrue(future.isDone());
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
@@ -87,8 +86,7 @@ public class RecordSendTest {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.set(baseOffset, Record.NO_TIMESTAMP, error);
-                    request.done();
+                    request.done(baseOffset, Record.NO_TIMESTAMP, error);
                 } catch (InterruptedException e) { }
             }
         };
