@@ -61,6 +61,11 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
       props.put(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
       props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
 
+      // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
+      props.put("listener.name.secure_internal.ssl.keystore.location", props.get("ssl.keystore.location"))
+      props.put("listener.name.secure_external.ssl.keystore.location", props.get("ssl.keystore.location"))
+      props.put("ssl.keystore.location", "invalid/file/path")
+
       servers += TestUtils.createServer(KafkaConfig.fromProps(props))
     }
 
