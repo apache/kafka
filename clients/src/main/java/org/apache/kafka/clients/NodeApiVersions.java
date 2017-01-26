@@ -27,6 +27,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
+/**
+ * An internal class which represents the API versions supported by a particular node.
+ */
 public class NodeApiVersions {
     private static final Short API_NOT_ON_NODE = null;
     private static final short NODE_TOO_OLD = (short) -1;
