@@ -613,7 +613,7 @@ class GroupMetadataManagerTest {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(error.code, 0L, Record.NO_TIMESTAMP)
+          new PartitionResponse(error, 0L, Record.NO_TIMESTAMP)
         )
       )})
     EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
