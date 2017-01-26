@@ -79,7 +79,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldIterateOverAllSegments() throws Exception {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator("segments",
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -107,7 +107,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator("segments",
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -127,7 +127,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator("segments",
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,
@@ -139,7 +139,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator("segments",
                 Arrays.asList(segmentOne,
                               segmentTwo).iterator(),
                 hasNextCondition,

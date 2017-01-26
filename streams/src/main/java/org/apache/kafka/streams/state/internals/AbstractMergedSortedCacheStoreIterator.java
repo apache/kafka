@@ -32,7 +32,7 @@ import java.util.NoSuchElementException;
  * @param <K>
  * @param <V>
  */
-abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyValueIterator<K, V> {
+abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends AbstractKeyValueIterator<K, V> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
     private final KeyValueIterator<KS, byte[]> storeIterator;
     protected final StateSerdes<K, V> serdes;
@@ -43,6 +43,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                            final KeyValueIterator<KS, byte[]> storeIterator,
                                            final StateSerdes<K, V> serdes) {
+        super(serdes.stateName());
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
         this.serdes = serdes;
@@ -62,6 +63,8 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
 
     @Override
     public boolean hasNext() {
+        validateIsOpen();
+
         // skip over items deleted from cache, and corresponding store items if they have the same key
         while (cacheIterator.hasNext() && isDeletedCacheEntry(cacheIterator.peekNext())) {
             if (storeIterator.hasNext()) {
@@ -158,14 +161,11 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
     }
 
     @Override
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported");
-    }
-
-    @Override
     public void close() {
         cacheIterator.close();
         storeIterator.close();
+
+        super.close();
     }
 }
 

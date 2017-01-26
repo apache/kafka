@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> implements KeyValueStore<K, V> {
+class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> {
     private final ChangeLoggingKeyValueBytesStore innerBytes;
     private final Serde keySerde;
     private final Serde valueSerde;

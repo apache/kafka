@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -177,7 +176,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     private MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> createIterator() {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(namespace);
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(store.all());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.all());
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 }

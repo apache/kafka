@@ -50,12 +50,16 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
     }
 
     public void close() {
+        closeCurrentIter();
+
+        super.close();
+    }
+
+    private void closeCurrentIter() {
         if (currentIterator != null) {
             currentIterator.close();
             currentIterator = null;
         }
-
-        super.close();
     }
 
     @Override
@@ -75,7 +79,7 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
                 && segments.hasNext()) {
-            close();
+            closeCurrentIter();
             currentSegment = segments.next();
             try {
                 currentIterator = currentSegment.range(from, to);

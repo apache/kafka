@@ -25,6 +25,7 @@ abstract class AbstractKeyValueIterator<K, V> implements KeyValueIterator<K, V> 
 
     AbstractKeyValueIterator(final String name) {
         this.name = name;
+        this.open = true;
     }
 
     @Override
