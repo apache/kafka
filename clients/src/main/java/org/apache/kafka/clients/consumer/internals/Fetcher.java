@@ -760,7 +760,7 @@ public class Fetcher<K, V> {
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
                         throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
                                 recordTooLargePartitions + " whose size is larger than the fetch size " + this.fetchSize +
-                                " and hence cannot be returned.  Please considering upgrading your broker to 0.10.0.1 or " +
+                                " and hence cannot be returned.  Please considering upgrading your broker to 0.10.1.0 or " +
                                 "newer to avoid this issue.  Alternately, increase the fetch size on the client (using " +
                                 ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
                                 recordTooLargePartitions);
