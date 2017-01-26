@@ -161,7 +161,6 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
   }
 
-
   @Test
   def testClose() {
     val numRecords = 10

@@ -265,6 +265,10 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
     GroupOverview(groupId, protocolType.getOrElse(""))
   }
 
+  def initializeOffsets(offsets: collection.Map[TopicPartition, OffsetAndMetadata]) {
+     this.offsets ++= offsets
+  }
+
   def completePendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
     if (pendingOffsetCommits.contains(topicPartition))
       offsets.put(topicPartition, offset)
@@ -287,14 +291,11 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
   }
 
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
-    val removedOffsetMap = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
-    for (topicPartition <- topicPartitions) {
+    topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      val removedOffsets = offsets.remove(topicPartition)
-      if (!removedOffsets.isEmpty)
-        removedOffsetMap.put(topicPartition, removedOffsets.get)
-    }
-    removedOffsetMap.toMap
+      val removedOffset = offsets.remove(topicPartition)
+      removedOffset.map(topicPartition -> _)
+    }.toMap
   }
 
   def removeExpiredOffsets(startMs: Long) = {
