@@ -388,6 +388,13 @@ public class StreamsConfig extends AbstractConfig {
         return PRODUCER_PREFIX + producerProp;
     }
 
+    /**
+     * Returns a copy of the config definition.
+     */
+    public static ConfigDef configDef() {
+        return new ConfigDef(CONFIG);
+    }
+
     public StreamsConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
