@@ -19,7 +19,10 @@ import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
@@ -29,6 +32,41 @@ public class NodeApiVersions {
 
     // An array of the usable versions of each API, indexed by ApiKeys ID.
     private final Map<ApiKeys, Short> usableVersions = new EnumMap<>(ApiKeys.class);
+
+    /**
+     * Create a NodeApiVersions object with the current ApiVersions.
+     *
+     * @return             A new NodeApiVersions object.
+     */
+    public static NodeApiVersions create() {
+        return create(Collections.EMPTY_LIST);
+    }
+
+    /**
+     * Create a NodeApiVersions object.
+     *
+     * @param overrides    Api versions to override.  Any ApiVersion not specified here will be
+     *                     set to the current client value.
+     *
+     * @return             A new NodeApiVersions object.
+     */
+    public static NodeApiVersions create(Collection<ApiVersion> overrides) {
+        List<ApiVersion> apiVersions = new LinkedList<>(overrides);
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            boolean exists = false;
+            for (ApiVersion apiVersion: apiVersions) {
+                if (apiVersion.apiKey == apiKey.id) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                apiVersions.add(new ApiVersion(apiKey.id, ProtoUtils.oldestVersion(apiKey.id),
+                    ProtoUtils.latestVersion(apiKey.id)));
+            }
+        }
+        return new NodeApiVersions(apiVersions);
+    }
 
     public NodeApiVersions(Collection<ApiVersion> apiVersions) {
         this.apiVersions = apiVersions;

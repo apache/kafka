@@ -142,6 +142,7 @@ public class FetchRequest extends AbstractRequest {
                     append(", replicaId=").append(replicaId).
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
+                    append(", maxBytes=").append(maxBytes).
                     append(", fetchData=").append(Utils.mkString(fetchData)).
                     append(")");
             return bld.toString();
