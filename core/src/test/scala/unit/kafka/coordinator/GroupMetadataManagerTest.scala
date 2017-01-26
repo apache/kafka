@@ -282,7 +282,6 @@ class GroupMetadataManagerTest {
     assertEquals(None, groupMetadataManager.getGroup(groupId))
   }
 
-
   @Test
   def testOffsetWriteAfterGroupRemoved(): Unit = {
     // this test case checks the following scenario:
@@ -882,7 +881,6 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
       .andStubReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME))
   }
-
 
   private def buildStableGroupWithMember(memberId: String): GroupMetadata = {
     val group = new GroupMetadata(groupId)
