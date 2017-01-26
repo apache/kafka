@@ -19,25 +19,27 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
-
 public class SslFactory implements Configurable {
+    private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
 
     private final Mode mode;
     private final String clientAuthConfigOverride;
@@ -145,7 +147,16 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
-        sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+        TrustManager[] trustManagers = tmf.getTrustManagers();
+        TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
+
+        for (int i=0; i< trustManagers.length; i++) {
+            if (trustManagers[i] instanceof X509TrustManager) {
+                trustManagers[i] = reloadableTrustManager;
+            }
+        }
+
+        sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
         return sslContext;
     }
 
@@ -222,4 +233,99 @@ public class SslFactory implements Configurable {
         }
     }
 
+
+    private class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X509TrustManager {
+        private final SecurityStore trustStore;
+        private TrustManagerFactory tmf;
+        private X509TrustManager trustManager;
+        private long lastReload = 0l;
+        private static final long MINIMAL_WAIT = 60 * 1000;
+
+        public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
+            this.trustStore = trustStore;
+            this.tmf = tmf;
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            reloadTrustManager();
+            trustManager.checkClientTrusted(chain, authType);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            reloadTrustManager();
+            trustManager.checkServerTrusted(chain, authType);
+        }
+
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            reloadTrustManager();
+            return trustManager.getAcceptedIssuers();
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
+            reloadTrustManager();
+            ((X509ExtendedTrustManager)trustManager).checkClientTrusted(x509Certificates, s, socket);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
+            reloadTrustManager();
+            ((X509ExtendedTrustManager)trustManager).checkServerTrusted(x509Certificates, s, socket);
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
+            reloadTrustManager();
+            ((X509ExtendedTrustManager)trustManager).checkClientTrusted(x509Certificates, s, sslEngine);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
+            reloadTrustManager();
+            ((X509ExtendedTrustManager)trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
+        }
+
+        private void reloadTrustManager() throws KafkaException {
+            try {
+                if (trustManager == null || System.currentTimeMillis() - lastReload > MINIMAL_WAIT) {
+                    log.info("Reloading trust manager...");
+
+                    trustManager = null;
+                    KeyStore ts = trustStore.load();
+
+                    Enumeration<String> alias = ts.aliases();
+                    StringBuilder logMessage = new StringBuilder("List of trusted certs: ");
+                    if (alias.hasMoreElements()) {
+                        logMessage.append(alias.nextElement());
+                    }
+                    while (alias.hasMoreElements()) {
+                        logMessage.append(", ");
+                        logMessage.append(alias.nextElement());
+                    }
+                    log.info(logMessage.toString());
+
+                    tmf.init(ts);
+
+                    TrustManager tms[] = tmf.getTrustManagers();
+                    for (int i = 0; i < tms.length; i++) {
+                        if (tms[i] instanceof X509TrustManager) {
+                            trustManager = (X509TrustManager) tms[i];
+                        }
+                    }
+
+                    if (trustManager == null) {
+                        throw new NoSuchAlgorithmException("No X509TrustManager in TrustManagerFactory");
+                    }
+
+                    lastReload = System.currentTimeMillis();
+                }
+
+            } catch (Exception ex) {
+                throw new KafkaException(ex);
+            }
+        }
+    }
 }
