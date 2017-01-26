@@ -48,6 +48,7 @@ public final class RecordBatch {
     long drainedMs;
     long lastAttemptMs;
     long lastAppendTime;
+    String expiryErrorMessage;
     private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
@@ -137,29 +138,31 @@ public final class RecordBatch {
      *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
+     * This methods sets {@code expiryErrorMessage} if the batch has timed out. {@link #expire()} must
+     * be invoked to expire the batch.
      */
-    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
-        boolean expire = false;
-        String errorMessage = null;
+    public boolean maybeMarkExpired(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
 
-        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime)) {
-            expire = true;
-            errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
-            expire = true;
-            errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
-        } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
-            expire = true;
-            errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
-        }
+        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
+            expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
+        else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
+            expiryErrorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
+        else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
+            expiryErrorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
 
-        if (expire) {
-            close();
-            this.done(-1L, Record.NO_TIMESTAMP,
-                      new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + errorMessage));
-        }
+        return expiryErrorMessage != null;
+    }
 
-        return expire;
+    /**
+     * Performs actual expiry of this batch. This method should be invoked only if
+     * {@link #maybeMarkExpired(int, long, long, long, boolean)} returned true.
+     */
+    void expire() {
+        if (expiryErrorMessage == null)
+            throw new IllegalStateException("Batch has not been marked for expiry");
+        close();
+        this.done(-1L, Record.NO_TIMESTAMP,
+                  new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + expiryErrorMessage));
     }
 
     /**
