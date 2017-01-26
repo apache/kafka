@@ -70,18 +70,21 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        // register the store
-        context.register(root, true, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                // check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    put(serdes.keyFrom(key), null);
-                } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
+        if (root != null) {
+            // register the store
+            context.register(root, true, new StateRestoreCallback() {
+                @Override
+                public void restore(byte[] key, byte[] value) {
+                    // check value for null, to avoid  deserialization error.
+                    if (value == null) {
+                        put(serdes.keyFrom(key), null);
+                    } else {
+                        put(serdes.keyFrom(key), serdes.valueFrom(value));
+                    }
                 }
-            }
-        });
+            });
+        }
+
         this.open = true;
     }
 

@@ -42,7 +42,7 @@ import static org.junit.Assert.assertFalse;
 
 public class ChangeLoggingKeyValueStoreTest {
 
-    private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv");
+    private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
     private final Serde<String> keySerde = Serdes.String();
     private final Serde<String> valueSerde = Serdes.String();
     private final ChangeLoggingKeyValueStore<String, String> store
@@ -173,7 +173,7 @@ public class ChangeLoggingKeyValueStoreTest {
         store.put(hello, world);
         store.put(hi, there);
         store.put("zooom", "home");
-        final KeyValueIterator<String, String> range = store.range(hello, hi);
+        final KeyValueIterator<String, String> range = store.range(hello, "zooom");
         assertThat(range.next(), equalTo(KeyValue.pair(hello, world)));
         assertThat(range.next(), equalTo(KeyValue.pair(hi, there)));
         assertFalse(range.hasNext());

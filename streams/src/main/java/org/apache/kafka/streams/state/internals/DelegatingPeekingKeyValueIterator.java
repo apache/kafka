@@ -49,8 +49,6 @@ class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K
 
     @Override
     public synchronized boolean hasNext() {
-        validateIsOpen();
-
         if (next != null) {
             return true;
         }

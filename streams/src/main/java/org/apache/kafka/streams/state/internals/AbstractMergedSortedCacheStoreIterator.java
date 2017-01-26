@@ -37,9 +37,6 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
     private final KeyValueIterator<KS, byte[]> storeIterator;
     protected final StateSerdes<K, V> serdes;
 
-    private KS nextStoreKey;
-    private Bytes nextCacheKey;
-
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                            final KeyValueIterator<KS, byte[]> storeIterator,
                                            final StateSerdes<K, V> serdes) {
@@ -63,12 +60,10 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
 
     @Override
     public boolean hasNext() {
-        validateIsOpen();
-
         // skip over items deleted from cache, and corresponding store items if they have the same key
         while (cacheIterator.hasNext() && isDeletedCacheEntry(cacheIterator.peekNext())) {
             if (storeIterator.hasNext()) {
-                nextStoreKey = storeIterator.peekNextKey();
+                final KS nextStoreKey = storeIterator.peekNextKey();
                 // advance the store iterator if the key is the same as the deleted cache key
                 if (compare(cacheIterator.peekNextKey(), nextStoreKey) == 0) {
                     storeIterator.next();
@@ -77,15 +72,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
             cacheIterator.next();
         }
 
-        if (nextStoreKey == null && storeIterator.hasNext()) {
-            nextStoreKey = storeIterator.peekNextKey();
-        }
-
-        if (nextCacheKey == null && cacheIterator.hasNext()) {
-            nextCacheKey = cacheIterator.peekNextKey();
-        }
-
-        return nextStoreKey != null || nextCacheKey != null;
+        return cacheIterator.hasNext() || storeIterator.hasNext();
     }
 
     @Override
@@ -93,6 +80,9 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
+
+        final Bytes nextCacheKey = cacheIterator.hasNext() ? cacheIterator.peekNextKey() : null;
+        final KS nextStoreKey = storeIterator.hasNext() ? storeIterator.peekNextKey() : null;
 
         if (nextCacheKey == null) {
             return nextStoreValue(nextStoreKey);
@@ -139,6 +129,9 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
+
+        final Bytes nextCacheKey = cacheIterator.hasNext() ? cacheIterator.peekNextKey() : null;
+        final KS nextStoreKey = storeIterator.hasNext() ? storeIterator.peekNextKey() : null;
 
         if (nextCacheKey == null) {
             return deserializeStoreKey(nextStoreKey);

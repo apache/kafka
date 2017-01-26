@@ -39,7 +39,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     @Before
     public void setUp() throws Exception {
-        store = new InMemoryKeyValueStore<>(namespace);
+        store = new InMemoryKeyValueStore<>(namespace, Serdes.Bytes(), Serdes.ByteArray());
         cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
     }
 
@@ -145,7 +145,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     @Test
     public void shouldPeekNextKey() throws Exception {
-        final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one");
+        final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one", Serdes.Bytes(), Serdes.ByteArray());
         final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         final String namespace = "one";

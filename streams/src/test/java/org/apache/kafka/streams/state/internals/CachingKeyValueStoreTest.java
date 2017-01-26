@@ -57,7 +57,7 @@ public class CachingKeyValueStoreTest {
     @Before
     public void setUp() throws Exception {
         final String storeName = "store";
-        underlyingStore = new InMemoryKeyValueStore<>(storeName);
+        underlyingStore = new InMemoryKeyValueStore<>(storeName, Serdes.Bytes(), Serdes.ByteArray());
         cacheFlushListener = new CacheFlushListenerStub<>();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
         store.setFlushListener(cacheFlushListener);
