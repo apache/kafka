@@ -107,12 +107,14 @@ public class ClientState<T> {
     }
 
     boolean hasMoreAvailableCapacityThan(final ClientState<T> other) {
-        final int thisCapacity = spareCapacity();
-        final int otherCapacity = other.spareCapacity();
-        if (thisCapacity == otherCapacity) {
+        final int otherLoad = other.assignedTaskCount() / other.capacity;
+        final int thisLoad = assignedTaskCount() / capacity;
+
+        if (thisLoad == otherLoad) {
             return capacity > other.capacity;
         }
-        return thisCapacity > otherCapacity;
+
+        return thisLoad < otherLoad;
     }
 
     Set<T> previousStandbyTasks() {
@@ -127,10 +129,6 @@ public class ClientState<T> {
 
     boolean hasAssignedTask(final T taskId) {
         return assignedTasks.contains(taskId);
-    }
-
-    private int spareCapacity() {
-        return capacity - assignedTasks.size();
     }
 
     // Visible for testing

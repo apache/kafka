@@ -33,7 +33,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsCollectionContaining.hasItems;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.assertTrue;
 
 public class StickyTaskAssignorTest {
 
@@ -289,11 +288,17 @@ public class StickyTaskAssignorTest {
                                                                             task02,
                                                                             new TaskId(1, 0),
                                                                             new TaskId(1, 1),
-                                                                            new TaskId(1, 2));
+                                                                            new TaskId(1, 2),
+                                                                            new TaskId(2, 0),
+                                                                            new TaskId(2, 1),
+                                                                            new TaskId(2, 2),
+                                                                            new TaskId(3, 0),
+                                                                            new TaskId(3, 1),
+                                                                            new TaskId(3, 2));
 
         taskAssignor.assign(0);
-        assertTrue("expected client 2 to have more assigned tasks than client 1",
-                   clients.get(p2).assignedTaskCount() > clients.get(p1).assignedTaskCount());
+        assertThat(clients.get(p2).assignedTaskCount(), equalTo(8));
+        assertThat(clients.get(p1).assignedTaskCount(), equalTo(4));
     }
 
 

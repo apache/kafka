@@ -108,5 +108,20 @@ public class ClientStateTest {
         assertFalse(client.hasMoreAvailableCapacityThan(c2));
     }
 
+    @Test
+    public void shouldUseMultiplesOfCapacityToDetermineClientWithMoreAvailableCapacity() throws Exception {
+        final ClientState<Integer> c2 = new ClientState<>(2);
+
+        for (int i = 0; i < 7; i++) {
+            c2.assign(i, true);
+        }
+
+        for (int i = 7; i < 11; i++) {
+            client.assign(i, true);
+        }
+
+        assertTrue(c2.hasMoreAvailableCapacityThan(client));
+    }
+
 
 }
