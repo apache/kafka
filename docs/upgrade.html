@@ -51,7 +51,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li>Upgrading a Kafka Streams Applications:
         <ul>
             <li>You need to recompile your code. Just swapping the jar file will not work and will break your appliation.</li>
-            <li>If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface got changed.</li>
+            <li>If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed.</li>
         </ul>
     </li>
 </ol>
@@ -76,11 +76,11 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
 
 <h5><a id="upgrade_1020_new_protocols" href="#upgrade_1020_new_protocols">New Protocol Versions</a></h5>
 <ul>
-    <li> KIP-88: OffsetFetchRequest v2 supports retrieval of offsets for all topics if the <code>topics</code> array is set to <code>null</code>. </li>
-    <li> KIP-88: OffsetFetchResponse v2 introduces a top-level <code>error_code</code> field. </li>
-    <li> KIP-103: UpdateMetadataRequest v2 introduces a <code>listener_name</code> field to the elements of the <code>end_points</code> array. </li>
-    <li> KIP-108: CreateTopicsRequest v1 introduces a <code>validate_only</code> field. </li>
-    <li> KIP-108: CreateTopicsResponse v1 introduces an <code>error_message</code> field to the elements of the <code>topic_errors</code> array. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-88%3A+OffsetFetch+Protocol+Update">KIP-88</a>: OffsetFetchRequest v2 supports retrieval of offsets for all topics if the <code>topics</code> array is set to <code>null</code>. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-88%3A+OffsetFetch+Protocol+Update">KIP-88</a>: OffsetFetchResponse v2 introduces a top-level <code>error_code</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-103%3A+Separation+of+Internal+and+External+traffic">KIP-103</a>: UpdateMetadataRequest v3 introduces a <code>listener_name</code> field to the elements of the <code>end_points</code> array. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a>: CreateTopicsRequest v1 introduces a <code>validate_only</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a>: CreateTopicsResponse v1 introduces an <code>error_message</code> field to the elements of the <code>topic_errors</code> array. </li>
 </ul>
 
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
