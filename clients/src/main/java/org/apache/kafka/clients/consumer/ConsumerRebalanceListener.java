@@ -86,7 +86,7 @@ public interface ConsumerRebalanceListener {
      *
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
      */
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions);
+    void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
@@ -100,5 +100,5 @@ public interface ConsumerRebalanceListener {
      * @param partitions The list of partitions that are now assigned to the consumer (may include partitions previously
      *            assigned to the consumer)
      */
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions);
+    void onPartitionsAssigned(Collection<TopicPartition> partitions);
 }
