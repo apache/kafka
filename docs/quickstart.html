@@ -282,7 +282,7 @@ This quickstart example will demonstrate how to run a streaming application code
 of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
 <pre>
-KTable<String, Long> wordCounts = textLines
+KTable&lt;String, Long&gt; wordCounts = textLines
     // Split each text line, by whitespace, into words.
     .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 
@@ -389,7 +389,7 @@ summit  1
 </pre>
 
 <p>
-Here, the first column is the Kafka message key, and the second column is the message value, both in in <code>java.lang.String</code> format.
+Here, the first column is the Kafka message key, and the second column is the message value, both in <code>java.lang.String</code> format.
 Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
 an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
 </p>
