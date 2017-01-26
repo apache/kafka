@@ -45,9 +45,9 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
-      assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+      assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
-      assertEquals(-1, partitionResponse.timestamp)
+      assertEquals(-1, partitionResponse.logAppendTime)
       partitionResponse
     }
 
@@ -82,9 +82,9 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
-    assertEquals(Errors.CORRUPT_MESSAGE.code, partitionResponse.errorCode)
+    assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
-    assertEquals(-1, partitionResponse.timestamp)
+    assertEquals(-1, partitionResponse.logAppendTime)
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

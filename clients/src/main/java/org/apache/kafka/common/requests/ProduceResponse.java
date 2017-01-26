@@ -14,9 +14,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -61,7 +63,7 @@ public class ProduceResponse extends AbstractResponse {
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
-    private static final String TIMESTAMP_KEY_NAME = "timestamp";
+    private static final String LOG_APPEND_TIME_KEY_NAME = "log_append_time";
 
     private final Map<TopicPartition, PartitionResponse> responses;
     private final int throttleTime;
@@ -114,11 +116,11 @@ public class ProduceResponse extends AbstractResponse {
             for (Object partResponse : topicRespStruct.getArray(PARTITION_RESPONSES_KEY_NAME)) {
                 Struct partRespStruct = (Struct) partResponse;
                 int partition = partRespStruct.getInt(PARTITION_KEY_NAME);
-                short errorCode = partRespStruct.getShort(ERROR_CODE_KEY_NAME);
+                Errors error = Errors.forCode(partRespStruct.getShort(ERROR_CODE_KEY_NAME));
                 long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
-                long timestamp = partRespStruct.getLong(TIMESTAMP_KEY_NAME);
+                long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
                 TopicPartition tp = new TopicPartition(topic, partition);
-                responses.put(tp, new PartitionResponse(errorCode, offset, timestamp));
+                responses.put(tp, new PartitionResponse(error, offset, logAppendTime));
             }
         }
         this.throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
@@ -135,10 +137,10 @@ public class ProduceResponse extends AbstractResponse {
                 PartitionResponse part = partitionEntry.getValue();
                 Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
                         .set(PARTITION_KEY_NAME, partitionEntry.getKey())
-                        .set(ERROR_CODE_KEY_NAME, part.errorCode)
+                        .set(ERROR_CODE_KEY_NAME, part.error.code())
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
-                if (partStruct.hasField(TIMESTAMP_KEY_NAME))
-                        partStruct.set(TIMESTAMP_KEY_NAME, part.timestamp);
+                if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
+                        partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partitionArray.add(partStruct);
             }
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
@@ -156,14 +158,18 @@ public class ProduceResponse extends AbstractResponse {
     }
 
     public static final class PartitionResponse {
-        public short errorCode;
+        public Errors error;
         public long baseOffset;
-        public long timestamp;
+        public long logAppendTime;
 
-        public PartitionResponse(short errorCode, long baseOffset, long timestamp) {
-            this.errorCode = errorCode;
+        public PartitionResponse(Errors error) {
+            this(error, INVALID_OFFSET, Record.NO_TIMESTAMP);
+        }
+
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime) {
+            this.error = error;
             this.baseOffset = baseOffset;
-            this.timestamp = timestamp;
+            this.logAppendTime = logAppendTime;
         }
 
         @Override
@@ -171,11 +177,11 @@ public class ProduceResponse extends AbstractResponse {
             StringBuilder b = new StringBuilder();
             b.append('{');
             b.append("error: ");
-            b.append(errorCode);
+            b.append(error);
             b.append(",offset: ");
             b.append(baseOffset);
-            b.append(",timestamp: ");
-            b.append(timestamp);
+            b.append(",logAppendTime: ");
+            b.append(logAppendTime);
             b.append('}');
             return b.toString();
         }

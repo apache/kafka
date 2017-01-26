@@ -35,16 +35,16 @@ import org.junit.Test;
 
 public class RecordSendTest {
 
-    private TopicPartition topicPartition = new TopicPartition("test", 0);
-    private long baseOffset = 45;
-    private long relOffset = 5;
+    private final TopicPartition topicPartition = new TopicPartition("test", 0);
+    private final long baseOffset = 45;
+    private final long relOffset = 5;
 
     /**
      * Test that waiting on a request that never completes times out
      */
     @Test
     public void testTimeout() throws Exception {
-        ProduceRequestResult request = new ProduceRequestResult();
+        ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
                                                                Record.NO_TIMESTAMP, 0, 0, 0);
         assertFalse("Request is not completed", future.isDone());
@@ -54,7 +54,7 @@ public class RecordSendTest {
         } catch (TimeoutException e) { /* this is good */
         }
 
-        request.done(topicPartition, baseOffset, null);
+        request.done(baseOffset, Record.NO_TIMESTAMP, null);
         assertTrue(future.isDone());
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
@@ -81,15 +81,13 @@ public class RecordSendTest {
 
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
-        final ProduceRequestResult request = new ProduceRequestResult();
+        final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         Thread thread = new Thread() {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.done(topicPartition, baseOffset, error);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                    request.done(baseOffset, Record.NO_TIMESTAMP, error);
+                } catch (InterruptedException e) { }
             }
         };
         thread.start();
