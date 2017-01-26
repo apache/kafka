@@ -22,7 +22,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 
 class ConsumerState:
@@ -136,7 +136,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=TRUNK, stop_timeout_sec=30):
+                 version=DEV_BRANCH, stop_timeout_sec=30):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = "TRACE"
         
