@@ -20,20 +20,23 @@ import org.junit.Test;
 
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsKafkaClientTest {
 
     @Test
     public void testConfigFromStreamsConfig() {
-        Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "some_app_id");
-        props.setProperty(SaslConfigs.SASL_MECHANISM, "PLAIN");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        StreamsConfig streamsConfig = new StreamsConfig(props);
-        AbstractConfig config = StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig);
-        assertEquals("PLAIN", config.values().get(SaslConfigs.SASL_MECHANISM));
-        assertEquals("PLAIN", config.getString(SaslConfigs.SASL_MECHANISM));
+        for (final String expectedMechanism : asList("PLAIN", "SCRAM-SHA-512")) {
+            final Properties props = new Properties();
+            props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "some_app_id");
+            props.setProperty(SaslConfigs.SASL_MECHANISM, expectedMechanism);
+            props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final AbstractConfig config = StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig);
+            assertEquals(expectedMechanism, config.values().get(SaslConfigs.SASL_MECHANISM));
+            assertEquals(expectedMechanism, config.getString(SaslConfigs.SASL_MECHANISM));
+        }
     }
 
 }
