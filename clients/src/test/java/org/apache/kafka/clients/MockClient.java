@@ -73,6 +73,7 @@ public class MockClient implements KafkaClient {
     private final Queue<ClientResponse> responses = new ConcurrentLinkedDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
     private final Queue<Cluster> metadataUpdates = new ArrayDeque<>();
+    private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
 
     public MockClient(Time time) {
         this.time = time;
@@ -145,7 +146,8 @@ public class MockClient implements KafkaClient {
             FutureResponse futureResp = iterator.next();
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
-
+            request.requestBuilder().setVersion(nodeApiVersions.usableVersion(
+                    request.requestBuilder().apiKey()));
             AbstractRequest abstractRequest = request.requestBuilder().build();
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Next in line response did not match expected request");
@@ -334,4 +336,7 @@ public class MockClient implements KafkaClient {
         boolean matches(AbstractRequest body);
     }
 
+    public void setNodeApiVersions(NodeApiVersions nodeApiVersions) {
+        this.nodeApiVersions = nodeApiVersions;
+    }
 }
