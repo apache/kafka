@@ -245,13 +245,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
 
         public void complete(RuntimeException e) {
-            result.done(e == null ? offset : -1L, Record.NO_TIMESTAMP, e);
+            result.set(e == null ? offset : -1L, Record.NO_TIMESTAMP, e);
             if (callback != null) {
                 if (e == null)
                     callback.onCompletion(metadata, null);
                 else
                     callback.onCompletion(null, e);
             }
+            result.done();
         }
     }
 
