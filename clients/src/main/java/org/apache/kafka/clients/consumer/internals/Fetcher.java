@@ -72,7 +72,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manage the fetching process with the brokers.
  */
-public class Fetcher<K, V> {
+public class Fetcher<K, V> implements SubscriptionState.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -124,6 +124,8 @@ public class Fetcher<K, V> {
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
+
+        subscriptions.addListener(this);
     }
 
     /**
@@ -453,10 +455,9 @@ public class Fetcher<K, V> {
                 if (completedFetch == null)
                     break;
 
-                nextInLineRecords = parseFetchedData(completedFetch);
+                nextInLineRecords = parseCompletedFetch(completedFetch);
             } else {
                 TopicPartition partition = nextInLineRecords.partition;
-
                 List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
                 if (!records.isEmpty()) {
                     List<ConsumerRecord<K, V>> currentRecords = drained.get(partition);
@@ -480,9 +481,6 @@ public class Fetcher<K, V> {
     }
 
     private List<ConsumerRecord<K, V>> drainRecords(PartitionRecords<K, V> partitionRecords, int maxRecords) {
-        if (partitionRecords.isDrained())
-            return Collections.emptyList();
-
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition {} since it is no longer assigned", partitionRecords.partition);
@@ -493,19 +491,19 @@ public class Fetcher<K, V> {
                 // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
                 log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
             } else if (partitionRecords.fetchOffset == position) {
-                // we are ensured to have at least one record since we already checked for emptiness
                 List<ConsumerRecord<K, V>> partRecords = partitionRecords.drainRecords(maxRecords);
-                long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
+                if (!partRecords.isEmpty()) {
+                    long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
+                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                            "position to {}", position, partitionRecords.partition, nextOffset);
 
-                log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                        "position to {}", position, partitionRecords.partition, nextOffset);
-
-                subscriptions.position(partitionRecords.partition, nextOffset);
-                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
-                if (partitionLag != null) {
-                    this.sensors.recordsFetchLag.record(partitionLag);
-                    this.sensors.recordPartitionFetchLag(partitionRecords.partition, partitionLag);
+                    subscriptions.position(partitionRecords.partition, nextOffset);
                 }
+
+                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
+                if (partitionLag != null)
+                    this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
+
                 return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
@@ -731,7 +729,7 @@ public class Fetcher<K, V> {
     /**
      * The callback for fetch completion
      */
-    private PartitionRecords<K, V> parseFetchedData(CompletedFetch completedFetch) {
+    private PartitionRecords<K, V> parseCompletedFetch(CompletedFetch completedFetch) {
         TopicPartition tp = completedFetch.partition;
         FetchResponse.PartitionData partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
@@ -766,26 +764,13 @@ public class Fetcher<K, V> {
 
                 recordsCount = parsed.size();
 
-                if (!parsed.isEmpty()) {
-                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
-                    parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
-                }
+                log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
 
                 if (partition.highWatermark >= 0) {
                     log.trace("Received {} records in fetch response for partition {} with offset {}", parsed.size(), tp, position);
-                    Long partitionLag = subscriptions.partitionLag(tp);
                     subscriptions.updateHighWatermark(tp, partition.highWatermark);
-                    // If the partition lag is null, that means this is the first fetch response for this partition.
-                    // We update the lag here to create the lag metric. This is to handle the case that there is no
-                    // message consumed by the end user from this partition. If there are messages returned from the
-                    // partition, the lag will be updated when those messages are consumed by the end user.
-                    if (partitionLag == null) {
-                        partitionLag = subscriptions.partitionLag(tp);
-                        this.sensors.recordsFetchLag.record(partitionLag);
-                        this.sensors.recordPartitionFetchLag(tp, partitionLag);
-                    }
                 }
-
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
@@ -860,20 +845,25 @@ public class Fetcher<K, V> {
         }
     }
 
+    @Override
+    public void onAssignment(Set<TopicPartition> assignment) {
+        sensors.updatePartitionLagSensors(assignment);
+    }
+
     private static class PartitionRecords<K, V> {
         private long fetchOffset;
         private TopicPartition partition;
         private List<ConsumerRecord<K, V>> records;
         private int position = 0;
 
-        public PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
+        private PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
             this.fetchOffset = fetchOffset;
             this.partition = partition;
             this.records = records;
         }
 
         private boolean isDrained() {
-            return records == null || position >= records.size();
+            return records == null;
         }
 
         private void drain() {
@@ -881,8 +871,10 @@ public class Fetcher<K, V> {
         }
 
         private List<ConsumerRecord<K, V>> drainRecords(int n) {
-            if (isDrained())
+            if (isDrained() || position >= records.size()) {
+                drain();
                 return Collections.emptyList();
+            }
 
             // using a sublist avoids a potentially expensive list copy (depending on the size of the records
             // and the maximum we can return from poll). The cost is that we cannot mutate the returned sublist.
@@ -903,10 +895,10 @@ public class Fetcher<K, V> {
         private final FetchResponse.PartitionData partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
 
-        public CompletedFetch(TopicPartition partition,
-                              long fetchedOffset,
-                              FetchResponse.PartitionData partitionData,
-                              FetchResponseMetricAggregator metricAggregator) {
+        private CompletedFetch(TopicPartition partition,
+                               long fetchedOffset,
+                               FetchResponse.PartitionData partitionData,
+                               FetchResponseMetricAggregator metricAggregator) {
             this.partition = partition;
             this.fetchedOffset = fetchedOffset;
             this.partitionData = partitionData;
@@ -974,16 +966,17 @@ public class Fetcher<K, V> {
     }
 
     private static class FetchManagerMetrics {
-        public final Metrics metrics;
-        public final String metricGrpName;
+        private final Metrics metrics;
+        private final String metricGrpName;
+        private final Sensor bytesFetched;
+        private final Sensor recordsFetched;
+        private final Sensor fetchLatency;
+        private final Sensor recordsFetchLag;
+        private final Sensor fetchThrottleTimeSensor;
 
-        public final Sensor bytesFetched;
-        public final Sensor recordsFetched;
-        public final Sensor fetchLatency;
-        public final Sensor recordsFetchLag;
-        public final Sensor fetchThrottleTimeSensor;
+        private Set<TopicPartition> assignedPartitions;
 
-        public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
+        private FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
 
@@ -1032,7 +1025,7 @@ public class Fetcher<K, V> {
                                                          "The maximum throttle time in ms"), new Max());
         }
 
-        public void recordTopicFetchMetrics(String topic, int bytes, int records) {
+        private void recordTopicFetchMetrics(String topic, int bytes, int records) {
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
@@ -1075,8 +1068,20 @@ public class Fetcher<K, V> {
             recordsFetched.record(records);
         }
 
-        public void recordPartitionFetchLag(TopicPartition tp, long lag) {
-            String name = tp + ".records-lag";
+        private void updatePartitionLagSensors(Set<TopicPartition> assignedPartitions) {
+            if (this.assignedPartitions != null) {
+                for (TopicPartition tp : this.assignedPartitions) {
+                    if (!assignedPartitions.contains(tp))
+                        metrics.removeSensor(partitionLagMetricName(tp));
+                }
+            }
+            this.assignedPartitions = assignedPartitions;
+        }
+
+        private void recordPartitionLag(TopicPartition tp, long lag) {
+            this.recordsFetchLag.record(lag);
+
+            String name = partitionLagMetricName(tp);
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
@@ -1090,6 +1095,10 @@ public class Fetcher<K, V> {
                         "The average lag of the partition"), new Avg());
             }
             recordsLag.record(lag);
+        }
+
+        private static String partitionLagMetricName(TopicPartition tp) {
+            return tp + ".records-lag";
         }
     }
 
