@@ -342,7 +342,6 @@ public class ClientCompatibilityTest {
                         "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
             try {
                 compareArrays(message2, next);
-                log.debug("Found second message...");
             } catch (RuntimeException e) {
                 System.out.printf("The second message in this topic was not ours.  Please use a new " +
                     "topic when running this program.");
