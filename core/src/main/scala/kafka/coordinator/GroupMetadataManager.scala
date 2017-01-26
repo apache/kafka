@@ -494,6 +494,8 @@ class GroupMetadataManager(val brokerId: Int,
    */
   private def initOffsets(group: GroupMetadata, offsets: Map[TopicPartition, OffsetAndMetadata]) {
     val loadedOffsets = offsets.mapValues { offsetAndMetadata =>
+      // special handling for version 0:
+      // set the expiration time stamp as commit time stamp + server default retention time
       if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
         offsetAndMetadata.copy(expireTimestamp = offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs)
       else
