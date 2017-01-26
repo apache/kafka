@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -53,7 +54,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The previous 2 sessions would be merged into a single session with start time 10 and end time 20.
  * The aggregate value for this session would be the result of aggregating all 4 values.
  * <p>
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link TimestampExtractor}.
  *
  * @see TimeWindows
  * @see UnlimitedWindows

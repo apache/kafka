@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
  * A single window instance, defined by its start and end timestamp.
@@ -24,13 +25,13 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * window implementations.
  * <p>
  * To specify how {@link Window} boundaries are defined use {@link Windows}.
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link TimestampExtractor}.
  *
  * @see Windows
  * @see org.apache.kafka.streams.kstream.internals.TimeWindow
  * @see org.apache.kafka.streams.kstream.internals.SessionWindow
  * @see org.apache.kafka.streams.kstream.internals.UnlimitedWindow
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
 public abstract class Window {
