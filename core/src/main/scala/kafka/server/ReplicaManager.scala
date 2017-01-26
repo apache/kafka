@@ -189,6 +189,8 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  def getLog(topicPartition: TopicPartition) = logManager.getLog(topicPartition)
+
   /**
    * Try to complete some delayed produce requests with the request key;
    * this can be triggered when:
@@ -926,8 +928,14 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def getLeaderPartitions() : List[Partition] = {
+  private def getLeaderPartitions(): List[Partition] = {
     allPartitions.values.filter(_.leaderReplicaIfLocal.isDefined).toList
+  }
+
+  def getHighWatermark(topicPartition: TopicPartition): Option[Long] = {
+    getPartition(topicPartition).flatMap { partition =>
+      partition.leaderReplicaIfLocal.map(_.highWatermark.messageOffset)
+    }
   }
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
