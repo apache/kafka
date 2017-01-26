@@ -165,7 +165,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         EasyMock.expect(task.cancel(eq(false))).andReturn(false);
         EasyMock.expect(task.isDone()).andReturn(false);
         EasyMock.expect(task.get()).andThrow(new CancellationException());
-        mockLog.trace(EasyMock.anyString(), EasyMock.anyObject());
+        mockLog.trace(EasyMock.anyString(), EasyMock.<Object>anyObject());
         PowerMock.expectLastCall();
         PowerMock.replayAll();
 
