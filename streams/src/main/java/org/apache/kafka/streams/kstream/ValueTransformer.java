@@ -103,7 +103,7 @@ public interface ValueTransformer<V, VR> {
     /**
      * Close this processor and clean up any resources.
      * <p>
-     * It is not possible to return any new output records within {@code punctuate}.
+     * It is not possible to return any new output records within {@code close()}.
      * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
      * or {@link ProcessorContext#forward(Object, Object, String)} will result in an
      * {@link org.apache.kafka.streams.errors.StreamsException exception}.
