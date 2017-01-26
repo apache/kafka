@@ -24,6 +24,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -52,15 +54,34 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsKafkaClient {
 
+    private static final ConfigDef CONFIG = StreamsConfig.configDef()
+            .withClientSslSupport()
+            .withClientSaslSupport();
+
+    public static class Config extends AbstractConfig {
+
+        public static Config fromStreamsConfig(StreamsConfig streamsConfig) {
+            return new Config(streamsConfig.originals());
+        }
+
+        public Config(Map<?, ?> originals) {
+            super(CONFIG, originals, false);
+        }
+    }
+
     private final KafkaClient kafkaClient;
     private final List<MetricsReporter> reporters;
-    private final StreamsConfig streamsConfig;
+    private final Config streamsConfig;
 
     private static final int MAX_INFLIGHT_REQUESTS = 100;
 
     public StreamsKafkaClient(final StreamsConfig streamsConfig) {
+        this(Config.fromStreamsConfig(streamsConfig));
+    }
 
+    public StreamsKafkaClient(final Config streamsConfig) {
         this.streamsConfig = streamsConfig;
+
         final Time time = new SystemTime();
 
         final Map<String, String> metricTags = new LinkedHashMap<>();
