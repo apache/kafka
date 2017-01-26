@@ -847,28 +847,28 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
-    val testProducer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
+    val testProducer = new KafkaProducer(producerProps, new StringSerializer, new StringSerializer)
 
     // produce records
     val numRecords = 10
     (0 until numRecords).map { i =>
-      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+      testProducer.send(new ProducerRecord(tp.topic, tp.partition, s"key $i", s"value $i"))
     }.foreach(_.get)
-    assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
-    assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
+    assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue)
+    assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue)
     // send invalid record
     try {
-      testProducer.send(null, null)
+      testProducer.send(null)
       fail("Should not allow sending a null record")
     } catch {
       case _: Throwable =>
-        assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue())
+        assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue)
         assertEquals("Interceptor should not receive metadata with an exception when record is null", 0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue())
     }
 
     // create consumer with interceptor
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
-    val testConsumer = new KafkaConsumer[String, String](this.consumerConfig, new StringDeserializer(), new StringDeserializer())
+    val testConsumer = new KafkaConsumer(this.consumerConfig, new StringDeserializer, new StringDeserializer)
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)
 
@@ -876,22 +876,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
       val record = records(i)
-      assertEquals(s"key $i", new String(record.key()))
-      assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
+      assertEquals(s"key $i", new String(record.key))
+      assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value))
     }
 
     // commit sync and verify onCommit is called
-    val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
+    val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue
     testConsumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
     assertEquals(2, testConsumer.committed(tp).offset)
-    assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     // commit async and verify onCommit is called
     val commitCallback = new CountConsumerCommitCallback()
     testConsumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
     awaitCommitCallback(testConsumer, commitCallback)
     assertEquals(5, testConsumer.committed(tp).offset)
-    assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     testConsumer.close()
     testProducer.close()
