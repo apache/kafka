@@ -115,9 +115,10 @@ class GroupMetadataManagerTest {
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None), EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
     EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
-        .andReturn(records.buffer)
+      .andReturn(records.buffer)
 
     EasyMock.replay(logMock, replicaManager, fileRecordsMock)
+    
     groupMetadataManager.loadGroupsAndOffsets(offsetTopicPartition, _ => ())
 
     val loadedGroup = groupMetadataManager.getGroup(groupId)
@@ -271,7 +272,6 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getHighWatermark(offsetTopicPartition)).andStubReturn(Some(endOffset))
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None), EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
-
     EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
       .andReturn(records.buffer)
 
@@ -323,15 +323,12 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getHighWatermark(offsetTopicPartition)).andStubReturn(Some(endOffset))
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None), EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
-
     EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
       .andReturn(records.buffer)
 
     EasyMock.replay(logMock, replicaManager, fileRecordsMock)
 
-    def onGroupLoaded(groupMetadata: GroupMetadata): Unit = {}
-
-    groupMetadataManager.loadGroupsAndOffsets(offsetTopicPartition, onGroupLoaded)
+    groupMetadataManager.loadGroupsAndOffsets(offsetTopicPartition, _ => ())
 
     val loadedGroup = groupMetadataManager.getGroup(groupId)
     loadedGroup match {
