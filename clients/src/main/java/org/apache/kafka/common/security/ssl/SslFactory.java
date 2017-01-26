@@ -24,7 +24,15 @@ import org.apache.kafka.common.network.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.*;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedTrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
@@ -150,7 +158,7 @@ public class SslFactory implements Configurable {
         TrustManager[] trustManagers = tmf.getTrustManagers();
         TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
 
-        for (int i=0; i< trustManagers.length; i++) {
+        for (int i = 0; i < trustManagers.length; i++) {
             if (trustManagers[i] instanceof X509TrustManager) {
                 trustManagers[i] = reloadableTrustManager;
             }
@@ -238,7 +246,7 @@ public class SslFactory implements Configurable {
         private final SecurityStore trustStore;
         private TrustManagerFactory tmf;
         private X509TrustManager trustManager;
-        private long lastReload = 0l;
+        private long lastReload = 0L;
         private static final long MINIMAL_WAIT = 60 * 1000;
 
         public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
@@ -267,25 +275,25 @@ public class SslFactory implements Configurable {
         @Override
         public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
             reloadTrustManager();
-            ((X509ExtendedTrustManager)trustManager).checkClientTrusted(x509Certificates, s, socket);
+            ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, socket);
         }
 
         @Override
         public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
             reloadTrustManager();
-            ((X509ExtendedTrustManager)trustManager).checkServerTrusted(x509Certificates, s, socket);
+            ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, socket);
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
             reloadTrustManager();
-            ((X509ExtendedTrustManager)trustManager).checkClientTrusted(x509Certificates, s, sslEngine);
+            ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, sslEngine);
         }
 
         @Override
         public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
             reloadTrustManager();
-            ((X509ExtendedTrustManager)trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
+            ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
         }
 
         private void reloadTrustManager() throws KafkaException {
@@ -309,7 +317,7 @@ public class SslFactory implements Configurable {
 
                     tmf.init(ts);
 
-                    TrustManager tms[] = tmf.getTrustManagers();
+                    TrustManager[] tms = tmf.getTrustManagers();
                     for (int i = 0; i < tms.length; i++) {
                         if (tms[i] instanceof X509TrustManager) {
                             trustManager = (X509TrustManager) tms[i];
