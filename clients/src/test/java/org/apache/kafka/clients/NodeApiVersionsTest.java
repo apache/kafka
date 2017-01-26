@@ -33,8 +33,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(
-                Collections.<ApiVersion>emptyList());
+        NodeApiVersions versions = new NodeApiVersions(Collections.<ApiVersion>emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
