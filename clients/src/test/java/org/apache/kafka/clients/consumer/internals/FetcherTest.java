@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,12 +32,13 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ByteBufferOutputStream;
 import org.apache.kafka.common.record.CompressionType;
@@ -45,6 +47,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -324,6 +327,8 @@ public class FetcherTest {
      */
     @Test
     public void testFetchRequestWhenRecordTooBig() {
+        client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
+            new ApiVersionsResponse.ApiVersion((short) ApiKeys.FETCH.id, (short) 2, (short) 2))));
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
         assertEquals(1, fetcher.sendFetches());
@@ -336,9 +341,9 @@ public class FetcherTest {
         try {
             List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
             assertEquals(0, consumerRecords.size());
-            fail("UnknownServerException should have been raised");
-        } catch (UnknownServerException e) {
-            assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
+            fail("RecordTooLargeException should have been raised");
+        } catch (RecordTooLargeException e) {
+            assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
             // the position should not advance since no data has been returned
             assertEquals(0, subscriptions.position(tp).longValue());
         }
