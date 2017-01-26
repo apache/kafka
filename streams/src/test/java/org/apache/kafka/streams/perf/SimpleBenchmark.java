@@ -51,6 +51,7 @@ import org.apache.kafka.test.TestUtils;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
@@ -59,7 +60,9 @@ public class SimpleBenchmark {
 
     private final String kafka;
     private final File stateDir;
-
+    private final Boolean loadPhase;
+    private final String testName;
+    private static final String ALL_TESTS = "all";
     private static final String SOURCE_TOPIC = "simpleBenchmarkSourceTopic";
     private static final String SINK_TOPIC = "simpleBenchmarkSinkTopic";
 
@@ -91,16 +94,75 @@ public class SimpleBenchmark {
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
 
-    public SimpleBenchmark(File stateDir, String kafka) {
+    public SimpleBenchmark(final File stateDir, final String kafka, final Boolean loadPhase, final String testName) {
         super();
         this.stateDir = stateDir;
         this.kafka = kafka;
+        this.loadPhase = loadPhase;
+        this.testName = testName;
+    }
+
+    private void run() throws Exception {
+        switch (testName) {
+            case ALL_TESTS:
+                // producer performance
+                produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+                // consumer performance
+                consume(SOURCE_TOPIC);
+                // simple stream performance source->process
+                processStream(SOURCE_TOPIC);
+                // simple stream performance source->sink
+                processStreamWithSink(SOURCE_TOPIC);
+                // simple stream performance source->store
+                processStreamWithStateStore(SOURCE_TOPIC);
+                // simple stream performance source->cache->store
+                processStreamWithCachedStateStore(SOURCE_TOPIC);
+                // simple streams performance KSTREAM-KTABLE join
+                kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
+                // simple streams performance KSTREAM-KSTREAM join
+                kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
+                // simple streams performance KTABLE-KTABLE join
+                kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
+                break;
+            case "produce":
+                produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+                break;
+            case "consume":
+                consume(SOURCE_TOPIC);
+                break;
+            case "processstream":
+                processStream(SOURCE_TOPIC);
+                break;
+            case "processstreamwithsink":
+                processStreamWithSink(SOURCE_TOPIC);
+                break;
+            case "processstreamwithstatestore":
+                processStreamWithStateStore(SOURCE_TOPIC);
+                break;
+            case "processstreamwithcachedstatestore":
+                processStreamWithCachedStateStore(SOURCE_TOPIC);
+                break;
+            case "kstreamktablejoin":
+                kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
+                break;
+            case "kstreamkstreamjoin":
+                kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
+                break;
+            case "ktablektablejoin":
+                kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
+                break;
+            default:
+                throw new Exception("Unknown test name " + testName);
+
+        }
     }
 
     public static void main(String[] args) throws Exception {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
         String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
         numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
+        boolean loadPhase = args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
+        String testName = args.length > 4 ? args[4].toLowerCase(Locale.ROOT) : ALL_TESTS;
         endKey = numRecords - 1;
 
         final File stateDir = new File(stateDirStr);
@@ -113,27 +175,11 @@ public class SimpleBenchmark {
         System.out.println("kafka=" + kafka);
         System.out.println("stateDir=" + stateDir);
         System.out.println("numRecords=" + numRecords);
+        System.out.println("loadPhase=" + loadPhase);
+        System.out.println("testName=" + testName);
 
-        SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka);
-
-        // producer performance
-        benchmark.produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
-        // consumer performance
-        benchmark.consume(SOURCE_TOPIC);
-        // simple stream performance source->process
-        benchmark.processStream(SOURCE_TOPIC);
-        // simple stream performance source->sink
-        benchmark.processStreamWithSink(SOURCE_TOPIC);
-        // simple stream performance source->store
-        benchmark.processStreamWithStateStore(SOURCE_TOPIC);
-        // simple stream performance source->cache->store
-        benchmark.processStreamWithCachedStateStore(SOURCE_TOPIC);
-        // simple streams performance KSTREAM-KTABLE join
-        benchmark.kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
-        // simple streams performance KSTREAM-KSTREAM join
-        benchmark.kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
-        // simple streams performance KTABLE-KTABLE join
-        benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
+        SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka, loadPhase, testName);
+        benchmark.run();
     }
 
     private Properties setJoinProperties(final String applicationId) {
@@ -233,7 +279,14 @@ public class SimpleBenchmark {
 
 
 
-    public void processStream(String topic) {
+    public void processStream(String topic) throws Exception {
+        // see if we're in the load phase
+        if (loadPhase) {
+            System.out.println("processStream loading phase on topic: " + topic);
+            produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-load", numRecords, true, numRecords, false);
+            return;
+        }
+
         CountDownLatch latch = new CountDownLatch(1);
 
         final KafkaStreams streams = createKafkaStreams(topic, stateDir, kafka, latch);
@@ -391,7 +444,14 @@ public class SimpleBenchmark {
             System.out.println("Producer Performance [MB/sec write]: " + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
     }
 
-    public void consume(String topic) {
+    public void consume(String topic) throws Exception {
+        // see if we're in the load phase
+        if (loadPhase) {
+            System.out.println("Consumer loading phase on topic: " + topic);
+            produce(topic, VALUE_SIZE, "simple-benchmark-consumer-load", numRecords, true, numRecords, false);
+            return;
+        }
+
         Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "simple-benchmark-consumer");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
