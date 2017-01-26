@@ -443,15 +443,13 @@ class GroupMetadataManager(val brokerId: Int,
 
             loadedGroups.values.foreach { group =>
               val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, OffsetAndMetadata])
-              initOffsets(group, offsets)
-              loadGroup(group)
+              loadGroup(group, offsets)
               onGroupLoaded(group)
             }
 
             noGroupOffsets.foreach { case (groupId, offsets) =>
               val group = new GroupMetadata(groupId)
-              initOffsets(group, offsets)
-              loadGroup(group)
+              loadGroup(group, offsets)
               onGroupLoaded(group)
             }
 
@@ -481,18 +479,9 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
-  private def loadGroup(group: GroupMetadata): Unit = {
-    val currentGroup = addGroup(group)
-    if (group != currentGroup)
-      debug(s"Attempt to load group ${group.groupId} from log with generation ${group.generationId} failed " +
-        s"because there is already a cached group with generation ${currentGroup.generationId}")
-  }
-
-  /**
-   * Initialize the offsets for a group. This must be called prior to loading the group into the
-   * cache to ensure that clients see a consistent view of the group's offsets.
-   */
-  private def initOffsets(group: GroupMetadata, offsets: Map[TopicPartition, OffsetAndMetadata]) {
+  private def loadGroup(group: GroupMetadata, offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
+    // offsets are initialized prior to loading the group into the cache to ensure that clients see a consistent
+    // view of the group's offsets
     val loadedOffsets = offsets.mapValues { offsetAndMetadata =>
       // special handling for version 0:
       // set the expiration time stamp as commit time stamp + server default retention time
@@ -503,6 +492,11 @@ class GroupMetadataManager(val brokerId: Int,
     }
     trace(s"Initialized offsets $loadedOffsets for group ${group.groupId}")
     group.initializeOffsets(loadedOffsets)
+
+    val currentGroup = addGroup(group)
+    if (group != currentGroup)
+      debug(s"Attempt to load group ${group.groupId} from log with generation ${group.generationId} failed " +
+        s"because there is already a cached group with generation ${currentGroup.generationId}")
   }
 
   /**
@@ -889,24 +883,24 @@ object GroupMetadataManager {
     value.set(LEADER_KEY, groupMetadata.leaderId)
 
     val memberArray = groupMetadata.allMemberMetadata.map { memberMetadata =>
-        val memberStruct = value.instance(MEMBERS_KEY)
-        memberStruct.set(MEMBER_ID_KEY, memberMetadata.memberId)
-        memberStruct.set(CLIENT_ID_KEY, memberMetadata.clientId)
-        memberStruct.set(CLIENT_HOST_KEY, memberMetadata.clientHost)
-        memberStruct.set(SESSION_TIMEOUT_KEY, memberMetadata.sessionTimeoutMs)
+      val memberStruct = value.instance(MEMBERS_KEY)
+      memberStruct.set(MEMBER_ID_KEY, memberMetadata.memberId)
+      memberStruct.set(CLIENT_ID_KEY, memberMetadata.clientId)
+      memberStruct.set(CLIENT_HOST_KEY, memberMetadata.clientHost)
+      memberStruct.set(SESSION_TIMEOUT_KEY, memberMetadata.sessionTimeoutMs)
 
-        if (version > 0)
-          memberStruct.set(REBALANCE_TIMEOUT_KEY, memberMetadata.rebalanceTimeoutMs)
+      if (version > 0)
+        memberStruct.set(REBALANCE_TIMEOUT_KEY, memberMetadata.rebalanceTimeoutMs)
 
-        val metadata = memberMetadata.metadata(groupMetadata.protocol)
-        memberStruct.set(SUBSCRIPTION_KEY, ByteBuffer.wrap(metadata))
+      val metadata = memberMetadata.metadata(groupMetadata.protocol)
+      memberStruct.set(SUBSCRIPTION_KEY, ByteBuffer.wrap(metadata))
 
-        val memberAssignment = assignment(memberMetadata.memberId)
-        assert(memberAssignment != null)
+      val memberAssignment = assignment(memberMetadata.memberId)
+      assert(memberAssignment != null)
 
-        memberStruct.set(ASSIGNMENT_KEY, ByteBuffer.wrap(memberAssignment))
+      memberStruct.set(ASSIGNMENT_KEY, ByteBuffer.wrap(memberAssignment))
 
-        memberStruct
+      memberStruct
     }
 
     value.set(MEMBERS_KEY, memberArray.toArray)
