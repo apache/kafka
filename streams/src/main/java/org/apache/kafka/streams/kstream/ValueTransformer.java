@@ -18,7 +18,11 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
  * The {@link ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).
@@ -27,8 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
  * {@link #transform(Object)} (cf. {@link ValueMapper} for stateless value transformation).
  * Additionally, the interface can be called in regular intervals based on the processing progress
  * (cf. {@link #punctuate(long)}.
- * If {@link ValueTransformer} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the
- * record's key is preserved.
+ * If {@link ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
  * Use {@link ValueTransformerSupplier} to provide new instances of {@link ValueTransformer} to Kafka Stream's runtime.
  * <p>
@@ -49,16 +52,15 @@ public interface ValueTransformer<V, VR> {
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(long) schedule itself} for periodical calls (cf. {@link #punctuate(long)}), and
-     * to access attached {@link org.apache.kafka.streams.processor.StateStore}s.
+     * to access attached {@link StateStore}s.
      * <p>
-     * Note, that {@link ProcessorContext} is updated in the background with the current record's meta data.
+     * Note that {@link ProcessorContext} is updated in the background with the current record's meta data.
      * Thus, it only contains valid record meta data when accessed within {@link #transform(Object)}.
      * <p>
-     * Note, that using {@link ProcessorContext#forward(Object, Object)},
+     * Note that using {@link ProcessorContext#forward(Object, Object)},
      * {@link ProcessorContext#forward(Object, Object, int)}, or
      * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within any method of
-     * {@code ValueTransformer} and will result in an {@link org.apache.kafka.streams.errors.StreamsException
-     * exception}.
+     * {@code ValueTransformer} and will result in an {@link StreamsException exception}.
      *
      * @param context the context
      */
@@ -66,14 +68,14 @@ public interface ValueTransformer<V, VR> {
 
     /**
      * Transform the given value to a new value.
-     * Additionally, any {@link org.apache.kafka.streams.processor.StateStore state} that is
-     * {@link KStream#transformValues(ValueTransformerSupplier, String...) attached} to this operator can be accessed
-     * and modified arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
+     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerSupplier, String...)
+     * attached} to this operator can be accessed and modified arbitrarily (cf.
+     * {@link ProcessorContext#getStateStore(String)}).
      * <p>
      * Note, that using {@link ProcessorContext#forward(Object, Object)},
      * {@link ProcessorContext#forward(Object, Object, int)}, and
      * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within {@code transform} and
-     * will result in an {@link org.apache.kafka.streams.errors.StreamsException exception}.
+     * will result in an {@link StreamsException exception}.
      *
      * @param value the value to be transformed
      * @return the new value
@@ -87,16 +89,15 @@ public interface ValueTransformer<V, VR> {
      * It is not possible to return any new output records within {@code punctuate}.
      * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
      * or {@link ProcessorContext#forward(Object, Object, String)} will result in an
-     * {@link org.apache.kafka.streams.errors.StreamsException exception}.
+     * {@link StreamsException exception}.
      * Furthermore, {@code punctuate} must return {@code null}.
      * <p>
      * Note, that {@code punctuate} is called base on <it>stream time</it> (i.e., time progress with regard to
-     * timestamps return by the used {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor})
+     * timestamps return by the used {@link TimestampExtractor})
      * and not based on wall-clock time.
      *
      * @param timestamp the stream time when {@code punctuate} is being called
-     * @return must return {@code null}&mdash;otherwise, and {@link org.apache.kafka.streams.errors.StreamsException
-     * exception} will be thrown
+     * @return must return {@code null}&mdash;otherwise, an {@link StreamsException exception} will be thrown
      */
     VR punctuate(final long timestamp);
 
@@ -105,8 +106,7 @@ public interface ValueTransformer<V, VR> {
      * <p>
      * It is not possible to return any new output records within {@code close()}.
      * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
-     * or {@link ProcessorContext#forward(Object, Object, String)} will result in an
-     * {@link org.apache.kafka.streams.errors.StreamsException exception}.
+     * or {@link ProcessorContext#forward(Object, Object, String)} will result in an {@link StreamsException exception}.
      */
     void close();
 
