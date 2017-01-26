@@ -32,6 +32,8 @@ import kafka.common.TopicAndPartition
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.atomic.AtomicBoolean
 
+import kafka.security.auth.{Authorizer, Resource, Topic}
+
 /**
  * This manages the state machine for topic deletion.
  * 1. TopicCommand issues topic deletion by creating a new admin path /admin/delete_topics/<topic>
@@ -75,7 +77,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class TopicDeletionManager(controller: KafkaController,
                            initialTopicsToBeDeleted: Set[String] = Set.empty,
-                           initialTopicsIneligibleForDeletion: Set[String] = Set.empty) extends Logging {
+                           initialTopicsIneligibleForDeletion: Set[String] = Set.empty,
+                           authorizer: Option[Authorizer]) extends Logging {
   this.logIdent = "[Topic Deletion Manager " + controller.config.brokerId + "], "
   val controllerContext = controller.controllerContext
   val partitionStateMachine = controller.partitionStateMachine
@@ -305,6 +308,8 @@ class TopicDeletionManager(controller: KafkaController,
     zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
     zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
     zkUtils.zkClient.delete(getDeleteTopicPath(topic))
+    if (!authorizer.isEmpty)
+      authorizer.get.removeAcls(new Resource(Topic, topic))
     controllerContext.removeTopic(topic)
   }
 
