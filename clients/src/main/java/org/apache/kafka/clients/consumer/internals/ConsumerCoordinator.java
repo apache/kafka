@@ -155,7 +155,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Set<String> topicsToSubscribe = new HashSet<>();
 
         for (String topic : cluster.topics())
-            if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+            if (subscriptions.subscribedPattern().matcher(topic).matches() &&
                     !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
                 topicsToSubscribe.add(topic);
 
