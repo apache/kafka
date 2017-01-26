@@ -101,8 +101,13 @@ public class JaasContext {
                                               String globalContextName) {
         String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
         if (jaasConfigFile == null) {
-            LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' and Kafka SASL property '" +
-                    SaslConfigs.SASL_JAAS_CONFIG + "' are not set, using default JAAS configuration.");
+            if (contextType == Type.CLIENT) {
+                LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' and Kafka SASL property '" +
+                        SaslConfigs.SASL_JAAS_CONFIG + "' are not set, using default JAAS configuration.");
+            } else {
+                LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS " +
+                        "configuration.");
+            }
         }
 
         Configuration jaasConfig = Configuration.getConfiguration();

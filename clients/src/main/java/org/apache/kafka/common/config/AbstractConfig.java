@@ -165,7 +165,7 @@ public class AbstractConfig {
      */
     public Map<String, Object> valuesWithPrefixOverride(String prefix) {
         Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
-        for (Map.Entry<String, ?> entry : originals().entrySet()) {
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
                 String keyWithNoPrefix = entry.getKey().substring(prefix.length());
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);

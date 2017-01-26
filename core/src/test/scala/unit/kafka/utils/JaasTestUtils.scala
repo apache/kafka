@@ -157,7 +157,7 @@ object JaasTestUtils {
     new JaasSection(ZkClientContextName, Seq(JaasModule(ZkModule, false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
-  private def kafkaServerSection(name: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
+  private def kafkaServerSection(contextName: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
     val modules = mechanisms.map {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -180,7 +180,7 @@ object JaasTestUtils {
           debug = false).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(name, modules)
+    new JaasSection(contextName, modules)
   }
 
   // consider refactoring if more mechanisms are added

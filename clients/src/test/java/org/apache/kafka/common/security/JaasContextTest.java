@@ -219,6 +219,9 @@ public class JaasContextTest {
                 Collections.<String, Object>emptyMap());
     }
 
+    /**
+     * ListenerName can only be used with Type.SERVER.
+     */
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForClientWithListenerName() {
         JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),

@@ -109,7 +109,8 @@ public class AbstractConfigTest {
 
         // unset with default
         assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
-        assertEquals(60000L, valuesWithPrefixOverride.get("sasl.kerberos.min.time.before.relogin"));
+        assertEquals(SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+                valuesWithPrefixOverride.get("sasl.kerberos.min.time.before.relogin"));
         assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
 
         // unset with no default
