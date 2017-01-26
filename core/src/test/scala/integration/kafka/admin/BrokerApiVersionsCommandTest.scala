@@ -42,7 +42,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     val lineIter = content.split("\n").iterator
     assertTrue(lineIter.hasNext)
     assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next)
-    val nodeApiVersions = new NodeApiVersions(ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions)
+    val nodeApiVersions = NodeApiVersions.create
     for (apiKey <- ApiKeys.values) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
       val versionRangeStr =

@@ -19,7 +19,9 @@ package org.apache.kafka.clients.producer.internals;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Record;
 
 
 /**
@@ -30,23 +32,40 @@ import org.apache.kafka.common.TopicPartition;
 public final class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
-    private volatile TopicPartition topicPartition;
-    private volatile long baseOffset = -1L;
+    private final TopicPartition topicPartition;
+
+    private volatile Long baseOffset = null;
+    private volatile long logAppendTime = Record.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
-    public ProduceRequestResult() {
+    /**
+     * Create an instance of this class.
+     *
+     * @param topicPartition The topic and partition to which this record set was sent was sent
+     */
+    public ProduceRequestResult(TopicPartition topicPartition) {
+        this.topicPartition = topicPartition;
+    }
+
+    /**
+     * Set the result of the produce request.
+     *
+     * @param baseOffset The base offset assigned to the record
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
+     * @param error The error that occurred if there was one, or null
+     */
+    public void set(long baseOffset, long logAppendTime, RuntimeException error) {
+        this.baseOffset = baseOffset;
+        this.logAppendTime = logAppendTime;
+        this.error = error;
     }
 
     /**
      * Mark this request as complete and unblock any threads waiting on its completion.
-     * @param topicPartition The topic and partition to which this record set was sent was sent
-     * @param baseOffset The base offset assigned to the record
-     * @param error The error that occurred if there was one, or null.
      */
-    public void done(TopicPartition topicPartition, long baseOffset, RuntimeException error) {
-        this.topicPartition = topicPartition;
-        this.baseOffset = baseOffset;
-        this.error = error;
+    public void done() {
+        if (baseOffset == null)
+            throw new IllegalStateException("The method `set` must be invoked before this method.");
         this.latch.countDown();
     }
 
@@ -72,6 +91,20 @@ public final class ProduceRequestResult {
      */
     public long baseOffset() {
         return baseOffset;
+    }
+
+    /**
+     * Return true if log append time is being used for this topic
+     */
+    public boolean hasLogAppendTime() {
+        return logAppendTime != Record.NO_TIMESTAMP;
+    }
+
+    /**
+     * The log append time or -1 if CreateTime is being used
+     */
+    public long logAppendTime() {
+        return logAppendTime;
     }
 
     /**

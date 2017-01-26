@@ -50,7 +50,6 @@ import java.util.LinkedHashMap;
 import java.util.Properties;
 import java.util.HashMap;
 import java.util.Collection;
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public class StreamsKafkaClient {
@@ -59,14 +58,29 @@ public class StreamsKafkaClient {
             .withClientSslSupport()
             .withClientSaslSupport();
 
+    public static class Config extends AbstractConfig {
+
+        public static Config fromStreamsConfig(StreamsConfig streamsConfig) {
+            return new Config(streamsConfig.originals());
+        }
+
+        public Config(Map<?, ?> originals) {
+            super(CONFIG, originals, false);
+        }
+    }
+
     private final KafkaClient kafkaClient;
     private final List<MetricsReporter> reporters;
-    private final AbstractConfig streamsConfig;
+    private final Config streamsConfig;
 
     private static final int MAX_INFLIGHT_REQUESTS = 100;
 
-    public StreamsKafkaClient(final StreamsConfig originalStreamsConfig) {
-        this.streamsConfig = new AbstractConfig(CONFIG, originalStreamsConfig.originals(), false);
+    public StreamsKafkaClient(final StreamsConfig streamsConfig) {
+        this(Config.fromStreamsConfig(streamsConfig));
+    }
+
+    public StreamsKafkaClient(final Config streamsConfig) {
+        this.streamsConfig = streamsConfig;
 
         final Time time = new SystemTime();
 
@@ -109,10 +123,6 @@ public class StreamsKafkaClient {
 
     /**
      * Creates a set of new topics using batch request.
-     *
-     * @param topicsMap
-     * @param replicationFactor
-     * @param windowChangeLogAdditionalRetention
      */
     public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
 
@@ -141,12 +151,8 @@ public class StreamsKafkaClient {
 
         for (InternalTopicConfig internalTopicConfig : topicsMap.keySet()) {
             CreateTopicsResponse.Error error = createTopicsResponse.errors().get(internalTopicConfig.name());
-            if (!error.is(Errors.NONE)) {
-                if (error.is(Errors.TOPIC_ALREADY_EXISTS)) {
-                    continue;
-                } else {
-                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
-                }
+            if (!error.is(Errors.NONE) && !error.is(Errors.TOPIC_ALREADY_EXISTS)) {
+                throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
             }
         }
     }
@@ -199,35 +205,8 @@ public class StreamsKafkaClient {
 
     }
 
-
-     /**
-     * Fetch the metadata for a topic.
-     * @param topic
-     * @return
-     */
-    public MetadataResponse.TopicMetadata fetchTopicMetadata(final String topic) {
-        final ClientRequest clientRequest = kafkaClient.newClientRequest(getBrokerId(), new MetadataRequest.Builder(Arrays.asList(topic)), Time.SYSTEM.milliseconds(), true, null);
-        final ClientResponse clientResponse = sendRequest(clientRequest);
-        if (!clientResponse.hasResponse()) {
-            throw new StreamsException("Empty response for client request.");
-        }
-        if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
-            throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
-        }
-        final MetadataResponse metadataResponse = (MetadataResponse) clientResponse.responseBody();
-        for (MetadataResponse.TopicMetadata topicMetadata: metadataResponse.topicMetadata()) {
-            if (topicMetadata.topic().equalsIgnoreCase(topic)) {
-                return topicMetadata;
-            }
-        }
-        return null;
-    }
-
-
     /**
      * Fetch the metadata for all topics
-     *
-     * @return
      */
     public Collection<MetadataResponse.TopicMetadata> fetchTopicsMetadata() {
 

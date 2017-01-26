@@ -17,7 +17,6 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -197,8 +196,11 @@ public class KStreamTestDriver {
     }
 
     private void closeState() {
+        // we need to first flush all stores before trying to close any one
+        // of them since the flushing could cause eviction and hence tries to access other stores
+        flushState();
+
         for (StateStore stateStore : context.allStateStores().values()) {
-            stateStore.flush();
             stateStore.close();
         }
     }
@@ -213,16 +215,28 @@ public class KStreamTestDriver {
         }
 
         @Override
-        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer,
                                 StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
-            process(record.topic(), record.key(), record.value());
+            process(topic, key, value);
         }
 
         @Override
-        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-            // The serialization is skipped.
-            process(record.topic(), record.key(), record.value());
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
+        // The serialization is skipped.
+            process(topic, key, value);
         }
 
         @Override

@@ -1163,9 +1163,16 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     @throws[Exception]
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
-      onControllerResignation()
-      inLock(controllerContext.controllerLock) {
-        controllerElector.elect
+      if (controllerElector.getControllerID() != config.brokerId) {
+        onControllerResignation()
+        inLock(controllerContext.controllerLock) {
+          controllerElector.elect
+        }
+      } else {
+        // This can happen when there are multiple consecutive session expiration and handleNewSession() are called multiple
+        // times. The first call may already register the controller path using the newest ZK session. Therefore, the
+        // controller path will exist in subsequent calls to handleNewSession().
+        info("ZK expired, but the current controller id %d is the same as this broker id, skip re-elect".format(config.brokerId))
       }
     }
 

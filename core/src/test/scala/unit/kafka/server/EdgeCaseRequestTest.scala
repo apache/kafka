@@ -27,7 +27,7 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
 import org.junit.Assert._
@@ -138,7 +138,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val partitionResponse = produceResponse.responses().get(topicPartition)
     assertNotNull(partitionResponse)
-    assertEquals("There should be no error", 0, partitionResponse.errorCode)
+    assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
   }
 
   @Test

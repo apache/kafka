@@ -38,11 +38,11 @@ import static org.junit.Assert.assertEquals;
 
 public class KeyValuePrinterProcessorTest {
 
-    private String topicName = "topic";
-    private Serde<String> stringSerde = Serdes.String();
-    private ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    private KStreamBuilder builder = new KStreamBuilder();
-    private PrintStream printStream = new PrintStream(baos);
+    private final String topicName = "topic";
+    private final Serde<String> stringSerde = Serdes.String();
+    private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    private final KStreamBuilder builder = new KStreamBuilder();
+    private final PrintStream printStream = new PrintStream(baos);
 
     private KStreamTestDriver driver = null;
 

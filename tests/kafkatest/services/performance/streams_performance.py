@@ -27,3 +27,12 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                                             kafka,
                                                             "org.apache.kafka.streams.perf.SimpleBenchmark",
                                                             numrecs)
+
+    def collect_data(self, node):
+        # Collect the data and return it to the framework
+        output = node.account.ssh_capture("grep Performance %s" % self.STDOUT_FILE)
+        data = {}
+        for line in output:
+            parts = line.split(':')
+            data[parts[0]] = float(parts[1])
+        return data
