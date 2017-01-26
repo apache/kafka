@@ -542,16 +542,16 @@ class GroupMetadataManager(val brokerId: Int,
     cleanupGroupMetadata(None)
   }
 
-  def cleanupGroupMetadata(topicPartitions: Option[Seq[TopicPartition]]) {
+  def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]]) {
     val startMs = time.milliseconds()
     var offsetsRemoved = 0
 
     groupMetadataCache.foreach { case (groupId, group) =>
       val (removedOffsets, groupIsDead, generation) = group synchronized {
-        val removedOffsets = if (topicPartitions.isDefined)
-          group.removeOffsets(topicPartitions.get)
-        else
-          group.removeExpiredOffsets(startMs)
+        val removedOffsets = deletedTopicPartitions match {
+          case Some(topicPartitions) => group.removeOffsets(topicPartitions)
+          case None => group.removeExpiredOffsets(startMs)
+        }
 
         if (group.is(Empty) && !group.hasOffsets) {
           info(s"Group $groupId transitioned to Dead in generation ${group.generationId}")
