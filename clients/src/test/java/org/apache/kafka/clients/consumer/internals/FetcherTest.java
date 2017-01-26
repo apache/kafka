@@ -321,32 +321,57 @@ public class FetcherTest {
     }
 
     /**
-     * Test the case where the client makes a FetchRequest, but the server replies with only a partial request.
-     * Prior to KIP-74, this would always happen when a single message was larger than the per-partition limit.
-     * The implementation of KIP-74 changed the behavior so that at least one message was always returned.
+     * Test the case where the client makes a pre-v3 FetchRequest, but the server replies with only a partial
+     * request.  This happens when a single message was larger than the per-partition limit.
      */
     @Test
     public void testFetchRequestWhenRecordTooBig() {
-        client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-            new ApiVersionsResponse.ApiVersion((short) ApiKeys.FETCH.id, (short) 2, (short) 2))));
+        try {
+            client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
+                new ApiVersionsResponse.ApiVersion((short) ApiKeys.FETCH.id, (short) 2, (short) 2))));
+            makeFetchRequestWithoutProgress();
+            try {
+                List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
+                fail("RecordTooLargeException should have been raised");
+            } catch (RecordTooLargeException e) {
+                assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
+                // the position should not advance since no data has been returned
+                assertEquals(0, subscriptions.position(tp).longValue());
+            }
+        } finally {
+            client.setNodeApiVersions(NodeApiVersions.create());
+        }
+    }
+
+    /**
+     * Test the case where the client makes a post-KIP-74 FetchRequest, but the server replies with only a
+     * partial request.  For v3 and later FetchRequests, the implementation of KIP-74 changed the behavior
+     * so that at least one message is always returned.  Therefore, this case should not happen, and it indicates
+     * that an internal error has taken place.
+     */
+    @Test
+    public void testFetchRequestInternalError() {
+        makeFetchRequestWithoutProgress();
+        try {
+            List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
+            fail("RecordTooLargeException should have been raised");
+        } catch (KafkaException e) {
+            assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp).longValue());
+        }
+    }
+
+    private void makeFetchRequestWithoutProgress() {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
         MemoryRecords partialRecord = MemoryRecords.readableRecords(
-                ByteBuffer.wrap(new byte[]{0, 0, 0, 0, 0, 0, 0, 0}));
+            ByteBuffer.wrap(new byte[]{0, 0, 0, 0, 0, 0, 0, 0}));
         client.prepareResponse(fetchResponse(partialRecord, Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         assertTrue(fetcher.hasCompletedFetches());
-        try {
-            List<ConsumerRecord<byte[], byte[]>> consumerRecords = fetcher.fetchedRecords().get(tp);
-            assertEquals(0, consumerRecords.size());
-            fail("RecordTooLargeException should have been raised");
-        } catch (RecordTooLargeException e) {
-            assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp).longValue());
-        }
     }
 
     @Test
