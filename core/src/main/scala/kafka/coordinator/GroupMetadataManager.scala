@@ -548,11 +548,10 @@ class GroupMetadataManager(val brokerId: Int,
 
     groupMetadataCache.foreach { case (groupId, group) =>
       val (removedOffsets, groupIsDead, generation) = group synchronized {
-        // remove expired offsets from the cache
-        val removedOffsets = if (topicPartitions.isEmpty)
-          group.removeExpiredOffsets(startMs)
-        else
+        val removedOffsets = if (topicPartitions.isDefined)
           group.removeOffsets(topicPartitions.get)
+        else
+          group.removeExpiredOffsets(startMs)
 
         if (group.is(Empty) && !group.hasOffsets) {
           info(s"Group $groupId transitioned to Dead in generation ${group.generationId}")
