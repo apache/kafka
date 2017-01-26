@@ -101,7 +101,7 @@ class ReplicaManagerTest {
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
-        assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
+        assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
       }
       rm.appendRecords(
         timeout = 0,
@@ -128,13 +128,15 @@ class ReplicaManagerTest {
     try {
       var produceCallbackFired = false
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
-        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.values.head.errorCode)
+        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION,
+          responseStatus.values.head.error)
         produceCallbackFired = true
       }
 
       var fetchCallbackFired = false
       def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
-        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.map(_._2).head.error)
+        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION,
+          responseStatus.map(_._2).head.error)
         fetchCallbackFired = true
       }
 
@@ -229,7 +231,7 @@ class ReplicaManagerTest {
       var fetchError = 0
       var fetchedRecords: Records = null
       def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
-        fetchError = responseStatus.map(_._2).head.error
+        fetchError = responseStatus.map(_._2).head.error.code
         fetchedRecords = responseStatus.map(_._2).head.records
         fetchCallbackFired = true
       }
