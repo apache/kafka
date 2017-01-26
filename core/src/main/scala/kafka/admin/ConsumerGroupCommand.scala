@@ -306,7 +306,8 @@ object ConsumerGroupCommand extends Logging {
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
-        if (offsetAndMetadata == OffsetMetadataAndError.NoOffset) {
+        offsetAndMetadata match {
+          case OffsetMetadataAndError.NoOffset => {
           val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
           // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
           // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
@@ -318,10 +319,11 @@ object ConsumerGroupCommand extends Logging {
               printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
           }
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
+          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE.code =>
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
-        else
+          case _ =>
           printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
+      }
       }
       channel.disconnect()
       offsetMap.toMap
