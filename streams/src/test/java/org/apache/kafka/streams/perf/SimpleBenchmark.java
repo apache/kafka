@@ -202,11 +202,13 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(numRecords);
 
         // initialize topics
-        System.out.println("Initializing kStreamTopic " + kStreamTopic);
-        produce(kStreamTopic, VALUE_SIZE, "simple-benchmark-produce-kstream", numRecords, false, numRecords, false);
-        System.out.println("Initializing kTableTopic " + kTableTopic);
-        produce(kTableTopic, VALUE_SIZE, "simple-benchmark-produce-ktable", numRecords, true, numRecords, false);
-
+        if (loadPhase) {
+            System.out.println("Initializing kStreamTopic " + kStreamTopic);
+            produce(kStreamTopic, VALUE_SIZE, "simple-benchmark-produce-kstream", numRecords, false, numRecords, false);
+            System.out.println("Initializing kTableTopic " + kTableTopic);
+            produce(kTableTopic, VALUE_SIZE, "simple-benchmark-produce-ktable", numRecords, true, numRecords, false);
+            return;
+        }
         // setup join
         Properties props = setJoinProperties("simple-benchmark-kstream-ktable-join");
         final KafkaStreams streams = createKafkaStreamsKStreamKTableJoin(props, kStreamTopic, kTableTopic, latch);
@@ -223,10 +225,13 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(numRecords);
 
         // initialize topics
-        System.out.println("Initializing kStreamTopic " + kStreamTopic1);
-        produce(kStreamTopic1, VALUE_SIZE, "simple-benchmark-produce-kstream-topic1", numRecords, true, numRecords, false);
-        System.out.println("Initializing kStreamTopic " + kStreamTopic2);
-        produce(kStreamTopic2, VALUE_SIZE, "simple-benchmark-produce-kstream-topic2", numRecords, true, numRecords, false);
+        if (loadPhase) {
+            System.out.println("Initializing kStreamTopic " + kStreamTopic1);
+            produce(kStreamTopic1, VALUE_SIZE, "simple-benchmark-produce-kstream-topic1", numRecords, true, numRecords, false);
+            System.out.println("Initializing kStreamTopic " + kStreamTopic2);
+            produce(kStreamTopic2, VALUE_SIZE, "simple-benchmark-produce-kstream-topic2", numRecords, true, numRecords, false);
+            return;
+        }
 
         // setup join
         Properties props = setJoinProperties("simple-benchmark-kstream-kstream-join");
@@ -244,10 +249,13 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(numRecords);
 
         // initialize topics
-        System.out.println("Initializing kTableTopic " + kTableTopic1);
-        produce(kTableTopic1, VALUE_SIZE, "simple-benchmark-produce-ktable-topic1", numRecords, true, numRecords, false);
-        System.out.println("Initializing kTableTopic " + kTableTopic2);
-        produce(kTableTopic2, VALUE_SIZE, "simple-benchmark-produce-ktable-topic2", numRecords, true, numRecords, false);
+        if (loadPhase) {
+            System.out.println("Initializing kTableTopic " + kTableTopic1);
+            produce(kTableTopic1, VALUE_SIZE, "simple-benchmark-produce-ktable-topic1", numRecords, true, numRecords, false);
+            System.out.println("Initializing kTableTopic " + kTableTopic2);
+            produce(kTableTopic2, VALUE_SIZE, "simple-benchmark-produce-ktable-topic2", numRecords, true, numRecords, false);
+            return;
+        }
 
         // setup join
         Properties props = setJoinProperties("simple-benchmark-ktable-ktable-join");
@@ -320,7 +328,14 @@ public class SimpleBenchmark {
         }
     }
 
-    public void processStreamWithSink(String topic) {
+    public void processStreamWithSink(String topic) throws Exception {
+        // see if we're in the load phase
+        if (loadPhase) {
+            System.out.println("processStreamWithSink loading phase on topic: " + topic);
+            produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-sink-load", numRecords, true, numRecords, false);
+            return;
+        }
+
         CountDownLatch latch = new CountDownLatch(1);
 
         final KafkaStreams streams = createKafkaStreamsWithSink(topic, stateDir, kafka, latch);
@@ -384,7 +399,14 @@ public class SimpleBenchmark {
             // ignore
         }
     }
-    public void processStreamWithStateStore(String topic) {
+    public void processStreamWithStateStore(String topic) throws Exception {
+        // see if we're in the load phase
+        if (loadPhase) {
+            System.out.println("processStreamWithStateStore loading phase on topic: " + topic);
+            produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-state-store-load", numRecords, true, numRecords, false);
+            return;
+        }
+
         CountDownLatch latch = new CountDownLatch(1);
 
         final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, latch, false);
@@ -392,7 +414,14 @@ public class SimpleBenchmark {
 
     }
 
-    public void processStreamWithCachedStateStore(String topic) {
+    public void processStreamWithCachedStateStore(String topic) throws Exception {
+        // see if we're in the load phase
+        if (loadPhase) {
+            System.out.println("processStreamWithCachedStateStore loading phase on topic: " + topic);
+            produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-cached-state-store-load", numRecords, true, numRecords, false);
+            return;
+        }
+
         CountDownLatch latch = new CountDownLatch(1);
 
         final KafkaStreams streams = createKafkaStreamsWithStateStore(topic, stateDir, kafka, latch, true);
@@ -472,16 +501,19 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(500);
             if (records.isEmpty()) {
-                if (endKey.equals(key))
+                if (endKey.compareTo(key) >= 0)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     Integer recKey = record.key();
-
                     if (key == null || key < recKey)
                         key = recKey;
+                    if (endKey.compareTo(key) >= 0)
+                        break;
                 }
             }
+            if (endKey.compareTo(key) >= 0)
+                break;
         }
 
         long endTime = System.currentTimeMillis();
@@ -513,7 +545,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        if (endKey.equals(key)) {
+                        if (endKey.compareTo(key) >= 0) {
                             latch.countDown();
                         }
                     }
@@ -555,7 +587,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        if (endKey.equals(key)) {
+                        if (endKey.compareTo(key) >= 0) {
                             latch.countDown();
                         }
                     }
@@ -657,7 +689,7 @@ public class SimpleBenchmark {
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
 
-                        if (endKey.equals(key)) {
+                        if (endKey.compareTo(key) >= 0) {
                             latch.countDown();
                         }
                     }
