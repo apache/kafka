@@ -398,6 +398,8 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   private[coordinator] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+    def highWaterMark = replicaManager.getHighWatermark(topicPartition).getOrElse(-1L)
+
     val startMs = time.milliseconds()
     replicaManager.getLog(topicPartition) match {
       case None =>
@@ -412,7 +414,7 @@ class GroupMetadataManager(val brokerId: Int,
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < getHighWatermark(topicPartition) && !shuttingDown.get()) {
+        while (currOffset < highWaterMark && !shuttingDown.get()) {
           buffer.clear()
           val fileRecords = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true)
             .records.asInstanceOf[FileRecords]
@@ -420,33 +422,36 @@ class GroupMetadataManager(val brokerId: Int,
 
           MemoryRecords.readableRecords(bufferRead).deepEntries.asScala.foreach { entry =>
             val record = entry.record
+            require(record.hasKey, "Group metadata/offset entry key should not be null")
 
-            require(record.hasKey, "Offset entry key should not be null")
-            val baseKey = GroupMetadataManager.readMessageKey(record.key)
+            GroupMetadataManager.readMessageKey(record.key) match {
+              case offsetKey: OffsetKey =>
+                // load offset
+                val key = offsetKey.key
+                if (record.hasNullValue) {
+                  loadedOffsets.remove(key)
+                  removedOffsets.add(key)
+                } else {
+                  val value = GroupMetadataManager.readOffsetMessageValue(record.value)
+                  loadedOffsets.put(key, value)
+                  removedOffsets.remove(key)
+                }
 
-            if (baseKey.isInstanceOf[OffsetKey]) {
-              // load offset
-              val key = baseKey.key.asInstanceOf[GroupTopicPartition]
-              if (record.hasNullValue) {
-                loadedOffsets.remove(key)
-                removedOffsets.add(key)
-              } else {
-                val value = GroupMetadataManager.readOffsetMessageValue(record.value)
-                loadedOffsets.put(key, value)
-                removedOffsets.remove(key)
-              }
-            } else {
-              // load group metadata
-              val groupId = baseKey.key.asInstanceOf[String]
-              val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
-              if (groupMetadata != null) {
-                trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
-                removedGroups.remove(groupId)
-                loadedGroups.put(groupId, groupMetadata)
-              } else {
-                loadedGroups.remove(groupId)
-                removedGroups.add(groupId)
-              }
+              case groupMetadataKey: GroupMetadataKey =>
+                // load group metadata
+                val groupId = groupMetadataKey.key
+                val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
+                if (groupMetadata != null) {
+                  trace(s"Loaded group metadata for group $groupId with generation ${groupMetadata.generationId}")
+                  removedGroups.remove(groupId)
+                  loadedGroups.put(groupId, groupMetadata)
+                } else {
+                  loadedGroups.remove(groupId)
+                  removedGroups.add(groupId)
+                }
+
+              case unknownKey =>
+                throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
             }
 
             currOffset = entry.nextOffset
@@ -455,8 +460,8 @@ class GroupMetadataManager(val brokerId: Int,
 
         val (groupOffsets, emptyGroupOffsets) = loadedOffsets
           .groupBy(_._1.group)
-          .mapValues(_.map{ case (groupTopicPartition, offsetAndMetadata) => (groupTopicPartition.topicPartition, offsetAndMetadata)})
-          .partition(value => loadedGroups.contains(value._1))
+          .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset)} )
+          .partition { case (group, _) => loadedGroups.contains(group) }
 
         loadedGroups.values.foreach { group =>
           val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, OffsetAndMetadata])
@@ -465,7 +470,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
 
         // load groups which store offsets in kafka, but which have no active members and thus no group
-        // group metadata stored in the log
+        // metadata stored in the log
         emptyGroupOffsets.foreach { case (groupId, offsets) =>
           val group = new GroupMetadata(groupId)
           loadGroup(group, offsets)
@@ -612,10 +617,6 @@ class GroupMetadataManager(val brokerId: Int,
     }
 
     info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
-  }
-
-  private def getHighWatermark(topicPartition: TopicPartition): Long = {
-    replicaManager.getHighWatermark(topicPartition).getOrElse(-1)
   }
 
   /*

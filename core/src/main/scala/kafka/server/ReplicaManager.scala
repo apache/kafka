@@ -25,7 +25,7 @@ import kafka.api._
 import kafka.cluster.{Partition, Replica}
 import kafka.common._
 import kafka.controller.KafkaController
-import kafka.log.{LogAppendInfo, LogManager}
+import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
@@ -189,7 +189,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getLog(topicPartition: TopicPartition) = logManager.getLog(topicPartition)
+  def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
 
   /**
    * Try to complete some delayed produce requests with the request key;
