@@ -1437,6 +1437,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws IllegalArgumentException if the target timestamp is negative.
+     * @throws UnsupportedVersionException if the broker does not support looking up the offsets by timestamp.
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
