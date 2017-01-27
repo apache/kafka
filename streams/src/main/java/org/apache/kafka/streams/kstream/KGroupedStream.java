@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.StreamsConfig;
 
 /**
  * {@link KGroupedStream} is an abstraction of a <i>grouped</i> record stream of key-value pairs.
@@ -49,11 +50,11 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
@@ -65,8 +66,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -83,7 +84,7 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
@@ -116,11 +117,11 @@ public interface KGroupedStream<K, V> {
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * ReadOnlyWindowStore<String,Long> localWindowStore = streams.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
@@ -134,8 +135,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -158,7 +159,7 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
@@ -191,7 +192,7 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
@@ -221,7 +222,7 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
@@ -256,8 +257,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -266,7 +267,7 @@ public interface KGroupedStream<K, V> {
      * Thus, {@code reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
@@ -278,8 +279,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -307,7 +308,7 @@ public interface KGroupedStream<K, V> {
      * max.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
@@ -343,8 +344,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -353,7 +354,7 @@ public interface KGroupedStream<K, V> {
      * Thus, {@code reduce(Reducer, Windows, String)} can be used to compute aggregate functions like sum, min, or max.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * ReadOnlyWindowStore<String,Long> localWindowStore = streams.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
@@ -367,8 +368,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -402,7 +403,7 @@ public interface KGroupedStream<K, V> {
      * min, or max.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
@@ -440,8 +441,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -451,7 +452,7 @@ public interface KGroupedStream<K, V> {
      * or max.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeName, QueryableStoreTypes.<String, Long>sessionStore());
@@ -463,8 +464,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * @param reducer           the instance of {@link Reducer}
@@ -491,8 +492,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -502,7 +503,7 @@ public interface KGroupedStream<K, V> {
      * sum, min, or max.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeName, QueryableStoreTypes.<String, Long>sessionStore());
@@ -514,8 +515,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * @param reducer           the instance of {@link Reducer}
@@ -543,8 +544,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is processed to
      * provide an initial intermediate aggregation result that is used to process the first record.
@@ -555,7 +556,7 @@ public interface KGroupedStream<K, V> {
      * count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
@@ -567,8 +568,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -603,7 +604,7 @@ public interface KGroupedStream<K, V> {
      * like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
@@ -642,8 +643,8 @@ public interface KGroupedStream<K, V> {
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * You can configure the cache size via {@link StreamsConfig} parameter
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Initializer} is applied once per window directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
@@ -654,7 +655,7 @@ public interface KGroupedStream<K, V> {
      * functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
      * ReadOnlyWindowStore<String,Long> localWindowStore = streams.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
@@ -668,8 +669,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
-     * user-specified in {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
@@ -711,7 +712,7 @@ public interface KGroupedStream<K, V> {
      * functions like count (c.f. {@link #count(String)}) TODO add more examples.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double TODO update example
@@ -758,7 +759,7 @@ public interface KGroupedStream<K, V> {
      * aggregate functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
@@ -808,7 +809,7 @@ public interface KGroupedStream<K, V> {
      * to compute aggregate functions like count (c.f. {@link #count(String)})
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
-     * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
