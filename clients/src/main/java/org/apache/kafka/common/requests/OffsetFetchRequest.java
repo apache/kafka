@@ -60,7 +60,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         @Override
         public OffsetFetchRequest build() {
             if (isAllTopicPartitions() && version() < 2)
-                throw new UnsupportedVersionException("The broker is too old to understand this request.");
+                throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
+                        "v" + version() + ", but we need v2 or newer to request all topic partitions.");
             return new OffsetFetchRequest(groupId, partitions, version());
         }
 
