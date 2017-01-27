@@ -640,7 +640,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Integer.parseInt(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be an integer, but it was a " + value.getClass().getName());
                     }
                 case SHORT:
                     if (value instanceof Short) {
@@ -648,7 +648,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 16-bit integer (short), but it was a " + value.getClass().getName());
                     }
                 case LONG:
                     if (value instanceof Integer)
@@ -658,14 +658,14 @@ public class ConfigDef {
                     else if (value instanceof String)
                         return Long.parseLong(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a long, but it was a " + value.getClass().getName());
                 case DOUBLE:
                     if (value instanceof Number)
                         return ((Number) value).doubleValue();
                     else if (value instanceof String)
                         return Double.parseDouble(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a double, but it was a " + value.getClass().getName());
                 case LIST:
                     if (value instanceof List)
                         return (List<?>) value;
