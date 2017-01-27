@@ -63,6 +63,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=6)
     @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["snappy"], new_consumer=False)
     @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["snappy"], new_consumer=False)
     @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], new_consumer=False)
@@ -113,7 +114,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                            compression_types=compression_types,
                                            version=KafkaVersion(from_kafka_version))
 
-        assert self.zk.query("/cluster/id") is None
+        if from_kafka_version <= LATEST_0_10_0:
+            assert self.zk.query("/cluster/id") is None
 
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,

@@ -74,7 +74,7 @@ class CheckCreatePathResolver(object):
         """
         resolver = create_path_resolver(DummyContext())
 
-        # Node with no version attribute should resolve to CURRENT_BRANCH
+        # Node with no version attribute should resolve to DEV_BRANCH
         node = DummyNode()
         assert resolver._version(node) == DEV_BRANCH
 

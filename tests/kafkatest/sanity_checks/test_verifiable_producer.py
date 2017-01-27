@@ -61,7 +61,7 @@ class TestVerifiableProducer(Test):
              err_msg="Producer failed to start in a reasonable amount of time.")
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
-        # that this check works with CURRENT_BRANCH
+        # that this check works with DEV_BRANCH
         # When running VerifiableProducer 0.8.X, both the current branch version and 0.8.X should show up because of the
         # way verifiable producer pulls in some development directories into its classpath
         if node.version <= LATEST_0_8_2:
