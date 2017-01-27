@@ -253,7 +253,12 @@ public class StreamsKafkaClient {
         return metadataResponse.topicMetadata();
     }
 
-    public void checkBrokerCompatibility() {
+    /**
+     * Checks if the used brokers have version 0.10.1.x or higher.
+     *
+     * @throws StreamsException if brokers have version 0.10.0.x
+     */
+    public void checkBrokerCompatibility() throws StreamsException {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
             getBrokerId(),
             new ApiVersionsRequest.Builder(),
