@@ -288,7 +288,7 @@ public class NetworkClient implements KafkaClient {
             // the case when sending the initial ApiVersionRequest which fetches the version
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
-                if ((!discoverBrokerVersions) && (log.isTraceEnabled()))
+                if (discoverBrokerVersions && (log.isTraceEnabled()))
                     log.trace("No version information found when sending message of type {} to node {}. " +
                             "Assuming version {}.", clientRequest.apiKey(), nodeId, builder.version());
             } else {
