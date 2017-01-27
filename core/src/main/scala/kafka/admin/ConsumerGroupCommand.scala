@@ -306,22 +306,23 @@ object ConsumerGroupCommand extends Logging {
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
-        if (offsetAndMetadata == OffsetMetadataAndError.NoOffset) {
-          val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
-          // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
-          // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-          try {
-            val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-            offsetMap.put(topicAndPartition, offset)
-          } catch {
-            case z: ZkNoNodeException =>
-              printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
-          }
+        offsetAndMetadata match {
+          case OffsetMetadataAndError.NoOffset =>
+            val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
+            // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
+            // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
+            try {
+              val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
+              offsetMap.put(topicAndPartition, offset)
+            } catch {
+              case z: ZkNoNodeException =>
+                printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
+            }
+          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE.code =>
+            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
+          case _ =>
+            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
-          offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
-        else
-          printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
       }
       channel.disconnect()
       offsetMap.toMap
