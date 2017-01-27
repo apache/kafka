@@ -138,10 +138,10 @@ public final class RecordBatch {
      *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
-     * This methods sets {@code expiryErrorMessage} if the batch has timed out. {@link #expire()} must
-     * be invoked to expire the batch.
+     * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
+     * {@link #expired()} must be invoked to complete the produce future and invoke callbacks.
      */
-    public boolean maybeMarkExpired(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
+    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
 
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
             expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
@@ -150,16 +150,20 @@ public final class RecordBatch {
         else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
             expiryErrorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
 
-        return expiryErrorMessage != null;
+        boolean expired = expiryErrorMessage != null;
+        if (expired)
+            close();
+        return expired;
     }
 
     /**
-     * Performs actual expiry of this batch. This method should be invoked only if
-     * {@link #maybeMarkExpired(int, long, long, long, boolean)} returned true.
+     * Completes the produce future with timeout exception and invokes callbacks.
+     * This method should be invoked only if {@link #maybeExpire(int, long, long, long, boolean)}
+     * returned true.
      */
-    void expire() {
+    void expired() {
         if (expiryErrorMessage == null)
-            throw new IllegalStateException("Batch has not been marked for expiry");
+            throw new IllegalStateException("Batch has not expired");
         this.done(-1L, Record.NO_TIMESTAMP,
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + expiryErrorMessage));
     }

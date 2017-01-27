@@ -243,12 +243,13 @@ public final class RecordAccumulator {
                     while (batchIterator.hasNext()) {
                         RecordBatch batch = batchIterator.next();
                         boolean isFull = batch != lastBatch || batch.isFull();
-                        // Check if the batch has expired. Actual expiry is done after completing the iterations
-                        // since sends invoked from callbacks may append more batches to the deque being iterated.
-                        if (batch.maybeMarkExpired(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
+                        // Check if the batch has expired. Expired batches are closed by maybeExpire, but callbacks
+                        // are invoked after completing the iterations, since sends invoked from callbacks
+                        // may append more batches to the deque being iterated. The batch is deallocated after
+                        // callbacks are invoked.
+                        if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
                             count++;
-                            batch.close();
                             batchIterator.remove();
                         } else {
                             // Stop at the first batch that has not expired.
@@ -261,7 +262,7 @@ public final class RecordAccumulator {
         if (!expiredBatches.isEmpty()) {
             log.trace("Expired {} batches in accumulator", count);
             for (RecordBatch batch : expiredBatches) {
-                batch.expire();
+                batch.expired();
                 deallocate(batch);
             }
         }
