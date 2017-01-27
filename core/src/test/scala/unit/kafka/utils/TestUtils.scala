@@ -289,6 +289,11 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
+   */
+  def fail(msg: String): Nothing = throw new AssertionError(msg)
+
+  /**
    * Wrap a single record log buffer.
    */
   def singletonRecords(value: Array[Byte],
