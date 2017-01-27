@@ -311,8 +311,8 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey1 : expectedKeys) {
-            driver.process(topic1, expectedKey1, "X" + expectedKey1);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-XX0+YY0)", "1:(X1+YY1<-XX1+YY1)", "2:(X2+YY2<-XX2+YY2)", "3:(X3+YY3<-XX3+YY3)");
