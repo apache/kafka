@@ -13,13 +13,13 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -32,7 +32,10 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -44,12 +47,12 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
 import java.util.Properties;
-import java.util.HashMap;
-import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 public class StreamsKafkaClient {
@@ -87,7 +90,10 @@ public class StreamsKafkaClient {
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", StreamsConfig.CLIENT_ID_CONFIG);
 
-        final Metadata metadata = new Metadata(streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
+        final Metadata metadata = new Metadata(streamsConfig.getLong(
+            StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG)
+        );
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
@@ -102,17 +108,24 @@ public class StreamsKafkaClient {
 
         final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);
 
-        final Selector selector = new Selector(streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, "kafka-client", channelBuilder);
+        final Selector selector = new Selector(
+            streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+            metrics,
+            time,
+            "kafka-client",
+            channelBuilder);
 
         kafkaClient = new NetworkClient(
-                selector,
-                metadata,
-                streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
-                MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
-                streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
-                streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
-                streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG), time, true);
+            selector,
+            metadata,
+            streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
+            MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
+            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+            streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
+            streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
+            streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
+            time,
+            true);
     }
 
     public void close() throws IOException {
@@ -133,19 +146,29 @@ public class StreamsKafkaClient {
             for (String key : topicProperties.stringPropertyNames()) {
                 topicConfig.put(key, topicProperties.getProperty(key));
             }
-            final CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(topicsMap.get(internalTopicConfig), (short) replicationFactor, topicConfig);
+            final CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(
+                topicsMap.get(internalTopicConfig),
+                (short) replicationFactor,
+                topicConfig);
 
             topicRequestDetails.put(internalTopicConfig.name(), topicDetails);
         }
 
-        final ClientRequest clientRequest = kafkaClient.newClientRequest(getBrokerId(), new CreateTopicsRequest.Builder(topicRequestDetails, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG)), Time.SYSTEM.milliseconds(), true, null);
+        final ClientRequest clientRequest = kafkaClient.newClientRequest(
+            getBrokerId(),
+            new CreateTopicsRequest.Builder(
+                topicRequestDetails,
+                streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG)),
+            Time.SYSTEM.milliseconds(),
+            true);
         final ClientResponse clientResponse = sendRequest(clientRequest);
 
         if (!clientResponse.hasResponse()) {
             throw new StreamsException("Empty response for client request.");
         }
         if (!(clientResponse.responseBody() instanceof CreateTopicsResponse)) {
-            throw new StreamsException("Inconsistent response type for internal topic creation request. Expected CreateTopicsResponse but received " + clientResponse.responseBody().getClass().getName());
+            throw new StreamsException("Inconsistent response type for internal topic creation request. " +
+                "Expected CreateTopicsResponse but received " + clientResponse.responseBody().getClass().getName());
         }
         final CreateTopicsResponse createTopicsResponse =  (CreateTopicsResponse) clientResponse.responseBody();
 
@@ -159,7 +182,9 @@ public class StreamsKafkaClient {
 
     private String getBrokerId() {
         String brokerId = null;
-        final Metadata metadata = new Metadata(streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
+        final Metadata metadata = new Metadata(
+            streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadata.update(Cluster.bootstrap(addresses), Time.SYSTEM.milliseconds());
 
@@ -196,8 +221,9 @@ public class StreamsKafkaClient {
                 if (response.requestHeader().correlationId() == clientRequest.correlationId()) {
                     return response;
                 } else {
-                    throw new StreamsException("Inconsistent response received from the broker " + clientRequest.destination() + ", expected correlation id " + clientRequest.correlationId() + ", but received " +
-                            response.requestHeader().correlationId());
+                    throw new StreamsException("Inconsistent response received from the broker "
+                        + clientRequest.destination() + ", expected correlation id " + clientRequest.correlationId()
+                        + ", but received " + response.requestHeader().correlationId());
                 }
             }
         }
@@ -210,16 +236,43 @@ public class StreamsKafkaClient {
      */
     public Collection<MetadataResponse.TopicMetadata> fetchTopicsMetadata() {
 
-        final ClientRequest clientRequest = kafkaClient.newClientRequest(getBrokerId(), new MetadataRequest.Builder(null), Time.SYSTEM.milliseconds(), true, null);
+        final ClientRequest clientRequest = kafkaClient.newClientRequest(
+            getBrokerId(),
+            new MetadataRequest.Builder(null),
+            Time.SYSTEM.milliseconds(),
+            true);
         final ClientResponse clientResponse = sendRequest(clientRequest);
         if (!clientResponse.hasResponse()) {
             throw new StreamsException("Empty response for client request.");
         }
         if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
-            throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
+            throw new StreamsException("Inconsistent response type for internal topic metadata request. " +
+                "Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
         }
         final MetadataResponse metadataResponse = (MetadataResponse) clientResponse.responseBody();
         return metadataResponse.topicMetadata();
     }
 
+    public void checkBrokerCompatibility() {
+        final ClientRequest clientRequest = kafkaClient.newClientRequest(
+            getBrokerId(),
+            new ApiVersionsRequest.Builder(),
+            Time.SYSTEM.milliseconds(),
+            true);
+
+        final ClientResponse clientResponse = sendRequest(clientRequest);
+        if (!clientResponse.hasResponse()) {
+            throw new StreamsException("Empty response for client request.");
+        }
+        if (!(clientResponse.responseBody() instanceof ApiVersionsResponse)) {
+            throw new StreamsException("Inconsistent response type for API versions request. " +
+                "Expected ApiVersionsResponse but received " + clientResponse.responseBody().getClass().getName());
+        }
+
+        final ApiVersionsResponse apiVersionsResponse =  (ApiVersionsResponse) clientResponse.responseBody();
+
+        if (apiVersionsResponse.apiVersion(ApiKeys.CREATE_TOPICS.id) == null) {
+            throw new StreamsException("Kafka Streams requires broker version 0.10.1.x or higher.");
+        }
+    }
 }
