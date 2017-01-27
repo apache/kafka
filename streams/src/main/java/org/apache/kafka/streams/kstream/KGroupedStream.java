@@ -17,20 +17,24 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
- * {@link KGroupedStream} is an abstraction of a <i>grouped</i> record stream of key-value pairs.
+ * {@link KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
  * It is an intermediate representation of a {@link KStream} in order to apply an aggregation operation on the original
  * {@link KStream} records.
  * <p>
- * A {@link KGroupedStream} must be obtained from a {@link KStream} via {@link KStream#groupByKey() #groupByKey()} or
- * {@link KStream#groupBy(KeyValueMapper) #groupBy(...)}.
+ * It is an intermediate representation after a grouping of a {@link KStream} before an aggregation is applied to the
+ * new partitions resulting in a {@link KTable}.
+ * <p>
+ * A {@link KGroupedStream} must be obtained from a {@link KStream} via {@link KStream#groupByKey() groupByKey()} or
+ * {@link KStream#groupBy(KeyValueMapper) groupBy(...)}.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
@@ -41,7 +45,7 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code storeName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -49,9 +53,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -72,16 +76,24 @@ public interface KGroupedStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param storeName the name of the underlying {@link KTable} state store
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) count (i.e., number of records) for each key
+     * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
+     * represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> count(final String storeName);
 
     /**
      * Count the number of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
-     * The result is written into a local {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * Records with {@code null} key or value are ignored.
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -96,15 +108,15 @@ public interface KGroupedStream<K, V> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) count (i.e., number of records) for each key
+     * @param storeSupplier user defined state store supplier
+     * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
+     * represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
@@ -116,9 +128,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -142,21 +154,29 @@ public interface KGroupedStream<K, V> {
      *
      * @param windows   the specification of the aggregation {@link Windows}
      * @param storeName the name of the underlying {@link KTable} state store
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
-     * the latest (rolling) count (i.e., number of records) for each key within a window
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final String storeName);
 
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
-     * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
+     * materialized view) provided by the given {@code storeSupplier}.
      * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -174,9 +194,9 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param windows       the specification of the aggregation {@link Windows}
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
-     * the latest (rolling) count (i.e., number of records) for each key within a window
+     * @param storeSupplier user defined state store supplier
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final StateStoreSupplier<WindowStore> storeSupplier);
@@ -184,12 +204,19 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key into {@link SessionWindows}.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating
      * materialized view) that can be queried using the provided {@code storeName}.
      * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -207,19 +234,26 @@ public interface KGroupedStream<K, V> {
      *
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @param storeName      the name of the state store created from this operation.
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName);
 
     /**
      * Count the number of records in this stream by the grouped key into {@link SessionWindows}.
-     * Records with {@code null} value are ignored.
-     * The result is written into a local {@link SessionStore} provided by the given {@code storeSupplier}.
+     * Records with {@code null} key or value are ignored.
+     * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -236,35 +270,34 @@ public interface KGroupedStream<K, V> {
      *
      *
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
-     * @param storeSupplier  user defined state store supplier {@link StateStoreSupplier}
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     * @param storeSupplier  user defined state store supplier
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
+     * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
                                     final StateStoreSupplier<SessionStore> storeSupplier);
 
     /**
      * Combine the values of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Serde, String)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code storeName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
+     * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
+     * aggregate and the record's value.
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
+     * value as-is.
+     * Thus, {@code reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
-     * <p>
-     * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
-     * value as-is.
-     * Thus, {@code reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -286,26 +319,34 @@ public interface KGroupedStream<K, V> {
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @param storeName the name of the underlying {@link KTable} state store
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) aggregate for each key
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
                         final String storeName);
 
     /**
      * Combine the value of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, StateStoreSupplier)}).
-     * The result is written into a local {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
      * max.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -320,16 +361,16 @@ public interface KGroupedStream<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) aggregate for each key
+     * @param storeSupplier user defined state store supplier
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
                         final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Combine the number of records in this stream by the grouped key and the defined windows.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)}).
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
@@ -340,18 +381,18 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
-     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
-     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
-     * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Windows, String)} can be used to compute aggregate functions like sum, min, or max.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -376,7 +417,7 @@ public interface KGroupedStream<K, V> {
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @param windows   the specification of the aggregation {@link Windows}
      * @param storeName the name of the state store created from this operation
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -385,22 +426,30 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Combine the values of records in this stream by the grouped key and the defined windows.
-     * Records with {@code null} value are ignored.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)}).
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
-     * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
+     * materialized view) provided by the given {@code storeSupplier}.
      * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Windows, StateStoreSupplier)} can be used to compute aggregate functions like sum,
      * min, or max.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -419,8 +468,8 @@ public interface KGroupedStream<K, V> {
      *
      * @param reducer       a {@link Reducer} that computes a new aggregate result
      * @param windows       the specification of the aggregation {@link Windows}
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
+     * @param storeSupplier user defined state store supplier
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -429,6 +478,7 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)}).
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating
@@ -437,19 +487,19 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
-     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
-     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
-     * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, SessionWindows, String)} can be used to compute aggregate functions like sum, min,
      * or max.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -471,9 +521,8 @@ public interface KGroupedStream<K, V> {
      * @param reducer           the instance of {@link Reducer}
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
      * @param storeName         the name of the state store created from this operation
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) aggregate for each key within that window
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
+     * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
@@ -481,26 +530,28 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Combine values of this stream by the grouped key into {@link SessionWindows}.
+     * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)}).
-     * The result is written into a local {@link SessionStore} provided by the given {@code storeSupplier}.
+     * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
-     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
-     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
-     * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
-     * If there is no current aggregate the {@link Reducer} is not applied an the new aggregate will be the record's
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, SessionWindows, StateStoreSupplier)} can be used to compute aggregate functions like
      * sum, min, or max.
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -521,10 +572,9 @@ public interface KGroupedStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * @param reducer           the instance of {@link Reducer}
      * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
-     * @param storeSupplier     user defined state store supplier {@link StateStoreSupplier}
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) aggregate for each key within that window
+     * @param storeSupplier     user defined state store supplier
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
+     * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
@@ -533,19 +583,12 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it allows the
-     * result to have a different type than the input values.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it, for example,
+     * allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code storeName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
-     * <p>
-     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
-     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is processed to
      * provide an initial intermediate aggregation result that is used to process the first record.
@@ -553,7 +596,14 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Serde, String)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count(String)})
+     * count (c.f. {@link #count(String)}).
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -579,8 +629,8 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param storeName     the name of the state store created from this operation
      * @param <VR>          the value type of the resulting {@link KTable}
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) aggregate for each key
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
@@ -589,10 +639,11 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, StateStoreSupplier)} combining via reduce(...)} as it
-     * allows the result to have a different type than the input values.
-     * The result is written into a local {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, StateStoreSupplier) combining via reduce(...)} as it,
+     * for example, allows the result to have a different type than the input values.
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is processed to
@@ -601,7 +652,14 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, StateStoreSupplier)} can be used to compute aggregate functions
-     * like count (c.f. {@link #count(String)})
+     * like count (c.f. {@link #count(String)}).
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -617,10 +675,10 @@ public interface KGroupedStream<K, V> {
      *
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @param storeSupplier user defined state store supplier
      * @param <VR>          the value type of the resulting {@link KTable}
-     * @return a {@link KTable} that contains "update" records with unmodified keys and values that represent the latest
-     * (rolling) aggregate for each key
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
@@ -628,9 +686,9 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Windows, String)} combining via reduce(...)} as it
-     * allows the result to have a different type than the input values.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, Windows, String) combining via reduce(...)} as it,
+     * for example, allows the result to have a different type than the input values.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
@@ -639,20 +697,20 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
-     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
-     * the same key.
-     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the cache size.
-     * You can configure the cache size via {@link StreamsConfig} parameter
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG CACHE_MAX_BYTES_BUFFERING_CONFIG}.
-     * <p>
      * The specified {@link Initializer} is applied once per window directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
      * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Windows, Serde, String)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)})
+     * functions like count (c.f. {@link #count(String)}).
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -682,7 +740,7 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <VR>          the value type of the resulting {@link KTable}
      * @param storeName     the name of the state store created from this operation
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -693,12 +751,13 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, Windows, StateStoreSupplier)} combining via
-     * reduce(...)} as it allows the result to have a different type than the input values.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, Windows, StateStoreSupplier) combining via
+     * reduce(...)} as it, for example, allows the result to have a different type than the input values.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
-     * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
+     * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
+     * materialized view) provided by the given {@code storeSupplier}.
      * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
@@ -709,13 +768,20 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Windows, StateStoreSupplier)} can be used to compute aggregate
-     * functions like count (c.f. {@link #count(String)}) TODO add more examples.
+     * functions like count (c.f. {@link #count(String)}).
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
      * Use {@link StateStoreSupplier#name()} to get the store name:
      * <pre>{@code
-     * KafkaStreams streams = ... // some windowed aggregation on value type double TODO update example
+     * KafkaStreams streams = ... // some windowed aggregation on value type Long
      * Sting storeName = storeSupplier.name();
      * ReadOnlyWindowStore<String,Long> localWindowStore = streams.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
      * String key = "some-key";
@@ -730,8 +796,8 @@ public interface KGroupedStream<K, V> {
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param windows       the specification of the aggregation {@link Windows}
      * @param <VR>          the value type of the resulting {@link KTable}
-     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
-     * @return a windowed {@link KTable} that contains "update" records with unmodified keys and values that represent
+     * @param storeSupplier user defined state store supplier
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -741,9 +807,9 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined {@link SessionWindows}.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, SessionWindows, String)} combining via
-     * reduce(...)} as it allows the result to have a different type than the input values.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, SessionWindows, String) combining via
+     * reduce(...)} as it, for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating
      * materialized view) that can be queried using the provided {@code storeName}.
      * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
@@ -757,6 +823,13 @@ public interface KGroupedStream<K, V> {
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, String)} can be used to compute
      * aggregate functions like count (c.f. {@link #count(String)})
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -779,9 +852,8 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulting {@link KTable}
      * @param storeName     the name of the state store created from this operation
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values with type {@code T}
-     *         that represent the latest (rolling) aggregate for each key within that window
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
+     * the latest (rolling) aggregate for each key within a window
      */
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
@@ -792,10 +864,11 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined {@link SessionWindows}.
-     * Records with {@code null} value are ignored.
-     * Aggregating is a generalization of {@link #reduce(Reducer, SessionWindows, String)} combining via
-     * reduce(...)} as it allows the result to have a different type than the input values.
-     * The result is written into a local {@link SessionStore} provided by the given {@code storeSupplier}.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, SessionWindows, String) combining via
+     * reduce(...)} as it, for example, allows the result to have a different type than the input values.
+     * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
      * SessionWindows are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
@@ -806,7 +879,14 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code #aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, StateStoreSupplier)} can be used
-     * to compute aggregate functions like count (c.f. {@link #count(String)})
+     * to compute aggregate functions like count (c.f. {@link #count(String)}).
+     * <p>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same window and key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -828,11 +908,10 @@ public interface KGroupedStream<K, V> {
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @param aggValueSerde  aggregate value serdes for materializing the aggregated table,
      *                       if not specified the default serdes defined in the configs will be used
-     * @param storeSupplier  user defined state store supplier {@link StateStoreSupplier}
+     * @param storeSupplier  user defined state store supplier
      * @param <T>           the value type of the resulting {@link KTable}
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values with type {@code T}
-     *         that represent the latest (rolling) aggregate for each key within that window
+     * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
+     * the latest (rolling) aggregate for each key within a window
      */
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
