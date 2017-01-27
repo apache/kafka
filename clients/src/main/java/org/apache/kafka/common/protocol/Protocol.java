@@ -1175,11 +1175,7 @@ public class Protocol {
 
         for (ApiKeys key : ApiKeys.values()) {
             // Key
-            b.append("<h5>");
-            b.append(key.name);
-            b.append(" API (Key: ");
-            b.append(key.id);
-            b.append("):</h5>\n\n");
+        	b.append("<h5> <a name=\"" + key.name + "\">" + key.name + " API (Key: " + key.id + "):</a></h5>\n\n");
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = REQUESTS[key.id];
