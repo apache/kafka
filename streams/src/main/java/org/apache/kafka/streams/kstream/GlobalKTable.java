@@ -37,22 +37,24 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * {@link KeyValue} of the left hand side {@link KStream} to the key of the right hand side {@link GlobalKTable}.
  * <p>
  * A {@link GlobalKTable} is created via a {@link KStreamBuilder}. For example:
- * <pre>
- *     builder.globalTable("topic-name", "queryable-store-name");
- * </pre>
+ * <pre>{@code
+ * builder.globalTable("topic-name", "queryable-store-name");
+ * }</pre>
  * all {@link GlobalKTable}s are backed by a {@link ReadOnlyKeyValueStore} and are therefore queryable via the
  * interactive queries API.
  * For example:
  * <pre>{@code
- *     final GlobalKTable globalOne = builder.globalTable("g1", "g1-store");
- *     final GlobalKTable globalTwo = builder.globalTable("g2", "g2-store");
- *     ...
- *     final KafkaStreams streams = ...;
- *     streams.start()
- *     ...
- *     ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
- *     view.get(key);
+ * final GlobalKTable globalOne = builder.globalTable("g1", "g1-store");
+ * final GlobalKTable globalTwo = builder.globalTable("g2", "g2-store");
+ * ...
+ * final KafkaStreams streams = ...;
+ * streams.start()
+ * ...
+ * ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
+ * view.get(key); // can be done on any key, as all keys are present
  *}</pre>
+ * Note that in contrast to {@link KTable} a {@link GlobalKTable}'s state holds a full copy if the underlying topic and
+ * thus, all keys can be queried locally.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
