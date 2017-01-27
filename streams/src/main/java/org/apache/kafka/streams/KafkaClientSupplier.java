@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import java.util.Map;
 
 /**
- * {@code KafkaClientSupplier} than can be used to provide custom Kafka clients to a {@link KafkaStreams} instance.
+ * {@code KafkaClientSupplier} can be used to provide custom Kafka clients to a {@link KafkaStreams} instance.
  *
  * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig, KafkaClientSupplier)
  */
@@ -49,7 +49,7 @@ public interface KafkaClientSupplier {
     Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config);
 
     /**
-     * Creates a {@link Consumer} which is used to read records to restore {@link StateStore}s.
+     * Create a {@link Consumer} which is used to read records to restore {@link StateStore}s.
      *
      * @param config {@link StreamsConfig#getRestoreConsumerConfigs(String) restore consumer config} which is supplied
      *               by the {@link StreamsConfig} given to the {@link KafkaStreams}

@@ -38,13 +38,19 @@ public interface StreamsMetrics {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * Add a latency and throughput sensor and default associated metrics.
-     * Metrics include both latency ones (average and max latency) and throughput ones (operations/time unit).
+     * Add a latency and throughput sensor for a specific operation, which will include the following sensors:
+     * <ol>
+     *   <li>average latency</li>
+     *   <li>max latency</li>
+     *   <li>throughput (num.operations / time unit)</li>
+     * </ol>
+     * Also create a parent sensor with the same metrics that aggregates all entities with the same operation under the
+     * same scope if it has not been created.
      *
      * @param scopeName      name of the scope, could be the type of the state store, etc.
      * @param entityName     name of the entity, could be the name of the state store instance, etc.
-     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param operationName  name of the operation, could be get / put / delete / etc.
+     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags           additional tags of the sensor
      * @return The added sensor.
      */
@@ -69,15 +75,19 @@ public interface StreamsMetrics {
                        final long endNs);
 
     /**
-     * Add a throughput sensor and default associated metrics.
-     * Metrics include throughput ones (operations/time unit).
-     * This sensor is a strict subset of the sensor created by
+     * Add a throughput sensor for a specific operation:
+     * <ol>
+     *   <li>throughput (num.operations / time unit)</li>
+     * </ol>
+     * Also create a parent sensor with the same metrics that aggregates all entities with the same operation under the
+     * same scope if it has not been created.
+     * This sensor is a strict subset of the sensors created by
      * {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}.
      *
      * @param scopeName      name of the scope, could be the type of the state store, etc.
      * @param entityName     name of the entity, could be the name of the state store instance, etc.
-     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param operationName  name of the operation, could be get / put / delete / etc.
+     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags           additional tags of the sensor
      * @return The added sensor.
      */
@@ -88,7 +98,7 @@ public interface StreamsMetrics {
                                final String... tags);
 
     /**
-     * Records the throughput value of a sensor.
+     * Record the throughput value of a sensor.
      *
      * @param sensor add Sensor whose throughput we are recording
      * @param value  throughput value

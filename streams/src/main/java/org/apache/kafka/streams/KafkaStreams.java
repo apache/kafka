@@ -76,13 +76,12 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
 /**
- * {@code KafkaStreams} allows for performing continuous computation on input coming from one or more input topics and
+ * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero, one, or more output topics.
  * <p>
  * The computational logic can be specified either by using the {@link TopologyBuilder} to define a DAG topology of
  * {@link Processor}s or by using the {@link KStreamBuilder} which provides the high-level DSL to define transformations.
  * <p>
- * {@code KafkaStreams} manages the lifecycle of a {@code KafkaStreams} instance.
  * One {@code KafkaStreams} instance can contain one or more threads specified in the configs for the processing work.
  * <p>
  * A {@code KafkaStreams} instance can co-ordinate with any other instances with the same
@@ -380,7 +379,10 @@ public class KafkaStreams {
     }
 
     /**
-     * Checks if the used brokers have version 0.10.1.x or higher.
+     * Check if the used brokers have version 0.10.1.x or higher.
+     * <p>
+     * Note, for <em>pre</em> 0.10.x brokers the broker version cannot be checked and the client will hang and retry
+     * until it {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
      *
      * @throws StreamsException if brokers have version 0.10.0.x
      */
@@ -399,7 +401,11 @@ public class KafkaStreams {
 
     /**
      * Start the {@code KafkaStreams} instance by starting all its threads.
-     *
+     * <p>
+     * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
+     * There will be no error and the client will hang and retry to verify the broker version until it
+     * {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
+
      * @throws IllegalStateException if process was already started
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
@@ -433,9 +439,9 @@ public class KafkaStreams {
     }
 
     /**
-     * Shutdown this stream instance by signaling all the threads to stop, and then wait up to the timeout for the
+     * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * A timeout of 0 means to wait forever.
+     * A {@code timeout} of 0 means to wait forever.
      *
      * @param timeout  how long to wait for the threads to shutdown
      * @param timeUnit unit of time used for timeout
@@ -504,9 +510,25 @@ public class KafkaStreams {
      */
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("\tKafkaStreams processID:" + processId + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
+     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
+     * {@link TopologyBuilder} and {@link KStreamBuilder}).
+     *
+     * @param indent the top-level indent for each line
+     * @return A string representation of the Kafka Streams instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder()
+            .append(indent)
+            .append("KafkaStreams processID: ")
+            .append(processId)
+            .append("\n");
         for (final StreamThread thread : threads) {
-            sb.append(thread.toString("\t\t"));
+            sb.append(thread.toString(indent + "\t"));
         }
         sb.append("\n");
 
@@ -514,7 +536,7 @@ public class KafkaStreams {
     }
 
     /**
-     * Do a clean up of local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}), by deleting all
+     * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
      * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
      * <p>
      * May only be called either before this {@code KafkaStreams} instance is {@link KafkaStreams#start() started} or
@@ -543,7 +565,7 @@ public class KafkaStreams {
     }
 
     /**
-     * Sets the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
+     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
      * terminates due to an uncaught exception.
      *
      * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler

@@ -56,7 +56,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default {@code "auto.offset.reset"} strategy and default key and value deserializers as specified in the
      * {@link StreamsConfig config} are used.
      * <p>
-     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -73,7 +73,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KStream} from the specified topics.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
-     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -132,7 +132,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -153,7 +153,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KStream} from the specified topics.
      * <p>
-     * If multiple topics are specified there are nor ordering guaranteed for records from different topics.
+     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -424,7 +424,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
-     * Note that {@link GlobalKTable} does always apply {@code "auto.offset.reset"} strategy {@code "earliest"}
+     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
      *
      * @param topic     the topic name; cannot be {@code null}
@@ -454,7 +454,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
-     * Note that {@link GlobalKTable} does always apply {@code "auto.offset.reset"} strategy {@code "earliest"}
+     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
      *
      * @param keySerde  key serde used to send key-value pairs,
