@@ -21,14 +21,15 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 /**
  * The {@link ValueMapper} interface for mapping a value to a new value of arbitrary type.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object)} is invoked individually for each record
- * of a stream.
- * Thus, if {@link ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the
- * record's key is preserved.
+ * of a stream (cf. {@link ValueTransformer} for stateful value transformation).
+ * If {@link ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the record's
+ * key is preserved.
  * If a record's key and value should be modified {@link KeyValueMapper} can be used.
  *
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see KeyValueMapper
+ * @see ValueTransformer
  * @see KStream#mapValues(ValueMapper)
  * @see KStream#flatMapValues(ValueMapper)
  * @see KTable#mapValues(ValueMapper)
