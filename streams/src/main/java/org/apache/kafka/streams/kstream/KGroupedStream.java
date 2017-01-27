@@ -91,10 +91,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -129,10 +128,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
@@ -176,10 +174,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -217,10 +214,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -255,10 +251,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -349,10 +344,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -453,10 +447,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -664,10 +657,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -781,10 +773,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -836,10 +827,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -894,10 +884,9 @@ public interface KGroupedStream<K, V> {
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
-     * parallel running Kafka Streams instances, and the
-     * {@link org.apache.kafka.streams.StreamsConfig configuration} parameters for
-     * {@link org.apache.kafka.streams.StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link org.apache.kafka.streams.StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * To query the local {@link SessionStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
