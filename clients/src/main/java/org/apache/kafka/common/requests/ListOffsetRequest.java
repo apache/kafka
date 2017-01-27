@@ -87,7 +87,8 @@ public class ListOffsetRequest extends AbstractRequest {
         public ListOffsetRequest build() {
             short version = version();
             if (version < minVersion) {
-                throw new UnsupportedVersionException("The broker is too old to understand this request.");
+                throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest because " +
+                    "we require features supported only in " + minVersion + " or later.");
             }
             if (version == 0) {
                 if (offsetData == null) {
@@ -105,7 +106,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 }
             } else {
                 if (offsetData != null) {
-                    throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest with v0 " +
+                    throw new RuntimeException("Cannot create a v" + version + " ListOffsetRequest with v0 " +
                         "PartitionData.");
                 } else if (partitionTimestamps == null) {
                     throw new RuntimeException("Must set partitionTimestamps when creating a v" +
