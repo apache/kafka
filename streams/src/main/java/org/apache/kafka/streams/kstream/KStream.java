@@ -31,14 +31,14 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 
 /**
- * {@link KStream} is an abstraction of a <i>record stream</i> of key-value pairs, i.e., each record is an independent
- * entity/event in the real world.
+ * {@link KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
+ * independent entity/event in the real world.
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
  * <p>
- * A {@link KStream} is either defined from one or multiple Kafka topics that are consumed message by message or the
- * result of a {@link KStream} transformation.
- * A {@link KTable} can also be converted into a {@link KStream}.
+ * A {@link KStream} is either {@link KStreamBuilder#stream(String...) defined from one or multiple Kafka topics} that
+ * are consumed message by message or the result of a {@link KStream} transformation.
+ * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@link KStream}.
  * <p>
  * A {@link KStream} can be transformed record by record, joined with another {@link KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
@@ -51,6 +51,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * @param <V> Type of values
  * @see KTable
  * @see KGroupedStream
+ * @see KStreamBuilder#stream(String...)
  */
 @SuppressWarnings("unused")
 @InterfaceStability.Unstable
@@ -265,8 +266,8 @@ public interface KStream<K, V> {
 
     /**
      * Print the records of this stream to {@code System.out}.
-     * This function will use the generated name of the parent processor node to label the key/value pairs printed out
-     * to the console.
+     * This function will use the generated name of the parent processor node to label the key/value pairs printed to
+     * the console.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -278,7 +279,7 @@ public interface KStream<K, V> {
 
     /**
      * Print the records of this stream to {@code System.out}.
-     * This function will use the given name to label the key/value pairs printed out to the console.
+     * This function will use the given name to label the key/value pairs printed to the console.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -286,14 +287,14 @@ public interface KStream<K, V> {
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
      *
-     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param streamName the name used to label the key/value pairs printed to the console
      */
     void print(final String streamName);
 
     /**
      * Print the records of this stream to {@code System.out}.
-     * This function will use the generated name of the parent processor node to label the key/value pairs printed out
-     * to the console.
+     * This function will use the generated name of the parent processor node to label the key/value pairs printed to
+     * the console.
      * <p>
      * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -318,7 +319,7 @@ public interface KStream<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param streamName the name used to label the key/value pairs printed to the console
      */
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
@@ -326,8 +327,8 @@ public interface KStream<K, V> {
 
     /**
      * Write the records of this stream to a file at the given path.
-     * This function will use the generated name of the parent processor node to label the key/value pairs printed out
-     * to the file.
+     * This function will use the generated name of the parent processor node to label the key/value pairs printed to
+     * the file.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -341,7 +342,7 @@ public interface KStream<K, V> {
 
     /**
      * Write the records of this stream to a file at the given path.
-     * This function will use the given name to label the key/value printed out to the file.
+     * This function will use the given name to label the key/value printed to the file.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -357,8 +358,8 @@ public interface KStream<K, V> {
 
     /**
      * Write the records of this stream to a file at the given path.
-     * This function will use the generated name of the parent processor node to label the key/value pairs printed out
-     * to the file.
+     * This function will use the generated name of the parent processor node to label the key/value pairs printed to
+     * the file.
      * <p>
      * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
@@ -376,7 +377,7 @@ public interface KStream<K, V> {
 
     /**
      * Write the records of this stream to a file at the given path.
-     * This function will use the given name to label the key/value printed out to the file.
+     * This function will use the given name to label the key/value printed to the file.
      * <p>
      * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]}
      * before calling {@code toString()} on the deserialized object.
