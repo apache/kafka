@@ -158,7 +158,7 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
 
-  def add(memberId: String, member: MemberMetadata) {
+  def add(member: MemberMetadata) {
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
@@ -167,8 +167,8 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
     assert(supportsProtocols(member.protocols))
 
     if (leaderId == null)
-      leaderId = memberId
-    members.put(memberId, member)
+      leaderId = member.memberId
+    members.put(member.memberId, member)
   }
 
   def remove(memberId: String) {
