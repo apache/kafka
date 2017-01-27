@@ -18,6 +18,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.security.TestSecurityConfig;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
@@ -59,6 +61,62 @@ public class AbstractConfigTest {
         Map<String, Object> expected = new HashMap<>();
         expected.put("bar", "abc");
         assertEquals(expected, originalsWithPrefix);
+    }
+
+    @Test
+    public void testValuesWithPrefixOverride() {
+        String prefix = "prefix.";
+        Properties props = new Properties();
+        props.put("sasl.mechanism", "PLAIN");
+        props.put("prefix.sasl.mechanism", "GSSAPI");
+        props.put("prefix.sasl.kerberos.kinit.cmd", "/usr/bin/kinit2");
+        props.put("prefix.ssl.truststore.location", "my location");
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("ssl.keymanager.algorithm", "algorithm");
+        TestSecurityConfig config = new TestSecurityConfig(props);
+        Map<String, Object> valuesWithPrefixOverride = config.valuesWithPrefixOverride(prefix);
+
+        // prefix overrides global
+        assertTrue(config.unused().contains("prefix.sasl.mechanism"));
+        assertTrue(config.unused().contains("sasl.mechanism"));
+        assertEquals("GSSAPI", valuesWithPrefixOverride.get("sasl.mechanism"));
+        assertFalse(config.unused().contains("sasl.mechanism"));
+        assertFalse(config.unused().contains("prefix.sasl.mechanism"));
+
+        // prefix overrides default
+        assertTrue(config.unused().contains("prefix.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
+        assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("prefix.sasl.kerberos.kinit.cmd"));
+
+        // prefix override with no default
+        assertTrue(config.unused().contains("prefix.ssl.truststore.location"));
+        assertFalse(config.unused().contains("ssl.truststore.location"));
+        assertEquals("my location", valuesWithPrefixOverride.get("ssl.truststore.location"));
+        assertFalse(config.unused().contains("ssl.truststore.location"));
+        assertFalse(config.unused().contains("prefix.ssl.truststore.location"));
+
+        // global overrides default
+        assertTrue(config.unused().contains("ssl.keymanager.algorithm"));
+        assertEquals("algorithm", valuesWithPrefixOverride.get("ssl.keymanager.algorithm"));
+        assertFalse(config.unused().contains("ssl.keymanager.algorithm"));
+
+        // global with no default
+        assertTrue(config.unused().contains("sasl.kerberos.service.name"));
+        assertEquals("service name", valuesWithPrefixOverride.get("sasl.kerberos.service.name"));
+        assertFalse(config.unused().contains("sasl.kerberos.service.name"));
+
+        // unset with default
+        assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
+        assertEquals(SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+                valuesWithPrefixOverride.get("sasl.kerberos.min.time.before.relogin"));
+        assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
+
+        // unset with no default
+        assertFalse(config.unused().contains("ssl.key.password"));
+        assertNull(valuesWithPrefixOverride.get("ssl.key.password"));
+        assertFalse(config.unused().contains("ssl.key.password"));
     }
 
     @Test

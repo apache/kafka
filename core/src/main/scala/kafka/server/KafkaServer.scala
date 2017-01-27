@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.KAFKA_0_9_0
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.coordinator.GroupCoordinator
@@ -37,13 +37,13 @@ import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
-import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
-import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
@@ -360,8 +360,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
           config.interBrokerSecurityProtocol,
-          LoginType.SERVER,
-          config.values,
+          JaasContext.Type.SERVER,
+          config,
+          config.interBrokerListenerName,
           config.saslMechanismInterBrokerProtocol,
           config.saslInterBrokerHandshakeRequestEnable)
         val selector = new Selector(
