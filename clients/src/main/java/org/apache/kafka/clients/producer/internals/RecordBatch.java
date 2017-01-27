@@ -160,7 +160,6 @@ public final class RecordBatch {
     void expire() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not been marked for expiry");
-        close();
         this.done(-1L, Record.NO_TIMESTAMP,
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + expiryErrorMessage));
     }

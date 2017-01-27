@@ -39,10 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -417,18 +419,22 @@ public class RecordAccumulatorTest {
         int requestTimeout = 60;
         int messagesPerBatch = 1024 / msgSize;
 
-        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
+        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs,
+                retryBackoffMs, metrics, time);
         final AtomicInteger expiryCallbackCount = new AtomicInteger();
+        final AtomicReference<Exception> unexpectedException = new AtomicReference<Exception>();
         Callback callback = new Callback() {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception instanceof TimeoutException)
+                if (exception instanceof TimeoutException) {
                     expiryCallbackCount.incrementAndGet();
-                try {
-                    accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException("Unexpected interruption", e);
-                }
+                    try {
+                        accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException("Unexpected interruption", e);
+                    }
+                } else if (exception != null)
+                    unexpectedException.compareAndSet(null, exception);
             }
         };
 
@@ -443,6 +449,7 @@ public class RecordAccumulatorTest {
         List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch was not expired", 1, expiredBatches.size());
         assertEquals("Callbacks not invoked for expiry", messagesPerBatch, expiryCallbackCount.get());
+        assertNull("Unexpected exception", unexpectedException.get());
         assertEquals("Some messages not appended from expiry callbacks", 2, accum.batches().get(tp1).size());
         assertTrue("First batch not full after expiry callbacks with appends", accum.batches().get(tp1).peekFirst().isFull());
     }

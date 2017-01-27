@@ -248,6 +248,7 @@ public final class RecordAccumulator {
                         if (batch.maybeMarkExpired(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
                             count++;
+                            batch.close();
                             batchIterator.remove();
                         } else {
                             // Stop at the first batch that has not expired.
