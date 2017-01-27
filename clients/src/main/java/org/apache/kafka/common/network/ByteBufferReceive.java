@@ -33,7 +33,8 @@ public class ByteBufferReceive implements Receive {
         super();
         this.source = source;
         this.buffers = buffers;
-        for (ByteBuffer buffer : buffers) remaining += buffer.remaining();
+        for (ByteBuffer buffer : buffers)
+            remaining += buffer.remaining();
     }
 
     @Override

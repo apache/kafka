@@ -138,8 +138,8 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey1 : expectedKeys) {
-            driver.process(topic1, expectedKey1, "X" + expectedKey1);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
 
