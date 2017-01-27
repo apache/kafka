@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -48,17 +49,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -358,6 +360,18 @@ public class KafkaStreams {
         return new HostInfo(host, port);
     }
 
+    private void checkBrokerVersionCompatibility() {
+        final StreamsKafkaClient client = new StreamsKafkaClient(config);
+
+        client.checkBrokerCompatibility();
+
+        try {
+            client.close();
+        } catch (final IOException e) {
+            log.warn("Could not close StreamKafkaClient.", e);
+        }
+
+    }
 
     /**
      * Start the stream instance by starting all its threads.
@@ -368,6 +382,7 @@ public class KafkaStreams {
         log.debug("Starting Kafka Stream process");
 
         if (state == KafkaStreams.State.CREATED) {
+            checkBrokerVersionCompatibility();
             setState(KafkaStreams.State.RUNNING);
 
             if (globalStreamThread != null) {
