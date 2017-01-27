@@ -27,9 +27,9 @@ public final class OffsetAndTimestamp {
 
     public OffsetAndTimestamp(long offset, long timestamp) {
         this.offset = offset;
-        assert(this.offset >= 0);
+        assert this.offset >= 0;
         this.timestamp = timestamp;
-        assert(this.timestamp >= 0);
+        assert this.timestamp >= 0;
     }
 
     public long timestamp() {
