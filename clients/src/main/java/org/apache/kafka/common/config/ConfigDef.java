@@ -426,24 +426,26 @@ public class ConfigDef {
         }
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
-        for (ConfigKey key : configKeys.values()) {
-            Object value;
-            // props map contains setting - assign ConfigKey value
-            if (props.containsKey(key.name)) {
-                value = parseType(key.name, props.get(key.name), key.type);
-                // props map doesn't contain setting, the key is required because no default value specified - its an error
-            } else if (key.defaultValue == NO_DEFAULT_VALUE) {
-                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-            } else {
-                // otherwise assign setting its default value
-                value = key.defaultValue;
-            }
-            if (key.validator != null) {
-                key.validator.ensureValid(key.name, value);
-            }
-            values.put(key.name, value);
-        }
+        for (ConfigKey key : configKeys.values())
+            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name)));
         return values;
+    }
+
+    Object parseValue(ConfigKey key, Object value, boolean isSet) {
+        Object parsedValue;
+        if (isSet) {
+            parsedValue = parseType(key.name, value, key.type);
+        // props map doesn't contain setting, the key is required because no default value specified - its an error
+        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+            throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
+        } else {
+            // otherwise assign setting its default value
+            parsedValue = key.defaultValue;
+        }
+        if (key.validator != null) {
+            key.validator.ensureValid(key.name, parsedValue);
+        }
+        return parsedValue;
     }
 
     /**
