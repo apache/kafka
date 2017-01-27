@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
 
@@ -50,7 +51,7 @@ import java.util.Map;
  * This implies, that each input record defines its own window with start and end time being relative to the record's
  * timestamp.
  * <p>
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link TimestampExtractor}.
  *
  * @see TimeWindows
  * @see UnlimitedWindows
@@ -61,7 +62,7 @@ import java.util.Map;
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
 public class JoinWindows extends Windows<Window> {
