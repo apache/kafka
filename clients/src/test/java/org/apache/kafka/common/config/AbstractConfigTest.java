@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,6 +122,33 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("ssl.key.password"));
         assertNull(valuesWithPrefixOverride.get("ssl.key.password"));
         assertFalse(config.unused().contains("ssl.key.password"));
+    }
+
+    public static class TestAbstractConfig extends AbstractConfig {
+        private static final ConfigDef CONFIG = new ConfigDef().
+            configBuilder("foo.bar", Type.STRING, Importance.LOW).
+                defaultValue("").
+                deprecatedNames(Collections.singleton("foobar")).
+                build().
+            configBuilder("baz", Type.INT, Importance.HIGH).
+                defaultValue(0).
+                build();
+
+        public TestAbstractConfig(Map<?, ?> originals) {
+            super(CONFIG, originals, false);
+        }
+    }
+
+    @Test
+    public void testValuesWithPrefixOverrideWithDefaults() {
+        Properties props = new Properties();
+        props.put("myprefix.foo.bar", "blah");
+        props.put("myprefix.baz", 123);
+        props.put("foo.bar", "blah2");
+        TestAbstractConfig config = new TestAbstractConfig(props);
+        Map<String, Object> map = config.valuesWithPrefixOverride("myprefix.");
+        assertEquals("blah", map.get("foo.bar"));
+        assertEquals(123, map.get("baz"));
     }
 
     @Test

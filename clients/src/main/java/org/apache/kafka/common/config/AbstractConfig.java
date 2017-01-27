@@ -59,12 +59,12 @@ public class AbstractConfig {
             if (!(entry.getKey() instanceof String))
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
-        this.values = definition.parse(this.originals);
-        Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
+        Map<String, Object> values = definition.parse(this.originals);
+        Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
-            this.values.put(update.getKey(), update.getValue());
+            values.put(update.getKey(), update.getValue());
         }
-        definition.parse(this.values);
+        this.values = definition.parse(values);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         this.definition = definition;
         if (doLog)
@@ -194,10 +194,13 @@ public class AbstractConfig {
         Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
-                String keyWithNoPrefix = entry.getKey().substring(prefix.length());
+                String prefixedName = entry.getKey();
+                String keyWithNoPrefix = prefixedName.substring(prefix.length());
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
-                if (configKey != null)
-                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+                if (configKey != null) {
+                    result.put(configKey.name, ConfigDef.
+                        parseType(prefixedName, entry.getValue(), configKey.type));
+                }
             }
         }
         return result;
