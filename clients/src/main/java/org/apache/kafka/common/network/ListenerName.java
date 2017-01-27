@@ -23,6 +23,8 @@ import java.util.Objects;
 
 public final class ListenerName {
 
+    private static final String CONFIG_STATIC_PREFIX = "listener.name";
+
     /**
      * Create an instance with the security protocol name as the value.
      */
@@ -64,5 +66,9 @@ public final class ListenerName {
     @Override
     public String toString() {
         return "ListenerName(" + value + ")";
+    }
+
+    public String configPrefix() {
+        return CONFIG_STATIC_PREFIX + "." + value.toLowerCase(Locale.ROOT) + ".";
     }
 }
