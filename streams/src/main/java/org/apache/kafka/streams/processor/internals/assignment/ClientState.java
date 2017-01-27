@@ -107,8 +107,16 @@ public class ClientState<T> {
     }
 
     boolean hasMoreAvailableCapacityThan(final ClientState<T> other) {
-        final int otherLoad = other.assignedTaskCount() / other.capacity;
-        final int thisLoad = assignedTaskCount() / capacity;
+        if (this.capacity <= 0) {
+            throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
+        }
+
+        if (other.capacity <= 0) {
+            throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
+        }
+
+        final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
+        final double thisLoad = (double) assignedTaskCount() / capacity;
 
         if (thisLoad == otherLoad) {
             return capacity > other.capacity;

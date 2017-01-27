@@ -123,5 +123,29 @@ public class ClientStateTest {
         assertTrue(c2.hasMoreAvailableCapacityThan(client));
     }
 
+    @Test
+    public void shouldHaveMoreAvailableCapacityWhenCapacityIsTheSameButAssignedTasksIsLess() throws Exception {
+        final ClientState<Integer> c1 = new ClientState<>(3);
+        final ClientState<Integer> c2 = new ClientState<>(3);
+        for (int i = 0; i < 4; i++) {
+            c1.assign(i, true);
+            c2.assign(i, true);
+        }
+        c2.assign(5, true);
+        assertTrue(c1.hasMoreAvailableCapacityThan(c2));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowIllegalStateExceptionIfCapacityOfThisClientStateIsZero() throws Exception {
+        final ClientState<Integer> c1 = new ClientState<>(0);
+        c1.hasMoreAvailableCapacityThan(new ClientState<Integer>(1));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowIllegalStateExceptionIfCapacityOfOtherClientStateIsZero() throws Exception {
+        final ClientState<Integer> c1 = new ClientState<>(1);
+        c1.hasMoreAvailableCapacityThan(new ClientState<Integer>(0));
+    }
+
 
 }
