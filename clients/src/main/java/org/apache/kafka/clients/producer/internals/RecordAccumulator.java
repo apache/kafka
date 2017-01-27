@@ -262,7 +262,7 @@ public final class RecordAccumulator {
         if (!expiredBatches.isEmpty()) {
             log.trace("Expired {} batches in accumulator", count);
             for (RecordBatch batch : expiredBatches) {
-                batch.expired();
+                batch.expirationDone();
                 deallocate(batch);
             }
         }

@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A batch of records that is or will be sent.
@@ -48,7 +49,8 @@ public final class RecordBatch {
     long drainedMs;
     long lastAttemptMs;
     long lastAppendTime;
-    String expiryErrorMessage;
+    private String expiryErrorMessage;
+    private AtomicBoolean completed;
     private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
@@ -58,6 +60,7 @@ public final class RecordBatch {
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
+        this.completed = new AtomicBoolean();
     }
 
     /**
@@ -93,6 +96,9 @@ public final class RecordBatch {
     public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition, baseOffset, exception);
+
+        if (completed.getAndSet(true))
+            throw new IllegalStateException("Batch has already been completed");
 
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
@@ -139,7 +145,7 @@ public final class RecordBatch {
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
      * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
-     * {@link #expired()} must be invoked to complete the produce future and invoke callbacks.
+     * {@link #expirationDone()} must be invoked to complete the produce future and invoke callbacks.
      */
     public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
 
@@ -161,11 +167,11 @@ public final class RecordBatch {
      * This method should be invoked only if {@link #maybeExpire(int, long, long, long, boolean)}
      * returned true.
      */
-    void expired() {
+    void expirationDone() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not expired");
         this.done(-1L, Record.NO_TIMESTAMP,
-                  new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + expiryErrorMessage));
+                  new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 
     /**
