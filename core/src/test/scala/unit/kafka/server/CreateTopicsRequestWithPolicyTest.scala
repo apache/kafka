@@ -86,7 +86,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("policy-topic5" -> new CreateTopicsRequest.TopicDetails(assignments)).asJava, timeout).build(),
       Map("policy-topic5" -> error(Errors.POLICY_VIOLATION,
-        Some("Topic partitions should have at least 2 partitions, received 1 for partition 0"))), checkErrorMessage = true)
+        Some("Topic partitions should have at least 2 partitions, received 1 for partition 0"))))
 
     // Check that basic errors still work
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
