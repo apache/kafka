@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.junit.Assert._
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.easymock.EasyMock
 import org.junit.Test
 import kafka.api._
@@ -36,7 +36,6 @@ import kafka.utils.TestUtils._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 
 @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")

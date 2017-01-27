@@ -621,7 +621,7 @@ class GroupCoordinator(val brokerId: Int,
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
-    group.add(member.memberId, member)
+    group.add(member)
     maybePrepareRebalance(group)
     member
   }
