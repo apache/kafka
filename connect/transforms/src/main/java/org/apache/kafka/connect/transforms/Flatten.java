@@ -101,7 +101,12 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
     private void applySchemaless(Map<String, Object> originalRecord, String fieldNamePrefix, Map<String, Object> newRecord) {
         for (Map.Entry<String, Object> entry : originalRecord.entrySet()) {
             final String fieldName = fieldName(fieldNamePrefix, entry.getKey());
-            switch (ConnectSchema.schemaType(entry.getValue().getClass())) {
+            Object value = entry.getValue();
+            if (value == null) {
+                newRecord.put(fieldName(fieldNamePrefix, entry.getKey()), null);
+                return;
+            }
+            switch (ConnectSchema.schemaType(value.getClass())) {
                 case INT8:
                 case INT16:
                 case INT32:
@@ -121,7 +126,6 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     throw new ConnectException("Flatten transformation does not support " + entry.getValue().getClass()
                             + " for record without schemas (for field " + fieldName + ").");
             }
-            entry.getValue();
         }
     }
 
