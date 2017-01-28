@@ -28,7 +28,7 @@ import java.util.Map;
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
  */
-@InterfaceStability.Unstable
+
 public class WorkerConfig extends AbstractConfig {
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";

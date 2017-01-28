@@ -41,7 +41,7 @@ import java.util.Map;
  * "table_name"} and the sourceOffset as a Long containing the timestamp of the row.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public class SourceRecord extends ConnectRecord<SourceRecord> {
     private final Map<String, ?> sourcePartition;
     private final Map<String, ?> sourceOffset;

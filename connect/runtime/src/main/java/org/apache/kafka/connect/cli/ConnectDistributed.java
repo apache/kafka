@@ -47,7 +47,7 @@ import java.util.Map;
  * instances.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
