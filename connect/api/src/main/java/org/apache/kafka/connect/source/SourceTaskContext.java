@@ -16,14 +16,12 @@
  **/
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 /**
  * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
  * runtime.
  */
-@InterfaceStability.Unstable
 public interface SourceTaskContext {
     /**
      * Get the OffsetStorageReader for this SourceTask.

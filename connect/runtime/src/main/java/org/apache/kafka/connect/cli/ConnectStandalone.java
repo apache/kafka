@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
@@ -51,7 +50,6 @@ import java.util.Map;
  * fault tolerant by overriding the settings to use file storage for both.
  * </p>
  */
-@InterfaceStability.Unstable
 public class ConnectStandalone {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 
