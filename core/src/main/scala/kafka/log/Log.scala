@@ -316,7 +316,7 @@ class Log(@volatile var dir: File,
   /**
    * Check if we have the "clean shutdown" file
    */
-  private def hasCleanShutdownFile() = new File(dir.getParentFile, CleanShutdownFile).exists()
+  private def hasCleanShutdownFile = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.

@@ -166,7 +166,7 @@ object TestUtils extends Logging {
   def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
     servers.map { s =>
       val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener with name $listenerName"))
+        sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
   }
@@ -287,6 +287,11 @@ object TestUtils extends Logging {
 
     props
   }
+
+  /**
+   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
+   */
+  def fail(msg: String): Nothing = throw new AssertionError(msg)
 
   /**
    * Wrap a single record log buffer.

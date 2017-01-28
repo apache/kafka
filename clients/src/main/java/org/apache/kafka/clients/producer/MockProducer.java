@@ -116,11 +116,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         int partition = 0;
         if (this.cluster.partitionsForTopic(record.topic()) != null)
             partition = partition(record, this.cluster);
-        ProduceRequestResult result = new ProduceRequestResult();
-        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, Record.NO_TIMESTAMP, 0, 0, 0);
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
+        ProduceRequestResult result = new ProduceRequestResult(topicPartition);
+        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, Record.NO_TIMESTAMP, 0, 0, 0);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(topicPartition, offset,
+        Completion completion = new Completion(offset,
                                                new RecordMetadata(topicPartition, 0, offset, Record.NO_TIMESTAMP, 0, 0, 0),
                                                result, callback);
         this.sent.add(record);
@@ -233,10 +233,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
         private final RecordMetadata metadata;
         private final ProduceRequestResult result;
         private final Callback callback;
-        private final TopicPartition topicPartition;
 
-        public Completion(TopicPartition topicPartition,
-                          long offset,
+        public Completion(long offset,
                           RecordMetadata metadata,
                           ProduceRequestResult result,
                           Callback callback) {
@@ -244,17 +242,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
             this.offset = offset;
             this.result = result;
             this.callback = callback;
-            this.topicPartition = topicPartition;
         }
 
         public void complete(RuntimeException e) {
-            result.done(topicPartition, e == null ? offset : -1L, e);
+            result.set(e == null ? offset : -1L, Record.NO_TIMESTAMP, e);
             if (callback != null) {
                 if (e == null)
                     callback.onCompletion(metadata, null);
                 else
                     callback.onCompletion(null, e);
             }
+            result.done();
         }
     }
 

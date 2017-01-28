@@ -46,6 +46,8 @@ public class AbstractConfig {
     /* the parsed values */
     private final Map<String, Object> values;
 
+    private final ConfigDef definition;
+
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
@@ -55,18 +57,13 @@ public class AbstractConfig {
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
+        this.definition = definition;
         if (doLog)
             logAll();
     }
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
-    }
-
-    public AbstractConfig(Map<String, Object> parsedConfig) {
-        this.values = parsedConfig;
-        this.originals = new HashMap<>();
-        this.used = Collections.synchronizedSet(new HashSet<String>());
     }
 
     protected Object get(String key) {
@@ -152,10 +149,29 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
-        Map<String, Object> result = new RecordingMap<>(prefix);
+        Map<String, Object> result = new RecordingMap<>(prefix, false);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
+     * put all the remaining keys with the prefix stripped and their parsed values in the result map.
+     *
+     * This is useful if one wants to allow prefixed configs to override default ones.
+     */
+    public Map<String, Object> valuesWithPrefixOverride(String prefix) {
+        Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                String keyWithNoPrefix = entry.getKey().substring(prefix.length());
+                ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
+                if (configKey != null)
+                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+            }
         }
         return result;
     }
@@ -264,34 +280,40 @@ public class AbstractConfig {
     private class RecordingMap<V> extends HashMap<String, V> {
 
         private final String prefix;
+        private final boolean withIgnoreFallback;
 
         RecordingMap() {
-            this("");
+            this("", false);
         }
 
-        RecordingMap(String prefix) {
+        RecordingMap(String prefix, boolean withIgnoreFallback) {
             this.prefix = prefix;
+            this.withIgnoreFallback = withIgnoreFallback;
         }
 
         RecordingMap(Map<String, ? extends V> m) {
-            this(m, "");
+            this(m, "", false);
         }
 
-        RecordingMap(Map<String, ? extends V> m, String prefix) {
+        RecordingMap(Map<String, ? extends V> m, String prefix, boolean withIgnoreFallback) {
             super(m);
             this.prefix = prefix;
+            this.withIgnoreFallback = withIgnoreFallback;
         }
 
         @Override
         public V get(Object key) {
             if (key instanceof String) {
+                String stringKey = (String) key;
                 String keyWithPrefix;
                 if (prefix.isEmpty()) {
-                    keyWithPrefix = (String) key;
+                    keyWithPrefix = stringKey;
                 } else {
-                    keyWithPrefix = prefix + key;
+                    keyWithPrefix = prefix + stringKey;
                 }
                 ignore(keyWithPrefix);
+                if (withIgnoreFallback)
+                    ignore(stringKey);
             }
             return super.get(key);
         }

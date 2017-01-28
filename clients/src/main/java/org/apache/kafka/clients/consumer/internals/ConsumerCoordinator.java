@@ -155,7 +155,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Set<String> topicsToSubscribe = new HashSet<>();
 
         for (String topic : cluster.topics())
-            if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+            if (subscriptions.subscribedPattern().matcher(topic).matches() &&
                     !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
                 topicsToSubscribe.add(topic);
 
@@ -215,6 +215,32 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
+
+        // check if the assignment contains some topics that were not in the original
+        // subscription, if yes we will obey what leader has decided and add these topics
+        // into the subscriptions as long as they still match the subscribed pattern
+        //
+        // TODO this part of the logic should be removed once we allow regex on leader assign
+        Set<String> addedTopics = new HashSet<>();
+        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+            if (!joinedSubscription.contains(tp.topic()))
+                addedTopics.add(tp.topic());
+        }
+
+        if (!addedTopics.isEmpty()) {
+            Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
+            Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
+            newSubscription.addAll(addedTopics);
+            newJoinedSubscription.addAll(addedTopics);
+
+            this.subscriptions.subscribeFromPattern(newSubscription);
+            this.joinedSubscription = newJoinedSubscription;
+        }
+
+        // update the metadata and enforce a refresh to make sure the fetcher can start
+        // fetching data in the next iteration
+        this.metadata.setTopics(subscriptions.groupSubscription());
+        client.ensureFreshMetadata();
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
@@ -307,12 +333,43 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.ensureFreshMetadata();
 
         isLeader = true;
-        assignmentSnapshot = metadataSnapshot;
 
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
                 groupId, assignor.name(), subscriptions);
 
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
+
+        // user-customized assignor may have created some topics that are not in the subscription list
+        // and assign their partitions to the members; in this case we would like to update the leader's
+        // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
+        // when these topics gets updated from metadata refresh.
+        //
+        // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
+        //       we may need to modify the PartitionAssingor API to better support this case.
+        Set<String> assignedTopics = new HashSet<>();
+        for (Assignment assigned : assignment.values()) {
+            for (TopicPartition tp : assigned.partitions())
+                assignedTopics.add(tp.topic());
+        }
+
+        if (!assignedTopics.containsAll(allSubscribedTopics)) {
+            Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
+            notAssignedTopics.removeAll(assignedTopics);
+            log.warn("The following subscribed topics are not assigned to any members in the group {} : {} ", groupId, notAssignedTopics);
+        }
+
+        if (!allSubscribedTopics.containsAll(assignedTopics)) {
+            Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
+            newlyAddedTopics.removeAll(allSubscribedTopics);
+            log.info("The following not-subscribed topics are assigned to group {}, and their metadata will be fetched from the brokers : {}", groupId, newlyAddedTopics);
+
+            allSubscribedTopics.addAll(assignedTopics);
+            this.subscriptions.groupSubscribe(allSubscribedTopics);
+            metadata.setTopics(this.subscriptions.groupSubscription());
+            client.ensureFreshMetadata();
+        }
+
+        assignmentSnapshot = metadataSnapshot;
 
         log.debug("Finished assignment for group {}: {}", groupId, assignment);
 

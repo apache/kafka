@@ -18,7 +18,6 @@ package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.Collection;
@@ -52,7 +51,6 @@ import java.util.Map;
   * </ol>
  *
  */
-@InterfaceStability.Unstable
 public abstract class SinkTask implements Task {
 
     /**

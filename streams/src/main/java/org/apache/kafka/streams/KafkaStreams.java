@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -28,6 +31,12 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -36,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -48,60 +58,62 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
 /**
- * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
- * sends output to zero or more output topics.
+ * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
+ * sends output to zero, one, or more output topics.
  * <p>
- * The computational logic can be specified either by using the {@link TopologyBuilder} class to define the a DAG topology of
- * {@link org.apache.kafka.streams.processor.Processor}s or by using the {@link org.apache.kafka.streams.kstream.KStreamBuilder}
- * class which provides the high-level {@link org.apache.kafka.streams.kstream.KStream} DSL to define the transformation.
+ * The computational logic can be specified either by using the {@link TopologyBuilder} to define a DAG topology of
+ * {@link Processor}s or by using the {@link KStreamBuilder} which provides the high-level DSL to define transformations.
  * <p>
- * The {@link KafkaStreams} class manages the lifecycle of a Kafka Streams instance. One stream instance can contain one or
- * more threads specified in the configs for the processing work.
+ * One {@code KafkaStreams} instance can contain one or more threads specified in the configs for the processing work.
  * <p>
- * A {@link KafkaStreams} instance can co-ordinate with any other instances with the same application ID (whether in this same process, on other processes
- * on this machine, or on remote machines) as a single (possibly distributed) stream processing client. These instances will divide up the work
- * based on the assignment of the input topic partitions so that all partitions are being
- * consumed. If instances are added or failed, all instances will rebalance the partition assignment among themselves
- * to balance processing load.
+ * A {@code KafkaStreams} instance can co-ordinate with any other instances with the same
+ * {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} (whether in the same process, on other processes on this
+ * machine, or on remote machines) as a single (possibly distributed) stream processing application.
+ * These instances will divide up the work based on the assignment of the input topic partitions so that all partitions
+ * are being consumed.
+ * If instances are added or fail, all (remaining) instances will rebalance the partition assignment among themselves
+ * to balance processing load and ensure that all input topic partitions are processed.
  * <p>
- * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
- * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
- * <p>
+ * Internally a {@link KafkaStreams} instance contains a normal {@link KafkaProducer} and {@link KafkaConsumer} instance
+ * that is used for reading input and writing output.
  * <p>
  * A simple example might look like this:
- * <pre>
- *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
- *    props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
- *    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
- *    props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
- *    props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
- *    StreamsConfig config = new StreamsConfig(props);
+ * <pre>{@code
+ * Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
+ * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
+ * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+ * props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+ * props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+ * StreamsConfig config = new StreamsConfig(props);
  *
- *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
+ * KStreamBuilder builder = new KStreamBuilder();
+ * builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
  *
- *    KafkaStreams streams = new KafkaStreams(builder, config);
- *    streams.start();
- * </pre>
+ * KafkaStreams streams = new KafkaStreams(builder, config);
+ * streams.start();
+ * }</pre>
+ *
+ * @see KStreamBuilder
+ * @see TopologyBuilder
  */
-
 @InterfaceStability.Unstable
 public class KafkaStreams {
 
@@ -161,15 +173,15 @@ public class KafkaStreams {
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
-        State(final Integer...validTransitions) {
+        State(final Integer... validTransitions) {
             this.validTransitions.addAll(Arrays.asList(validTransitions));
         }
 
         public boolean isRunning() {
-            return this.equals(RUNNING) || this.equals(REBALANCING);
+            return equals(RUNNING) || equals(REBALANCING);
         }
         public boolean isCreatedOrRunning() {
-            return isRunning() || this.equals(CREATED);
+            return isRunning() || equals(CREATED);
         }
         public boolean isValidTransition(final State newState) {
             return validTransitions.contains(newState.ordinal());
@@ -177,33 +189,34 @@ public class KafkaStreams {
     }
     private volatile State state = KafkaStreams.State.CREATED;
     private StateListener stateListener = null;
-    private final StreamStateListener streamStateListener = new StreamStateListener();
+
 
     /**
-     * Listen to state change events
+     * Listen to {@link State} change events.
      */
     public interface StateListener {
 
         /**
-         * Called when state changes
-         * @param newState     current state
-         * @param oldState     previous state
+         * Called when state changes.
+         *
+         * @param newState new state
+         * @param oldState previous state
          */
         void onChange(final State newState, final State oldState);
     }
 
     /**
-     * An app can set {@link StateListener} so that the app is notified when state changes
-     * @param listener
+     * An app can set a single {@link StateListener} so that the app is notified when state changes.
+     * @param listener a new state listener
      */
     public void setStateListener(final StateListener listener) {
-        this.stateListener = listener;
+        stateListener = listener;
     }
 
-    private synchronized void setState(State newState) {
-        State oldState = state;
+    private synchronized void setState(final State newState) {
+        final State oldState = state;
         if (!state.isValidTransition(newState)) {
-            log.warn("Unexpected state transition from " + state + " to " + newState);
+            log.warn("Unexpected state transition from {} to {}.", oldState, newState);
         }
         state = newState;
         if (stateListener != null) {
@@ -211,31 +224,35 @@ public class KafkaStreams {
         }
     }
 
-
     /**
-     * @return The state this instance is in
+     * Return the current {@link State} of this {@code KafkaStreams} instance.
+     *
+     * @return the currnt state of this Kafka Streams instance
      */
     public synchronized State state() {
         return state;
     }
 
     /**
-     * Get read-only handle on global metrics registry
+     * Get read-only handle on global metrics registry.
+     *
      * @return Map of all metrics.
      */
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(this.metrics.metrics());
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     private class StreamStateListener implements StreamThread.StateListener {
         @Override
-        public synchronized void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
+        public synchronized void onChange(final StreamThread thread,
+                                          final StreamThread.State newState,
+                                          final StreamThread.State oldState) {
             threadState.put(thread.getId(), newState);
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
                 setState(State.REBALANCING);
             } else if (newState == StreamThread.State.RUNNING) {
-                for (StreamThread.State state : threadState.values()) {
+                for (final StreamThread.State state : threadState.values()) {
                     if (state != StreamThread.State.RUNNING) {
                         return;
                     }
@@ -244,35 +261,38 @@ public class KafkaStreams {
             }
         }
     }
+
     /**
-     * Construct the stream instance.
+     * Create a {@code KafkaStreams} instance.
      *
      * @param builder the processor topology builder specifying the computational logic
-     * @param props   properties for the {@link StreamsConfig}
+     * @param props   properties for {@link StreamsConfig}
      */
     public KafkaStreams(final TopologyBuilder builder, final Properties props) {
         this(builder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
-     * Construct the stream instance.
+     * Create a {@code KafkaStreams} instance.
      *
      * @param builder the processor topology builder specifying the computational logic
-     * @param config  the stream configs
+     * @param config  the Kafka Streams configuration
      */
     public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config) {
         this(builder, config, new DefaultKafkaClientSupplier());
     }
 
     /**
-     * Construct the stream instance.
+     * Create a {@code KafkaStreams} instance.
      *
      * @param builder        the processor topology builder specifying the computational logic
-     * @param config         the stream configs
-     * @param clientSupplier the kafka clients supplier which provides underlying producer and consumer clients
-     *                       for this {@link KafkaStreams} instance
+     * @param config         the Kafka Streams configuration
+     * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
+     *                       for the new {@code KafkaStreams} instance
      */
-    public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
+    public KafkaStreams(final TopologyBuilder builder,
+                        final StreamsConfig config,
+                        final KafkaClientSupplier clientSupplier) {
         // create the metrics
         final Time time = Time.SYSTEM;
 
@@ -336,7 +356,7 @@ public class KafkaStreams {
                                           time,
                                           streamsMetadataState,
                                           cacheSizeBytes);
-            threads[i].setStateListener(streamStateListener);
+            threads[i].setStateListener(new StreamStateListener());
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -358,16 +378,42 @@ public class KafkaStreams {
         return new HostInfo(host, port);
     }
 
+    /**
+     * Check if the used brokers have version 0.10.1.x or higher.
+     * <p>
+     * Note, for <em>pre</em> 0.10.x brokers the broker version cannot be checked and the client will hang and retry
+     * until it {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
+     *
+     * @throws StreamsException if brokers have version 0.10.0.x
+     */
+    private void checkBrokerVersionCompatibility() throws StreamsException {
+        final StreamsKafkaClient client = new StreamsKafkaClient(config);
+
+        client.checkBrokerCompatibility();
+
+        try {
+            client.close();
+        } catch (final IOException e) {
+            log.warn("Could not close StreamKafkaClient.", e);
+        }
+
+    }
 
     /**
-     * Start the stream instance by starting all its threads.
-     *
+     * Start the {@code KafkaStreams} instance by starting all its threads.
+     * <p>
+     * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
+     * There will be no error and the client will hang and retry to verify the broker version until it
+     * {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
+
      * @throws IllegalStateException if process was already started
+     * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
-    public synchronized void start() {
-        log.debug("Starting Kafka Stream process");
+    public synchronized void start() throws IllegalStateException, StreamsException {
+        log.debug("Starting Kafka Stream process.");
 
         if (state == KafkaStreams.State.CREATED) {
+            checkBrokerVersionCompatibility();
             setState(KafkaStreams.State.RUNNING);
 
             if (globalStreamThread != null) {
@@ -385,9 +431,7 @@ public class KafkaStreams {
     }
 
     /**
-     * Shutdown this stream instance by signaling all the threads to stop,
-     * and then wait for them to join.
-     *
+     * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
      */
     public void close() {
@@ -395,17 +439,17 @@ public class KafkaStreams {
     }
 
     /**
-     * Shutdown this stream instance by signaling all the threads to stop,
-     * and then wait up to the timeout for the threads to join.
+     * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
+     * threads to join.
+     * A {@code timeout} of 0 means to wait forever.
      *
-     * A timeout of 0 means to wait forever
-     *
-     * @param timeout   how long to wait for {@link StreamThread}s to shutdown
-     * @param timeUnit  unit of time used for timeout
-     * @return true if all threads were successfully stopped
+     * @param timeout  how long to wait for the threads to shutdown
+     * @param timeUnit unit of time used for timeout
+     * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
+     * before all threads stopped
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("Stopping Kafka Stream process");
+        log.debug("Stopping Kafka Stream process.");
         if (state.isCreatedOrRunning()) {
             setState(KafkaStreams.State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
@@ -413,42 +457,42 @@ public class KafkaStreams {
             final Thread shutdown = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                        // signal the threads to stop and wait
-                        for (final StreamThread thread : threads) {
-                            // avoid deadlocks by stopping any further state reports
-                            // from the thread since we're shutting down
-                            thread.setStateListener(null);
-                            thread.close();
-                        }
-                        if (globalStreamThread != null) {
-                            globalStreamThread.close();
-                            if (!globalStreamThread.stillRunning()) {
-                                try {
-                                    globalStreamThread.join();
-                                } catch (InterruptedException e) {
-                                    Thread.interrupted();
-                                }
-                            }
-                        }
-                        for (final StreamThread thread : threads) {
+                    // signal the threads to stop and wait
+                    for (final StreamThread thread : threads) {
+                        // avoid deadlocks by stopping any further state reports
+                        // from the thread since we're shutting down
+                        thread.setStateListener(null);
+                        thread.close();
+                    }
+                    if (globalStreamThread != null) {
+                        globalStreamThread.close();
+                        if (!globalStreamThread.stillRunning()) {
                             try {
-                                if (!thread.stillRunning()) {
-                                    thread.join();
-                                }
-                            } catch (final InterruptedException ex) {
+                                globalStreamThread.join();
+                            } catch (final InterruptedException e) {
                                 Thread.interrupted();
                             }
                         }
-
-                        metrics.close();
-                        log.info("Stopped Kafka Streams process");
                     }
+                    for (final StreamThread thread : threads) {
+                        try {
+                            if (!thread.stillRunning()) {
+                                thread.join();
+                            }
+                        } catch (final InterruptedException ex) {
+                            Thread.interrupted();
+                        }
+                    }
+
+                    metrics.close();
+                    log.info("Stopped Kafka Streams process.");
+                }
             }, "kafka-streams-close-thread");
             shutdown.setDaemon(true);
             shutdown.start();
             try {
                 shutdown.join(TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.interrupted();
             }
             setState(KafkaStreams.State.NOT_RUNNING);
@@ -458,9 +502,10 @@ public class KafkaStreams {
     }
 
     /**
-     * Produces a string representation containing useful information about Kafka Streams
-     * Such as thread IDs, task IDs and a representation of the topology. This is useful
-     * in debugging scenarios.
+     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
+     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
+     * {@link TopologyBuilder} and {@link KStreamBuilder}).
+     *
      * @return A string representation of the Kafka Streams instance.
      */
     @Override
@@ -469,13 +514,19 @@ public class KafkaStreams {
     }
 
     /**
-     * Produces a string representation containing useful information about Kafka Streams
-     * such as thread IDs, task IDs and a representation of the topology starting with the given indent. This is useful
-     * in debugging scenarios.
+     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
+     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
+     * {@link TopologyBuilder} and {@link KStreamBuilder}).
+     *
+     * @param indent the top-level indent for each line
      * @return A string representation of the Kafka Streams instance.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + "KafkaStreams processID:" + processId + "\n");
+        final StringBuilder sb = new StringBuilder()
+            .append(indent)
+            .append("KafkaStreams processID: ")
+            .append(processId)
+            .append("\n");
         for (final StreamThread thread : threads) {
             sb.append(thread.toString(indent + "\t"));
         }
@@ -485,11 +536,16 @@ public class KafkaStreams {
     }
 
     /**
-     * Cleans up local state store directory ({@code state.dir}), by deleting all data with regard to the application-id.
+     * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
+     * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
      * <p>
-     * May only be called either before instance is started or after instance is closed.
+     * May only be called either before this {@code KafkaStreams} instance is {@link KafkaStreams#start() started} or
+     * after the instance is {@link KafkaStreams#close() closed}.
+     * <p>
+     * Calling this method triggers a restore of local {@link StateStore}s on the next {@link KafkaStreams#start()
+     * application start}.
      *
-     * @throws IllegalStateException if instance is currently running
+     * @throws IllegalStateException if the instance is currently running
      */
     public void cleanUp() {
         if (state.isRunning()) {
@@ -500,7 +556,7 @@ public class KafkaStreams {
         final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
 
         final String localApplicationDir = stateDir + File.separator + appId;
-        log.debug("Removing local Kafka Streams application data in {} for application {}",
+        log.debug("Removing local Kafka Streams application data in {} for application {}.",
             localApplicationDir,
             appId);
 
@@ -509,9 +565,10 @@ public class KafkaStreams {
     }
 
     /**
-     * Sets the handler invoked when a stream thread abruptly terminates due to an uncaught exception.
+     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
+     * terminates due to an uncaught exception.
      *
-     * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
+     * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
         for (final StreamThread thread : threads) {
@@ -523,25 +580,34 @@ public class KafkaStreams {
         }
     }
 
-
     /**
-     * Find all of the instances of {@link StreamsMetadata} in the {@link KafkaStreams} application that this instance belongs to
-     *
+     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that use the same
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all instances that belong to
+     * the same Kafka Streams application) and return {@link StreamsMetadata} for each discovered instance.
+     * <p>
      * Note: this is a point in time view and it may change due to partition reassignment.
-     * @return collection containing all instances of {@link StreamsMetadata} in the {@link KafkaStreams} application that this instance belongs to
+     *
+     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
     public Collection<StreamsMetadata> allMetadata() {
         validateIsRunning();
         return streamsMetadataState.getAllMetadata();
     }
 
-
     /**
-     * Find instances of {@link StreamsMetadata} that contains the given storeName
-     *
+     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that
+     * <ul>
+     *   <li>use the same {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all
+     *       instances that belong to the same Kafka Streams application)</li>
+     *   <li>and that contain a {@link StateStore} with the given {@code storeName}</li>
+     * </ul>
+     * and return {@link StreamsMetadata} for each discovered instance.
+     * <p>
      * Note: this is a point in time view and it may change due to partition reassignment.
-     * @param storeName the storeName to find metadata for
-     * @return  A collection containing instances of {@link StreamsMetadata} that have the provided storeName
+     *
+     * @param storeName the {@code storeName} to find metadata for
+     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
+     * this application
      */
     public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
         validateIsRunning();
@@ -549,22 +615,35 @@ public class KafkaStreams {
     }
 
     /**
-     * Find the {@link StreamsMetadata} instance that contains the given storeName
-     * and the corresponding hosted store instance contains the given key. This will use
-     * the {@link org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner} to
-     * locate the partition. If a custom partitioner has been used please use
-     * {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
+     * Find the currently running {@code KafkaStreams} instance (potentially remotely) that
+     * <ul>
+     *   <li>use the same {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all
+     *       instances that belong to the same Kafka Streams application)</li>
+     *   <li>and that contain a {@link StateStore} with the given {@code storeName}</li>
+     *   <li>and the {@link StateStore} contains the given {@code key}</li>
+     * </ul>
+     * and return {@link StreamsMetadata} for it.
+     * <p>
+     * This will use the default Kafka Streams partitioner to locate the partition.
+     * If a {@link StreamPartitioner custom partitioner} has been
+     * {@link ProducerConfig#PARTITIONER_CLASS_CONFIG configured} via {@link StreamsConfig},
+     * {@link KStream#through(StreamPartitioner, String)}, or {@link KTable#through(StreamPartitioner, String, String)},
+     * or if the original {@link KTable}'s input {@link KStreamBuilder#table(String, String) topic} is partitioned
+     * differently, please use {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}.
+     * <p>
+     * Note:
+     * <ul>
+     *   <li>this is a point in time view and it may change due to partition reassignment</li>
+     *   <li>the key may not exist in the {@link StateStore}; this method provides a way of finding which host it
+     *       <em>would</em> exist on</li>
+     * </ul>
      *
-     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
-     * this method provides a way of finding which host it would exist on.
-     *
-     * Note: this is a point in time view and it may change due to partition reassignment.
-     * @param storeName         Name of the store
-     * @param key               Key to use to for partition
-     * @param keySerializer     Serializer for the key
-     * @param <K>               key type
-     * @return  The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param keySerializer serializer for the key
+     * @param <K>           key type
+     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provide {@code storeName} and
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
@@ -574,19 +653,28 @@ public class KafkaStreams {
     }
 
     /**
-     * Find the {@link StreamsMetadata} instance that contains the given storeName
-     * and the corresponding hosted store instance contains the given key
+     * Find the currently running {@code KafkaStreams} instance (potentially remotely) that
+     * <ul>
+     *   <li>use the same {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all
+     *       instances that belong to the same Kafka Streams application)</li>
+     *   <li>and that contain a {@link StateStore} with the given {@code storeName}</li>
+     *   <li>and the {@link StateStore} contains the given {@code key}</li>
+     * </ul>
+     * and return {@link StreamsMetadata} for it.
+     * <p>
+     * Note:
+     * <ul>
+     *   <li>this is a point in time view and it may change due to partition reassignment</li>
+     *   <li>the key may not exist in the {@link StateStore}; this method provides a way of finding which host it
+     *       <em>would</em> exist on</li>
+     * </ul>
      *
-     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
-     * this method provides a way of finding which host it would exist on.
-     *
-     * Note: this is a point in time view and it may change due to partition reassignment.
-     * @param storeName         Name of the store
-     * @param key               Key to use to for partition
-     * @param partitioner       Partitioner for the store
-     * @param <K>               key type
-     * @return  The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing
+     * @param storeName   the {@code storeName} to find metadata for
+     * @param key         the key to find metadata for
+     * @param partitioner the partitioner to be use to locate the host for the key
+     * @param <K>         key type
+     * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provide {@code storeName} and
+     * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
@@ -595,17 +683,17 @@ public class KafkaStreams {
         return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }
 
-
     /**
-     * Get a facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
-     * with the provided storeName and accepted by {@link QueryableStoreType#accepts(StateStore)}.
-     * The returned object can be used to query the {@link org.apache.kafka.streams.processor.StateStore} instances
-     * @param storeName             name of the store to find
-     * @param queryableStoreType    accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
-     * @param <T>                   return type
-     * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
-     * @throws org.apache.kafka.streams.errors.InvalidStateStoreException if the streams are (re-)initializing or
-     * a store with storeName and queryableStoreType doesnt' exist.
+     * Get a facade wrapping the local {@link StateStore} instances with the provided {@code storeName} if the Store's
+     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.
+     * The returned object can be used to query the {@link StateStore} instances.
+     *
+     * @param storeName           name of the store to find
+     * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
+     * @param <T>                 return type
+     * @return A facade wrapping the local {@link StateStore} instances
+     * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
+     * {@code queryableStoreType} doesnt' exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
@@ -614,7 +702,7 @@ public class KafkaStreams {
 
     private void validateIsRunning() {
         if (!state.isRunning()) {
-            throw new IllegalStateException("KafkaStreams is not running. State is " + state);
+            throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
         }
     }
 }

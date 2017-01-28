@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,11 +32,13 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ByteBufferOutputStream;
 import org.apache.kafka.common.record.CompressionType;
@@ -44,6 +47,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -91,8 +95,8 @@ public class FetcherTest {
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private Metrics metrics = new Metrics(time);
-    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST, metrics);
-    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE, metrics);
+    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
@@ -314,6 +318,60 @@ public class FetcherTest {
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
         assertEquals(30L, consumerRecords.get(2).offset());
+    }
+
+    /**
+     * Test the case where the client makes a pre-v3 FetchRequest, but the server replies with only a partial
+     * request. This happens when a single message is larger than the per-partition limit.
+     */
+    @Test
+    public void testFetchRequestWhenRecordTooLarge() {
+        try {
+            client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
+                new ApiVersionsResponse.ApiVersion(ApiKeys.FETCH.id, (short) 2, (short) 2))));
+            makeFetchRequestWithIncompleteRecord();
+            try {
+                fetcher.fetchedRecords();
+                fail("RecordTooLargeException should have been raised");
+            } catch (RecordTooLargeException e) {
+                assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
+                // the position should not advance since no data has been returned
+                assertEquals(0, subscriptions.position(tp).longValue());
+            }
+        } finally {
+            client.setNodeApiVersions(NodeApiVersions.create());
+        }
+    }
+
+    /**
+     * Test the case where the client makes a post KIP-74 FetchRequest, but the server replies with only a
+     * partial request. For v3 and later FetchRequests, the implementation of KIP-74 changed the behavior
+     * so that at least one message is always returned. Therefore, this case should not happen, and it indicates
+     * that an internal error has taken place.
+     */
+    @Test
+    public void testFetchRequestInternalError() {
+        makeFetchRequestWithIncompleteRecord();
+        try {
+            fetcher.fetchedRecords();
+            fail("RecordTooLargeException should have been raised");
+        } catch (KafkaException e) {
+            assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp).longValue());
+        }
+    }
+
+    private void makeFetchRequestWithIncompleteRecord() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        MemoryRecords partialRecord = MemoryRecords.readableRecords(
+            ByteBuffer.wrap(new byte[]{0, 0, 0, 0, 0, 0, 0, 0}));
+        client.prepareResponse(fetchResponse(partialRecord, Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
     }
 
     @Test
@@ -704,8 +762,11 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
+        MetricName maxLagMetric = metrics.metricName("records-lag-max", metricGroup, "");
+        MetricName partitionLagMetric = metrics.metricName(tp + ".records-lag", metricGroup, "");
+
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric recordsFetchLagMax = allMetrics.get(metrics.metricName("records-lag-max", metricGroup, ""));
+        KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
         assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
@@ -714,12 +775,19 @@ public class FetcherTest {
         fetchRecords(MemoryRecords.EMPTY, Errors.NONE.code(), 100L, 0);
         assertEquals(100, recordsFetchLagMax.value(), EPSILON);
 
+        KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
+        assertEquals(100, partitionLag.value(), EPSILON);
+
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE.code(), 200L, 0);
         assertEquals(197, recordsFetchLagMax.value(), EPSILON);
+
+        // verify de-registration of partition lag
+        subscriptions.unsubscribe();
+        assertFalse(allMetrics.containsKey(partitionLagMetric));
     }
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(MemoryRecords records, short error, long hw, int throttleTime) {

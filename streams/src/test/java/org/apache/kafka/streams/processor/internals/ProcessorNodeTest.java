@@ -103,7 +103,7 @@ public class ProcessorNodeTest {
         String name = "task." + context.taskId() + "." + node.name();
         String[] entities = {"all", name};
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        String throughputOperation =  "process-throughput";
+        String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
         Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
 
@@ -115,14 +115,14 @@ public class ProcessorNodeTest {
 
         for (String entity : entities) {
             for (String operation : latencyOperations) {
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
                     "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
                     "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                     "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
             }
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-qps", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
     }

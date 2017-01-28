@@ -19,12 +19,14 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -33,8 +35,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(
-                Collections.<ApiVersion>emptyList());
+        NodeApiVersions versions = new NodeApiVersions(Collections.<ApiVersion>emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
@@ -52,6 +53,8 @@ public class NodeApiVersionsTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
                 versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
+            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+                versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
             } else {
                 versionList.add(new ApiVersion(apiKey.id,
                         ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
@@ -63,7 +66,9 @@ public class NodeApiVersionsTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix);
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                bld.append("ControlledShutdown(7): 0 [usable: NONE]");
+                bld.append("ControlledShutdown(7): 0 [unusable: node too old]");
+            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+                bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
             } else {
                 bld.append(apiKey.name).append("(").
                         append(apiKey.id).append("): ");
@@ -97,5 +102,26 @@ public class NodeApiVersionsTest {
             // pass
         }
         assertEquals(2, versions.usableVersion(ApiKeys.FETCH));
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testUsableVersionCalculationNoKnownVersions() {
+        List<ApiVersion> versionList = new ArrayList<>();
+        NodeApiVersions versions =  new NodeApiVersions(versionList);
+        versions.usableVersion(ApiKeys.FETCH);
+    }
+
+    @Test
+    public void testUsableVersionLatestVersions() {
+        List<ApiVersion> versionList = new LinkedList<>();
+        for (ApiVersion apiVersion: ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions()) {
+            versionList.add(apiVersion);
+        }
+        // Add an API key that we don't know about.
+        versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
+        NodeApiVersions versions =  new NodeApiVersions(versionList);
+        for (ApiKeys apiKey: ApiKeys.values()) {
+            assertEquals(ProtoUtils.latestVersion(apiKey.id), versions.usableVersion(apiKey));
+        }
     }
 }

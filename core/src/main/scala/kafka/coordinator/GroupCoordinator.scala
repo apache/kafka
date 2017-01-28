@@ -497,6 +497,10 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
+  def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
+    groupManager.cleanupGroupMetadata(Some(topicPartitions))
+  }
+
   private def onGroupUnloaded(group: GroupMetadata) {
     group synchronized {
       info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
@@ -617,7 +621,7 @@ class GroupCoordinator(val brokerId: Int,
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
-    group.add(member.memberId, member)
+    group.add(member)
     maybePrepareRebalance(group)
     member
   }

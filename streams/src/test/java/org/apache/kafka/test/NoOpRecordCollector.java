@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -28,12 +27,25 @@ import java.util.Map;
 public class NoOpRecordCollector implements RecordCollector {
 
     @Override
-    public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-        // no-op
+    public <K, V> void send(final String topic,
+                            K key,
+                            V value,
+                            Integer partition,
+                            Long timestamp,
+                            Serializer<K> keySerializer,
+                            Serializer<V> valueSerializer) {
+    // no-op
     }
 
     @Override
-    public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<? super K, ? super V> partitioner) {
+    public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer,
+                                StreamPartitioner<? super K, ? super V> partitioner) {
         // no-op
     }
 

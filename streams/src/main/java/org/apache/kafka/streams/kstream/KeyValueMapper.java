@@ -17,24 +17,25 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
 
 /**
- * The {@link KeyValueMapper} interface for mapping a {@link org.apache.kafka.streams.KeyValue key-value pair} to a new
- * value of arbitrary type. For example, it can be used to
+ * The {@link KeyValueMapper} interface for mapping a {@link KeyValue key-value pair} to a new value of arbitrary type.
+ * For example, it can be used to
  * <ul>
- * <li>map from an input {@link org.apache.kafka.streams.KeyValue key-value pair} to an output
- * {@link org.apache.kafka.streams.KeyValue key-value pair} with different key and/or value type (for this case
- * output type {@code VR == }{@link org.apache.kafka.streams.KeyValue KeyValue&lt;NewKeyType,NewValueType&gt;})</li>
+ * <li>map from an input {@link KeyValue} pair to an output {@link KeyValue} pair with different key and/or value type
+ *     (for this case output type {@code VR == }{@link KeyValue KeyValue&lt;NewKeyType,NewValueType&gt;})</li>
  * <li>map from an input record to a new key (with arbitrary key type as specified by {@code VR})</li>
  * </ul>
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
- * record of a stream.
+ * record of a stream (cf. {@link Transformer} for stateful record transformation).
  * {@link KeyValueMapper} is a generalization of {@link ValueMapper}.
  *
  * @param <K>  key type
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see ValueMapper
+ * @see Transformer
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
  * @see KStream#selectKey(KeyValueMapper)

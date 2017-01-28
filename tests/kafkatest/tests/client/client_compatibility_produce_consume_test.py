@@ -22,17 +22,16 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
-from kafkatest.version import TRUNK, V_0_10_0_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, KafkaVersion
 
-class TestProducerConsumerCompat(ProduceConsumeValidateTest):
+class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
-    These tests validate that we can use a new client to consume from older
-    brokers.
+    These tests validate that we can use a new client to produce and consume from older brokers.
     """
 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(TestProducerConsumerCompat, self).__init__(test_context=test_context)
+        super(ClientCompatibilityProduceConsumeTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=3)
@@ -51,10 +50,11 @@ class TestProducerConsumerCompat(ProduceConsumeValidateTest):
 
     def min_cluster_size(self):
         # Override this since we're adding services outside of the constructor
-        return super(TestProducerConsumerCompat, self).min_cluster_size() + self.num_producers + self.num_consumers
+        return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    # TODO: when KAFKA-4462 is fully implemented, we should test other versions here.
-    @parametrize(broker_version=str(TRUNK))
+    @parametrize(broker_version=str(DEV_BRANCH))
+    @parametrize(broker_version=str(LATEST_0_10_0))
+    @parametrize(broker_version=str(LATEST_0_10_1))
     def test_produce_consume(self, broker_version):
         print("running producer_consumer_compat with broker_version = %s" % broker_version)
         self.kafka.set_version(KafkaVersion(broker_version))

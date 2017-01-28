@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -72,7 +74,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manage the fetching process with the brokers.
  */
-public class Fetcher<K, V> {
+public class Fetcher<K, V> implements SubscriptionState.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -124,6 +126,30 @@ public class Fetcher<K, V> {
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
+
+        subscriptions.addListener(this);
+    }
+
+    /**
+     * Represents data about an offset returned by a broker.
+     */
+    private static class OffsetData {
+        /**
+         * The offset
+         */
+        final long offset;
+
+        /**
+         * The timestamp.
+         *
+         * Will be null if the broker does not support returning timestamps.
+         */
+        final Long timestamp;
+
+        OffsetData(long offset, Long timestamp) {
+            this.offset = offset;
+            this.timestamp = timestamp;
+        }
     }
 
     /**
@@ -172,7 +198,8 @@ public class Fetcher<K, V> {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
-                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator));
+                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
+                                        request.version()));
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
@@ -332,50 +359,39 @@ public class Fetcher<K, V> {
     private void resetOffset(TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
-        long offset = listOffset(partition, strategy);
+        final long timestamp;
+        if (strategy == OffsetResetStrategy.EARLIEST)
+            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
+        else if (strategy == OffsetResetStrategy.LATEST)
+            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
+        else
+            throw new NoOffsetForPartitionException(partition);
+        Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(
+                Collections.singletonMap(partition, timestamp), Long.MAX_VALUE, false);
+        OffsetData offsetData = offsetsByTimes.get(partition);
+        if (offsetData == null)
+            throw new NoOffsetForPartitionException(partition);
+        long offset = offsetData.offset;
         // we might lose the assignment while fetching the offset, so check it is still active
         if (subscriptions.isAssigned(partition))
             this.subscriptions.seek(partition, offset);
     }
 
-    private long listOffset(TopicPartition partition, OffsetResetStrategy strategy) {
-        final long timestamp;
-        switch (strategy) {
-            case EARLIEST:
-                timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
-                break;
-            case LATEST:
-                timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
-                break;
-            default:
-                throw new NoOffsetForPartitionException(partition);
-        }
-        while (true) {
-            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                    sendListOffsetRequests(false, Collections.singletonMap(partition, timestamp));
-            client.poll(future);
-            if (future.succeeded()) {
-                OffsetAndTimestamp offsetAndTimestamp = future.value().get(partition);
-                if (offsetAndTimestamp == null)
-                    throw new NoOffsetForPartitionException(partition);
-                return offsetAndTimestamp.offset();
-            }
-            if (!future.isRetriable())
-                throw future.exception();
-            if (future.exception() instanceof InvalidMetadataException)
-                client.awaitMetadataUpdate();
-            else
-                time.sleep(retryBackoffMs);
-        }
-    }
-
-
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
-        return retrieveOffsetsByTimes(timestampsToSearch, timeout, true);
+        Map<TopicPartition, OffsetData> offsetData = retrieveOffsetsByTimes(timestampsToSearch, timeout, true);
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(offsetData.size());
+        for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet()) {
+            OffsetData data = entry.getValue();
+            if (data == null)
+                offsetsByTimes.put(entry.getKey(), null);
+            else
+                offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(data.offset, data.timestamp));
+        }
+        return offsetsByTimes;
     }
 
-    private Map<TopicPartition, OffsetAndTimestamp> retrieveOffsetsByTimes(
+    private Map<TopicPartition, OffsetData> retrieveOffsetsByTimes(
             Map<TopicPartition, Long> timestampsToSearch, long timeout, boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty())
             return Collections.emptyMap();
@@ -383,7 +399,7 @@ public class Fetcher<K, V> {
         long startMs = time.milliseconds();
         long remaining = timeout;
         do {
-            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+            RequestFuture<Map<TopicPartition, OffsetData>> future =
                     sendListOffsetRequests(requireTimestamps, timestampsToSearch);
             client.poll(future, remaining);
 
@@ -427,9 +443,9 @@ public class Fetcher<K, V> {
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> result = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry :
+        for (Map.Entry<TopicPartition, OffsetData> entry :
                 retrieveOffsetsByTimes(timestampsToSearch, timeout, false).entrySet()) {
-            result.put(entry.getKey(), entry.getValue().offset());
+            result.put(entry.getKey(), entry.getValue().offset);
         }
         return result;
     }
@@ -453,10 +469,9 @@ public class Fetcher<K, V> {
                 if (completedFetch == null)
                     break;
 
-                nextInLineRecords = parseFetchedData(completedFetch);
+                nextInLineRecords = parseCompletedFetch(completedFetch);
             } else {
                 TopicPartition partition = nextInLineRecords.partition;
-
                 List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
                 if (!records.isEmpty()) {
                     List<ConsumerRecord<K, V>> currentRecords = drained.get(partition);
@@ -480,9 +495,6 @@ public class Fetcher<K, V> {
     }
 
     private List<ConsumerRecord<K, V>> drainRecords(PartitionRecords<K, V> partitionRecords, int maxRecords) {
-        if (partitionRecords.isDrained())
-            return Collections.emptyList();
-
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition {} since it is no longer assigned", partitionRecords.partition);
@@ -493,19 +505,19 @@ public class Fetcher<K, V> {
                 // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
                 log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
             } else if (partitionRecords.fetchOffset == position) {
-                // we are ensured to have at least one record since we already checked for emptiness
                 List<ConsumerRecord<K, V>> partRecords = partitionRecords.drainRecords(maxRecords);
-                long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
+                if (!partRecords.isEmpty()) {
+                    long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
+                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                            "position to {}", position, partitionRecords.partition, nextOffset);
 
-                log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                        "position to {}", position, partitionRecords.partition, nextOffset);
-
-                subscriptions.position(partitionRecords.partition, nextOffset);
-                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
-                if (partitionLag != null) {
-                    this.sensors.recordsFetchLag.record(partitionLag);
-                    this.sensors.recordPartitionFetchLag(partitionRecords.partition, partitionLag);
+                    subscriptions.position(partitionRecords.partition, nextOffset);
                 }
+
+                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
+                if (partitionLag != null)
+                    this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
+
                 return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
@@ -522,12 +534,12 @@ public class Fetcher<K, V> {
     /**
      * Search the offsets by target times for the specified partitions.
      *
-     * @param requireTimestamps true if we should fail with an ObsoleteBrokerException if the broker does not support
-     *                         fetching precise timestamps for offsets
+     * @param requireTimestamps true if we should fail with an UnsupportedVersionException if the broker does
+     *                         not support fetching precise timestamps for offsets
      * @param timestampsToSearch the mapping between partitions and target time
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(
+    private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequests(
             final boolean requireTimestamps,
             final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
@@ -553,14 +565,14 @@ public class Fetcher<K, V> {
             }
         }
 
-        final RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> listOffsetRequestsFuture = new RequestFuture<>();
-        final Map<TopicPartition, OffsetAndTimestamp> fetchedTimestampOffsets = new HashMap<>();
+        final RequestFuture<Map<TopicPartition, OffsetData>> listOffsetRequestsFuture = new RequestFuture<>();
+        final Map<TopicPartition, OffsetData> fetchedTimestampOffsets = new HashMap<>();
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps)
-                    .addListener(new RequestFutureListener<Map<TopicPartition, OffsetAndTimestamp>>() {
+                    .addListener(new RequestFutureListener<Map<TopicPartition, OffsetData>>() {
                         @Override
-                        public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
+                        public void onSuccess(Map<TopicPartition, OffsetData> value) {
                             synchronized (listOffsetRequestsFuture) {
                                 fetchedTimestampOffsets.putAll(value);
                                 if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone())
@@ -589,7 +601,7 @@ public class Fetcher<K, V> {
      * @param requireTimestamp  True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(final Node node,
+    private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequest(final Node node,
                                                                                          final Map<TopicPartition, Long> timestampsToSearch,
                                                                                          boolean requireTimestamp) {
         ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().setTargetTimes(timestampsToSearch);
@@ -600,9 +612,9 @@ public class Fetcher<K, V> {
 
         log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
-                .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
+                .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetData>>() {
                     @Override
-                    public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
+                    public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetData>> future) {
                         ListOffsetResponse lor = (ListOffsetResponse) response.responseBody();
                         log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                         handleListOffsetResponse(timestampsToSearch, lor, future);
@@ -619,8 +631,8 @@ public class Fetcher<K, V> {
     @SuppressWarnings("deprecation")
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
                                           ListOffsetResponse listOffsetResponse,
-                                          RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
-        Map<TopicPartition, OffsetAndTimestamp> timestampOffsetMap = new HashMap<>();
+                                          RequestFuture<Map<TopicPartition, OffsetData>> future) {
+        Map<TopicPartition, OffsetData> timestampOffsetMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
@@ -638,20 +650,19 @@ public class Fetcher<K, V> {
                     } else {
                         offset = partitionData.offsets.get(0);
                     }
-                    log.debug("Handling v0 ListOffsetResponse response for {}.  Fetched offset {}",
+                    log.debug("Handling v0 ListOffsetResponse response for {}. Fetched offset {}",
                             topicPartition, offset);
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
-                        OffsetAndTimestamp offsetAndTimestamp = new OffsetAndTimestamp(offset, -1);
-                        timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
+                        OffsetData offsetData = new OffsetData(offset, null);
+                        timestampOffsetMap.put(topicPartition, offsetData);
                     }
                 } else {
                     // Handle v1 and later response
-                    log.debug("Handling ListOffsetResponse response for {}.  Fetched offset {}, timestamp {}",
+                    log.debug("Handling ListOffsetResponse response for {}. Fetched offset {}, timestamp {}",
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
-                        OffsetAndTimestamp offsetAndTimestamp =
-                                new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
-                        timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
+                        OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp);
+                        timestampOffsetMap.put(topicPartition, offsetData);
                     }
                 }
             } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
@@ -731,7 +742,7 @@ public class Fetcher<K, V> {
     /**
      * The callback for fetch completion
      */
-    private PartitionRecords<K, V> parseFetchedData(CompletedFetch completedFetch) {
+    private PartitionRecords<K, V> parseCompletedFetch(CompletedFetch completedFetch) {
         TopicPartition tp = completedFetch.partition;
         FetchResponse.PartitionData partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
@@ -756,36 +767,43 @@ public class Fetcher<K, V> {
                 }
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
+                boolean skippedRecords = false;
                 for (LogEntry logEntry : partition.records.deepEntries()) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.sizeInBytes();
-                    }
+                    } else
+                        skippedRecords = true;
                 }
 
                 recordsCount = parsed.size();
 
-                if (!parsed.isEmpty()) {
-                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
-                    parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
+                log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
+
+                if (parsed.isEmpty() && !skippedRecords && (partition.records.sizeInBytes() > 0)) {
+                    if (completedFetch.responseVersion < 3) {
+                        // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
+                        Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
+                        throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
+                                recordTooLargePartitions + " whose size is larger than the fetch size " + this.fetchSize +
+                                " and hence cannot be returned. Please considering upgrading your broker to 0.10.1.0 or " +
+                                "newer to avoid this issue. Alternately, increase the fetch size on the client (using " +
+                                ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
+                                recordTooLargePartitions);
+                    } else {
+                        // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
+                        throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
+                            fetchOffset + ". Received a non-empty fetch response from the server, but no " +
+                            "complete records were found.");
+                    }
                 }
 
                 if (partition.highWatermark >= 0) {
                     log.trace("Received {} records in fetch response for partition {} with offset {}", parsed.size(), tp, position);
-                    Long partitionLag = subscriptions.partitionLag(tp);
                     subscriptions.updateHighWatermark(tp, partition.highWatermark);
-                    // If the partition lag is null, that means this is the first fetch response for this partition.
-                    // We update the lag here to create the lag metric. This is to handle the case that there is no
-                    // message consumed by the end user from this partition. If there are messages returned from the
-                    // partition, the lag will be updated when those messages are consumed by the end user.
-                    if (partitionLag == null) {
-                        partitionLag = subscriptions.partitionLag(tp);
-                        this.sensors.recordsFetchLag.record(partitionLag);
-                        this.sensors.recordPartitionFetchLag(tp, partitionLag);
-                    }
                 }
-
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
@@ -860,20 +878,25 @@ public class Fetcher<K, V> {
         }
     }
 
+    @Override
+    public void onAssignment(Set<TopicPartition> assignment) {
+        sensors.updatePartitionLagSensors(assignment);
+    }
+
     private static class PartitionRecords<K, V> {
         private long fetchOffset;
         private TopicPartition partition;
         private List<ConsumerRecord<K, V>> records;
         private int position = 0;
 
-        public PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
+        private PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
             this.fetchOffset = fetchOffset;
             this.partition = partition;
             this.records = records;
         }
 
         private boolean isDrained() {
-            return records == null || position >= records.size();
+            return records == null;
         }
 
         private void drain() {
@@ -881,8 +904,10 @@ public class Fetcher<K, V> {
         }
 
         private List<ConsumerRecord<K, V>> drainRecords(int n) {
-            if (isDrained())
+            if (isDrained() || position >= records.size()) {
+                drain();
                 return Collections.emptyList();
+            }
 
             // using a sublist avoids a potentially expensive list copy (depending on the size of the records
             // and the maximum we can return from poll). The cost is that we cannot mutate the returned sublist.
@@ -902,15 +927,18 @@ public class Fetcher<K, V> {
         private final long fetchedOffset;
         private final FetchResponse.PartitionData partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
+        private final short responseVersion;
 
-        public CompletedFetch(TopicPartition partition,
-                              long fetchedOffset,
-                              FetchResponse.PartitionData partitionData,
-                              FetchResponseMetricAggregator metricAggregator) {
+        private CompletedFetch(TopicPartition partition,
+                               long fetchedOffset,
+                               FetchResponse.PartitionData partitionData,
+                               FetchResponseMetricAggregator metricAggregator,
+                               short responseVersion) {
             this.partition = partition;
             this.fetchedOffset = fetchedOffset;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
+            this.responseVersion = responseVersion;
         }
     }
 
@@ -974,16 +1002,17 @@ public class Fetcher<K, V> {
     }
 
     private static class FetchManagerMetrics {
-        public final Metrics metrics;
-        public final String metricGrpName;
+        private final Metrics metrics;
+        private final String metricGrpName;
+        private final Sensor bytesFetched;
+        private final Sensor recordsFetched;
+        private final Sensor fetchLatency;
+        private final Sensor recordsFetchLag;
+        private final Sensor fetchThrottleTimeSensor;
 
-        public final Sensor bytesFetched;
-        public final Sensor recordsFetched;
-        public final Sensor fetchLatency;
-        public final Sensor recordsFetchLag;
-        public final Sensor fetchThrottleTimeSensor;
+        private Set<TopicPartition> assignedPartitions;
 
-        public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
+        private FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
 
@@ -1032,7 +1061,7 @@ public class Fetcher<K, V> {
                                                          "The maximum throttle time in ms"), new Max());
         }
 
-        public void recordTopicFetchMetrics(String topic, int bytes, int records) {
+        private void recordTopicFetchMetrics(String topic, int bytes, int records) {
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
@@ -1075,8 +1104,20 @@ public class Fetcher<K, V> {
             recordsFetched.record(records);
         }
 
-        public void recordPartitionFetchLag(TopicPartition tp, long lag) {
-            String name = tp + ".records-lag";
+        private void updatePartitionLagSensors(Set<TopicPartition> assignedPartitions) {
+            if (this.assignedPartitions != null) {
+                for (TopicPartition tp : this.assignedPartitions) {
+                    if (!assignedPartitions.contains(tp))
+                        metrics.removeSensor(partitionLagMetricName(tp));
+                }
+            }
+            this.assignedPartitions = assignedPartitions;
+        }
+
+        private void recordPartitionLag(TopicPartition tp, long lag) {
+            this.recordsFetchLag.record(lag);
+
+            String name = partitionLagMetricName(tp);
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
@@ -1090,6 +1131,10 @@ public class Fetcher<K, V> {
                         "The average lag of the partition"), new Avg());
             }
             recordsLag.record(lag);
+        }
+
+        private static String partitionLagMetricName(TopicPartition tp) {
+            return tp + ".records-lag";
         }
     }
 

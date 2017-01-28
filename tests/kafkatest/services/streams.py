@@ -131,7 +131,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:
             node.account.ssh(self.start_cmd(node))
-            monitor.wait_until('StreamsTest instance started', timeout_sec=60, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
+            monitor.wait_until('StreamsTest instance started', timeout_sec=15, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -143,7 +143,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, command):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
-                                                          "org.apache.kafka.streams.smoketest.StreamsSmokeTest",
+                                                          "org.apache.kafka.streams.tests.StreamsSmokeTest",
                                                           command)
 
 
@@ -160,3 +160,11 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
+
+
+class StreamsBrokerCompatibilityService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsBrokerCompatibilityService, self).__init__(test_context,
+                                                                kafka,
+                                                                "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
+                                                                "dummy")

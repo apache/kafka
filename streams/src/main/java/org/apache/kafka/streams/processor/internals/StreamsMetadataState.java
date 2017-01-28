@@ -84,7 +84,7 @@ public class StreamsMetadataState {
             return allMetadata;
         }
 
-        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
         }
@@ -201,7 +201,7 @@ public class StreamsMetadataState {
         rebuildMetadata(currentState);
     }
 
-    private boolean hasPartitionsForAnyTopics(final Set<String> topicNames, final Set<TopicPartition> partitionForHost) {
+    private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
         for (TopicPartition topicPartition : partitionForHost) {
             if (topicNames.contains(topicPartition.topic())) {
                 return true;
@@ -215,13 +215,13 @@ public class StreamsMetadataState {
         if (currentState.isEmpty()) {
             return;
         }
-        final Map<String, Set<String>> stores = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> stores = builder.stateStoreNameToSourceTopics();
         for (Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
             final HostInfo key = entry.getKey();
             final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
             final Set<String> storesOnHost = new HashSet<>();
-            for (Map.Entry<String, Set<String>> storeTopicEntry : stores.entrySet()) {
-                final Set<String> topicsForStore = storeTopicEntry.getValue();
+            for (Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
+                final List<String> topicsForStore = storeTopicEntry.getValue();
                 if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
                     storesOnHost.add(storeTopicEntry.getKey());
                 }
@@ -259,7 +259,7 @@ public class StreamsMetadataState {
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
-        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
         if (sourceTopics == null || sourceTopics.isEmpty()) {
             return null;
         }
@@ -271,11 +271,11 @@ public class StreamsMetadataState {
     }
 
     private class SourceTopicsInfo {
-        private final Set<String> sourceTopics;
+        private final List<String> sourceTopics;
         private int maxPartitions;
         private String topicWithMostPartitions;
 
-        private SourceTopicsInfo(final Set<String> sourceTopics) {
+        private SourceTopicsInfo(final List<String> sourceTopics) {
             this.sourceTopics = sourceTopics;
             for (String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
