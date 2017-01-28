@@ -48,7 +48,7 @@ trait ConfigHandler {
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
-    // Validate the compatibility of message format version.
+    // Validate the configurations.
     val configNamesToExclude = getExcludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
@@ -105,26 +105,6 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         excludeConfigs += LogConfig.MessageFormatVersionProp
       }
     }
-    
-    // Verify log retention and max timestamp difference
-    val logRetentionMsConfig: Option[Long] = 
-      Option(topicConfig.getProperty(LogConfig.RetentionMsProp)) match {
-        case Some(retentionMs) => Some(retentionMs.toLong)
-        case None => logManager.topicConfigs.get(topic).map(config => config.retentionMs)
-      }
-
-    val maxDiffMsConfig: Option[Long] = 
-      Option(topicConfig.getProperty(LogConfig.MessageTimestampDifferenceMaxMsProp)) match {
-        case Some(maxDiffMs) => Some(maxDiffMs.toLong)
-        case None => logManager.topicConfigs.get(topic).map(config => config.messageTimestampDifferenceMaxMs)
-      }
-    maxDiffMsConfig.foreach { maxDiffMs =>
-        if (logRetentionMsConfig.exists(logRetentionMs => logRetentionMs < maxDiffMs)) {
-          excludeConfigs += LogConfig.MessageTimestampDifferenceMaxMsProp
-          excludeConfigs += LogConfig.RetentionMsProp
-        }
-    }
-    
     excludeConfigs.toSet
   }
 }
