@@ -158,7 +158,7 @@ public class VerifiableLog4jAppender {
      *
      * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate
      * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests,
-     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
     public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
