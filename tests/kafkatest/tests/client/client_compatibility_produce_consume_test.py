@@ -22,7 +22,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
-from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, KafkaVersion
 
 class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
@@ -52,7 +52,7 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    @parametrize(broker_version=str(TRUNK))
+    @parametrize(broker_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     def test_produce_consume(self, broker_version):
