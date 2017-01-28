@@ -51,7 +51,7 @@ import java.util.Map;
  * fault tolerant by overriding the settings to use file storage for both.
  * </p>
  */
-@InterfaceStability.Unstable
+
 public class ConnectStandalone {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 

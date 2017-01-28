@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
-@InterfaceStability.Unstable
+
 public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;

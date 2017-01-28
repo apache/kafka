@@ -30,7 +30,7 @@ import org.apache.kafka.connect.data.Schema;
  * It also includes the {@link TimestampType}, which may be {@link TimestampType#NO_TIMESTAMP_TYPE}, and the relevant
  * timestamp, which may be {@code null}.
  */
-@InterfaceStability.Unstable
+
 public class SinkRecord extends ConnectRecord<SinkRecord> {
     private final long kafkaOffset;
     private final TimestampType timestampType;

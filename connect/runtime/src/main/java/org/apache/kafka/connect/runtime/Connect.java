@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * This class ties together all the components of a Kafka Connect process (herder, worker,
  * storage, command interface), managing their lifecycle.
  */
-@InterfaceStability.Unstable
+
 public class Connect {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
