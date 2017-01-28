@@ -135,7 +135,7 @@ public class StreamsKafkaClient {
     }
 
     /**
-     * Creates a set of new topics using batch request.
+     * Create a set of new topics using batch request.
      */
     public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
 
@@ -253,7 +253,15 @@ public class StreamsKafkaClient {
         return metadataResponse.topicMetadata();
     }
 
-    public void checkBrokerCompatibility() {
+    /**
+     * Check if the used brokers have version 0.10.1.x or higher.
+     * <p>
+     * Note, for <em>pre</em> 0.10.x brokers the broker version cannot be checked and the client will hang and retry
+     * until it {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
+     *
+     * @throws StreamsException if brokers have version 0.10.0.x
+     */
+    public void checkBrokerCompatibility() throws StreamsException {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
             getBrokerId(),
             new ApiVersionsRequest.Builder(),
