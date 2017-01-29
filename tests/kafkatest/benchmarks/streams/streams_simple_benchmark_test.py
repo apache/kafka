@@ -21,7 +21,7 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import TRUNK
+from kafkatest.version import TRUNK
 
 class StreamsSimpleBenchmarkTest(Test):
     """
@@ -34,8 +34,8 @@ class StreamsSimpleBenchmarkTest(Test):
         self.replication = 1
 
 
-    @cluster(num_nodes=9)
-    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 2, 3])
+    @cluster(num_nodes=30)
+    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[10])
     #@matrix(test=["consume"], scale=[1, 2, 3])
     def test_simple_benchmark(self, test, scale):
         """
