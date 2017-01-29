@@ -26,14 +26,14 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 
 /**
- * {@link KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
+ * {@code KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
  * It is an intermediate representation of a {@link KStream} in order to apply an aggregation operation on the original
  * {@link KStream} records.
  * <p>
  * It is an intermediate representation after a grouping of a {@link KStream} before an aggregation is applied to the
  * new partitions resulting in a {@link KTable}.
  * <p>
- * A {@link KGroupedStream} must be obtained from a {@link KStream} via {@link KStream#groupByKey() groupByKey()} or
+ * A {@code KGroupedStream} must be obtained from a {@link KStream} via {@link KStream#groupByKey() groupByKey()} or
  * {@link KStream#groupBy(KeyValueMapper) groupBy(...)}.
  *
  * @param <K> Type of keys

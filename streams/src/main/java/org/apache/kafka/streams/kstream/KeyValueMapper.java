@@ -20,7 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 
 /**
- * The {@link KeyValueMapper} interface for mapping a {@link KeyValue key-value pair} to a new value of arbitrary type.
+ * The {@code KeyValueMapper} interface for mapping a {@link KeyValue key-value pair} to a new value of arbitrary type.
  * For example, it can be used to
  * <ul>
  * <li>map from an input {@link KeyValue} pair to an output {@link KeyValue} pair with different key and/or value type
@@ -29,7 +29,7 @@ import org.apache.kafka.streams.KeyValue;
  * </ul>
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
  * record of a stream (cf. {@link Transformer} for stateful record transformation).
- * {@link KeyValueMapper} is a generalization of {@link ValueMapper}.
+ * {@code KeyValueMapper} is a generalization of {@link ValueMapper}.
  *
  * @param <K>  key type
  * @param <V>  value type

@@ -20,7 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 
 /**
- * The {@link Predicate} interface represents a predicate (boolean-valued function) of a {@link KeyValue} pair.
+ * The {@code Predicate} interface represents a predicate (boolean-valued function) of a {@link KeyValue} pair.
  * This is a stateless record-by-record operation, i.e, {@link #test(Object, Object)} is invoked individually for each
  * record of a stream.
  *

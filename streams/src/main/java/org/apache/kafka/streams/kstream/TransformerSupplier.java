@@ -20,7 +20,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A {@link TransformerSupplier} interface which can create one or more {@link Transformer} instances.
+ * A {@code TransformerSupplier} interface which can create one or more {@link Transformer} instances.
  *
  * @param <K> key type
  * @param <V> value type
