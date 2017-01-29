@@ -65,10 +65,10 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
-public class SessionWindows {
+public final class SessionWindows {
 
     private final long gapMs;
     private long maintainDurationMs;
@@ -121,7 +121,7 @@ public class SessionWindows {
     /**
      * Return the window maintain duration (retention time) in milliseconds.
      * <p>
-     * For {@link SessionWindows} the maintain duration is at least as small as the window gap.
+     * For {@code SessionWindows} the maintain duration is at least as small as the window gap.
      *
      * @return the window maintain duration
      */

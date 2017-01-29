@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
- * {@link KStreamBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
+ * {@code KStreamBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
  * @see TopologyBuilder
  * @see KStream
