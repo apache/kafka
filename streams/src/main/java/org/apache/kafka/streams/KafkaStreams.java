@@ -92,7 +92,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * If instances are added or fail, all (remaining) instances will rebalance the partition assignment among themselves
  * to balance processing load and ensure that all input topic partitions are processed.
  * <p>
- * Internally a {@link KafkaStreams} instance contains a normal {@link KafkaProducer} and {@link KafkaConsumer} instance
+ * Internally a {@code KafkaStreams} instance contains a normal {@link KafkaProducer} and {@link KafkaConsumer} instance
  * that is used for reading input and writing output.
  * <p>
  * A simple example might look like this:
@@ -187,7 +187,7 @@ public class KafkaStreams {
             return validTransitions.contains(newState.ordinal());
         }
     }
-    private volatile State state = KafkaStreams.State.CREATED;
+    private volatile State state = State.CREATED;
     private StateListener stateListener = null;
 
 
@@ -412,9 +412,9 @@ public class KafkaStreams {
     public synchronized void start() throws IllegalStateException, StreamsException {
         log.debug("Starting Kafka Stream process.");
 
-        if (state == KafkaStreams.State.CREATED) {
+        if (state == State.CREATED) {
             checkBrokerVersionCompatibility();
-            setState(KafkaStreams.State.RUNNING);
+            setState(State.RUNNING);
 
             if (globalStreamThread != null) {
                 globalStreamThread.start();
@@ -451,7 +451,7 @@ public class KafkaStreams {
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process.");
         if (state.isCreatedOrRunning()) {
-            setState(KafkaStreams.State.PENDING_SHUTDOWN);
+            setState(State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
             final Thread shutdown = new Thread(new Runnable() {
@@ -495,7 +495,7 @@ public class KafkaStreams {
             } catch (final InterruptedException e) {
                 Thread.interrupted();
             }
-            setState(KafkaStreams.State.NOT_RUNNING);
+            setState(State.NOT_RUNNING);
             return !shutdown.isAlive();
         }
         return true;
@@ -539,11 +539,10 @@ public class KafkaStreams {
      * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
      * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
      * <p>
-     * May only be called either before this {@code KafkaStreams} instance is {@link KafkaStreams#start() started} or
-     * after the instance is {@link KafkaStreams#close() closed}.
+     * May only be called either before this {@code KafkaStreams} instance is {@link #start() started} or after the
+     * instance is {@link #close() closed}.
      * <p>
-     * Calling this method triggers a restore of local {@link StateStore}s on the next {@link KafkaStreams#start()
-     * application start}.
+     * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
      *
      * @throws IllegalStateException if the instance is currently running
      */
@@ -629,7 +628,7 @@ public class KafkaStreams {
      * {@link ProducerConfig#PARTITIONER_CLASS_CONFIG configured} via {@link StreamsConfig},
      * {@link KStream#through(StreamPartitioner, String)}, or {@link KTable#through(StreamPartitioner, String, String)},
      * or if the original {@link KTable}'s input {@link KStreamBuilder#table(String, String) topic} is partitioned
-     * differently, please use {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}.
+     * differently, please use {@link #metadataForKey(String, Object, StreamPartitioner)}.
      * <p>
      * Note:
      * <ul>

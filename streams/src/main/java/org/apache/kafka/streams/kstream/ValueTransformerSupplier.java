@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A {@link ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
+ * A {@code ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
  *
  * @param <V>  value type
  * @param <VR> transformed value type

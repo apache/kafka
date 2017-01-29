@@ -26,13 +26,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 /**
- * {@link KGroupedTable} is an abstraction of a <i>re-grouped changelog stream</i> from a primary-keyed table,
+ * {@code KGroupedTable} is an abstraction of a <i>re-grouped changelog stream</i> from a primary-keyed table,
  * usually on a different grouping key than the original primary key.
  * <p>
  * It is an intermediate representation after a re-grouping of a {@link KTable} before an aggregation is applied to the
  * new partitions resulting in a new {@link KTable}.
  * <p>
- * A {@link KGroupedTable} must be obtained from a {@link KTable} via {@link KTable#groupBy(KeyValueMapper)
+ * A {@code KGroupedTable} must be obtained from a {@link KTable} via {@link KTable#groupBy(KeyValueMapper)
  * groupBy(...)}.
  *
  * @param <K> Type of keys

@@ -21,10 +21,10 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
  * A single window instance, defined by its start and end timestamp.
- * {@link Window} is agnostic if start/end boundaries are inclusive or exclusive; this is defined by concrete
+ * {@code Window} is agnostic if start/end boundaries are inclusive or exclusive; this is defined by concrete
  * window implementations.
  * <p>
- * To specify how {@link Window} boundaries are defined use {@link Windows}.
+ * To specify how {@code Window} boundaries are defined use {@link Windows}.
  * For time semantics, see {@link TimestampExtractor}.
  *
  * @see Windows
@@ -46,7 +46,7 @@ public abstract class Window {
      * @param endMs   the end timestamp of the window
      * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
      */
-    public Window(long startMs, long endMs) throws IllegalArgumentException {
+    public Window(final long startMs, final long endMs) throws IllegalArgumentException {
         if (startMs < 0) {
             throw new IllegalArgumentException("Window startMs time cannot be negative.");
         }

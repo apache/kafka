@@ -56,7 +56,7 @@ import java.util.Map;
  * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
-public class TimeWindows extends Windows<TimeWindow> {
+public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */
     public final long sizeMs;
@@ -128,12 +128,11 @@ public class TimeWindows extends Windows<TimeWindow> {
     }
 
     /**
-     * {@inheritDoc}
-     *
      * @param durationMs the window retention time
      * @return itself
      * @throws IllegalArgumentException if {@code duration} is smaller than the window size
      */
+    @Override
     public TimeWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < sizeMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
@@ -145,7 +144,7 @@ public class TimeWindows extends Windows<TimeWindow> {
     /**
      * {@inheritDoc}
      * <p>
-     * For {@link TimeWindows} the maintain duration is at least as small as the window size.
+     * For {@code TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
      */
@@ -155,7 +154,7 @@ public class TimeWindows extends Windows<TimeWindow> {
     }
 
     @Override
-    public final boolean equals(final Object o) {
+    public boolean equals(final Object o) {
         if (o == this) {
             return true;
         }

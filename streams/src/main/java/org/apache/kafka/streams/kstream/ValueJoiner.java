@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The {@link ValueJoiner} interface for joining two values into a new value of arbitrary type.
+ * The {@code ValueJoiner} interface for joining two values into a new value of arbitrary type.
  * This is a stateless operation, i.e, {@link #apply(Object, Object)} is invoked individually for each joining
  * record-pair of a {@link KStream}-{@link KStream}, {@link KStream}-{@link KTable}, or {@link KTable}-{@link KTable}
  * join.

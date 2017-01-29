@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The {@link ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value
+ * The {@code ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value
  * pair}.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
  * record of a stream.
