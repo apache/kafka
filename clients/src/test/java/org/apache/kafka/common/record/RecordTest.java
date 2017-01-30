@@ -35,18 +35,22 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(value = Parameterized.class)
 public class RecordTest {
 
-    private long timestamp;
-    private ByteBuffer key;
-    private ByteBuffer value;
-    private CompressionType compression;
-    private Record record;
+    private final byte magic;
+    private final long timestamp;
+    private final ByteBuffer key;
+    private final ByteBuffer value;
+    private final CompressionType compression;
+    private final TimestampType timestampType;
+    private final Record record;
 
-    public RecordTest(long timestamp, byte[] key, byte[] value, CompressionType compression) {
+    public RecordTest(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
+        this.magic = magic;
         this.timestamp = timestamp;
+        this.timestampType = TimestampType.CREATE_TIME;
         this.key = key == null ? null : ByteBuffer.wrap(key);
         this.value = value == null ? null : ByteBuffer.wrap(value);
         this.compression = compression;
-        this.record = new Record(timestamp, key, value, compression);
+        this.record = Record.create(magic, timestamp, key, value, compression, timestampType);
     }
 
     @Test
@@ -56,22 +60,33 @@ public class RecordTest {
         assertEquals(key, record.key());
         if (key != null)
             assertEquals(key.limit(), record.keySize());
-        assertEquals(Record.CURRENT_MAGIC_VALUE, record.magic());
+        assertEquals(magic, record.magic());
         assertEquals(value, record.value());
         if (value != null)
             assertEquals(value.limit(), record.valueSize());
+        if (magic > 0) {
+            assertEquals(timestamp, record.timestamp());
+            assertEquals(timestampType, record.timestampType());
+        } else {
+            assertEquals(Record.NO_TIMESTAMP, record.timestamp());
+            assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
+        }
     }
 
     @Test
     public void testChecksum() {
         assertEquals(record.checksum(), record.computeChecksum());
+
+        byte attributes = Record.computeAttributes(magic, this.compression, TimestampType.CREATE_TIME);
         assertEquals(record.checksum(), Record.computeChecksum(
-            this.timestamp,
-            this.key == null ? null : this.key.array(),
-            this.value == null ? null : this.value.array(),
-            this.compression, 0, -1));
+                magic,
+                attributes,
+                this.timestamp,
+                this.key == null ? null : this.key.array(),
+                this.value == null ? null : this.value.array()
+        ));
         assertTrue(record.isValid());
-        for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.size(); i++) {
+        for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.sizeInBytes(); i++) {
             Record copy = copyOf(record);
             copy.buffer().put(i, (byte) 69);
             assertFalse(copy.isValid());
@@ -85,7 +100,7 @@ public class RecordTest {
     }
 
     private Record copyOf(Record record) {
-        ByteBuffer buffer = ByteBuffer.allocate(record.size());
+        ByteBuffer buffer = ByteBuffer.allocate(record.sizeInBytes());
         record.buffer().put(buffer);
         buffer.rewind();
         record.buffer().rewind();
@@ -101,12 +116,13 @@ public class RecordTest {
     public static Collection<Object[]> data() {
         byte[] payload = new byte[1000];
         Arrays.fill(payload, (byte) 1);
-        List<Object[]> values = new ArrayList<Object[]>();
-        for (long timestamp : Arrays.asList(Record.NO_TIMESTAMP, 0L, 1L))
-            for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
-                for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
-                    for (CompressionType compression : CompressionType.values())
-                        values.add(new Object[] {timestamp, key, value, compression});
+        List<Object[]> values = new ArrayList<>();
+        for (byte magic : Arrays.asList(Record.MAGIC_VALUE_V0, Record.MAGIC_VALUE_V1))
+            for (long timestamp : Arrays.asList(Record.NO_TIMESTAMP, 0L, 1L))
+                for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
+                    for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
+                        for (CompressionType compression : CompressionType.values())
+                            values.add(new Object[] {magic, timestamp, key, value, compression});
         return values;
     }
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -29,7 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ListOffsetResponse extends AbstractRequestResponse {
+public class ListOffsetResponse extends AbstractResponse {
+    public static final long UNKNOWN_TIMESTAMP = -1L;
+    public static final long UNKNOWN_OFFSET = -1L;
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String RESPONSES_KEY_NAME = "responses";
@@ -47,25 +50,75 @@ public class ListOffsetResponse extends AbstractRequestResponse {
      *
      *  UNKNOWN_TOPIC_OR_PARTITION (3)
      *  NOT_LEADER_FOR_PARTITION (6)
+     *  UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
      *  UNKNOWN (-1)
      */
 
+    // This key is only used by ListOffsetResponse v0
+    @Deprecated
     private static final String OFFSETS_KEY_NAME = "offsets";
+    private static final String TIMESTAMP_KEY_NAME = "timestamp";
+    private static final String OFFSET_KEY_NAME = "offset";
 
     private final Map<TopicPartition, PartitionData> responseData;
 
     public static final class PartitionData {
         public final short errorCode;
+        // The offsets list is only used in ListOffsetResponse v0.
+        @Deprecated
         public final List<Long> offsets;
+        public final Long timestamp;
+        public final Long offset;
 
+        /**
+         * Constructor for ListOffsetResponse v0
+         */
+        @Deprecated
         public PartitionData(short errorCode, List<Long> offsets) {
             this.errorCode = errorCode;
             this.offsets = offsets;
+            this.timestamp = null;
+            this.offset = null;
+        }
+
+        /**
+         * Constructor for ListOffsetResponse v1
+         */
+        public PartitionData(short errorCode, long timestamp, long offset) {
+            this.errorCode = errorCode;
+            this.timestamp = timestamp;
+            this.offset = offset;
+            this.offsets = null;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("PartitionData{").
+                append("errorCode: ").append((int) errorCode).
+                append(", timestamp: ").append(timestamp).
+                append(", offset: ").append(offset).
+                append(", offsets: ");
+            if (offsets == null) {
+                bld.append(offsets);
+            } else {
+                bld.append("[").append(Utils.join(this.offsets, ",")).append("]");
+            }
+            bld.append("}");
+            return bld.toString();
         }
     }
 
+    /**
+     * Constructor for ListOffsetResponse v0.
+     */
+    @Deprecated
     public ListOffsetResponse(Map<TopicPartition, PartitionData> responseData) {
-        super(new Struct(CURRENT_SCHEMA));
+        this(responseData, 0);
+    }
+
+    public ListOffsetResponse(Map<TopicPartition, PartitionData> responseData, int version) {
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.LIST_OFFSETS.id, version)));
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<Struct>();
@@ -78,7 +131,12 @@ public class ListOffsetResponse extends AbstractRequestResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
                 partitionData.set(ERROR_CODE_KEY_NAME, offsetPartitionData.errorCode);
-                partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
+                if (version == 0)
+                    partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
+                else {
+                    partitionData.set(TIMESTAMP_KEY_NAME, offsetPartitionData.timestamp);
+                    partitionData.set(OFFSET_KEY_NAME, offsetPartitionData.offset);
+                }
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
@@ -98,11 +156,18 @@ public class ListOffsetResponse extends AbstractRequestResponse {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
-                Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
-                List<Long> offsetsList = new ArrayList<Long>();
-                for (Object offset: offsets)
-                    offsetsList.add((Long) offset);
-                PartitionData partitionData = new PartitionData(errorCode, offsetsList);
+                PartitionData partitionData;
+                if (partitionResponse.hasField(OFFSETS_KEY_NAME)) {
+                    Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
+                    List<Long> offsetsList = new ArrayList<Long>();
+                    for (Object offset : offsets)
+                        offsetsList.add((Long) offset);
+                    partitionData = new PartitionData(errorCode, offsetsList);
+                } else {
+                    long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
+                    long offset = partitionResponse.getLong(OFFSET_KEY_NAME);
+                    partitionData = new PartitionData(errorCode, timestamp, offset);
+                }
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -114,5 +179,9 @@ public class ListOffsetResponse extends AbstractRequestResponse {
 
     public static ListOffsetResponse parse(ByteBuffer buffer) {
         return new ListOffsetResponse(CURRENT_SCHEMA.read(buffer));
+    }
+
+    public static ListOffsetResponse parse(ByteBuffer buffer, int version) {
+        return new ListOffsetResponse(ProtoUtils.responseSchema(ApiKeys.LIST_OFFSETS.id, version).read(buffer));
     }
 }

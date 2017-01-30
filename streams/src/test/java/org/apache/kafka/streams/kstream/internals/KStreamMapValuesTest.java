@@ -50,10 +50,10 @@ public class KStreamMapValuesTest {
     public void testFlatMapValues() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueMapper<String, Integer> mapper =
-            new ValueMapper<String, Integer>() {
+        ValueMapper<CharSequence, Integer> mapper =
+            new ValueMapper<CharSequence, Integer>() {
                 @Override
-                public Integer apply(String value) {
+                public Integer apply(CharSequence value) {
                     return value.length();
                 }
             };
@@ -66,8 +66,8 @@ public class KStreamMapValuesTest {
         stream.mapValues(mapper).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], Integer.toString(expectedKeys[i]));
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, Integer.toString(expectedKey));
         }
 
         assertEquals(4, processor.processed.size());

@@ -166,4 +166,36 @@ public class StateDirectoryTest {
         assertTrue(dirs.contains(taskDir2));
     }
 
+    @Test
+    public void shouldCreateDirectoriesIfParentDoesntExist() throws Exception {
+        final File tempDir = TestUtils.tempDirectory();
+        final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
+        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath());
+        final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
+        assertTrue(stateDir.exists());
+        assertTrue(taskDir.exists());
+    }
+
+    @Test(expected = OverlappingFileLockException.class)
+    public void shouldLockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+        channel.lock();
+    }
+
+    @Test
+    public void shouldUnlockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+
+        directory.unlockGlobalState();
+
+        // should lock without any exceptions
+        channel.lock();
+    }
+
 }

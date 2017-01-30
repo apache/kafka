@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Time;
@@ -51,7 +52,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
-    private final WorkerCoordinatorMetrics sensors;
     private ClusterConfigState configSnapshot;
     private final WorkerRebalanceListener listener;
     private LeaderState leaderState;
@@ -63,6 +63,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
      */
     public WorkerCoordinator(ConsumerNetworkClient client,
                              String groupId,
+                             int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
                              int heartbeatIntervalMs,
                              Metrics metrics,
@@ -74,6 +75,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              WorkerRebalanceListener listener) {
         super(client,
                 groupId,
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
@@ -83,7 +85,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
+        new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -95,6 +97,38 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     public String protocolType() {
         return "connect";
+    }
+
+    public void poll(long timeout) {
+        // poll for io until the timeout expires
+        final long start = time.milliseconds();
+        long now = start;
+        long remaining;
+
+        do {
+            if (coordinatorUnknown()) {
+                ensureCoordinatorReady();
+                now = time.milliseconds();
+            }
+
+            if (needRejoin()) {
+                ensureActiveGroup();
+                now = time.milliseconds();
+            }
+
+            pollHeartbeat(now);
+
+            long elapsed = now - start;
+            remaining = timeout - elapsed;
+
+            // Note that because the network client is shared with the background heartbeat thread,
+            // we do not want to block in poll longer than the time to the next heartbeat.
+            client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+
+            now = time.milliseconds();
+            elapsed = now - start;
+            remaining = timeout - elapsed;
+        } while (remaining > 0);
     }
 
     @Override
@@ -120,25 +154,25 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
         log.debug("Performing task assignment");
 
-        Map<String, ConnectProtocol.WorkerState> allConfigs = new HashMap<>();
+        Map<String, ConnectProtocol.WorkerState> memberConfigs = new HashMap<>();
         for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
-            allConfigs.put(entry.getKey(), ConnectProtocol.deserializeMetadata(entry.getValue()));
+            memberConfigs.put(entry.getKey(), ConnectProtocol.deserializeMetadata(entry.getValue()));
 
-        long maxOffset = findMaxMemberConfigOffset(allConfigs);
+        long maxOffset = findMaxMemberConfigOffset(memberConfigs);
         Long leaderOffset = ensureLeaderConfig(maxOffset);
         if (leaderOffset == null)
-            return fillAssignmentsAndSerialize(allConfigs.keySet(), ConnectProtocol.Assignment.CONFIG_MISMATCH,
-                    leaderId, allConfigs.get(leaderId).url(), maxOffset,
+            return fillAssignmentsAndSerialize(memberConfigs.keySet(), ConnectProtocol.Assignment.CONFIG_MISMATCH,
+                    leaderId, memberConfigs.get(leaderId).url(), maxOffset,
                     new HashMap<String, List<String>>(), new HashMap<String, List<ConnectorTaskId>>());
-        return performTaskAssignment(leaderId, leaderOffset, allConfigs);
+        return performTaskAssignment(leaderId, leaderOffset, memberConfigs);
     }
 
-    private long findMaxMemberConfigOffset(Map<String, ConnectProtocol.WorkerState> allConfigs) {
+    private long findMaxMemberConfigOffset(Map<String, ConnectProtocol.WorkerState> memberConfigs) {
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in
         // the response so members that have fallen behind will not use the assignment until they have caught up.
         Long maxOffset = null;
-        for (Map.Entry<String, ConnectProtocol.WorkerState> stateEntry : allConfigs.entrySet()) {
+        for (Map.Entry<String, ConnectProtocol.WorkerState> stateEntry : memberConfigs.entrySet()) {
             long memberRootOffset = stateEntry.getValue().offset();
             if (maxOffset == null)
                 maxOffset = memberRootOffset;
@@ -171,13 +205,18 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return maxOffset;
     }
 
-    private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset, Map<String, ConnectProtocol.WorkerState> allConfigs) {
+    private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset, Map<String, ConnectProtocol.WorkerState> memberConfigs) {
         Map<String, List<String>> connectorAssignments = new HashMap<>();
         Map<String, List<ConnectorTaskId>> taskAssignments = new HashMap<>();
 
-        // Perform round-robin task assignment
-        CircularIterator<String> memberIt = new CircularIterator<>(sorted(allConfigs.keySet()));
-        for (String connectorId : sorted(configSnapshot.connectors())) {
+        // Perform round-robin task assignment. Assign all connectors and then all tasks because assigning both the
+        // connector and its tasks can lead to very uneven distribution of work in some common cases (e.g. for connectors
+        // that generate only 1 task each; in a cluster of 2 or an even # of nodes, only even nodes will be assigned
+        // connectors and only odd nodes will be assigned tasks, but tasks are, on average, actually more resource
+        // intensive than connectors).
+        List<String> connectorsSorted = sorted(configSnapshot.connectors());
+        CircularIterator<String> memberIt = new CircularIterator<>(sorted(memberConfigs.keySet()));
+        for (String connectorId : connectorsSorted) {
             String connectorAssignedTo = memberIt.next();
             log.trace("Assigning connector {} to {}", connectorId, connectorAssignedTo);
             List<String> memberConnectors = connectorAssignments.get(connectorAssignedTo);
@@ -186,7 +225,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 connectorAssignments.put(connectorAssignedTo, memberConnectors);
             }
             memberConnectors.add(connectorId);
-
+        }
+        for (String connectorId : connectorsSorted) {
             for (ConnectorTaskId taskId : sorted(configSnapshot.tasks(connectorId))) {
                 String taskAssignedTo = memberIt.next();
                 log.trace("Assigning task {} to {}", taskId, taskAssignedTo);
@@ -199,10 +239,10 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             }
         }
 
-        this.leaderState = new LeaderState(allConfigs, connectorAssignments, taskAssignments);
+        this.leaderState = new LeaderState(memberConfigs, connectorAssignments, taskAssignments);
 
-        return fillAssignmentsAndSerialize(allConfigs.keySet(), ConnectProtocol.Assignment.NO_ERROR,
-                leaderId, allConfigs.get(leaderId).url(), maxOffset, connectorAssignments, taskAssignments);
+        return fillAssignmentsAndSerialize(memberConfigs.keySet(), ConnectProtocol.Assignment.NO_ERROR,
+                leaderId, memberConfigs.get(leaderId).url(), maxOffset, connectorAssignments, taskAssignments);
     }
 
     private Map<String, ByteBuffer> fillAssignmentsAndSerialize(Collection<String> members,
@@ -238,12 +278,15 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public boolean needRejoin() {
+    protected boolean needRejoin() {
         return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
-        return this.memberId;
+        Generation generation = generation();
+        if (generation != null)
+            return generation.memberId;
+        return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
     @Override
@@ -252,7 +295,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private boolean isLeader() {
-        return assignmentSnapshot != null && memberId.equals(assignmentSnapshot.leader());
+        return assignmentSnapshot != null && memberId().equals(assignmentSnapshot.leader());
     }
 
     public String ownerUrl(String connector) {
@@ -268,11 +311,9 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private class WorkerCoordinatorMetrics {
-        public final Metrics metrics;
         public final String metricGrpName;
 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {

@@ -16,4 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-public enum Mode { CLIENT, SERVER };
+/**
+ * Connection mode for SSL and SASL connections.
+ */
+public enum Mode { CLIENT, SERVER }

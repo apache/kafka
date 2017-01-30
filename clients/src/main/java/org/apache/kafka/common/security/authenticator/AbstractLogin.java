@@ -18,8 +18,6 @@
 
 package org.apache.kafka.common.security.authenticator;
 
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.security.sasl.RealmCallback;
@@ -30,7 +28,7 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.Subject;
 
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.Login;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,29 +41,17 @@ import java.util.Map;
 public abstract class AbstractLogin implements Login {
     private static final Logger log = LoggerFactory.getLogger(AbstractLogin.class);
 
-    private String loginContextName;
+    private JaasContext jaasContext;
     private LoginContext loginContext;
 
-
     @Override
-    public void configure(Map<String, ?> configs, String loginContextName) {
-        this.loginContextName = loginContextName;
+    public void configure(Map<String, ?> configs, JaasContext jaasContext) {
+        this.jaasContext = jaasContext;
     }
 
     @Override
     public LoginContext login() throws LoginException {
-        String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
-        if (jaasConfigFile == null) {
-            log.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS configuration.");
-        }
-        AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
-        if (configEntries == null) {
-            String errorMessage = "Could not find a '" + loginContextName + "' entry in the JAAS configuration. System property '" +
-                JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " + (jaasConfigFile == null ? "not set" : jaasConfigFile);
-            throw new IllegalArgumentException(errorMessage);
-        }
-
-        loginContext = new LoginContext(loginContextName, new LoginCallbackHandler());
+        loginContext = new LoginContext(jaasContext.name(), null, new LoginCallbackHandler(), jaasContext.configuration());
         loginContext.login();
         log.info("Successfully logged in.");
         return loginContext;
@@ -74,6 +60,10 @@ public abstract class AbstractLogin implements Login {
     @Override
     public Subject subject() {
         return loginContext.getSubject();
+    }
+
+    protected JaasContext jaasContext() {
+        return jaasContext;
     }
 
     /**

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.List;
@@ -26,7 +25,6 @@ import java.util.Map;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
-@InterfaceStability.Unstable
 public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;
@@ -82,13 +80,14 @@ public abstract class SourceTask implements Task {
 
     /**
      * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
      * </p>
+     *
      * @param record {@link SourceRecord} that was successfully sent via the producer.
      * @throws InterruptedException
      */

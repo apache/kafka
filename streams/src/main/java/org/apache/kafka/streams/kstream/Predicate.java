@@ -14,23 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
+
 /**
- * The {@link Predicate} interface represents a predicate (boolean-valued function) of a key-value pair.
+ * The {@code Predicate} interface represents a predicate (boolean-valued function) of a {@link KeyValue} pair.
+ * This is a stateless record-by-record operation, i.e, {@link #test(Object, Object)} is invoked individually for each
+ * record of a stream.
  *
- * @param <K>   key type
- * @param <V>   value type
+ * @param <K> key type
+ * @param <V> value type
+ * @see KStream#filter(Predicate)
+ * @see KStream#filterNot(Predicate)
+ * @see KStream#branch(Predicate[])
+ * @see KTable#filter(Predicate)
+ * @see KTable#filterNot(Predicate)
  */
+@InterfaceStability.Unstable
 public interface Predicate<K, V> {
 
     /**
      * Test if the record with the given key and value satisfies the predicate.
      *
-     * @param key    the key of the record
-     * @param value  the value of the record
-     * @return       return {@code true} if the key-value pair satisfies the predicate&mdash;{@code false} otherwise
+     * @param key   the key of the record
+     * @param value the value of the record
+     * @return {@code true} if the {@link KeyValue} pair satisfies the predicate&mdash;{@code false} otherwise
      */
-    boolean test(K key, V value);
+    boolean test(final K key, final V value);
 }

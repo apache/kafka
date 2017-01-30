@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -28,11 +28,11 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     private final String topic;
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
-    private final StreamPartitioner<K, V> partitioner;
+    private final StreamPartitioner<? super K, ? super V> partitioner;
 
     private ProcessorContext context;
 
-    public SinkNode(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner) {
+    public SinkNode(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<? super K, ? super V> partitioner) {
         super(name);
 
         this.topic = topic;
@@ -52,6 +52,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
+        super.init(context);
         this.context = context;
 
         // if serializers are null, get the default ones from the context
@@ -62,32 +63,50 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (this.valSerializer instanceof ChangedSerializer &&
                 ((ChangedSerializer) this.valSerializer).inner() == null)
             ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
-
     }
 
+
     @Override
-    public void process(K key, V value) {
-        // send to all the registered topics
+    public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
-    }
 
-    @Override
-    public void close() {
-        // do nothing
-    }
+        final long timestamp = context.timestamp();
+        if (timestamp < 0) {
+            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
+        }
 
-    // for test only
-    public Serializer<V> valueSerializer() {
-        return valSerializer;
+        try {
+            collector.send(topic, key, value, null, timestamp, keySerializer, valSerializer, partitioner);
+        } catch (ClassCastException e) {
+            throw new StreamsException(
+                    String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
+                                    "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
+                                    "provide correct Serdes via method parameters.",
+                                    keySerializer.getClass().getName(),
+                                    valSerializer.getClass().getName(),
+                                    key.getClass().getName(),
+                                    value.getClass().getName()),
+                    e);
+        }
     }
 
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("topic:" + topic);
+        return toString("");
+    }
+
+    /**
+     * @return a string representation of this node starting with the given indent, useful for debugging.
+     */
+    public String toString(String indent) {
+        final StringBuilder sb = new StringBuilder(super.toString(indent));
+        sb.append(indent).append("\ttopic:\t\t");
+        sb.append(topic);
+        sb.append("\n");
         return sb.toString();
     }
+
 }

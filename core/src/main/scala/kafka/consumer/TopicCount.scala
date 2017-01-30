@@ -140,8 +140,8 @@ private[kafka] class WildcardTopicCount(zkUtils: ZkUtils,
 
   def pattern: String = {
     topicFilter match {
-      case wl: Whitelist => TopicCount.whiteListPattern
-      case bl: Blacklist => TopicCount.blackListPattern
+      case _: Whitelist => TopicCount.whiteListPattern
+      case _: Blacklist => TopicCount.blackListPattern
     }
   }
 

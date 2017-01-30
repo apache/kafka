@@ -16,12 +16,11 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.network.ChannelBuilders;
-import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.config.ConfigException;
@@ -36,26 +35,28 @@ public class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
-        List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
+        List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
-            if (url != null && url.length() > 0) {
-                String host = getHost(url);
-                Integer port = getPort(url);
-                if (host == null || port == null)
-                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            if (url != null && !url.isEmpty()) {
                 try {
+                    String host = getHost(url);
+                    Integer port = getPort(url);
+                    if (host == null || port == null)
+                        throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+
                     InetSocketAddress address = new InetSocketAddress(host, port);
+
                     if (address.isUnresolved()) {
-                        log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + url);
+                        log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
                     } else {
                         addresses.add(address);
                     }
-                } catch (NumberFormatException e) {
+                } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
         }
-        if (addresses.size() < 1)
+        if (addresses.isEmpty())
             throw new ConfigException("No resolvable bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         return addresses;
     }
@@ -72,15 +73,15 @@ public class ClientUtils {
     }
 
     /**
-     * @param configs client/server configs
+     * @param config client configs
      * @return configured ChannelBuilder based on the configs.
      */
-    public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
-        SecurityProtocol securityProtocol = SecurityProtocol.forName((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    public static ChannelBuilder createChannelBuilder(AbstractConfig config) {
+        SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
             throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
-        String clientSaslMechanism = (String) configs.get(SaslConfigs.SASL_MECHANISM);
-        return ChannelBuilders.create(securityProtocol, Mode.CLIENT, LoginType.CLIENT, configs, clientSaslMechanism, true);
+        String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
+        return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
+                clientSaslMechanism, true);
     }
-
 }

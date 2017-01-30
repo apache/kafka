@@ -15,6 +15,7 @@
 
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -22,7 +23,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, DEV_BRANCH, KafkaVersion
 
 
 class TestVerifiableProducer(Test):
@@ -44,12 +45,13 @@ class TestVerifiableProducer(Test):
         self.zk.start()
         self.kafka.start()
 
+    @cluster(num_nodes=3)
     @parametrize(producer_version=str(LATEST_0_8_2))
     @parametrize(producer_version=str(LATEST_0_9))
-    @parametrize(producer_version=str(TRUNK))
-    def test_simple_run(self, producer_version=TRUNK):
+    @parametrize(producer_version=str(DEV_BRANCH))
+    def test_simple_run(self, producer_version=DEV_BRANCH):
         """
-        Test that we can start VerifiableProducer on trunk or against the 0.8.2 jar, and
+        Test that we can start VerifiableProducer on the current branch snapshot version or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
         """
         node = self.producer.nodes[0]
@@ -59,11 +61,11 @@ class TestVerifiableProducer(Test):
              err_msg="Producer failed to start in a reasonable amount of time.")
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
-        # that this check works with TRUNK
-        # When running VerifiableProducer 0.8.X, both trunk version and 0.8.X should show up because of the way
-        # verifiable producer pulls in some trunk directories into its classpath
+        # that this check works with DEV_BRANCH
+        # When running VerifiableProducer 0.8.X, both the current branch version and 0.8.X should show up because of the
+        # way verifiable producer pulls in some development directories into its classpath
         if node.version <= LATEST_0_8_2:
-            assert is_version(node, [node.version.vstring, TRUNK.vstring])
+            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring])
         else:
             assert is_version(node, [node.version.vstring])
 

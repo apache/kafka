@@ -194,10 +194,27 @@ public class ConnectorsResourceTest {
         PowerMock.verifyAll();
     }
 
+    @Test(expected = BadRequestException.class)
+    public void testCreateConnectorWithASlashInItsName() throws Throwable {
+        String badConnectorName = CONNECTOR_NAME + "/" + "test";
+
+        CreateConnectorRequest body = new CreateConnectorRequest(badConnectorName, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, badConnectorName));
+
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES)));
+
+        PowerMock.replayAll();
+
+        connectorsResource.createConnector(FORWARD, body);
+
+        PowerMock.verifyAll();
+    }
+
     @Test
     public void testDeleteConnector() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
-        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.<Map<String, String>>isNull(), EasyMock.eq(true), EasyMock.capture(cb));
+        herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackResult(cb, null);
 
         PowerMock.replayAll();
@@ -210,7 +227,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testDeleteConnectorNotLeader() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
-        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.<Map<String, String>>isNull(), EasyMock.eq(true), EasyMock.capture(cb));
+        herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
         EasyMock.expect(RestServer.httpRequest("http://leader:8083/connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", null, null))
@@ -227,7 +244,7 @@ public class ConnectorsResourceTest {
     @Test(expected = NotFoundException.class)
     public void testDeleteConnectorNotFound() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
-        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.<Map<String, String>>isNull(), EasyMock.eq(true), EasyMock.capture(cb));
+        herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("not found"));
 
         PowerMock.replayAll();

@@ -21,22 +21,27 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 /**
  * Retrieves current wall clock timestamps as {@link System#currentTimeMillis()}.
- *
+ * <p>
  * Using this extractor effectively provides <i>processing-time</i> semantics.
- *
- * If you need <i>event-time</i> semantics, use {@link ConsumerRecordTimestampExtractor} with
+ * <p>
+ * If you need <i>event-time</i> semantics, use {@link FailOnInvalidTimestamp} with
  * built-in <i>CreateTime</i> or <i>LogAppendTime</i> timestamp (see KIP-32: Add timestamps to Kafka message for details).
+ *
+ * @see FailOnInvalidTimestamp
+ * @see LogAndSkipOnInvalidTimestamp
+ * @see UsePreviousTimeOnInvalidTimestamp
  */
 public class WallclockTimestampExtractor implements TimestampExtractor {
 
     /**
      * Return the current wall clock time as timestamp.
      *
-     * @param record  a data record
-     * @return        the current wall clock time, expressed in milliseconds since midnight, January 1, 1970 UTC
+     * @param record a data record
+     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @return the current wall clock time, expressed in milliseconds since midnight, January 1, 1970 UTC
      */
     @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
         return System.currentTimeMillis();
     }
 }

@@ -21,20 +21,29 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -44,12 +53,17 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamTaskTest {
 
@@ -75,11 +89,12 @@ public class StreamTaskTest {
                 }
             },
             Collections.<String, SinkNode>emptyMap(),
-            Collections.<StateStoreSupplier>emptyList(),
-            Collections.<String, String>emptyMap()
-    );
+            Collections.<StateStore>emptyList(),
+            Collections.<String, String>emptyMap(),
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
+    private RecordCollectorImpl recordCollector;
 
     private StreamsConfig createConfig(final File baseDir) throws Exception {
         return new StreamsConfig(new Properties() {
@@ -119,7 +134,9 @@ public class StreamTaskTest {
     @Test
     public void testProcessOrder() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        recordCollector = new RecordCollectorImpl(producer, "taskId");
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -159,14 +176,41 @@ public class StreamTaskTest {
 
         task.close();
 
+    }
 
+    @Test
+    public void testMetrics() throws Exception {
+        StreamsConfig config = createConfig(baseDir);
+        recordCollector = new RecordCollectorImpl(producer, "taskId");
+        Metrics metrics = new Metrics();
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(metrics), stateDirectory, null, new MockTime(), recordCollector);
+        String name = task.id().toString();
+        String[] entities = {"all", name};
+        String operation = "commit";
+
+        String groupName = "stream-task-metrics";
+        Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
+
+        assertNotNull(metrics.getSensor(operation));
+        assertNotNull(metrics.getSensor(name + "-" + operation));
+
+        for (String entity : entities) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
+                "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
+                "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
+                "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+        }
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -225,7 +269,8 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+            restoreStateConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), recordCollector);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -281,6 +326,115 @@ public class StreamTaskTest {
 
         task.close();
 
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContext() throws Exception {
+        final StreamsConfig config = createConfig(baseDir);
+        final MockSourceNode processorNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
+
+            @Override
+            public void process(final Object key, final Object value) {
+                throw new KafkaException("KABOOM!");
+            }
+        };
+
+        final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
+        final Map<String, SourceNode> sourceNodes
+                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final ProcessorTopology topology = new ProcessorTopology(processorNodes,
+                                                                 sourceNodes,
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList(),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions,
+            topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+        final int offset = 20;
+        streamTask.addRecords(partition1, Collections.singletonList(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+
+        try {
+            streamTask.process();
+            fail("Should've thrown StreamsException");
+        } catch (StreamsException e) {
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain topic", message.contains("topic=" + topic1[0]));
+            assertTrue("message=" + message + " should contain partition", message.contains("partition=" + partition1.partition()));
+            assertTrue("message=" + message + " should contain offset", message.contains("offset=" + offset));
+            assertTrue("message=" + message + " should contain processor", message.contains("processor=" + processorNode.name()));
+        }
+
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuating() throws Exception {
+        final StreamsConfig config = createConfig(baseDir);
+        final ProcessorNode punctuator = new ProcessorNode("test", new AbstractProcessor() {
+            @Override
+            public void init(final ProcessorContext context) {
+                context.schedule(1);
+            }
+
+            @Override
+            public void process(final Object key, final Object value) {
+                //
+            }
+
+            @Override
+            public void punctuate(final long timestamp) {
+                throw new KafkaException("KABOOM!");
+            }
+        }, Collections.<String>emptySet());
+
+        final List<ProcessorNode> processorNodes = Collections.singletonList(punctuator);
+
+
+        final ProcessorTopology topology = new ProcessorTopology(processorNodes,
+                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList(),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer,
+                                                     restoreStateConsumer, config, streamsMetrics, stateDirectory,
+                                                     new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+
+        try {
+            streamTask.punctuate(punctuator, 1);
+            fail("Should've thrown StreamsException");
+        } catch (StreamsException e) {
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
+        }
+
+    }
+
+    @Test
+    public void shouldFlushRecordCollectorOnFlushState() throws Exception {
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList(),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+        final AtomicBoolean flushed = new AtomicBoolean(false);
+        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
+            @Override
+            public void flush() {
+                flushed.set(true);
+            }
+        };
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "appId", partitions, topology, consumer,
+            restoreStateConsumer, createConfig(baseDir), streamsMetrics, stateDirectory, new ThreadCache("testCache", 0, streamsMetrics), new MockTime(), recordCollector);
+        streamTask.flushState();
+        assertTrue(flushed.get());
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

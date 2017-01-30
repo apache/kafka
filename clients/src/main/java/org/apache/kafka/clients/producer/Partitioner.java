@@ -20,11 +20,13 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Cluster;
 
+import java.io.Closeable;
+
 /**
  * Partitioner Interface
  */
 
-public interface Partitioner extends Configurable {
+public interface Partitioner extends Configurable, Closeable {
 
     /**
      * Compute the partition for the given record.

@@ -17,6 +17,8 @@
 
 package kafka.server
 
-import kafka.message.MessageSet
+import org.apache.kafka.common.record.Records
 
-case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata, messageSet: MessageSet)
+case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
+                         records: Records,
+                         firstEntryIncomplete: Boolean = false)

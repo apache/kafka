@@ -37,11 +37,11 @@ if [ -z `which javac` ]; then
 fi
 
 chmod a+rw /opt
-if [ -h /opt/kafka-trunk ]; then
+if [ -h /opt/kafka-dev ]; then
     # reset symlink
-    rm /opt/kafka-trunk
+    rm /opt/kafka-dev
 fi
-ln -s /vagrant /opt/kafka-trunk
+ln -s /vagrant /opt/kafka-dev
 
 get_kafka() {
     version=$1
@@ -65,6 +65,11 @@ get_kafka 0.8.2.2
 chmod a+rw /opt/kafka-0.8.2.2
 get_kafka 0.9.0.1
 chmod a+rw /opt/kafka-0.9.0.1
+get_kafka 0.10.0.1
+chmod a+rw /opt/kafka-0.10.0.1
+get_kafka 0.10.1.1
+chmod a+rw /opt/kafka-0.10.1.1
+
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

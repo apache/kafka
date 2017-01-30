@@ -56,6 +56,21 @@ object JaasTestUtils {
     }
   }
 
+  case class ScramLoginModule(username: String,
+                              password: String,
+                              debug: Boolean = false) {
+    def toJaasModule: JaasModule = {
+      JaasModule(
+        "org.apache.kafka.common.security.scram.ScramLoginModule",
+        debug = debug,
+        entries = Map(
+          "username" -> username,
+          "password" -> password
+        )
+      )
+    }
+  }
+
   case class JaasModule(moduleName: String,
                         debug: Boolean,
                         entries: Map[String, String]) {
@@ -63,7 +78,7 @@ object JaasTestUtils {
       s"""$moduleName required
           |  debug=$debug
           |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
-          |"""
+          |""".stripMargin
     }
   }
 
@@ -84,15 +99,28 @@ object JaasTestUtils {
   private val ZkUserPassword = "fpjsecret"
   private val ZkModule = "org.apache.zookeeper.server.auth.DigestLoginModule"
 
-  private val KafkaServerContextName = "KafkaServer"
-  private val KafkaServerPrincipal = "kafka/localhost@EXAMPLE.COM"
+  val KafkaServerContextName = "KafkaServer"
+  val KafkaServerPrincipalUnqualifiedName = "kafka"
+  private val KafkaServerPrincipal = KafkaServerPrincipalUnqualifiedName + "/localhost@EXAMPLE.COM"
   private val KafkaClientContextName = "KafkaClient"
-  private val KafkaClientPrincipal = "client@EXAMPLE.COM"
+  val KafkaClientPrincipalUnqualifiedName = "client"
+  private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
+  val KafkaClientPrincipalUnqualifiedName2 = "client2"
+  private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
   
-  private val KafkaPlainUser = "testuser"
-  private val KafkaPlainPassword = "testuser-secret"
-  private val KafkaPlainAdmin = "admin"
-  private val KafkaPlainAdminPassword = "admin-secret"
+  val KafkaPlainUser = "plain-user"
+  private val KafkaPlainPassword = "plain-user-secret"
+  val KafkaPlainUser2 = "plain-user2"
+  val KafkaPlainPassword2 = "plain-user2-secret"
+  val KafkaPlainAdmin = "plain-admin"
+  private val KafkaPlainAdminPassword = "plain-admin-secret"
+
+  val KafkaScramUser = "scram-user"
+  val KafkaScramPassword = "scram-user-secret"
+  val KafkaScramUser2 = "scram-user2"
+  val KafkaScramPassword2 = "scram-user2-secret"
+  val KafkaScramAdmin = "scram-admin"
+  val KafkaScramAdminPassword = "scram-admin-secret"
 
   def writeZkFile(): String = {
     val jaasFile = TestUtils.tempFile()
@@ -100,26 +128,36 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
 
-  def writeKafkaFile(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanisms: List[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
+  def writeKafkaFile(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
+                     kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
+                     clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanisms, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
+      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections)
     jaasFile.getCanonicalPath
   }
 
-  def writeZkAndKafkaFiles(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanisms: List[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
+  def writeZkAndKafkaFiles(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
+                           kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
+                           clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanisms, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
+      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections ++ zkSections)
     jaasFile.getCanonicalPath
   }
+
+  // Returns the dynamic configuration, using credentials for user #1
+  def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
 
   private def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
     new JaasSection(ZkClientContextName, Seq(JaasModule(ZkModule, false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
-  private def kafkaServerSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
+  private def kafkaServerSection(contextName: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
     val modules = mechanisms.map {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -134,31 +172,52 @@ object JaasTestUtils {
           KafkaPlainAdmin,
           KafkaPlainAdminPassword,
           debug = false,
-          Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword)).toJaasModule
+          Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword, KafkaPlainUser2 -> KafkaPlainPassword2)).toJaasModule
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          KafkaScramAdmin,
+          KafkaScramAdminPassword,
+          debug = false).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(KafkaServerContextName, modules)
+    new JaasSection(contextName, modules)
   }
 
-  private def kafkaClientSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
-    val modules = mechanisms.map {
+  // consider refactoring if more mechanisms are added
+  private def kafkaClientModule(mechanism: String, 
+      keytabLocation: Option[File], clientPrincipal: String,
+      plainUser: String, plainPassword: String, 
+      scramUser: String, scramPassword: String): JaasModule = {
+    mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
-          principal = KafkaClientPrincipal,
+          principal = clientPrincipal,
           debug = true,
           serviceName = Some("kafka")
         ).toJaasModule
       case "PLAIN" =>
         PlainLoginModule(
-          KafkaPlainUser,
-          KafkaPlainPassword
+          plainUser,
+          plainPassword
+        ).toJaasModule
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          scramUser,
+          scramPassword
         ).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
-    new JaasSection(KafkaClientContextName, modules)
+  }
+
+  /*
+   * Used for the static JAAS configuration and it uses the credentials for client#2
+   */
+  private def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
+    new JaasSection(KafkaClientContextName, mechanism.map(m =>
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =

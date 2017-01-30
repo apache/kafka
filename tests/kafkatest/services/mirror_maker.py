@@ -14,10 +14,10 @@
 # limitations under the License.
 
 import os
-import subprocess
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
@@ -72,8 +72,8 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         }
 
     def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1,
-                 new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka",
-                 offset_commit_interval_ms=60000):
+                 new_consumer=True, consumer_timeout_ms=None, offsets_storage="kafka",
+                 offset_commit_interval_ms=60000, log_level="DEBUG", producer_interceptor_classes=None):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -91,7 +91,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             offset_commit_interval_ms:  how frequently the mirror maker consumer commits offsets
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
-        self.log_level = "DEBUG"
+        self.log_level = log_level
         self.new_consumer = new_consumer
         self.consumer_timeout_ms = consumer_timeout_ms
         self.num_streams = num_streams
@@ -108,11 +108,21 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             raise Exception("offsets_storage should be 'kafka' or 'zookeeper'. Instead found %s" % self.offsets_storage)
 
         self.offset_commit_interval_ms = offset_commit_interval_ms
+        self.producer_interceptor_classes = producer_interceptor_classes
+        self.external_jars = None
+
+        # These properties are potentially used by third-party tests.
+        self.source_auto_offset_reset = None
+        self.partition_assignment_strategy = None
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        # add external dependencies, for instance for interceptors
+        if self.external_jars is not None:
+            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % self.external_jars
+            cmd += "export CLASSPATH; "
         cmd += " %s kafka.tools.MirrorMaker" % self.path.script("kafka-run-class.sh", node)
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
@@ -126,8 +136,6 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             cmd += " --whitelist=\"%s\"" % self.whitelist
         if self.blacklist is not None:
             cmd += " --blacklist=\"%s\"" % self.blacklist
-        if self.new_consumer:
-            cmd += " --new.consumer"
 
         cmd += " 1>> %s 2>> %s &" % (MirrorMaker.LOG_FILE, MirrorMaker.LOG_FILE)
         return cmd
@@ -137,7 +145,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             cmd = "ps ax | grep -i MirrorMaker | grep java | grep -v grep | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError):
             return []
 
     def alive(self, node):
@@ -172,13 +180,13 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         cmd = self.start_cmd(node)
         self.logger.debug("Mirror maker command: %s", cmd)
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self.alive(node), timeout_sec=10, backoff_sec=.5,
+        wait_until(lambda: self.alive(node), timeout_sec=30, backoff_sec=.5,
                    err_msg="Mirror maker took to long to start.")
         self.logger.debug("Mirror maker is alive")
 
     def stop_node(self, node, clean_shutdown=True):
         node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
-        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
+        wait_until(lambda: not self.alive(node), timeout_sec=30, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
     def clean_node(self, node):

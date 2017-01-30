@@ -22,13 +22,14 @@ import java.net.Socket
 import java.nio.ByteBuffer
 
 import kafka.integration.KafkaServerTestHarness
-
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader, ProduceRequest}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -45,7 +46,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   private def socketServer = servers.head.socketServer
 
   private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", s.boundPort(protocol))
+    new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
@@ -116,7 +117,9 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val serializedBytes = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, 2, null, correlationId)
       val messageBytes = "message".getBytes
-      val request = new ProduceRequest(1, 10000, Map(topicPartition -> ByteBuffer.wrap(messageBytes)).asJava)
+      val records = MemoryRecords.readableRecords(ByteBuffer.wrap(messageBytes))
+      val request = new ProduceRequest.Builder(
+          1, 10000, Map(topicPartition -> records).asJava).build()
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.sizeOf)
       byteBuffer.put(headerBytes)
       request.writeTo(byteBuffer)
@@ -135,7 +138,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val partitionResponse = produceResponse.responses().get(topicPartition)
     assertNotNull(partitionResponse)
-    assertEquals("There should be no error", 0, partitionResponse.errorCode)
+    assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
   }
 
   @Test

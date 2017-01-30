@@ -12,17 +12,20 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A batch of records that is or will be sent.
@@ -33,29 +36,31 @@ public final class RecordBatch {
 
     private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
 
-    public int recordCount = 0;
-    public int maxRecordSize = 0;
-    public volatile int attempts = 0;
-    public final long createdMs;
-    public long drainedMs;
-    public long lastAttemptMs;
-    public final MemoryRecords records;
-    public final TopicPartition topicPartition;
-    public final ProduceRequestResult produceFuture;
-    public long lastAppendTime;
-    private final List<Thunk> thunks;
-    private long offsetCounter = 0L;
+    final long createdMs;
+    final TopicPartition topicPartition;
+    final ProduceRequestResult produceFuture;
+
+    private final List<Thunk> thunks = new ArrayList<>();
+    private final MemoryRecordsBuilder recordsBuilder;
+
+    volatile int attempts;
+    int recordCount;
+    int maxRecordSize;
+    long drainedMs;
+    long lastAttemptMs;
+    long lastAppendTime;
+    private String expiryErrorMessage;
+    private AtomicBoolean completed;
     private boolean retry;
 
-    public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
+    public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
         this.lastAttemptMs = now;
-        this.records = records;
+        this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
-        this.produceFuture = new ProduceRequestResult();
-        this.thunks = new ArrayList<Thunk>();
         this.lastAppendTime = createdMs;
-        this.retry = false;
+        this.produceFuture = new ProduceRequestResult(topicPartition);
+        this.completed = new AtomicBoolean();
     }
 
     /**
@@ -64,10 +69,10 @@ public final class RecordBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
-        if (!this.records.hasRoomFor(key, value)) {
+        if (!recordsBuilder.hasRoomFor(key, value)) {
             return null;
         } else {
-            long checksum = this.records.append(offsetCounter++, timestamp, key, value);
+            long checksum = this.recordsBuilder.append(timestamp, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
@@ -82,37 +87,37 @@ public final class RecordBatch {
     }
 
     /**
-     * Complete the request
+     * Complete the request.
      * 
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param timestamp The timestamp returned by the broker.
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param exception The exception that occurred (or null if the request was successful)
      */
-    public void done(long baseOffset, long timestamp, RuntimeException exception) {
+    public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
-                  topicPartition,
-                  baseOffset,
-                  exception);
+                  topicPartition, baseOffset, exception);
+
+        if (completed.getAndSet(true))
+            throw new IllegalStateException("Batch has already been completed");
+
+        // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
+        produceFuture.set(baseOffset, logAppendTime, exception);
+
         // execute callbacks
-        for (int i = 0; i < this.thunks.size(); i++) {
+        for (Thunk thunk : thunks) {
             try {
-                Thunk thunk = this.thunks.get(i);
                 if (exception == null) {
-                    // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
-                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
-                                                                 timestamp == Record.NO_TIMESTAMP ? thunk.future.timestamp() : timestamp,
-                                                                 thunk.future.checksum(),
-                                                                 thunk.future.serializedKeySize(),
-                                                                 thunk.future.serializedValueSize());
+                    RecordMetadata metadata = thunk.future.value();
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);
                 }
             } catch (Exception e) {
-                log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
+                log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
             }
         }
-        this.produceFuture.done(topicPartition, baseOffset, exception);
+
+        produceFuture.done();
     }
 
     /**
@@ -139,35 +144,40 @@ public final class RecordBatch {
      *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
+     * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
+     * {@link #expirationDone()} must be invoked to complete the produce future and invoke callbacks.
      */
     public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
-        boolean expire = false;
-        String errorMessage = null;
 
-        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime)) {
-            expire = true;
-            errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
-            expire = true;
-            errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
-        } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
-            expire = true;
-            errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
-        }
+        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
+            expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
+        else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
+            expiryErrorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
+        else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
+            expiryErrorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
 
-        if (expire) {
-            this.records.close();
-            this.done(-1L, Record.NO_TIMESTAMP,
-                      new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + errorMessage));
-        }
+        boolean expired = expiryErrorMessage != null;
+        if (expired)
+            close();
+        return expired;
+    }
 
-        return expire;
+    /**
+     * Completes the produce future with timeout exception and invokes callbacks.
+     * This method should be invoked only if {@link #maybeExpire(int, long, long, long, boolean)}
+     * returned true.
+     */
+    void expirationDone() {
+        if (expiryErrorMessage == null)
+            throw new IllegalStateException("Batch has not expired");
+        this.done(-1L, Record.NO_TIMESTAMP,
+                  new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 
     /**
      * Returns if the batch is been retried for sending to kafka
      */
-    public boolean inRetry() {
+    private boolean inRetry() {
         return this.retry;
     }
 
@@ -177,4 +187,37 @@ public final class RecordBatch {
     public void setRetry() {
         this.retry = true;
     }
+
+    public MemoryRecords records() {
+        return recordsBuilder.build();
+    }
+
+    public int sizeInBytes() {
+        return recordsBuilder.sizeInBytes();
+    }
+
+    public double compressionRate() {
+        return recordsBuilder.compressionRate();
+    }
+
+    public boolean isFull() {
+        return recordsBuilder.isFull();
+    }
+
+    public void close() {
+        recordsBuilder.close();
+    }
+
+    public ByteBuffer buffer() {
+        return recordsBuilder.buffer();
+    }
+
+    public int initialCapacity() {
+        return recordsBuilder.initialCapacity();
+    }
+
+    public boolean isWritable() {
+        return !recordsBuilder.isClosed();
+    }
+
 }

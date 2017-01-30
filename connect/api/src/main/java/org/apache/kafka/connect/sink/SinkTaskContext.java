@@ -18,7 +18,6 @@
 package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Set;
@@ -26,7 +25,6 @@ import java.util.Set;
 /**
  * Context passed to SinkTasks, allowing them to access utilities in the Kafka Connect runtime.
  */
-@InterfaceStability.Unstable
 public interface SinkTaskContext {
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
@@ -79,4 +77,13 @@ public interface SinkTaskContext {
      * @param partitions the partitions to resume
      */
     void resume(TopicPartition... partitions);
+
+    /**
+     * Request an offset commit. Sink tasks can use this to minimize the potential for redelivery
+     * by requesting an offset commit as soon as they flush data to the destination system.
+     *
+     * It is only a hint to the runtime and no timing guarantee should be assumed.
+     */
+    void requestCommit();
+
 }

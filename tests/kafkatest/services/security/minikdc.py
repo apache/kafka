@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import random
 import uuid
 from io import open
 from os import remove, close
@@ -23,7 +24,7 @@ from tempfile import mkstemp
 from ducktape.services.service import Service
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_LIBS_JAR_NAME, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 
 class MiniKdc(KafkaPathResolverMixin, Service):
@@ -39,13 +40,47 @@ class MiniKdc(KafkaPathResolverMixin, Service):
     KEYTAB_FILE = "/mnt/minikdc/keytab"
     KRB5CONF_FILE = "/mnt/minikdc/krb5.conf"
     LOG_FILE = "/mnt/minikdc/minikdc.log"
-    LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
-    LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
+
+    LOCAL_KEYTAB_FILE = None
+    LOCAL_KRB5CONF_FILE = None
+
+    @staticmethod
+    def _set_local_keytab_file(local_scratch_dir):
+        """Set MiniKdc.LOCAL_KEYTAB_FILE exactly once per test.
+
+        LOCAL_KEYTAB_FILE is currently used like a global variable to provide a mechanism to share the
+        location of the local keytab file among all services which might need it.
+
+        Since individual ducktape tests are each run in a subprocess forked from the ducktape main process,
+        class variables set at class load time are duplicated between test processes. This leads to collisions
+        if test subprocesses are run in parallel, so we defer setting these class variables until after the test itself
+        begins to run.
+        """
+        if MiniKdc.LOCAL_KEYTAB_FILE is None:
+            MiniKdc.LOCAL_KEYTAB_FILE = os.path.join(local_scratch_dir, "keytab")
+        return MiniKdc.LOCAL_KEYTAB_FILE
+
+    @staticmethod
+    def _set_local_krb5conf_file(local_scratch_dir):
+        """Set MiniKdc.LOCAL_KRB5CONF_FILE exactly once per test.
+
+        See _set_local_keytab_file for details why we do this.
+        """
+
+        if MiniKdc.LOCAL_KRB5CONF_FILE is None:
+            MiniKdc.LOCAL_KRB5CONF_FILE = os.path.join(local_scratch_dir, "krb5conf")
+        return MiniKdc.LOCAL_KRB5CONF_FILE
 
     def __init__(self, context, kafka_nodes, extra_principals=""):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
+
+        # context.local_scratch_dir uses a ducktape feature:
+        # each test_context object has a unique local scratch directory which is available for the duration of the test
+        # which is automatically garbage collected after the test finishes
+        MiniKdc._set_local_keytab_file(context.local_scratch_dir)
+        MiniKdc._set_local_krb5conf_file(context.local_scratch_dir)
 
     def replace_in_file(self, file_path, pattern, subst):
         fh, abs_path = mkstemp()
@@ -68,8 +103,8 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         principals = 'client ' + kafka_principals + ' ' + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
-        core_libs_jar = self.path.jar(CORE_LIBS_JAR_NAME, TRUNK)
-        core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+        core_libs_jar = self.path.jar(CORE_LIBS_JAR_NAME, DEV_BRANCH)
+        core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
 
         cmd = "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_libs_jar
         cmd += " for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar
@@ -80,8 +115,8 @@ class MiniKdc(KafkaPathResolverMixin, Service):
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
 
-        node.account.scp_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
-        node.account.scp_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
+        node.account.copy_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
+        node.account.copy_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
         # KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)

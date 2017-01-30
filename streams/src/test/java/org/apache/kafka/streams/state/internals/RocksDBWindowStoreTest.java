@@ -19,20 +19,24 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
@@ -40,6 +44,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,24 +54,36 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBWindowStoreTest {
 
     private final Serde<byte[]> byteArraySerde = Serdes.ByteArray();
     private final String windowName = "window";
     private final int numSegments = 3;
-    private final long segmentSize = RocksDBWindowStore.MIN_SEGMENT_INTERVAL;
+    private final long segmentSize = Segments.MIN_SEGMENT_INTERVAL;
     private final long retentionPeriod = segmentSize * (numSegments - 1);
     private final long windowSize = 3;
     private final Serde<Integer> intSerde = Serdes.Integer();
     private final Serde<String> stringSerde = Serdes.String();
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", intSerde, stringSerde);
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private ThreadCache cache;
+    private final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
+
+    @Before
+    public void setUp() {
+        cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+    }
+
+
+
 
     @SuppressWarnings("unchecked")
-    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context) {
-        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde);
-
-        WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
+    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {
+        final RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, retainDuplicates, intSerde, stringSerde, windowSize, true, Collections.<String, String>emptyMap(), enableCaching);
+        final WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
     }
@@ -75,33 +92,41 @@ public class RocksDBWindowStoreTest {
     public void shouldOnlyIterateOpenSegments() throws Exception {
         final File baseDir = TestUtils.tempDirectory();
         Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-        RecordCollector recordCollector = new RecordCollector(producer) {
+        RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
             @Override
-            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
             }
         };
 
         MockProcessorContext context = new MockProcessorContext(
-                null, baseDir,
+                baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector);
+                recordCollector, cache);
 
-        final WindowStore<Integer, String> windowStore = createWindowStore(context);
+        final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         long currentTime = 0;
-        context.setTime(currentTime);
+        context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "one");
+
         currentTime = currentTime + segmentSize;
-        context.setTime(currentTime);
+        context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "two");
         currentTime = currentTime + segmentSize;
-        context.setTime(currentTime);
+
+        context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "three");
 
         final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, currentTime);
 
         // roll to the next segment that will close the first
         currentTime = currentTime + segmentSize;
-        context.setTime(currentTime);
+        context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "four");
 
         // should only have 2 values as the first segment is no longer open
@@ -110,43 +135,42 @@ public class RocksDBWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    private ProcessorRecordContext createRecordContext(final long time) {
+        return new ProcessorRecordContext(time, 0, 0, "topic");
+    }
+
     @Test
     public void testPutAndFetch() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestPutAndFetch") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
-                context.setTime(startTime + 0L);
-                store.put(0, "zero");
-                context.setTime(startTime + 1L);
-                store.put(1, "one");
-                context.setTime(startTime + 2L);
-                store.put(2, "two");
-                context.setTime(startTime + 3L);
-                // (3, "three") is not put
-                context.setTime(startTime + 4L);
-                store.put(4, "four");
-                context.setTime(startTime + 5L);
-                store.put(5, "five");
+                putFirstBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L - windowSize, startTime + 0L + windowSize)));
                 assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L - windowSize, startTime + 1L + windowSize)));
@@ -155,18 +179,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L - windowSize, startTime + 4L + windowSize)));
                 assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L - windowSize, startTime + 5L + windowSize)));
 
-                context.setTime(startTime + 3L);
-                store.put(2, "two+1");
-                context.setTime(startTime + 4L);
-                store.put(2, "two+2");
-                context.setTime(startTime + 5L);
-                store.put(2, "two+3");
-                context.setTime(startTime + 6L);
-                store.put(2, "two+4");
-                context.setTime(startTime + 7L);
-                store.put(2, "two+5");
-                context.setTime(startTime + 8L);
-                store.put(2, "two+6");
+                putSecondBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L - windowSize, startTime - 2L + windowSize)));
                 assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L - windowSize, startTime - 1L + windowSize)));
@@ -212,37 +225,32 @@ public class RocksDBWindowStoreTest {
         try {
             final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestPutAndFetchBefore") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
-                context.setTime(startTime + 0L);
-                store.put(0, "zero");
-                context.setTime(startTime + 1L);
-                store.put(1, "one");
-                context.setTime(startTime + 2L);
-                store.put(2, "two");
-                context.setTime(startTime + 3L);
-                // (3, "three") is not put
-                context.setTime(startTime + 4L);
-                store.put(4, "four");
-                context.setTime(startTime + 5L);
-                store.put(5, "five");
+                putFirstBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L - windowSize, startTime + 0L)));
                 assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L - windowSize, startTime + 1L)));
@@ -251,18 +259,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L - windowSize, startTime + 4L)));
                 assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L - windowSize, startTime + 5L)));
 
-                context.setTime(startTime + 3L);
-                store.put(2, "two+1");
-                context.setTime(startTime + 4L);
-                store.put(2, "two+2");
-                context.setTime(startTime + 5L);
-                store.put(2, "two+3");
-                context.setTime(startTime + 6L);
-                store.put(2, "two+4");
-                context.setTime(startTime + 7L);
-                store.put(2, "two+5");
-                context.setTime(startTime + 8L);
-                store.put(2, "two+6");
+                putSecondBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 1L - windowSize, startTime - 1L)));
                 assertEquals(Utils.mkList(), toList(store.fetch(2, startTime + 0L - windowSize, startTime + 0L)));
@@ -302,43 +299,53 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    private void putSecondBatch(final WindowStore<Integer, String> store, final long startTime, MockProcessorContext context) {
+        context.setRecordContext(createRecordContext(startTime + 3L));
+        store.put(2, "two+1");
+        context.setRecordContext(createRecordContext(startTime + 4L));
+        store.put(2, "two+2");
+        context.setRecordContext(createRecordContext(startTime + 5L));
+        store.put(2, "two+3");
+        context.setRecordContext(createRecordContext(startTime + 6L));
+        store.put(2, "two+4");
+        context.setRecordContext(createRecordContext(startTime + 7L));
+        store.put(2, "two+5");
+        context.setRecordContext(createRecordContext(startTime + 8L));
+        store.put(2, "two+6");
+    }
+
     @Test
     public void testPutAndFetchAfter() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestPutAndFetchAfter") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
-                context.setTime(startTime + 0L);
-                store.put(0, "zero");
-                context.setTime(startTime + 1L);
-                store.put(1, "one");
-                context.setTime(startTime + 2L);
-                store.put(2, "two");
-                context.setTime(startTime + 3L);
-                // (3, "three") is not put
-                context.setTime(startTime + 4L);
-                store.put(4, "four");
-                context.setTime(startTime + 5L);
-                store.put(5, "five");
+                putFirstBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime + 0L, startTime + 0L + windowSize)));
                 assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + 1L, startTime + 1L + windowSize)));
@@ -347,18 +354,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + 4L, startTime + 4L + windowSize)));
                 assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + 5L, startTime + 5L + windowSize)));
 
-                context.setTime(startTime + 3L);
-                store.put(2, "two+1");
-                context.setTime(startTime + 4L);
-                store.put(2, "two+2");
-                context.setTime(startTime + 5L);
-                store.put(2, "two+3");
-                context.setTime(startTime + 6L);
-                store.put(2, "two+4");
-                context.setTime(startTime + 7L);
-                store.put(2, "two+5");
-                context.setTime(startTime + 8L);
-                store.put(2, "two+6");
+                putSecondBatch(store, startTime, context);
 
                 assertEquals(Utils.mkList(), toList(store.fetch(2, startTime - 2L, startTime - 2L + windowSize)));
                 assertEquals(Utils.mkList("two"), toList(store.fetch(2, startTime - 1L, startTime - 1L + windowSize)));
@@ -398,41 +394,57 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    private void putFirstBatch(final WindowStore<Integer, String> store, final long startTime, final MockProcessorContext context) {
+        context.setRecordContext(createRecordContext(startTime));
+        store.put(0, "zero");
+        context.setRecordContext(createRecordContext(startTime + 1L));
+        store.put(1, "one");
+        context.setRecordContext(createRecordContext(startTime + 2L));
+        store.put(2, "two");
+        context.setRecordContext(createRecordContext(startTime + 4L));
+        store.put(4, "four");
+        context.setRecordContext(createRecordContext(startTime + 5L));
+        store.put(5, "five");
+    }
+
     @Test
     public void testPutSameKeyTimestamp() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestPutSameKeyTimestamp") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
-                context.setTime(startTime);
+                context.setRecordContext(createRecordContext(startTime));
                 store.put(0, "zero");
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
 
-                context.setTime(startTime);
                 store.put(0, "zero");
-                context.setTime(startTime);
                 store.put(0, "zero+");
-                context.setTime(startTime);
                 store.put(0, "zero++");
 
                 assertEquals(Utils.mkList("zero", "zero", "zero+", "zero++"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
@@ -458,56 +470,98 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void testRolling() throws IOException {
+    public void testCachingEnabled() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "anyTaskID") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                        keySerializer.serialize(topic, key),
+                        valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
-                    byteArraySerde, byteArraySerde,
-                    recordCollector);
+                baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+            WindowStore<Integer, String> store = createWindowStore(context, true, false);
+            assertTrue(store instanceof CachedStateStore);
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
+
+    @Test
+    public void testRolling() throws IOException {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+            Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestRolling") {
+                @Override
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
+                    changeLog.add(new KeyValue<>(
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
+                    );
+                }
+            };
+
+            MockProcessorContext context = new MockProcessorContext(
+                    baseDir,
+                    byteArraySerde, byteArraySerde,
+                    recordCollector, cache);
+
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
+                // to validate segments
+                final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
                 long startTime = segmentSize * 2;
                 long incr = segmentSize / 2;
-
-                context.setTime(startTime);
+                context.setRecordContext(createRecordContext(startTime));
                 store.put(0, "zero");
-                assertEquals(Utils.mkSet(2L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
 
-                context.setTime(startTime + incr);
+                context.setRecordContext(createRecordContext(startTime + incr));
                 store.put(1, "one");
-                assertEquals(Utils.mkSet(2L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
 
-                context.setTime(startTime + incr * 2);
+                context.setRecordContext(createRecordContext(startTime + incr * 2));
                 store.put(2, "two");
-                assertEquals(Utils.mkSet(2L, 3L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3)), segmentDirs(baseDir));
 
-                context.setTime(startTime + incr * 3);
-                // (3, "three") is not put
-                assertEquals(Utils.mkSet(2L, 3L), inner.segmentIds());
 
-                context.setTime(startTime + incr * 4);
+                context.setRecordContext(createRecordContext(startTime + incr * 4));
                 store.put(4, "four");
-                assertEquals(Utils.mkSet(2L, 3L, 4L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3),
+                                         segments.segmentName(4)), segmentDirs(baseDir));
 
-                context.setTime(startTime + incr * 5);
+
+                context.setRecordContext(createRecordContext(startTime + incr * 5));
                 store.put(5, "five");
-                assertEquals(Utils.mkSet(2L, 3L, 4L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(2),
+                                         segments.segmentName(3),
+                                         segments.segmentName(4)), segmentDirs(baseDir));
 
                 assertEquals(Utils.mkList("zero"), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList("one"), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -516,9 +570,12 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("four"), toList(store.fetch(4, startTime + incr * 4 - windowSize, startTime + incr * 4 + windowSize)));
                 assertEquals(Utils.mkList("five"), toList(store.fetch(5, startTime + incr * 5 - windowSize, startTime + incr * 5 + windowSize)));
 
-                context.setTime(startTime + incr * 6);
+                context.setRecordContext(createRecordContext(startTime + incr * 6));
                 store.put(6, "six");
-                assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(3),
+                                         segments.segmentName(4),
+                                         segments.segmentName(5)), segmentDirs(baseDir));
+
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -529,9 +586,11 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
 
 
-                context.setTime(startTime + incr * 7);
+                context.setRecordContext(createRecordContext(startTime + incr * 7));
                 store.put(7, "seven");
-                assertEquals(Utils.mkSet(3L, 4L, 5L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(3),
+                                         segments.segmentName(4),
+                                         segments.segmentName(5)), segmentDirs(baseDir));
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -542,9 +601,12 @@ public class RocksDBWindowStoreTest {
                 assertEquals(Utils.mkList("six"), toList(store.fetch(6, startTime + incr * 6 - windowSize, startTime + incr * 6 + windowSize)));
                 assertEquals(Utils.mkList("seven"), toList(store.fetch(7, startTime + incr * 7 - windowSize, startTime + incr * 7 + windowSize)));
 
-                context.setTime(startTime + incr * 8);
+                context.setRecordContext(createRecordContext(startTime + incr * 8));
                 store.put(8, "eight");
-                assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
+                assertEquals(Utils.mkSet(segments.segmentName(4),
+                                         segments.segmentName(5),
+                                         segments.segmentName(6)), segmentDirs(baseDir));
+
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -558,10 +620,10 @@ public class RocksDBWindowStoreTest {
 
                 // check segment directories
                 store.flush();
-                assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
-                        segmentDirs(baseDir)
-                );
+                assertEquals(Utils.mkSet(segments.segmentName(4),
+                                         segments.segmentName(5),
+                                         segments.segmentName(6)), segmentDirs(baseDir));
+
             } finally {
                 store.close();
             }
@@ -570,6 +632,7 @@ public class RocksDBWindowStoreTest {
             Utils.delete(baseDir);
         }
     }
+
 
     @Test
     public void testRestore() throws IOException {
@@ -580,40 +643,46 @@ public class RocksDBWindowStoreTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestRestore") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
-                context.setTime(startTime);
+                context.setRecordContext(createRecordContext(startTime));
                 store.put(0, "zero");
-                context.setTime(startTime + incr);
+                context.setRecordContext(createRecordContext(startTime + incr));
                 store.put(1, "one");
-                context.setTime(startTime + incr * 2);
+                context.setRecordContext(createRecordContext(startTime + incr * 2));
                 store.put(2, "two");
-                context.setTime(startTime + incr * 3);
+                context.setRecordContext(createRecordContext(startTime + incr * 3));
                 store.put(3, "three");
-                context.setTime(startTime + incr * 4);
+                context.setRecordContext(createRecordContext(startTime + incr * 4));
                 store.put(4, "four");
-                context.setTime(startTime + incr * 5);
+                context.setRecordContext(createRecordContext(startTime + incr * 5));
                 store.put(5, "five");
-                context.setTime(startTime + incr * 6);
+                context.setRecordContext(createRecordContext(startTime + incr * 6));
                 store.put(6, "six");
-                context.setTime(startTime + incr * 7);
+                context.setRecordContext(createRecordContext(startTime + incr * 7));
                 store.put(7, "seven");
-                context.setTime(startTime + incr * 8);
+                context.setRecordContext(createRecordContext(startTime + incr * 8));
                 store.put(8, "eight");
                 store.flush();
 
@@ -629,29 +698,31 @@ public class RocksDBWindowStoreTest {
         File baseDir2 = Files.createTempDirectory("test").toFile();
         try {
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestRestoreII") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
                     changeLog.add(new KeyValue<>(
-                                    keySerializer.serialize(record.topic(), record.key()),
-                                    valueSerializer.serialize(record.topic(), record.value()))
+                                    keySerializer.serialize(topic, key),
+                                    valueSerializer.serialize(topic, value))
                     );
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
 
             try {
                 context.restore(windowName, changeLog);
-
-                assertEquals(Utils.mkSet(4L, 5L, 6L), inner.segmentIds());
 
                 assertEquals(Utils.mkList(), toList(store.fetch(0, startTime - windowSize, startTime + windowSize)));
                 assertEquals(Utils.mkList(), toList(store.fetch(1, startTime + incr - windowSize, startTime + incr + windowSize)));
@@ -666,7 +737,7 @@ public class RocksDBWindowStoreTest {
                 // check segment directories
                 store.flush();
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
             } finally {
@@ -684,44 +755,47 @@ public class RocksDBWindowStoreTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestSegmentMaintenance") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    // do nothing
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
+                // do nothing
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
-
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
 
                 context.setTime(0L);
+                context.setRecordContext(createRecordContext(0));
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L)),
+                        Utils.mkSet(segments.segmentName(0L)),
                         segmentDirs(baseDir)
                 );
 
-                context.setTime(59999L);
+                context.setRecordContext(createRecordContext(59999));
                 store.put(0, "v");
-                context.setTime(59999L);
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L)),
+                        Utils.mkSet(segments.segmentName(0L)),
                         segmentDirs(baseDir)
                 );
 
-                context.setTime(60000L);
+                context.setRecordContext(createRecordContext(60000));
                 store.put(0, "v");
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
                         segmentDirs(baseDir)
                 );
 
@@ -737,11 +811,11 @@ public class RocksDBWindowStoreTest {
                 assertEquals(4, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(0L), inner.segmentName(1L)),
+                        Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
                         segmentDirs(baseDir)
                 );
 
-                context.setTime(180000L);
+                context.setRecordContext(createRecordContext(180000));
                 store.put(0, "v");
 
                 iter = store.fetch(0, 0L, 240000L);
@@ -753,11 +827,11 @@ public class RocksDBWindowStoreTest {
                 assertEquals(2, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(3L)),
+                        Utils.mkSet(segments.segmentName(1L), segments.segmentName(3L)),
                         segmentDirs(baseDir)
                 );
 
-                context.setTime(300000L);
+                context.setRecordContext(createRecordContext(300000));
                 store.put(0, "v");
 
                 iter = store.fetch(0, 240000L, 1000000L);
@@ -769,7 +843,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(1, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(5L)),
+                        Utils.mkSet(segments.segmentName(3L), segments.segmentName(5L)),
                         segmentDirs(baseDir)
                 );
 
@@ -787,42 +861,46 @@ public class RocksDBWindowStoreTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
-            RecordCollector recordCollector = new RecordCollector(producer) {
+            RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-TestInitialLoading") {
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    // do nothing
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
+                // do nothing
                 }
             };
 
             MockProcessorContext context = new MockProcessorContext(
-                    null, baseDir,
+                    baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, cache);
 
             File storeDir = new File(baseDir, windowName);
 
-            WindowStore<Integer, String> store = createWindowStore(context);
-            RocksDBWindowStore<Integer, String> inner =
-                    (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
+
 
             try {
-                new File(storeDir, inner.segmentName(0L)).mkdir();
-                new File(storeDir, inner.segmentName(1L)).mkdir();
-                new File(storeDir, inner.segmentName(2L)).mkdir();
-                new File(storeDir, inner.segmentName(3L)).mkdir();
-                new File(storeDir, inner.segmentName(4L)).mkdir();
-                new File(storeDir, inner.segmentName(5L)).mkdir();
-                new File(storeDir, inner.segmentName(6L)).mkdir();
+                new File(storeDir, segments.segmentName(0L)).mkdir();
+                new File(storeDir, segments.segmentName(1L)).mkdir();
+                new File(storeDir, segments.segmentName(2L)).mkdir();
+                new File(storeDir, segments.segmentName(3L)).mkdir();
+                new File(storeDir, segments.segmentName(4L)).mkdir();
+                new File(storeDir, segments.segmentName(5L)).mkdir();
+                new File(storeDir, segments.segmentName(6L)).mkdir();
             } finally {
                 store.close();
             }
 
-            store = createWindowStore(context);
-            inner = (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+            store = createWindowStore(context, false, true);
 
             try {
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
 
@@ -833,7 +911,7 @@ public class RocksDBWindowStoreTest {
                 }
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(4L), inner.segmentName(5L), inner.segmentName(6L)),
+                        Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
                         segmentDirs(baseDir)
                 );
 
@@ -843,6 +921,51 @@ public class RocksDBWindowStoreTest {
 
         } finally {
             Utils.delete(baseDir);
+        }
+    }
+
+    @Test
+    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            }
+        };
+
+        MockProcessorContext context = new MockProcessorContext(
+                baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, cache);
+
+        final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
+        context.setRecordContext(createRecordContext(0));
+        windowStore.put(1, "one", 1L);
+        windowStore.put(1, "two", 2L);
+        windowStore.put(1, "three", 3L);
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 1L, 3L);
+        assertTrue(iterator.hasNext());
+        windowStore.close();
+        try {
+            iterator.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iterator.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
         }
     }
 

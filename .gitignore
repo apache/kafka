@@ -21,7 +21,6 @@ TAGS
 *.iml
 .project
 .settings
-.gradle
 kafka.ipr
 kafka.iws
 .vagrant
@@ -33,11 +32,14 @@ config/server-*
 config/zookeeper-*
 core/data/*
 gradle/wrapper/*
+gradlew
+gradlew.bat
 
 results
 tests/results
 .ducktape
 tests/.ducktape
+tests/venv
 .cache
 
 docs/generated/

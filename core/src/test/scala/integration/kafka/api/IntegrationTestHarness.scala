@@ -47,15 +47,21 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
 
   override def generateConfigs() = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+    cfgs.foreach { config =>
+      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
+      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
+      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
+      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+    }
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     super.setUp()
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
@@ -63,18 +69,10 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.putAll(consumerSecurityProps)
-    for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(producerConfig))
-    for (i <- 0 until consumerCount) {
-      consumers += TestUtils.createNewConsumer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(consumerConfig))
+    for (_ <- 0 until producerCount)
+      producers += createNewProducer
+    for (_ <- 0 until consumerCount) {
+      consumers += createNewConsumer
     }
 
     // create the consumer offset topic
@@ -83,6 +81,22 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
       servers.head.groupCoordinator.offsetsTopicConfigs)
+  }
+
+  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewProducer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.clientSaslProperties,
+                                  props = Some(producerConfig))
+  }
+  
+  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewConsumer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.clientSaslProperties,
+                                  props = Some(consumerConfig))
   }
 
   @After

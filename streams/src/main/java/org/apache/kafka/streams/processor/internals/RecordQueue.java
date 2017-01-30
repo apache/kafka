@@ -19,11 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
+
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -32,20 +33,28 @@ import java.util.ArrayDeque;
  */
 public class RecordQueue {
 
+    private static final Logger log = LoggerFactory.getLogger(RecordQueue.class);
+
     private final SourceNode source;
+    private final TimestampExtractor timestampExtractor;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
     private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
+    private final RecordDeserializer recordDeserializer;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
 
-    public RecordQueue(TopicPartition partition, SourceNode source) {
+    RecordQueue(final TopicPartition partition,
+                final SourceNode source,
+                final TimestampExtractor timestampExtractor) {
         this.partition = partition;
         this.source = source;
-
+        this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
+        this.recordDeserializer = new SourceNodeRecordDeserializer(source);
     }
+
 
     /**
      * Returns the corresponding source node in the topology
@@ -69,28 +78,20 @@ public class RecordQueue {
      * Add a batch of {@link ConsumerRecord} into the queue
      *
      * @param rawRecords the raw records
-     * @param timestampExtractor TimestampExtractor
      * @return the size of this queue
      */
-    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords, TimestampExtractor timestampExtractor) {
+    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            // deserialize the raw record, extract the timestamp and put into the queue
-            Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
-            Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
+            long timestamp = timestampExtractor.extract(record, timeTracker.get());
+            log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
-            ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(),
-                                                                         rawRecord.timestamp(), TimestampType.CREATE_TIME,
-                                                                         rawRecord.checksum(),
-                                                                         rawRecord.serializedKeySize(),
-                                                                         rawRecord.serializedValueSize(), key, value);
-            long timestamp = timestampExtractor.extract(record);
-
-            // validate that timestamp must be non-negative
-            if (timestamp < 0)
-                throw new StreamsException("Extracted timestamp value is negative, which is not allowed.");
+            // drop message if TS is invalid, i.e., negative
+            if (timestamp < 0) {
+                continue;
+            }
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
-
             fifoQueue.addLast(stampedRecord);
             timeTracker.addElement(stampedRecord);
         }
@@ -154,5 +155,12 @@ public class RecordQueue {
      */
     public long timestamp() {
         return partitionTime;
+    }
+
+    /**
+     * Clear the fifo queue of its elements
+     */
+    public void clear() {
+        fifoQueue.clear();
     }
 }

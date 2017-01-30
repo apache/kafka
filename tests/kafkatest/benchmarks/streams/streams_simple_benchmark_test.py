@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import ignore
+from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
-import time
+
 
 class StreamsSimpleBenchmarkTest(KafkaTest):
     """
@@ -25,10 +25,20 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
     """
 
     def __init__(self, test_context):
-        super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1)
+        super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1,topics={
+            'simpleBenchmarkSourceTopic' : { 'partitions': 1, 'replication-factor': 1 },
+            'simpleBenchmarkSinkTopic' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic1KTableKTable' : { 'partitions': 1, 'replication-factor': 1 },
+            'joinSourceTopic2KTableKTable' : { 'partitions': 1, 'replication-factor': 1 }
+        })
 
-        self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka)
+        self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
+    @cluster(num_nodes=3)
     def test_simple_benchmark(self):
         """
         Run simple Kafka Streams benchmark

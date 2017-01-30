@@ -42,10 +42,11 @@ public class ThroughputThrottler {
     private static final long NS_PER_SEC = 1000 * NS_PER_MS;
     private static final long MIN_SLEEP_NS = 2 * NS_PER_MS;
 
-    long sleepTimeNs;
-    long sleepDeficitNs = 0;
-    long targetThroughput = -1;
-    long startMs;
+    private final long startMs;
+    private final long sleepTimeNs;
+    private final long targetThroughput;
+
+    private long sleepDeficitNs = 0;
     private boolean wakeup = false;
 
     /**

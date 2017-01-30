@@ -93,10 +93,10 @@ public class KTableMapKeysTest {
         convertedStream.process(processor);
 
         driver = new KStreamTestDriver(builder, stateDir);
-
         for (int i = 0;  i < originalKeys.length; i++) {
             driver.process(topic1, originalKeys[i], values[i]);
         }
+        driver.flushState();
 
         assertEquals(3, processor.processed.size());
 

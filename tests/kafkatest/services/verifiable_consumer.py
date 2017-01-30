@@ -16,13 +16,13 @@
 import json
 import os
 import signal
-import subprocess
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 
 class ConsumerState:
@@ -136,7 +136,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=TRUNK, stop_timeout_sec=30):
+                 version=DEV_BRANCH, stop_timeout_sec=30):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = "TRACE"
         
@@ -148,8 +148,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
         self.prop_file = ""
-        self.security_config = kafka.security_config.client_config(self.prop_file)
-        self.prop_file += str(self.security_config)
         self.stop_timeout_sec = stop_timeout_sec
 
         self.event_handlers = {}
@@ -160,10 +158,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             node.version = version
 
     def _worker(self, idx, node):
-        if node not in self.event_handlers:
-            self.event_handlers[node] = ConsumerEventHandler(node)
+        with self.lock:
+            if node not in self.event_handlers:
+                self.event_handlers[node] = ConsumerEventHandler(node)
+            handler = self.event_handlers[node]
 
-        handler = self.event_handlers[node]
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
@@ -171,6 +170,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
+        self.security_config = self.kafka.security_config.client_config(self.prop_file, node)
+        self.security_config.setup_node(node)
+        self.prop_file += str(self.security_config)
         self.logger.info("verifiable_consumer.properties:")
         self.logger.info(self.prop_file)
         node.account.create_file(VerifiableConsumer.CONFIG_FILE, self.prop_file)
@@ -243,7 +245,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             cmd = "jps | grep -i VerifiableConsumer | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def try_parse_json(self, string):
@@ -266,7 +268,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
-        self.event_handlers[node].handle_kill_process(clean_shutdown)
+        with self.lock:
+            self.event_handlers[node].handle_kill_process(clean_shutdown)
 
     def stop_node(self, node, clean_shutdown=True):
         self.kill_node(node, clean_shutdown=clean_shutdown)
@@ -292,10 +295,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
                 return None
 
     def owner(self, tp):
-        for handler in self.event_handlers.itervalues():
-            if tp in handler.current_assignment():
-                return handler.node
-        return None
+        with self.lock:
+            for handler in self.event_handlers.itervalues():
+                if tp in handler.current_assignment():
+                    return handler.node
+            return None
 
     def last_commit(self, tp):
         with self.lock:

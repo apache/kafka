@@ -12,56 +12,57 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 
 /**
  * A request being sent to the server. This holds both the network send as well as the client-level metadata.
  */
 public final class ClientRequest {
 
+    private final String destination;
+    private final AbstractRequest.Builder<?> requestBuilder;
+    private final int correlationId;
+    private final String clientId;
     private final long createdTimeMs;
     private final boolean expectResponse;
-    private final RequestSend request;
     private final RequestCompletionHandler callback;
-    private final boolean isInitiatedByNetworkClient;
-    private long sendTimeMs;
 
     /**
+     * @param destination The brokerId to send the request to
+     * @param requestBuilder The builder for the request to make
+     * @param correlationId The correlation id for this client request
+     * @param clientId The client ID to use for the header
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param request The request
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
-    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
+    public ClientRequest(String destination,
+                         AbstractRequest.Builder<?> requestBuilder,
+                         int correlationId,
+                         String clientId,
+                         long createdTimeMs,
+                         boolean expectResponse,
                          RequestCompletionHandler callback) {
-        this(createdTimeMs, expectResponse, request, callback, false);
-    }
-
-    /**
-     * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
-     * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param request The request
-     * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
-     * @param isInitiatedByNetworkClient Is request initiated by network client, if yes, its
-     *                                   response will be consumed by network client
-     */
-    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
-                         RequestCompletionHandler callback, boolean isInitiatedByNetworkClient) {
+        this.destination = destination;
+        this.requestBuilder = requestBuilder;
+        this.correlationId = correlationId;
+        this.clientId = clientId;
         this.createdTimeMs = createdTimeMs;
-        this.callback = callback;
-        this.request = request;
         this.expectResponse = expectResponse;
-        this.isInitiatedByNetworkClient = isInitiatedByNetworkClient;
+        this.callback = callback;
     }
 
     @Override
     public String toString() {
         return "ClientRequest(expectResponse=" + expectResponse +
             ", callback=" + callback +
-            ", request=" + request +
-            (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
+            ", destination=" + destination +
+            ", correlationId=" + correlationId +
+            ", clientId=" + clientId +
             ", createdTimeMs=" + createdTimeMs +
-            ", sendTimeMs=" + sendTimeMs +
+            ", requestBuilder=" + requestBuilder +
             ")";
     }
 
@@ -69,12 +70,21 @@ public final class ClientRequest {
         return expectResponse;
     }
 
-    public RequestSend request() {
-        return request;
+    public ApiKeys apiKey() {
+        return requestBuilder.apiKey();
     }
 
-    public boolean hasCallback() {
-        return callback != null;
+    public RequestHeader makeHeader() {
+        return new RequestHeader(requestBuilder.apiKey().id,
+                requestBuilder.version(), clientId, correlationId);
+    }
+
+    public AbstractRequest.Builder<?> requestBuilder() {
+        return requestBuilder;
+    }
+
+    public String destination() {
+        return destination;
     }
 
     public RequestCompletionHandler callback() {
@@ -85,15 +95,7 @@ public final class ClientRequest {
         return createdTimeMs;
     }
 
-    public boolean isInitiatedByNetworkClient() {
-        return isInitiatedByNetworkClient;
-    }
-
-    public long sendTimeMs() {
-        return sendTimeMs;
-    }
-
-    public void setSendTimeMs(long sendTimeMs) {
-        this.sendTimeMs = sendTimeMs;
+    public int correlationId() {
+        return correlationId;
     }
 }

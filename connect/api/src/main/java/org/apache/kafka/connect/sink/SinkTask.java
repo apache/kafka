@@ -18,7 +18,6 @@ package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.Collection;
@@ -52,7 +51,6 @@ import java.util.Map;
   * </ol>
  *
  */
-@InterfaceStability.Unstable
 public abstract class SinkTask implements Task {
 
     /**
@@ -95,13 +93,30 @@ public abstract class SinkTask implements Task {
     public abstract void put(Collection<SinkRecord> records);
 
     /**
-     * Flush all records that have been {@link #put} for the specified topic-partitions. The
-     * offsets are provided for convenience, but could also be determined by tracking all offsets
-     * included in the SinkRecords passed to {@link #put}.
+     * Flush all records that have been {@link #put(Collection)} for the specified topic-partitions.
      *
-     * @param offsets mapping of TopicPartition to committed offset
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
+     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
+     *                       passed to {@link #put}.
      */
-    public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
+    public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    }
+
+    /**
+     * Pre-commit hook invoked prior to an offset commit.
+     *
+     * The default implementation simply invokes {@link #flush(Map)} and is thus able to assume all {@code currentOffsets} are safe to commit.
+     *
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
+     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
+     *                       passed to {@link #put}.
+     *
+     * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are safe to commit.
+     */
+    public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+        flush(currentOffsets);
+        return currentOffsets;
+    }
 
     /**
      * The SinkTask use this method to create writers for newly assigned partitions in case of partition

@@ -17,11 +17,10 @@
 
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.ConnectorFactory;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
@@ -47,7 +46,6 @@ import java.util.Map;
  * instances.
  * </p>
  */
-@InterfaceStability.Unstable
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
@@ -61,7 +59,8 @@ public class ConnectDistributed {
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
-        Time time = new SystemTime();
+        Time time = Time.SYSTEM;
+        ConnectorFactory connectorFactory = new ConnectorFactory();
         DistributedConfig config = new DistributedConfig(workerProps);
 
         RestServer rest = new RestServer(config);
@@ -71,13 +70,12 @@ public class ConnectDistributed {
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
         offsetBackingStore.configure(config);
 
-        Worker worker = new Worker(workerId, time, config, offsetBackingStore);
+        Worker worker = new Worker(workerId, time, connectorFactory, config, offsetBackingStore);
 
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, worker.getInternalValueConverter());
         statusBackingStore.configure(config);
 
-        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter());
-        configBackingStore.configure(config);
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter(), config);
 
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());

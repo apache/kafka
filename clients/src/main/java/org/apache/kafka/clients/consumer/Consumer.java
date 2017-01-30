@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -151,9 +152,29 @@ public interface Consumer<K, V> extends Closeable {
     public void resume(Collection<TopicPartition> partitions);
 
     /**
+     * @see KafkaConsumer#offsetsForTimes(java.util.Map)
+     */
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+
+    /**
+     * @see KafkaConsumer#beginningOffsets(java.util.Collection)
+     */
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#endOffsets(java.util.Collection)
+     */
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
+
+    /**
      * @see KafkaConsumer#close()
      */
     public void close();
+
+    /**
+     * @see KafkaConsumer#close(long, TimeUnit)
+     */
+    public void close(long timeout, TimeUnit unit);
 
     /**
      * @see KafkaConsumer#wakeup()

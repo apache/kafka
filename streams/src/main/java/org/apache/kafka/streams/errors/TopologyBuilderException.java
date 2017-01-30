@@ -17,14 +17,26 @@
 
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * Indicates a pre-run time error incurred while parsing the builder to construct the processor topology
+ * Indicates a pre-run time error incurred while parsing the {@link org.apache.kafka.streams.processor.TopologyBuilder
+ * builder} to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology processor topology}.
  */
+@InterfaceStability.Unstable
 public class TopologyBuilderException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
 
-    public TopologyBuilderException(String message) {
+    public TopologyBuilderException(final String message) {
         super("Invalid topology building" + (message == null ? "" : ": " + message));
+    }
+
+    public TopologyBuilderException(final String message, final Throwable throwable) {
+        super("Invalid topology building" + (message == null ? "" : ": " + message), throwable);
+    }
+
+    public TopologyBuilderException(final Throwable throwable) {
+        super(throwable);
     }
 }

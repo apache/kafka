@@ -15,15 +15,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -42,8 +43,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Before
     public void before() {
-        stubProviderOne = new StateStoreProviderStub();
-        stubProviderTwo = new StateStoreProviderStub();
+        stubProviderOne = new StateStoreProviderStub(false);
+        stubProviderTwo = new StateStoreProviderStub(false);
         underlyingWindowStore = new ReadOnlyWindowStoreStub<>();
         stubProviderOne.addStore(storeName, underlyingWindowStore);
 
@@ -63,7 +64,7 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
         final WindowStoreIterator<String> iterator = windowStore.fetch("my-key", 0L, 25L);
-        final List<KeyValue<Long, String>> results = toList(iterator);
+        final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
 
         assertEquals(asList(new KeyValue<>(0L, "my-value"),
                             new KeyValue<>(10L, "my-later-value")),
@@ -85,10 +86,10 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("key-one", "value-one", 0L);
         secondUnderlying.put("key-two", "value-two", 10L);
 
-        final List<KeyValue<Long, String>> keyOneResults = toList(windowStore.fetch("key-one", 0L,
-                                                                                    1L));
-        final List<KeyValue<Long, String>> keyTwoResults = toList(windowStore.fetch("key-two", 10L,
-                                                                                    11L));
+        final List<KeyValue<Long, String>> keyOneResults = StreamsTestUtils.toList(windowStore.fetch("key-one", 0L,
+                                                                                                     1L));
+        final List<KeyValue<Long, String>> keyTwoResults = StreamsTestUtils.toList(windowStore.fetch("key-two", 10L,
+                                                                                                     11L));
 
         assertEquals(Collections.singletonList(KeyValue.pair(0L, "value-one")), keyOneResults);
         assertEquals(Collections.singletonList(KeyValue.pair(10L, "value-two")), keyTwoResults);
@@ -99,16 +100,21 @@ public class CompositeReadOnlyWindowStoreTest {
         otherUnderlyingStore.put("some-key", "some-value", 0L);
         underlyingWindowStore.put("some-key", "my-value", 1L);
 
-        final List<KeyValue<Long, String>> results = toList(windowStore.fetch("some-key", 0L, 2L));
+        final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(windowStore.fetch("some-key", 0L, 2L));
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);
     }
 
-    static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
-        final List<KeyValue<K, V>> results = new ArrayList<>();
 
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStateStoreExceptionOnRebalance() throws Exception {
+        final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new StateStoreProviderStub(true), QueryableStoreTypes.windowStore(), "foo");
+        store.fetch("key", 1, 10);
     }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() throws Exception {
+        underlyingWindowStore.setOpen(false);
+        underlyingWindowStore.fetch("key", 1, 10);
+    }
+
 }

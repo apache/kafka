@@ -96,6 +96,7 @@ public class KTableForeachTest {
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }
+        driver.flushState();
 
         assertEquals(expectedRecords.size(), actualRecords.size());
         for (int i = 0; i < expectedRecords.size(); i++) {
@@ -103,5 +104,17 @@ public class KTableForeachTest {
             KeyValue<Integer, String> actualRecord = actualRecords.get(i);
             assertEquals(expectedRecord, actualRecord);
         }
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
+            @Override
+            public void apply(Number key, Object value) {}
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>table("emptyTopic", "emptyStore")
+            .foreach(consume);
     }
 }

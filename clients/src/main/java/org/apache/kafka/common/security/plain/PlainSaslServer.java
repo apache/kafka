@@ -18,7 +18,6 @@
 
 package org.apache.kafka.common.security.plain;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
@@ -29,8 +28,8 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
-import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
@@ -50,10 +49,13 @@ public class PlainSaslServer implements SaslServer {
     public static final String PLAIN_MECHANISM = "PLAIN";
     private static final String JAAS_USER_PREFIX = "user_";
 
+    private final JaasContext jaasContext;
+
     private boolean complete;
     private String authorizationID;
 
-    public PlainSaslServer(CallbackHandler callbackHandler) {
+    public PlainSaslServer(JaasContext jaasContext) {
+        this.jaasContext = jaasContext;
     }
 
     @Override
@@ -92,13 +94,10 @@ public class PlainSaslServer implements SaslServer {
         if (authorizationID.isEmpty())
             authorizationID = username;
 
-        try {
-            String expectedPassword = JaasUtils.jaasConfig(LoginType.SERVER.contextName(), JAAS_USER_PREFIX + username);
-            if (!password.equals(expectedPassword)) {
-                throw new SaslException("Authentication failed: Invalid username or password");
-            }
-        } catch (IOException e) {
-            throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
+        String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
+                PlainLoginModule.class.getName());
+        if (!password.equals(expectedPassword)) {
+            throw new SaslException("Authentication failed: Invalid username or password");
         }
         complete = true;
         return new byte[0];
@@ -152,10 +151,13 @@ public class PlainSaslServer implements SaslServer {
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props, CallbackHandler cbh)
             throws SaslException {
 
-            if (!PLAIN_MECHANISM.equals(mechanism)) {
+            if (!PLAIN_MECHANISM.equals(mechanism))
                 throw new SaslException(String.format("Mechanism \'%s\' is not supported. Only PLAIN is supported.", mechanism));
-            }
-            return new PlainSaslServer(cbh);
+
+            if (!(cbh instanceof SaslServerCallbackHandler))
+                throw new SaslException("CallbackHandler must be of type SaslServerCallbackHandler, but it is: " + cbh.getClass());
+
+            return new PlainSaslServer(((SaslServerCallbackHandler) cbh).jaasContext());
         }
 
         @Override

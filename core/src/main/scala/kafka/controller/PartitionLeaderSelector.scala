@@ -148,7 +148,7 @@ with Logging {
                                                    .format(preferredReplica, topicAndPartition))
     } else {
       info("Current leader %d for partition %s is not the preferred replica.".format(currentLeader, topicAndPartition) +
-        " Trigerring preferred replica leader election")
+        " Triggering preferred replica leader election")
       // check if preferred replica is not the current leader and is alive and in the isr
       if (controllerContext.liveBrokerIds.contains(preferredReplica) && currentLeaderAndIsr.isr.contains(preferredReplica)) {
         (new LeaderAndIsr(preferredReplica, currentLeaderAndIsr.leaderEpoch + 1, currentLeaderAndIsr.isr,
