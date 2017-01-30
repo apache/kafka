@@ -155,16 +155,20 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
-        TrustManager[] trustManagers = tmf.getTrustManagers();
-        TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
+        if ((wantClientAuth || needClientAuth) && truststore != null && mode == Mode.SERVER) {
+            TrustManager[] trustManagers = tmf.getTrustManagers();
+            TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
 
-        for (int i = 0; i < trustManagers.length; i++) {
-            if (trustManagers[i] instanceof X509TrustManager) {
-                trustManagers[i] = reloadableTrustManager;
+            for (int i = 0; i < trustManagers.length; i++) {
+                if (trustManagers[i] instanceof X509TrustManager) {
+                    trustManagers[i] = reloadableTrustManager;
+                }
             }
-        }
 
-        sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
+            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
+        } else {
+            sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+        }
         return sslContext;
     }
 
@@ -247,11 +251,17 @@ public class SslFactory implements Configurable {
         private TrustManagerFactory tmf;
         private X509TrustManager trustManager;
         private long lastReload = 0L;
-        private static final long MINIMAL_WAIT = 60 * 1000;
+        private long minimumDelay = 60 * 1000L;
 
         public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
             this.trustStore = trustStore;
             this.tmf = tmf;
+        }
+
+        public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf, long minimumDelay) {
+            this.trustStore = trustStore;
+            this.tmf = tmf;
+            this.minimumDelay = minimumDelay;
         }
 
         @Override
@@ -262,7 +272,9 @@ public class SslFactory implements Configurable {
 
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            reloadTrustManager();
+            if (trustManager == null) {
+                reloadTrustManager();
+            }
             trustManager.checkServerTrusted(chain, authType);
         }
 
@@ -280,7 +292,9 @@ public class SslFactory implements Configurable {
 
         @Override
         public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
-            reloadTrustManager();
+            if (trustManager == null) {
+                reloadTrustManager();
+            }
             ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, socket);
         }
 
@@ -292,31 +306,30 @@ public class SslFactory implements Configurable {
 
         @Override
         public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
-            reloadTrustManager();
+            if (trustManager == null) {
+                reloadTrustManager();
+            }
             ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
         }
 
         private void reloadTrustManager() throws KafkaException {
             try {
-                if (trustManager == null || System.currentTimeMillis() - lastReload > MINIMAL_WAIT) {
-                    log.info("Reloading trust manager...");
-
-                    trustManager = null;
+                if (trustManager == null || System.currentTimeMillis() - lastReload > minimumDelay) {
                     KeyStore ts = trustStore.load();
 
                     Enumeration<String> alias = ts.aliases();
-                    StringBuilder logMessage = new StringBuilder("List of trusted certs: ");
+                    StringBuilder logMessage = new StringBuilder("Reloaded ").append(mode).append(" trust manager. List of trusted certs: ");
                     if (alias.hasMoreElements()) {
                         logMessage.append(alias.nextElement());
                     }
                     while (alias.hasMoreElements()) {
-                        logMessage.append(", ");
-                        logMessage.append(alias.nextElement());
+                        logMessage.append(", ").append(alias.nextElement());
                     }
                     log.info(logMessage.toString());
 
                     tmf.init(ts);
 
+                    trustManager = null;
                     TrustManager[] tms = tmf.getTrustManagers();
                     for (int i = 0; i < tms.length; i++) {
                         if (tms[i] instanceof X509TrustManager) {
