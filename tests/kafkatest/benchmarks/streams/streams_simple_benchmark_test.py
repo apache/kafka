@@ -35,7 +35,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
 
     @cluster(num_nodes=30)
-    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[10])
+    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 5, 10])
     #@matrix(test=["consume"], scale=[1, 2, 3])
     def test_simple_benchmark(self, test, scale):
         """
