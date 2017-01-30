@@ -34,9 +34,8 @@ class StreamsSimpleBenchmarkTest(Test):
         self.replication = 1
 
 
-    @cluster(num_nodes=30)
-    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[10])
-    #@matrix(test=["consume"], scale=[1, 2, 3])
+    @cluster(num_nodes=4)
+    @matrix(test=["all"], scale=[1])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -76,7 +75,7 @@ class StreamsSimpleBenchmarkTest(Test):
         ################
         for num in range(0, scale):
             self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
-                                                             self.num_records/(scale + 1), "false", test)
+                                                             self.num_records/(scale), "false", test)
             self.driver[num].start()
 
         #######################
