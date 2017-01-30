@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
@@ -50,9 +52,93 @@ import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class TopologyBuilderTest {
 
+
+    @Test
+    public void testAddSourceWithAutoOffestReset() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        final String earliestTopic = "earliestTopic";
+        final String latestTopic = "latestTopic";
+
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", earliestTopic);
+        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", latestTopic);
+
+        assertTrue(builder.earliestResetTopicsPattern().matcher(earliestTopic).matches());
+        assertTrue(builder.latestResetTopicsPattern().matcher(latestTopic).matches());
+
+    }
+
+    @Test
+    public void testAddSourcePatternWithAutoOffestReset() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        
+        final String earliestTopicPattern = "earliest.*Topic";
+        final String latestTopicPattern = "latest.*Topic";
+
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", Pattern.compile(earliestTopicPattern));
+        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", Pattern.compile(latestTopicPattern));
+
+        assertTrue(builder.earliestResetTopicsPattern().matcher("earliestTestTopic").matches());
+        assertTrue(builder.latestResetTopicsPattern().matcher("latestTestTopic").matches());
+    }
+
+    @Test
+    public void testAddSourceNoAutoOffsetReset() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Serde<String> stringSerde = Serdes.String();
+
+        builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
+
+
+        Pattern expectedPattern = Pattern.compile("test-topic");
+
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+
+        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
+        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+    }
+
+    @Test
+    public void testAddPatternSourceNoAutoOffsetReset() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Serde<String> stringSerde = Serdes.String();
+
+        builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
+
+
+        Pattern expectedPattern = Pattern.compile("test-.*");
+
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+
+        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
+        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testAddSourceAutoOffsetResetNoTopics() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Serde<String> stringSerde = Serdes.String();
+
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
+        fail("Should throw TopologyBuilderException with no topics");
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testAddSourceAutoOffsetResetSameSource() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Serde<String> stringSerde = Serdes.String();
+
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
+        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
+        fail("Should throw TopologyBuilderException for duplicate source name");
+    }
+
+
+    
     @Test(expected = TopologyBuilderException.class)
     public void testAddSourceWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
