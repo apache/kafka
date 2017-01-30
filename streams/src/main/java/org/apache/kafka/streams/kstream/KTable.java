@@ -530,6 +530,8 @@ public interface KTable<K, V> {
      * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serde, Serde)}
      * instead.
      *
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}.
+     *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
      * @param <KR>     the key type of the result {@link KGroupedTable}
      * @param <VR>     the value type of the result {@link KGroupedTable}
@@ -555,6 +557,8 @@ public interface KTable<K, V> {
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
      * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
+     *
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}.
      *
      * @param selector   a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
      * @param keySerde   key serdes for materializing this stream,
@@ -584,12 +588,9 @@ public interface KTable<K, V> {
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Note that {@link KeyValue records} with {@code null} keys or values (so-called tombstone records) have delete semantics.
      * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded
      * directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
-     * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
-     * <p>
      * Example:
      * <table border='1'>
      * <tr>
@@ -675,13 +676,10 @@ public interface KTable<K, V> {
      * null} to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Note that {@link KeyValue records} with {@code null} keys or values (so-called tombstone records) have delete semantics.
      * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
      * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
      * deleted).
-     * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
-     * <p>
      * Example:
      * <table border='1'>
      * <tr>
@@ -768,12 +766,9 @@ public interface KTable<K, V> {
      * corresponding other value to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Note that {@link KeyValue records} with {@code null} keys or values (so-called tombstone records) have delete semantics.
      * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to bedeleted).
-     * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
-     * <p>
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
      * Example:
      * <table border='1'>
      * <tr>
