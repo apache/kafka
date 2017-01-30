@@ -47,76 +47,15 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Updating a Kafka Streams Application</a></h5>
+<h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Upgrading a Kafka Streams Application</a></h5>
 <ul>
-    <li>Upgrading a Kafka Streams Applications:
-        <ul>
-            <li> You need to recompile your code. Just swapping the jar file will not work and will break your application. </li>
-            <li> <code>KStreamBuilder#table()</code> always requires to specify a store name. </li>
-            <li> <code>KTable#through()</code> always requires to specify a store name. </li>
-            <li> If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
-            <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
-            <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require to upgrade your brokers.
-                 A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
-        </ul>
-    </li>
-
-    <li>Streams API changes in 0.10.2.0:
-         <li> New methods in <code>KafkaStreams</code>:
-             <ul>
-                 <li> set a listener to react on application state change via <code>#setStateListener(StateListener listener)</code> </li>
-                 <li> retrieve the current application state via <code>#state()</code> </li>
-                 <li> retrieve the global metrics registry via <code>#metrics()</code> </li>
-                 <li> apply a timeout when closing an application via <code>#close(long timeout, TimeUnit timeUnit)</code> </li>
-                 <li> specify a custom indent when retrieving Kafka Streams information via <code>#toString(String indent)</code> </li>
-             </ul>
-         </li>
-         <li> Parameter updates in <code>StreamsConfig</code>:
-             <ul>
-                 <li> parameter "zookeeper.connect" got deprecated </li>
-                 <li> added many new parameters for metrics, security, and client configurations </li>
-             </ul>
-         </li>
-         <li> Changes in <code>StreamsMetics</code> interface:
-             <ul>
-                 <li> removed methods: <code>#addLatencySensor()</code> </li>
-                 <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>, <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
-             </ul>
-         </li>
-         <li> New methods in <code>TopologyBuilder</code>:
-             <ul>
-                 <li> added overloads for <code>#addSource()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
-                 <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
-             </ul>
-         </li>
-         <li> New methods in <code>KStreamBuilder</code>:
-             <ul>
-                 <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
-                 <li> <code>#table()</code> always require to specify a store name </li>
-                 <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
-             </ul>
-         </li>
-         <li> New joins for <code>KStream</code>:
-             <ul>
-                 <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
-                 <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
-             </ul>
-         </li>
-         <li> New window type <em>Session Windows</em>:
-             <ul>
-                 <li> added class <code>SessionWindows</code> to specify session windows </li>
-                 <li> added overlaods for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code> to allow session window aggregations </li>
-             </ul>
-         </li>
-         <li> Changes to <code>TimestampExtractor</code>:
-             <ul>
-                 <li> method <code>#extract()</code> got second parameter </li>
-                 <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code> </li>
-                 <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
-             </ul>
-         </li>
-         <li> Improved generic types of many DSL interfaces, classes, and methods. </li>
-    </li>
+    <li> You need to recompile your code. Just swapping the jar file will not work and will break your application. </li>
+    <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
+    <li> <code>KTable#through()</code> always requires a store name. </li>
+    <li> If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
+    <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
+    <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
+         A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
 </ul>
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
@@ -133,7 +72,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li>The Zookeeper dependency was removed from the Streams API. The Streams API now uses the Kafka protocol to manage internal topics instead of
         modifying Zookeeper directly. This eliminates the need for privileges to access Zookeeper directly and "StreamsConfig.ZOOKEEPER_CONFIG"
         should not be set in the Streams app any more. If the Kafka cluster is secured, Streams apps must have the required security privileges to create new topics.</li>
-    <li>Upgrading your Streams application from 0.10.1 to 0.10.2 does not require to upgrade your brokers.
+    <li>Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
         A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though).</li>
     <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to
         StreamsConfig class. User should pay attenntion to the default values and set these if needed. For more details please refer to <a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>

@@ -35,6 +35,9 @@
                     <li><a href="#streams_dsl">High-level streams DSL</a>
                 </ul>
             </li>
+            <li>
+                <a href="#streams_upgrade">Upgrade guide and API changes</a>
+            </li>
         </ol>
 
         <h2><a id="streams_overview" href="#streams_overview">Overview</a></h2>
@@ -466,7 +469,83 @@
         in <code>StreamsConfig</code> before running it. A complete list of
         Kafka Streams configs can be found <a href="#streamsconfigs"><b>here</b></a>.
         </p>
+
+        <h2><a id="streams_upgrade" href="#upgrade">Upgrade guide and API changes</a></h2>
+
+        <h3><a id="streams_upgrade_1020" href="#upgrade_1020">Upgrading a Kafka Streams Application</a></h3>
+
+        <h5>Upgrading 0.10.1.x to 0.10.2.0</h5>
+        <ul>
+            <li> You need to recompile your code. Just swapping the jar file will not work and will break your application. </li>
+            <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
+            <li> <code>KTable#through()</code> always requires a store name. </li>
+            <li> If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
+            <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
+            <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
+                 A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+        </ul>
+
+        <h3><a id="streams_api_changes" href="#api_changes">Streams API changes in 0.10.2.0</a></h3>
+        <li> New methods in <code>KafkaStreams</code>:
+            <ul>
+                <li> set a listener to react on application state change via <code>#setStateListener(StateListener listener)</code> </li>
+                <li> retrieve the current application state via <code>#state()</code> </li>
+                <li> retrieve the global metrics registry via <code>#metrics()</code> </li>
+                <li> apply a timeout when closing an application via <code>#close(long timeout, TimeUnit timeUnit)</code> </li>
+                <li> specify a custom indent when retrieving Kafka Streams information via <code>#toString(String indent)</code> </li>
+            </ul>
+        </li>
+        <li> Parameter updates in <code>StreamsConfig</code>:
+            <ul>
+                <li> parameter "zookeeper.connect" got deprecated </li>
+                <li> added many new parameters for metrics, security, and client configurations </li>
+            </ul>
+        </li>
+        <li> Changes in <code>StreamsMetics</code> interface:
+            <ul>
+                <li> removed methods: <code>#addLatencySensor()</code> </li>
+                <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
+                     <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
+            </ul>
+        </li>
+        <li> New methods in <code>TopologyBuilder</code>:
+            <ul>
+                <li> added overloads for <code>#addSource()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
+                <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
+            </ul>
+        </li>
+        <li> New methods in <code>KStreamBuilder</code>:
+            <ul>
+                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
+                <li> <code>#table()</code> always require to specify a store name </li>
+                <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
+            </ul>
+        </li>
+        <li> New joins for <code>KStream</code>:
+            <ul>
+                <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
+                <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+            </ul>
+        </li>
+        <li> New window type <em>Session Windows</em>:
+            <ul>
+                <li> added class <code>SessionWindows</code> to specify session windows </li>
+                <li> added overlaods for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+                     to allow session window aggregations </li>
+            </ul>
+        </li>
+        <li> Changes to <code>TimestampExtractor</code>:
+            <ul>
+                <li> method <code>#extract()</code> got second parameter </li>
+                <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code> </li>
+                <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
+            </ul>
+        </li>
+        <li> Improved generic types of many DSL interfaces, classes, and methods. </li>
+    </ul>
 </pre>
+
+
 </script>
 
 <!--#include virtual="../includes/_header.htm" -->
