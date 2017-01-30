@@ -106,7 +106,7 @@ public class SimpleBenchmark {
         switch (testName) {
             case ALL_TESTS:
                 // producer performance
-                produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+                produce(SOURCE_TOPIC);
                 // consumer performance
                 consume(SOURCE_TOPIC);
                 // simple stream performance source->process
@@ -290,6 +290,11 @@ public class SimpleBenchmark {
     public void processStream(String topic) throws Exception {
         // see if we're in the load phase
         if (loadPhase) {
+            // if we run all tests, the produce test will have already loaded the data
+            if (testName.equals(ALL_TESTS)) {
+                // Skipping loading phase since previously loaded
+                return;
+            }
             System.out.println("processStream loading phase on topic: " + topic);
             produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-load", numRecords, true, numRecords, false);
             return;
@@ -331,6 +336,11 @@ public class SimpleBenchmark {
     public void processStreamWithSink(String topic) throws Exception {
         // see if we're in the load phase
         if (loadPhase) {
+            // if we run all tests, the produce test will have already loaded the data
+            if (testName.equals(ALL_TESTS)) {
+                // Skipping loading phase since previously loaded
+                return;
+            }
             System.out.println("processStreamWithSink loading phase on topic: " + topic);
             produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-sink-load", numRecords, true, numRecords, false);
             return;
@@ -402,6 +412,11 @@ public class SimpleBenchmark {
     public void processStreamWithStateStore(String topic) throws Exception {
         // see if we're in the load phase
         if (loadPhase) {
+            // if we run all tests, the produce test will have already loaded the data
+            if (testName.equals(ALL_TESTS)) {
+                // Skipping loading phase since previously loaded
+                return;
+            }
             System.out.println("processStreamWithStateStore loading phase on topic: " + topic);
             produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-state-store-load", numRecords, true, numRecords, false);
             return;
@@ -417,6 +432,11 @@ public class SimpleBenchmark {
     public void processStreamWithCachedStateStore(String topic) throws Exception {
         // see if we're in the load phase
         if (loadPhase) {
+            // if we run all tests, the produce test will have already loaded the data
+            if (testName.equals(ALL_TESTS)) {
+                // Skipping loading phase since previously loaded
+                return;
+            }
             System.out.println("processStreamWithCachedStateStore loading phase on topic: " + topic);
             produce(topic, VALUE_SIZE, "simple-benchmark-process-stream-with-cached-state-store-load", numRecords, true, numRecords, false);
             return;
@@ -429,6 +449,14 @@ public class SimpleBenchmark {
         internalProcessStreamWithStore(streams, latch, "Streams Performance [MB/sec read+cache+store]: ");
     }
 
+    public void produce(String topic) throws Exception {
+        // loading phase does not make sense for producer
+        if (loadPhase) {
+            return;
+        }
+        produce(topic, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+
+    }
     /**
      * Produce values to a topic
      * @param topic Topic to produce to
@@ -440,8 +468,9 @@ public class SimpleBenchmark {
      * @param printStats if True, print stats on how long producing took. If False, don't print stats. False can be used
      *                   when this produce step is part of another benchmark that produces its own stats
      */
-    public void produce(String topic, int valueSizeBytes, String clientId, int numRecords, boolean sequential,
+    private void produce(String topic, int valueSizeBytes, String clientId, int numRecords, boolean sequential,
                         int upperRange, boolean printStats) throws Exception {
+
 
         if (sequential) {
             if (upperRange < numRecords) throw new Exception("UpperRange must be >= numRecords");
@@ -476,6 +505,11 @@ public class SimpleBenchmark {
     public void consume(String topic) throws Exception {
         // see if we're in the load phase
         if (loadPhase) {
+            // if we run all tests, the produce test will have already loaded the data
+            if (testName.equals(ALL_TESTS)) {
+                // Skipping loading phase since previously loaded
+                return;
+            }
             System.out.println("Consumer loading phase on topic: " + topic);
             produce(topic, VALUE_SIZE, "simple-benchmark-consumer-load", numRecords, true, numRecords, false);
             return;
@@ -501,18 +535,18 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(500);
             if (records.isEmpty()) {
-                if (endKey.compareTo(key) >= 0)
+                if (key.compareTo(endKey) >= 0)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
                         key = recKey;
-                    if (endKey.compareTo(key) >= 0)
+                    if (key.compareTo(endKey) >= 0)
                         break;
                 }
             }
-            if (endKey.compareTo(key) >= 0)
+            if (key.compareTo(endKey) >= 0)
                 break;
         }
 
@@ -545,7 +579,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        if (endKey.compareTo(key) >= 0) {
+                        if (key.compareTo(endKey) >= 0) {
                             latch.countDown();
                         }
                     }
@@ -587,7 +621,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        if (endKey.compareTo(key) >= 0) {
+                        if (key.compareTo(endKey) >= 0) {
                             latch.countDown();
                         }
                     }
@@ -689,7 +723,7 @@ public class SimpleBenchmark {
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
 
-                        if (endKey.compareTo(key) >= 0) {
+                        if (key.compareTo(endKey) >= 0) {
                             latch.countDown();
                         }
                     }
