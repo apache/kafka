@@ -103,6 +103,8 @@ public class KTableKTableJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic1, null, "SomeVal");
         driver.flushState();
 
         processor.checkAndClearProcessResult();
@@ -112,6 +114,8 @@ public class KTableKTableJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic2, null, "AnotherVal");
         driver.flushState();
 
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
@@ -165,6 +169,10 @@ public class KTableKTableJoinTest {
 
         processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
         checkJoinedValues(getter, kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
+
+        driver.process(topic1, null, "XX" + 1);
+        checkJoinedValues(getter, kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
+
     }
 
     @Test
