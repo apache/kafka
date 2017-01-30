@@ -21,7 +21,7 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 class StreamsSimpleBenchmarkTest(Test):
     """
@@ -49,7 +49,7 @@ class StreamsSimpleBenchmarkTest(Test):
         #############
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
-        self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=TRUNK, topics={
+        self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=DEV_BRANCH, topics={
             'simpleBenchmarkSourceTopic' : { 'partitions': scale, 'replication-factor': self.replication },
             'simpleBenchmarkSinkTopic' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic1KStreamKStream' : { 'partitions': scale, 'replication-factor': self.replication },
