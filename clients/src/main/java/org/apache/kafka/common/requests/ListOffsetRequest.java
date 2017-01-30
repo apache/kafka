@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ObsoleteBrokerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -88,7 +87,8 @@ public class ListOffsetRequest extends AbstractRequest {
         public ListOffsetRequest build() {
             short version = version();
             if (version < minVersion) {
-                throw new ObsoleteBrokerException("The broker is too old to send this request.");
+                throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest because " +
+                    "we require features supported only in " + minVersion + " or later.");
             }
             if (version == 0) {
                 if (offsetData == null) {
@@ -106,7 +106,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 }
             } else {
                 if (offsetData != null) {
-                    throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest with v0 " +
+                    throw new RuntimeException("Cannot create a v" + version + " ListOffsetRequest with v0 " +
                         "PartitionData.");
                 } else if (partitionTimestamps == null) {
                     throw new RuntimeException("Must set partitionTimestamps when creating a v" +

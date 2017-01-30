@@ -22,6 +22,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -34,7 +35,8 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ObsoleteBrokerException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
@@ -66,12 +68,14 @@ public class ClientCompatibilityTest {
         final String topic;
         final boolean offsetsForTimesSupported;
         final boolean expectClusterId;
+        final boolean expectRecordTooLargeException;
 
         TestConfig(Namespace res) {
             this.bootstrapServer = res.getString("bootstrapServer");
             this.topic = res.getString("topic");
             this.offsetsForTimesSupported = res.getBoolean("offsetsForTimesSupported");
             this.expectClusterId = res.getBoolean("clusterIdSupported");
+            this.expectRecordTooLargeException = res.getBoolean("expectRecordTooLargeException");
         }
     }
 
@@ -108,6 +112,15 @@ public class ClientCompatibilityTest {
             .dest("clusterIdSupported")
             .metavar("CLUSTER_ID_SUPPORTED")
             .help("True if cluster IDs are supported.  False if cluster ID always appears as null.");
+        parser.addArgument("--expect-record-too-large-exception")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("expectRecordTooLargeException")
+            .metavar("EXPECT_RECORD_TOO_LARGE_EXCEPTION")
+            .help("True if we should expect a RecordTooLargeException when trying to read from a topic " +
+                  "that contains a message that is bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG +
+                  ".  This is pre-KIP-74 behavior.");
         Namespace res = null;
         try {
             res = parser.parseArgs(args);
@@ -133,19 +146,6 @@ public class ClientCompatibilityTest {
         System.exit(0);
     }
 
-    private static byte[] asByteArray(long a) {
-        ByteBuffer buf = ByteBuffer.allocate(8);
-        buf.putLong(a);
-        return buf.array();
-    }
-
-    private static byte[] asByteArray(long a, long b) {
-        ByteBuffer buf = ByteBuffer.allocate(16);
-        buf.putLong(a);
-        buf.putLong(b);
-        return buf.array();
-    }
-
     private static String toHexString(byte[] buf) {
         StringBuilder bld = new StringBuilder();
         for (byte b : buf) {
@@ -169,8 +169,16 @@ public class ClientCompatibilityTest {
     ClientCompatibilityTest(TestConfig testConfig) {
         this.testConfig = testConfig;
         long curTime = Time.SYSTEM.milliseconds();
-        this.message1 = asByteArray(curTime);
-        this.message2 = asByteArray(curTime, curTime);
+
+        ByteBuffer buf = ByteBuffer.allocate(8);
+        buf.putLong(curTime);
+        this.message1 = buf.array();
+
+        ByteBuffer buf2 = ByteBuffer.allocate(4096);
+        for (long i = 0; i < buf2.capacity(); i += 8) {
+            buf2.putLong(curTime + i);
+        }
+        this.message2 = buf2.array();
     }
 
     void run() throws Exception {
@@ -242,6 +250,7 @@ public class ClientCompatibilityTest {
     public void testConsume(final long prodTimeMs) throws Exception {
         Properties consumerProps = new Properties();
         consumerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 512);
         ClientCompatibilityTestDeserializer deserializer =
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
         final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
@@ -318,7 +327,6 @@ public class ClientCompatibilityTest {
                 throw new UnsupportedOperationException();
             }
         };
-
         byte[] next = iter.next();
         try {
             compareArrays(message1, next);
@@ -327,13 +335,23 @@ public class ClientCompatibilityTest {
             throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
                     "running this program.");
         }
-        next = iter.next();
         try {
-            compareArrays(message2, next);
-            log.debug("Found second message...");
-        } catch (RuntimeException e) {
-            throw new RuntimeException("The second message in this topic was not ours. Please use a new topic when " +
-                    "running this program.");
+            next = iter.next();
+            if (testConfig.expectRecordTooLargeException)
+                throw new RuntimeException("Expected to get a RecordTooLargeException when reading a record " +
+                        "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+            try {
+                compareArrays(message2, next);
+            } catch (RuntimeException e) {
+                System.out.println("The second message in this topic was not ours. Please use a new " +
+                    "topic when running this program.");
+                System.exit(1);
+            }
+        } catch (RecordTooLargeException e) {
+            log.debug("Got RecordTooLargeException", e);
+            if (!testConfig.expectRecordTooLargeException)
+                throw new RuntimeException("Got an unexpected RecordTooLargeException when reading a record " +
+                    "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
         }
         log.debug("Closing consumer.");
         consumer.close();
@@ -344,8 +362,8 @@ public class ClientCompatibilityTest {
         try {
             invoker.run();
             log.info("Successfully used feature {}", featureName);
-        } catch (ObsoleteBrokerException e) {
-            log.info("Got ObsoleteBrokerException when attempting to use feature {}", featureName);
+        } catch (UnsupportedVersionException e) {
+            log.info("Got UnsupportedVersionException when attempting to use feature {}", featureName);
             if (supported) {
                 throw new RuntimeException("Expected " + featureName + " to be supported, but it wasn't.", e);
             }

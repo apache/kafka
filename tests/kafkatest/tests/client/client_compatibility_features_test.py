@@ -23,16 +23,18 @@ from ducktape.tests.test import TestContext
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
-from kafkatest.version import TRUNK, LATEST_0_10_0, LATEST_0_10_1, V_0_10_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
     if (broker_version < V_0_10_1_0):
         features["offsets-for-times-supported"] = False
         features["cluster-id-supported"] = False
+        features["expect-record-too-large-exception"] = True
     else:
         features["offsets-for-times-supported"] = True
         features["cluster-id-supported"] = True
+        features["expect-record-too-large-exception"] = False
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -74,10 +76,12 @@ class ClientCompatibilityFeaturesTest(Test):
                "--bootstrap-server %s "
                "--offsets-for-times-supported %s "
                "--cluster-id-supported %s "
+               "--expect-record-too-large-exception %s "
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                features["offsets-for-times-supported"],
                                features["cluster-id-supported"],
+                               features["expect-record-too-large-exception"],
                                self.topics.keys()[0]))
         results_dir = TestContext.results_dir(self.test_context, 0)
         os.makedirs(results_dir)
@@ -89,7 +93,7 @@ class ClientCompatibilityFeaturesTest(Test):
           self.logger.info("** Command failed.  See %s for log messages." % ssh_log_file)
           raise e
 
-    @parametrize(broker_version=str(TRUNK))
+    @parametrize(broker_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     def run_compatibility_test(self, broker_version):

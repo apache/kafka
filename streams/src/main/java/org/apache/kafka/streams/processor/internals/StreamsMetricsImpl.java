@@ -113,7 +113,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
+    public Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
         Map<String, String> tagMap = tagMap(tags);
 
         // first add the global operation metrics if not yet, with the global tags only
@@ -150,15 +150,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-avg", groupNameFromScope(scopeName),
             "The average latency of " + entityName + " " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-max", groupNameFromScope(scopeName),
             "The max latency of " + entityName + " " + opName + " operation.", tags), new Max());
         addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
     }
 
     private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-rate", groupNameFromScope(scopeName),
             "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
     }
 
@@ -166,7 +166,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (!metrics.metrics().containsKey(name)) {
             sensor.add(name, stat);
         } else {
-            log.debug("Trying to add metric twice " + name);
+            log.trace("Trying to add metric twice: {}", name);
         }
     }
 

@@ -25,7 +25,7 @@ import kafka.api._
 import kafka.cluster.{Partition, Replica}
 import kafka.common._
 import kafka.controller.KafkaController
-import kafka.log.{LogAppendInfo, LogManager}
+import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
@@ -45,10 +45,10 @@ import scala.collection.JavaConverters._
 /*
  * Result metadata of a log append operation on the log
  */
-case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None) {
-  def errorCode = error match {
-    case None => Errors.NONE.code
-    case Some(e) => Errors.forException(e).code
+case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = None) {
+  def error: Errors = exception match {
+    case None => Errors.NONE
+    case Some(e) => Errors.forException(e)
   }
 }
 
@@ -66,20 +66,19 @@ case class LogReadResult(info: FetchDataInfo,
                          leaderLogEndOffset: Long,
                          fetchTimeMs: Long,
                          readSize: Int,
-                         error: Option[Throwable] = None) {
+                         exception: Option[Throwable] = None) {
 
-  def errorCode = error match {
-    case None => Errors.NONE.code
-    case Some(e) => Errors.forException(e).code
+  def error: Errors = exception match {
+    case None => Errors.NONE
+    case Some(e) => Errors.forException(e)
   }
 
-  override def toString = {
-    "Fetch Data: [%s], HW: [%d], leaderLogEndOffset: [%d], readSize: [%d], error: [%s]"
-            .format(info, hw, leaderLogEndOffset, readSize, error)
-  }
+  override def toString =
+    s"Fetch Data: [$info], HW: [$hw], leaderLogEndOffset: [$leaderLogEndOffset], readSize: [$readSize], error: [$error]"
+
 }
 
-case class FetchPartitionData(error: Short = Errors.NONE.code, hw: Long = -1L, records: Records)
+case class FetchPartitionData(error: Errors = Errors.NONE, hw: Long = -1L, records: Records)
 
 object LogReadResult {
   val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
@@ -189,6 +188,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
   }
+
+  def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
 
   /**
    * Try to complete some delayed produce requests with the request key;
@@ -315,7 +316,7 @@ class ReplicaManager(val config: KafkaConfig,
         topicPartition ->
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
-                  new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.logAppendTime)) // response status
+                  new PartitionResponse(result.error, result.info.firstOffset, result.info.logAppendTime)) // response status
       }
 
       if (delayedRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
@@ -340,7 +341,7 @@ class ReplicaManager(val config: KafkaConfig,
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
-        topicPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
+        topicPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS,
           LogAppendInfo.UnknownLogAppendInfo.firstOffset, Record.NO_TIMESTAMP)
       }
       responseCallback(responseStatus)
@@ -357,7 +358,7 @@ class ReplicaManager(val config: KafkaConfig,
                                      localProduceResults: Map[TopicPartition, LogAppendResult]): Boolean = {
     requiredAcks == -1 &&
     entriesPerPartition.nonEmpty &&
-    localProduceResults.values.count(_.error.isDefined) < entriesPerPartition.size
+    localProduceResults.values.count(_.exception.isDefined) < entriesPerPartition.size
   }
 
   private def isValidRequiredAcks(requiredAcks: Short): Boolean = {
@@ -464,7 +465,7 @@ class ReplicaManager(val config: KafkaConfig,
     val logReadResultValues = logReadResults.map { case (_, v) => v }
     val bytesReadable = logReadResultValues.map(_.info.records.sizeInBytes).sum
     val errorReadingData = logReadResultValues.foldLeft(false) ((errorIncurred, readResult) =>
-      errorIncurred || (readResult.errorCode != Errors.NONE.code))
+      errorIncurred || (readResult.error != Errors.NONE))
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
@@ -472,7 +473,7 @@ class ReplicaManager(val config: KafkaConfig,
     //                        4) some error happens while reading data
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
-        tp -> FetchPartitionData(result.errorCode, result.hw, result.info.records)
+        tp -> FetchPartitionData(result.error, result.hw, result.info.records)
       }
       responseCallback(fetchPartitionData)
     } else {
@@ -567,7 +568,7 @@ class ReplicaManager(val config: KafkaConfig,
                       leaderLogEndOffset = initialLogEndOffset,
                       fetchTimeMs = fetchTimeMs,
                       readSize = partitionFetchSize,
-                      error = None)
+                      exception = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
@@ -580,7 +581,7 @@ class ReplicaManager(val config: KafkaConfig,
                         leaderLogEndOffset = -1L,
                         fetchTimeMs = -1L,
                         readSize = partitionFetchSize,
-                        error = Some(e))
+                        exception = Some(e))
         case e: Throwable =>
           BrokerTopicStats.getBrokerTopicStats(tp.topic).failedFetchRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
@@ -590,7 +591,7 @@ class ReplicaManager(val config: KafkaConfig,
                         leaderLogEndOffset = -1L,
                         fetchTimeMs = -1L,
                         readSize = partitionFetchSize,
-                        error = Some(e))
+                        exception = Some(e))
       }
     }
 
@@ -625,7 +626,7 @@ class ReplicaManager(val config: KafkaConfig,
       replica.log.map(log => (log.config.messageFormatVersion.messageFormatVersion, log.config.messageTimestampType))
     }
 
-  def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) {
+  def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) : Seq[TopicPartition] =  {
     replicaStateChangeLock synchronized {
       if(updateMetadataRequest.controllerEpoch < controllerEpoch) {
         val stateControllerEpochErrorMessage = ("Broker %d received update metadata request with correlation id %d from an " +
@@ -635,8 +636,9 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.warn(stateControllerEpochErrorMessage)
         throw new ControllerMovedException(stateControllerEpochErrorMessage)
       } else {
-        metadataCache.updateCache(correlationId, updateMetadataRequest)
+        val deletedPartitions = metadataCache.updateCache(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
+        deletedPartitions
       }
     }
   }
@@ -926,8 +928,14 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def getLeaderPartitions() : List[Partition] = {
+  private def getLeaderPartitions(): List[Partition] = {
     allPartitions.values.filter(_.leaderReplicaIfLocal.isDefined).toList
+  }
+
+  def getHighWatermark(topicPartition: TopicPartition): Option[Long] = {
+    getPartition(topicPartition).flatMap { partition =>
+      partition.leaderReplicaIfLocal.map(_.highWatermark.messageOffset)
+    }
   }
 
   // Flushes the highwatermark value for all partitions to the highwatermark file

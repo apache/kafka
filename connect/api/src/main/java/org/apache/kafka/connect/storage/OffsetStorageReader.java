@@ -17,8 +17,6 @@
 
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collection;
 import java.util.Map;
 
@@ -33,7 +31,6 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.data.Schema} other than Array, Map, and Struct.
  * </p>
  */
-@InterfaceStability.Unstable
 public interface OffsetStorageReader {
     /**
      * Get the offset for the specified partition. If the data isn't already available locally, this

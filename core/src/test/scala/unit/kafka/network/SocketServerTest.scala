@@ -328,7 +328,7 @@ class SocketServerTest extends JUnitSuite {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config.values, metrics, credentialProvider) {
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
           override protected[network] def sendResponse(response: RequestChannel.Response) {
             conn.close()
             super.sendResponse(response)
