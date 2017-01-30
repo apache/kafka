@@ -50,6 +50,14 @@ class ProduceConsumeValidateTest(Test):
         # Start background producer and consumer
         self.consumer.start()
         if (self.consumer_init_timeout_sec > 0):
+            self.logger.debug("Waiting %ds for the consumer to initialize.",
+                              self.consumer_init_timeout_sec)
+            start = int(time.time())
+            wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
+                       timeout_sec=self.consumer_init_timeout_sec,
+                       err_msg="Consumer process took more than %d s to fork" %\
+                       self.consumer_init_timeout_sec)
+            end = int(time.time())
             # TODO(apurva): This sleep is a hack. The problem is that the
             # the JmxTool is spawned before the consumer process is fully
             # initialized. Hence the connection fails. Retries on connection
@@ -62,14 +70,6 @@ class ProduceConsumeValidateTest(Test):
             #
             # This is covered in KAFKA-4620
             time.sleep(1)
-            self.logger.debug("Waiting %ds for the consumer to initialize.",
-                              self.consumer_init_timeout_sec)
-            start = int(time.time())
-            wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
-                       timeout_sec=self.consumer_init_timeout_sec,
-                       err_msg="Consumer process took more than %d s to fork" %\
-                       self.consumer_init_timeout_sec)
-            end = int(time.time())
             remaining_time = self.consumer_init_timeout_sec - (end - start)
             if remaining_time < 0 :
                 remaining_time = 0
