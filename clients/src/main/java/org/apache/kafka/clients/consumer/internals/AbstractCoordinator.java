@@ -237,7 +237,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (node == null) {
                 // TODO: If there are no brokers left, perhaps we should use the bootstrap set
                 // from configuration?
-                log.debug("No broker available to send group coordinator request for group", groupId);
+                log.debug("No broker available to send group coordinator request for group {}", groupId);
                 return RequestFuture.noBrokersAvailable();
             } else
                 findCoordinatorFuture = sendGroupCoordinatorRequest(node);
