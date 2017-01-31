@@ -588,7 +588,7 @@ public interface KTable<K, V> {
      * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded
      * directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
      * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
+     * Input records with {@code null} key will be dropped and no join computation is performed.
      * <p>
      * Example:
      * <table border='1'>
@@ -680,7 +680,7 @@ public interface KTable<K, V> {
      * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
      * deleted).
      * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
+     * Input records with {@code null} key will be dropped and no join computation is performed.
      * <p>
      * Example:
      * <table border='1'>
@@ -770,9 +770,9 @@ public interface KTable<K, V> {
      * <p>
      * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
      * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to bedeleted).
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
      * <p>
-     * A {@code KTable} input record key cannot be {@code null}.
+     * Input records with {@code null} key will be dropped and no join computation is performed.
      * <p>
      * Example:
      * <table border='1'>
