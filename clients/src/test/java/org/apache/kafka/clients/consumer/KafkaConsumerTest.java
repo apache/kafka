@@ -1486,7 +1486,6 @@ public class KafkaConsumerTest {
         Deserializer<String> valueDeserializer = new StringDeserializer();
 
         OffsetResetStrategy autoResetStrategy = OffsetResetStrategy.EARLIEST;
-        OffsetCommitCallback defaultCommitCallback = new ConsumerCoordinator.DefaultOffsetCommitCallback();
         List<PartitionAssignor> assignors = Arrays.asList(assignor);
         ConsumerInterceptors<String, String> interceptors = null;
 
@@ -1506,7 +1505,6 @@ public class KafkaConsumerTest {
                 metricGroupPrefix,
                 time,
                 retryBackoffMs,
-                defaultCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 interceptors,

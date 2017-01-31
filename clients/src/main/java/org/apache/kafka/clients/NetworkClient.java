@@ -427,13 +427,22 @@ public class NetworkClient implements KafkaClient {
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
             if (currInflight == 0 && this.connectionStates.isReady(node.idString())) {
                 // if we find an established connection with no in-flight requests we can stop right away
+                log.trace("Found least loaded node {} connected with no in-flight requests", node);
                 return node;
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;
                 found = node;
+            } else if (log.isTraceEnabled()) {
+                log.trace("Removing node {} from least loaded node selection: is-blacked-out: {}, in-flight-requests: {}",
+                        node, this.connectionStates.isBlackedOut(node.idString(), now), currInflight);
             }
         }
+
+        if (found != null)
+            log.trace("Found least loaded node {}", found);
+        else
+            log.trace("Least loaded node selection failed to find an available node");
 
         return found;
     }
