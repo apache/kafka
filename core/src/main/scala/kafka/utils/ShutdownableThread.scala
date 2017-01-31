@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CountDownLatch
 
-import org.apache.kafka.common.errors.FatalExitError
+import org.apache.kafka.common.internals.FatalExitError
 
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
         extends Thread(name) with Logging {
@@ -35,9 +35,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   }
 
   def initiateShutdown(): Boolean = {
-    if(isRunning.compareAndSet(true, false)) {
+    if (isRunning.compareAndSet(true, false)) {
       info("Shutting down")
-      isRunning.set(false)
       if (isInterruptible)
         interrupt()
       true
@@ -59,19 +58,21 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   def doWork(): Unit
 
   override def run(): Unit = {
-    info("Starting ")
-    try{
-      while(isRunning.get()){
+    info("Starting")
+    try {
+      while (isRunning.get)
         doWork()
-      }
-    } catch{
-      case fatalExitError: FatalExitError =>
-        fatalExitError.shutdownSystem()
+    } catch {
+      case e: FatalExitError =>
+        isRunning.set(false)
+        shutdownLatch.countDown()
+        info("Stopped")
+        Exit.exit(e.statusCode())
       case e: Throwable =>
-        if(isRunning.get())
-          error("Error due to ", e)
+        if (isRunning.get())
+          error("Error due to", e)
     }
     shutdownLatch.countDown()
-    info("Stopped ")
+    info("Stopped")
   }
 }

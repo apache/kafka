@@ -44,7 +44,6 @@ import java.util.Properties;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 
-import org.apache.kafka.common.errors.FatalExitError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.KafkaException;
@@ -525,12 +524,7 @@ public class Utils {
         thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                if (e instanceof FatalExitError) {
-                    log.error("Received FatalExitError ", e);
-                    ((FatalExitError) e).shutdownSystem();
-                } else {
-                    log.error("Uncaught exception in thread '" + t.getName() + "':", e);
-                }
+                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
             }
         });
         return thread;
@@ -552,7 +546,7 @@ public class Utils {
      */
     public static void croak(String message) {
         System.err.println(message);
-        System.exit(1);
+        Exit.exit(1);
     }
 
     /**
