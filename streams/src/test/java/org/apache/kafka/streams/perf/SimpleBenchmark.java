@@ -199,7 +199,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the KTable
      */
     public void kStreamKTableJoin(String kStreamTopic, String kTableTopic) throws Exception {
-        CountDownLatch latch = new CountDownLatch(numRecords);
+        CountDownLatch latch = new CountDownLatch(1);
 
         // initialize topics
         if (loadPhase) {
@@ -222,7 +222,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the other KStream
      */
     public void kStreamKStreamJoin(String kStreamTopic1, String kStreamTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch(numRecords);
+        CountDownLatch latch = new CountDownLatch(1);
 
         // initialize topics
         if (loadPhase) {
@@ -246,7 +246,7 @@ public class SimpleBenchmark {
      * KTable record joins to exactly one element in the other KTable
      */
     public void kTableKTableJoin(String kTableTopic1, String kTableTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch(numRecords);
+        CountDownLatch latch = new CountDownLatch(1);
 
         // initialize topics
         if (loadPhase) {
@@ -640,14 +640,16 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
-    private class CountDownAction<K, V> implements ForeachAction<K, V> {
+    private class CountDownAction implements ForeachAction<Integer, byte[]> {
         private CountDownLatch latch;
         CountDownAction(final CountDownLatch latch) {
             this.latch = latch;
         }
         @Override
-        public void apply(K key, V value) {
-            this.latch.countDown();
+        public void apply(Integer key, byte[] value) {
+            if (key.compareTo(endKey) >= 0) {
+                this.latch.countDown();
+            }
         }
     }
 
