@@ -117,7 +117,7 @@ public class SyncGroupRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
                 return new SyncGroupResponse(
-                        Errors.forException(e).code(),
+                        Errors.forException(e),
                         ByteBuffer.wrap(new byte[]{}));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

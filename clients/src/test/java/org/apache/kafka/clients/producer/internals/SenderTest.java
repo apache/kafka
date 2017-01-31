@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -99,7 +99,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
-        client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
+        client.respond(produceResponse(tp, offset, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
         sender.run(time.milliseconds());
@@ -114,9 +114,9 @@ public class SenderTest {
     public void testQuotaMetrics() throws Exception {
         final long offset = 0;
         for (int i = 1; i <= 3; i++) {
-            Future<RecordMetadata> future = accumulator.append(tp, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+            accumulator.append(tp, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT);
             sender.run(time.milliseconds()); // send produce request
-            client.respond(produceResponse(tp, offset, Errors.NONE.code(), 100 * i));
+            client.respond(produceResponse(tp, offset, Errors.NONE, 100 * i));
             sender.run(time.milliseconds());
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
@@ -158,7 +158,7 @@ public class SenderTest {
             sender.run(time.milliseconds()); // resend
             assertEquals(1, client.inFlightRequestCount());
             long offset = 0;
-            client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
+            client.respond(produceResponse(tp, offset, Errors.NONE, 0));
             sender.run(time.milliseconds());
             assertTrue("Request should have retried and completed", future.isDone());
             assertEquals(offset, future.get().offset());
@@ -239,7 +239,7 @@ public class SenderTest {
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
         metadata.update(cluster, time.milliseconds());
         sender.run(time.milliseconds());  // send produce request
-        client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
+        client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
         sender.run(time.milliseconds());
@@ -254,7 +254,7 @@ public class SenderTest {
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
         metadata.update(cluster, time.milliseconds());
         sender.run(time.milliseconds());  // send produce request
-        client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
+        client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
         sender.run(time.milliseconds());
@@ -271,9 +271,8 @@ public class SenderTest {
         }
     }
 
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, int error, int throttleTimeMs) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.forCode((short) error),
-                offset, Record.NO_TIMESTAMP);
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, Record.NO_TIMESTAMP);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }

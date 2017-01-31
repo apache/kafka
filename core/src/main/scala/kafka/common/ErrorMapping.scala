@@ -30,14 +30,14 @@ import scala.Predef._
 object ErrorMapping {
   val EmptyByteBuffer = ByteBuffer.allocate(0)
 
-  val UnknownCode : Short = -1
-  val NoError : Short = 0
-  val OffsetOutOfRangeCode : Short = 1
-  val InvalidMessageCode : Short = 2
-  val UnknownTopicOrPartitionCode : Short = 3
-  val InvalidFetchSizeCode  : Short = 4
-  val LeaderNotAvailableCode : Short = 5
-  val NotLeaderForPartitionCode : Short = 6
+  val UnknownCode: Short = -1
+  val NoError: Short = 0
+  val OffsetOutOfRangeCode: Short = 1
+  val InvalidMessageCode: Short = 2
+  val UnknownTopicOrPartitionCode: Short = 3
+  val InvalidFetchSizeCode: Short = 4
+  val LeaderNotAvailableCode: Short = 5
+  val NotLeaderForPartitionCode: Short = 6
   val RequestTimedOutCode: Short = 7
   val BrokerNotAvailableCode: Short = 8
   val ReplicaNotAvailableCode: Short = 9
@@ -48,9 +48,9 @@ object ErrorMapping {
   val OffsetsLoadInProgressCode: Short = 14
   val ConsumerCoordinatorNotAvailableCode: Short = 15
   val NotCoordinatorForConsumerCode: Short = 16
-  val InvalidTopicCode : Short = 17
+  val InvalidTopicCode: Short = 17
   val MessageSetSizeTooLargeCode: Short = 18
-  val NotEnoughReplicasCode : Short = 19
+  val NotEnoughReplicasCode: Short = 19
   val NotEnoughReplicasAfterAppendCode: Short = 20
   // 21: InvalidRequiredAcks
   // 22: IllegalConsumerGeneration

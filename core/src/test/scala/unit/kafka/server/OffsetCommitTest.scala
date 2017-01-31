@@ -86,13 +86,13 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val commitRequest = OffsetCommitRequest(group, immutable.Map(topicAndPartition -> OffsetAndMetadata(offset = 42L)))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(topicAndPartition).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(topicAndPartition).get)
 
     // Fetch it and verify
     val fetchRequest = OffsetFetchRequest(group, Seq(topicAndPartition))
     val fetchResponse = simpleConsumer.fetchOffsets(fetchRequest)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(topicAndPartition).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(topicAndPartition).get.error)
     assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(topicAndPartition).get.metadata)
     assertEquals(42L, fetchResponse.requestInfo.get(topicAndPartition).get.offset)
 
@@ -103,13 +103,13 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     )))
     val commitResponse1 = simpleConsumer.commitOffsets(commitRequest1)
 
-    assertEquals(Errors.NONE.code, commitResponse1.commitStatus.get(topicAndPartition).get)
+    assertEquals(Errors.NONE, commitResponse1.commitStatus.get(topicAndPartition).get)
 
     // Fetch it and verify
     val fetchRequest1 = OffsetFetchRequest(group, Seq(topicAndPartition))
     val fetchResponse1 = simpleConsumer.fetchOffsets(fetchRequest1)
 
-    assertEquals(Errors.NONE.code, fetchResponse1.requestInfo.get(topicAndPartition).get.error)
+    assertEquals(Errors.NONE, fetchResponse1.requestInfo.get(topicAndPartition).get.error)
     assertEquals("some metadata", fetchResponse1.requestInfo.get(topicAndPartition).get.metadata)
     assertEquals(100L, fetchResponse1.requestInfo.get(topicAndPartition).get.offset)
 
@@ -142,10 +142,10 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       TopicAndPartition(topic2, 1) -> OffsetAndMetadata(offset=45L)
     ))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic3, 0)).get)
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic2, 1)).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(TopicAndPartition(topic3, 0)).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(TopicAndPartition(topic2, 1)).get)
 
     val fetchRequest = OffsetFetchRequest(group, Seq(
       TopicAndPartition(topic1, 0),
@@ -158,19 +158,19 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     ))
     val fetchResponse = simpleConsumer.fetchOffsets(fetchRequest)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.error)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.error)
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.error)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.error)
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.error)
     assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.error)
     assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get)
 
-    assertEquals(Errors.NONE.code, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
+    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
     assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get)
 
     assertEquals("metadata one", fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.metadata)
@@ -205,7 +205,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     )))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(topicAndPartition).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(topicAndPartition).get)
 
     val commitRequest1 = OffsetCommitRequest(group, immutable.Map(topicAndPartition -> OffsetAndMetadata(
       offset=42L,
@@ -213,7 +213,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     )))
     val commitResponse1 = simpleConsumer.commitOffsets(commitRequest1)
 
-    assertEquals(Errors.OFFSET_METADATA_TOO_LARGE.code, commitResponse1.commitStatus.get(topicAndPartition).get)
+    assertEquals(Errors.OFFSET_METADATA_TOO_LARGE, commitResponse1.commitStatus.get(topicAndPartition).get)
   }
 
   @Test
@@ -232,7 +232,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata")),
       versionId = 0
     )
-    assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // committed offset should exist with fetch version 0
@@ -248,7 +248,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(2L, "metadata", -1L)),
       versionId = 1
     )
-    assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest1).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest1).commitStatus.get(topicPartition).get)
     Thread.sleep(retentionCheckInterval * 2)
     assertEquals(2L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
@@ -259,7 +259,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", Time.SYSTEM.milliseconds - 2*24*60*60*1000L)),
       versionId = 1
     )
-    assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest2).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest2).commitStatus.get(topicPartition).get)
     Thread.sleep(retentionCheckInterval * 2)
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
@@ -271,7 +271,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       versionId = 2,
       retentionMs = 1000 * 60 * 60L
     )
-    assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest3).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest3).commitStatus.get(topicPartition).get)
     Thread.sleep(retentionCheckInterval * 2)
     assertEquals(4L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
@@ -283,7 +283,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
       versionId = 2,
       retentionMs = 0L
     )
-    assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest4).commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest4).commitStatus.get(topicPartition).get)
     Thread.sleep(retentionCheckInterval * 2)
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
@@ -303,8 +303,8 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     ))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
   }
 
   @Test
@@ -317,7 +317,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val commitRequest = OffsetCommitRequest(group, immutable.Map(topicPartition -> OffsetAndMetadata(offset = 42L)))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
-    assertEquals(Errors.NONE.code, commitResponse.commitStatus.get(topicPartition).get)
+    assertEquals(Errors.NONE, commitResponse.commitStatus.get(topicPartition).get)
 
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
