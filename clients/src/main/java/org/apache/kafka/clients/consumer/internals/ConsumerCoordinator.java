@@ -100,7 +100,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                String metricGrpPrefix,
                                Time time,
                                long retryBackoffMs,
-                               OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
@@ -117,7 +116,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
-        this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
+        this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
@@ -355,13 +354,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!assignedTopics.containsAll(allSubscribedTopics)) {
             Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
             notAssignedTopics.removeAll(assignedTopics);
-            log.warn("The following subscribed topics are not assigned to any members in the group {} : {} ", groupId, notAssignedTopics);
+            log.warn("The following subscribed topics are not assigned to any members in the group {} : {} ", groupId,
+                    notAssignedTopics);
         }
 
         if (!allSubscribedTopics.containsAll(assignedTopics)) {
             Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
             newlyAddedTopics.removeAll(allSubscribedTopics);
-            log.info("The following not-subscribed topics are assigned to group {}, and their metadata will be fetched from the brokers : {}", groupId, newlyAddedTopics);
+            log.info("The following not-subscribed topics are assigned to group {}, and their metadata will be " +
+                    "fetched from the brokers : {}", groupId, newlyAddedTopics);
 
             allSubscribedTopics.addAll(assignedTopics);
             this.subscriptions.groupSubscribe(allSubscribedTopics);
@@ -487,7 +488,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
@@ -612,15 +612,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void doAutoCommitOffsetsAsync() {
-        commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+        log.debug("Sending asynchronous auto-commit of offsets {} for group {}", allConsumedOffsets, groupId);
+
+        commitOffsetsAsync(allConsumedOffsets, new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                 if (exception != null) {
-                    log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
+                    log.warn("Auto-commit of offsets {} failed for group {}: {}", offsets, groupId,
+                            exception.getMessage());
                     if (exception instanceof RetriableException)
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
                 } else {
-                    log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
+                    log.debug("Completed auto-commit of offsets {} for group {}", offsets, groupId);
                 }
             }
         });
@@ -628,25 +632,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void maybeAutoCommitOffsetsSync(long timeoutMs) {
         if (autoCommitEnabled) {
+            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
             try {
-                if (!commitOffsetsSync(subscriptions.allConsumed(), timeoutMs))
-                    log.debug("Automatic commit of offsets {} for group {} timed out before completion", subscriptions.allConsumed(), groupId);
+                log.debug("Sending synchronous auto-commit of offsets {} for group {}", allConsumedOffsets, groupId);
+                if (!commitOffsetsSync(allConsumedOffsets, timeoutMs))
+                    log.debug("Auto-commit of offsets {} for group {} timed out before completion",
+                            allConsumedOffsets, groupId);
             } catch (WakeupException | InterruptException e) {
-                log.debug("Automatic commit of offsets {} for group {} was interrupted before completion", subscriptions.allConsumed(), groupId);
+                log.debug("Auto-commit of offsets {} for group {} was interrupted before completion",
+                        allConsumedOffsets, groupId);
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto offset commit failed for group {}: {}", groupId, e.getMessage());
+                log.warn("Auto-commit of offsets {} failed for group {}: {}", allConsumedOffsets, groupId,
+                        e.getMessage());
             }
         }
     }
 
-    public static class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             if (exception != null)
-                log.error("Offset commit failed.", exception);
+                log.error("Offset commit with offsets {} failed for group {}", offsets, groupId, exception);
         }
     }
 
@@ -694,7 +703,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         setMemberId(generation.memberId).
                         setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
 
-        log.trace("Sending offset-commit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
+        log.trace("Sending OffsetCommit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
         return client.send(coordinator, builder)
                 .compose(new OffsetCommitResponseHandler(offsets));
@@ -704,7 +713,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        public OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
             this.offsets = offsets;
         }
 

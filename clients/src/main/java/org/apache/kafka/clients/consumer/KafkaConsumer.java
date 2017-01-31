@@ -78,8 +78,8 @@ import java.util.regex.Pattern;
  * <h3>Cross-Version Compatibility</h3>
  * This client can communicate with brokers that are version 0.10.0 or newer. Older or newer brokers may not support
  * certain features. For example, 0.10.0 brokers do not support offsetsForTimes, because this feature was added
- * in version 0.10.1. You will receive an UnsupportedVersionException when invoking an API that is not available on the
- * running broker version.
+ * in version 0.10.1. You will receive an {@link org.apache.kafka.common.errors.UnsupportedVersionException}
+ * when invoking an API that is not available on the running broker version.
  * <p>
  *
  * <h3>Offsets and Consumer Position</h3>
@@ -685,7 +685,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricGrpPrefix,
                     this.time,
                     retryBackoffMs,
-                    new ConsumerCoordinator.DefaultOffsetCommitCallback(),
                     config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
                     config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                     this.interceptors,
@@ -1443,7 +1442,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws IllegalArgumentException if the target timestamp is negative.
-     * @throws UnsupportedVersionException if the broker does not support looking up the offsets by timestamp.
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
+     *         the offsets by timestamp.
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {

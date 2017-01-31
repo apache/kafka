@@ -112,9 +112,8 @@ public class ConsumerCoordinatorTest {
     private Metrics metrics;
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
-    private MockCommitCallback defaultOffsetCommitCallback;
+    private MockCommitCallback mockOffsetCommitCallback;
     private ConsumerCoordinator coordinator;
-
 
     @Before
     public void setup() {
@@ -126,7 +125,7 @@ public class ConsumerCoordinatorTest {
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
-        this.defaultOffsetCommitCallback = new MockCommitCallback();
+        this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
 
         client.setNode(node);
@@ -1010,14 +1009,14 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCommitOffsetAsyncWithDefaultCallback() {
-        int invokedBeforeTest = defaultOffsetCommitCallback.invoked;
+        int invokedBeforeTest = mockOffsetCommitCallback.invoked;
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE.code())));
-        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), null);
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), mockOffsetCommitCallback);
         coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
-        assertNull(defaultOffsetCommitCallback.exception);
+        assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
+        assertNull(mockOffsetCommitCallback.exception);
     }
 
     @Test
@@ -1059,14 +1058,14 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCommitOffsetAsyncFailedWithDefaultCallback() {
-        int invokedBeforeTest = defaultOffsetCommitCallback.invoked;
+        int invokedBeforeTest = mockOffsetCommitCallback.invoked;
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorReady();
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code())));
-        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), null);
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), mockOffsetCommitCallback);
         coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
-        assertTrue(defaultOffsetCommitCallback.exception instanceof RetriableCommitFailedException);
+        assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
+        assertTrue(mockOffsetCommitCallback.exception instanceof RetriableCommitFailedException);
     }
 
     @Test
@@ -1220,12 +1219,12 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCommitAsyncNegativeOffset() {
-        int invokedBeforeTest = defaultOffsetCommitCallback.invoked;
+        int invokedBeforeTest = mockOffsetCommitCallback.invoked;
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
-        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(-1L)), null);
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(-1L)), mockOffsetCommitCallback);
         coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
-        assertTrue(defaultOffsetCommitCallback.exception instanceof IllegalArgumentException);
+        assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
+        assertTrue(mockOffsetCommitCallback.exception instanceof IllegalArgumentException);
     }
 
     @Test
@@ -1531,7 +1530,6 @@ public class ConsumerCoordinatorTest {
                 "consumer" + groupId,
                 time,
                 retryBackoffMs,
-                defaultOffsetCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 null,
