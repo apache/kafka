@@ -58,17 +58,11 @@ class ProduceConsumeValidateTest(Test):
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
             end = int(time.time())
-            # TODO(apurva): This sleep is a hack. The problem is that the
-            # the JmxTool is spawned before the consumer process is fully
-            # initialized. Hence the connection fails. Retries on connection
-            # failures were added to the JmxTool, but unfortunately, it appears
-            # that the exception does not bubble to the top level, rendering
-            # the retry loop useless.
-            #
-            # We can remove this sleep once we figure out a way to do proper
-            # retries in JMXTool.
-            #
-            # This is covered in KAFKA-4620
+            # If `JMXConnectFactory.connect` is invoked during the
+            # initialization of the JMX server, it may fail to throw the
+            # specified IOException back to the calling code. The sleep is a
+            # workaround that should allow initialization to complete before we
+            # try to connect. See KAFKA-4620 for more details.
             time.sleep(1)
             remaining_time = self.consumer_init_timeout_sec - (end - start)
             if remaining_time < 0 :

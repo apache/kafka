@@ -18,7 +18,6 @@
  */
 package kafka.tools
 
-import java.io.IOException
 import java.util.Date
 import java.text.SimpleDateFormat
 import javax.management._
@@ -30,6 +29,12 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
 import kafka.utils.{CommandLineUtils, Exit, Logging}
+
+
+/**
+  * A program for reading JMX metrics from a given endpoint. This tool only works reliably if the JmxServer is fully
+  * initialized prior to invoking the tool. See KAFKA-4620 for details.
+  */
 
 object JmxTool extends Logging {
 
@@ -84,8 +89,8 @@ object JmxTool extends Logging {
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
 
-    var jmxc : JMXConnector = null
-    var mbsc : MBeanServerConnection = null
+    var jmxc: JMXConnector = null
+    var mbsc: MBeanServerConnection = null
     var retries = 0
     val maxNumRetries = 20
     var connected = false
@@ -96,18 +101,18 @@ object JmxTool extends Logging {
         mbsc = jmxc.getMBeanServerConnection()
         connected = true
       } catch {
-        case e : Exception => {
-          System.err.println("Could not connect to JMX url: %s. Exception %s".format(url, e.getMessage))
+        case e : Exception =>
+          System.err.println(s"Could not connect to JMX url: ${url}. Exception ${e.getMessage}.")
+          e.printStackTrace()
           retries += 1
           Thread.sleep(500)
-        }
       }
     }
 
     if (!connected) {
       System.err.println("Could not connect to JMX url %s after %d retries".format(url, maxNumRetries))
       System.err.println("Exiting")
-      System.exit(1)
+      sys.exit(1)
     }
 
     val queries: Iterable[ObjectName] =
