@@ -34,7 +34,7 @@ public class ClientState<T> {
         this(0);
     }
 
-    ClientState(int capacity) {
+    ClientState(final int capacity) {
         this(new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), capacity);
     }
 
@@ -52,7 +52,7 @@ public class ClientState<T> {
                 new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
     }
 
-    public void assign(T taskId, boolean active) {
+    public void assign(final T taskId, final boolean active) {
         if (active) {
             activeTasks.add(taskId);
         } else {

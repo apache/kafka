@@ -149,11 +149,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() throws Exception {
-        final ClientState<TaskId> client1 = createClientWithPreviousActiveTasks(p1, 1);
+        final ClientState<TaskId> client1 = createClient(p1, 1);
         client1.addPreviousStandbyTasks(Utils.mkSet(task02));
-        final ClientState<TaskId> client2 = createClientWithPreviousActiveTasks(p2, 1);
+        final ClientState<TaskId> client2 = createClient(p2, 1);
         client2.addPreviousStandbyTasks(Utils.mkSet(task01));
-        final ClientState<TaskId> client3 = createClientWithPreviousActiveTasks(p3, 1);
+        final ClientState<TaskId> client3 = createClient(p3, 1);
         client3.addPreviousStandbyTasks(Utils.mkSet(task00));
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
@@ -212,7 +212,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotAssignStandbyTaskReplicasWhenNoClientHasCapacityLeftOver() throws Exception {
+    public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() throws Exception {
         createClient(p1, 1);
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00);
         taskAssignor.assign(1);
@@ -401,6 +401,15 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
     }
 
+    @Test
+    public void shouldRebalanceTasksToClientsBasedOnCapacity() throws Exception {
+        createClientWithPreviousActiveTasks(p2, 1, task00, task03, task02);
+        createClient(p3, 2);
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task03);
+        taskAssignor.assign(0);
+        assertThat(clients.get(p2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(p3).assignedTaskCount(), equalTo(2));
+    }
 
     @Test
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() throws Exception {

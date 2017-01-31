@@ -42,7 +42,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         this.clients = clients;
         this.taskIds = taskIds;
         this.availableCapacity = sumCapacity(clients.values());
-        taskPairs = new TaskPairs(taskIds.size() * (taskIds.size() - 1) * 2);
+        taskPairs = new TaskPairs(taskIds.size() * (taskIds.size() - 1) / 2);
         mapPreviousTaskAssignment(clients);
         this.hasNewTasks = !previousActiveTaskAssignment.keySet().containsAll(taskIds);
     }
@@ -53,14 +53,18 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         assignStandby(numStandbyReplicas);
     }
 
-    // Visible for testing
-    void assignStandby(final int numStandbyReplicas) {
-        for (int i = 0; i < numStandbyReplicas; i++) {
-            for (final TaskId taskId : taskIds) {
+    private void assignStandby(final int numStandbyReplicas) {
+        for (final TaskId taskId : taskIds) {
+            for (int i = 0; i < numStandbyReplicas; i++) {
                 final Set<ID> ids = findClientsWithoutAssignedTask(taskId);
                 if (ids.isEmpty()) {
-                    log.warn("Unable to assign replica for task [{}]", taskId);
-                    continue;
+                    log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
+                                     "There is not enough available capacity. You should " +
+                                     "increase the number of threads and/or application instances " +
+                                     "to maintain the requested number of standby replicas.",
+                             numStandbyReplicas - i,
+                             numStandbyReplicas, taskId);
+                    break;
                 }
                 assign(taskId, ids, false);
             }
@@ -129,13 +133,12 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private boolean shouldBalanceLoad(final ClientState<TaskId> client) {
         return !hasNewTasks
                 && client.reachedCapacity()
-                && availableCapacity <= taskIds.size()
-                && hasClientsWithZeroTasks();
+                && hasClientsWithMoreAvailableCapacity(client);
     }
 
-    private boolean hasClientsWithZeroTasks() {
+    private boolean hasClientsWithMoreAvailableCapacity(final ClientState<TaskId> client) {
         for (ClientState<TaskId> clientState : clients.values()) {
-            if (clientState.assignedTaskCount() == 0) {
+            if (clientState.hasMoreAvailableCapacityThan(client)) {
                 return true;
             }
         }
