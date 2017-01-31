@@ -211,7 +211,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     if (remainingMs <= 0)
                         break;
 
-                    log.debug("Coordinator discover failed for group {}, refresh metadata and try again", groupId);
+                    log.debug("Coordinator discovery failed for group {}, refreshing metadata", groupId);
                     client.awaitMetadataUpdate(remainingMs);
                 } else
                     throw future.exception();
@@ -237,7 +237,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (node == null) {
                 // TODO: If there are no brokers left, perhaps we should use the bootstrap set
                 // from configuration?
-                log.debug("No broker available to send group coordinator request for group {}", groupId);
+                log.debug("No broker available to send GroupCoordinator request for group {}", groupId);
                 return RequestFuture.noBrokersAvailable();
             } else
                 findCoordinatorFuture = sendGroupCoordinatorRequest(node);
@@ -421,7 +421,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             Errors error = Errors.forCode(joinResponse.errorCode());
             if (error == Errors.NONE) {
-                log.debug("Received successful join group response for group {}: {}", groupId, joinResponse);
+                log.debug("Received successful JoinGroup response for group {}: {}", groupId, joinResponse);
                 sensors.joinLatency.record(response.requestLatencyMs());
 
                 synchronized (AbstractCoordinator.this) {
@@ -713,7 +713,7 @@ public abstract class AbstractCoordinator implements Closeable {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
             Errors error = Errors.forCode(heartbeatResponse.errorCode());
             if (error == Errors.NONE) {
-                log.debug("Received successful heartbeat response for group {}", groupId);
+                log.debug("Received successful Heartbeat response for group {}", groupId);
                 future.complete(null);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR_FOR_GROUP) {

@@ -613,17 +613,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void doAutoCommitOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
-        log.debug("Sending asynchronous auto commit of offsets {} for group {}", allConsumedOffsets, groupId);
+        log.debug("Sending asynchronous auto-commit of offsets {} for group {}", allConsumedOffsets, groupId);
 
         commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                 if (exception != null) {
-                    log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
+                    log.warn("Auto-commit of offsets {} failed for group {}: {}", offsets, groupId,
+                            exception.getMessage());
                     if (exception instanceof RetriableException)
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
                 } else {
-                    log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
+                    log.debug("Completed auto-commit of offsets {} for group {}", offsets, groupId);
                 }
             }
         });
@@ -633,18 +634,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
             try {
-                log.debug("Sending synchronous auto commit of offsets {} for group {}", allConsumedOffsets, groupId);
+                log.debug("Sending synchronous auto-commit of offsets {} for group {}", allConsumedOffsets, groupId);
                 if (!commitOffsetsSync(allConsumedOffsets, timeoutMs))
-                    log.debug("Automatic commit of offsets {} for group {} timed out before completion",
+                    log.debug("Auto-commit of offsets {} for group {} timed out before completion",
                             allConsumedOffsets, groupId);
             } catch (WakeupException | InterruptException e) {
-                log.debug("Automatic commit of offsets {} for group {} was interrupted before completion",
+                log.debug("Auto-commit of offsets {} for group {} was interrupted before completion",
                         allConsumedOffsets, groupId);
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto offset commit failed for group {}: {}", groupId, e.getMessage());
+                log.warn("Auto-commit of offsets {} failed for group {}: {}", allConsumedOffsets, groupId,
+                        e.getMessage());
             }
         }
     }
