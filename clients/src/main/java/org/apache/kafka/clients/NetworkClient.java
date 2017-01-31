@@ -439,7 +439,11 @@ public class NetworkClient implements KafkaClient {
             }
         }
 
-        log.trace("Found least loaded node {}", found);
+        if (found != null)
+            log.trace("Found least loaded node {}", found);
+        else
+            log.trace("Least loaded node selection failed to find an available node");
+
         return found;
     }
 
