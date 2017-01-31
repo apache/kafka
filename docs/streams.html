@@ -474,16 +474,11 @@
 
         <h3><a id="streams_upgrade_1020" href="#upgrade_1020">Upgrading a Kafka Streams Application</a></h3>
 
+
         <h5>Upgrading 0.10.1.x to 0.10.2.0</h5>
-        <ul>
-            <li> You need to recompile your code. Just swapping the jar file will not work and will break your application. </li>
-            <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
-            <li> <code>KTable#through()</code> always requires a store name. </li>
-            <li> If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
-            <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
-            <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
-                 A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
-        </ul>
+        <p>
+        See <a href="../#upgrade_1020_streams">Upgrade Section</a> for details.
+        </p>
 
         <h3><a id="streams_api_changes" href="#api_changes">Streams API changes in 0.10.2.0</a></h3>
         <li> New methods in <code>KafkaStreams</code>:
@@ -525,6 +520,11 @@
             <ul>
                 <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
                 <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+            </ul>
+        </li>
+        <li> Aligned <code>null</code>-key handling for <code>KTable</code> joins:
+            <ul>
+                <li> like all other KTable operations, <code>KTable-KTable</code> joins do not throw an exception on <code>null</code> key records anymore, but drop those records silently </li>
             </ul>
         </li>
         <li> New window type <em>Session Windows</em>:
