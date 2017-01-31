@@ -33,6 +33,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsCollectionContaining.hasItems;
 import static org.hamcrest.core.IsNot.not;
+import static org.junit.Assert.assertTrue;
 
 public class StickyTaskAssignorTest {
 
@@ -191,11 +192,24 @@ public class StickyTaskAssignorTest {
         taskAssignor.assign(1);
 
         assertThat(clients.get(p1).standbyTasks(), not(hasItems(task00)));
+        assertTrue(clients.get(p1).standbyTasks().size() <= 2);
         assertThat(clients.get(p2).standbyTasks(), not(hasItems(task01)));
+        assertTrue(clients.get(p2).standbyTasks().size() <= 2);
         assertThat(clients.get(p3).standbyTasks(), not(hasItems(task02)));
+        assertTrue(clients.get(p3).standbyTasks().size() <= 2);
         assertThat(clients.get(p4).standbyTasks(), not(hasItems(task03)));
+        assertTrue(clients.get(p4).standbyTasks().size() <= 2);
+
+        int nonEmptyStandbyTaskCount = 0;
+        for (final Integer client : clients.keySet()) {
+            nonEmptyStandbyTaskCount += clients.get(client).standbyTasks().isEmpty() ? 0 : 1;
+        }
+
+        assertTrue(nonEmptyStandbyTaskCount >= 3);
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
+
+
 
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() throws Exception {
