@@ -92,7 +92,6 @@ class KafkaRequestHandlerPool(val brokerId: Int,
     for (handler <- runnables)
       handler.shutdown
     for (thread <- threads)
-    for (thread <- threads)
       thread.join
     info("shut down completely")
   }

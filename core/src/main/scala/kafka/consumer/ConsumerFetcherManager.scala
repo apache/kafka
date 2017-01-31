@@ -19,7 +19,6 @@ package kafka.consumer
 
 import kafka.server.{AbstractFetcherManager, AbstractFetcherThread, BrokerAndInitialOffset}
 import kafka.cluster.{BrokerEndPoint, Cluster}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
@@ -100,7 +99,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           topicPartition -> BrokerAndInitialOffset(broker, partitionMap(topicPartition).getFetchOffset())}
         )
       } catch {
-        case fee: FatalExitError => throw fee
+        case e: FatalExitError => throw e
         case t: Throwable =>
           if (!isRunning.get())
             throw t /* If this thread is stopped, propagate this exception to kill the thread. */
