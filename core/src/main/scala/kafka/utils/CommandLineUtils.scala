@@ -63,7 +63,7 @@ object CommandLineUtils extends Logging {
     val splits = args.map(_ split "=").filterNot(_.length == 0)
 
     val props = new Properties
-    for(a <- splits) {
+    for (a <- splits) {
       if (a.length == 1) {
         if (acceptMissingValue) props.put(a(0), "")
         else throw new IllegalArgumentException(s"Missing value for key ${a(0)}")

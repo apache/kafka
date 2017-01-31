@@ -38,7 +38,7 @@ class KafkaRequestHandler(id: Int,
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
 
   def run() {
-    while(true) {
+    while (true) {
       try {
         var req : RequestChannel.Request = null
         while (req == null) {
@@ -52,7 +52,7 @@ class KafkaRequestHandler(id: Int,
           aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
         }
 
-        if(req eq RequestChannel.AllDone) {
+        if (req eq RequestChannel.AllDone) {
           debug("Kafka request handler %d on broker %d received shut down command".format(
             id, brokerId))
           return
@@ -89,9 +89,10 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   def shutdown() {
     info("shutting down")
-    for(handler <- runnables)
+    for (handler <- runnables)
       handler.shutdown
-    for(thread <- threads)
+    for (thread <- threads)
+    for (thread <- threads)
       thread.join
     info("shut down completely")
   }

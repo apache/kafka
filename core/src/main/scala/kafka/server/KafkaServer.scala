@@ -571,7 +571,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     try {
       info("shutting down")
 
-      if(isStartingUp.get)
+      if (isStartingUp.get)
         throw new IllegalStateException("Kafka server is still starting up, cannot shut down!")
 
       val canShutdown = isShuttingDown.compareAndSet(false, true)
