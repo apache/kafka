@@ -58,7 +58,7 @@ public class TopologyBuilderTest {
 
 
     @Test
-    public void testAddSourceWithAutoOffestReset() {
+    public void shouldAddSourceWithOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         final String earliestTopic = "earliestTopic";
@@ -73,7 +73,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void testAddSourcePatternWithAutoOffestReset() {
+    public void shouldAddSourcePatternWithOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
         
         final String earliestTopicPattern = "earliest.*Topic";
@@ -87,14 +87,15 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void testAddSourceNoAutoOffsetReset() {
+    public void shouldAddSourceWithoutOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
-        Serde<String> stringSerde = Serdes.String();
+        final Serde<String> stringSerde = Serdes.String();
+
+        final Pattern expectedPattern = Pattern.compile("test-topic");
 
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
 
 
-        Pattern expectedPattern = Pattern.compile("test-topic");
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
 
@@ -103,14 +104,15 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void testAddPatternSourceNoAutoOffsetReset() {
+    public void shouldAddPatternSourceWithoutOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
-        Serde<String> stringSerde = Serdes.String();
+        final Serde<String> stringSerde = Serdes.String();
 
+        final Pattern expectedPattern = Pattern.compile("test-.*");
+        
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
 
-        Pattern expectedPattern = Pattern.compile("test-.*");
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
 
@@ -119,18 +121,18 @@ public class TopologyBuilderTest {
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void testAddSourceAutoOffsetResetNoTopics() {
+    public void shouldNotAllowOffsetResetSourceWithoutTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
-        Serde<String> stringSerde = Serdes.String();
+        final Serde<String> stringSerde = Serdes.String();
 
         builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
         fail("Should throw TopologyBuilderException with no topics");
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void testAddSourceAutoOffsetResetSameSource() {
+    public void shouldNotAllowOffsetResetSourceWithRepeatedSourceName() {
         final TopologyBuilder builder = new TopologyBuilder();
-        Serde<String> stringSerde = Serdes.String();
+        final Serde<String> stringSerde = Serdes.String();
 
         builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
         builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
