@@ -474,8 +474,7 @@
 
         <h3><a id="streams_upgrade_1020" href="#upgrade_1020">Upgrading a Kafka Streams Application</a></h3>
 
-
-        <h5>Upgrading 0.10.1.x to 0.10.2.0</h5>
+        <h4>Upgrading from 0.10.1.x to 0.10.2.0</h4>
         <p>
         See <a href="../#upgrade_1020_streams">Upgrade Section</a> for details.
         </p>
@@ -492,11 +491,11 @@
         </li>
         <li> Parameter updates in <code>StreamsConfig</code>:
             <ul>
-                <li> parameter "zookeeper.connect" got deprecated </li>
+                <li> parameter "zookeeper.connect" was deprecated </li>
                 <li> added many new parameters for metrics, security, and client configurations </li>
             </ul>
         </li>
-        <li> Changes in <code>StreamsMetics</code> interface:
+        <li> Changes in <code>StreamsMetrics</code> interface:
             <ul>
                 <li> removed methods: <code>#addLatencySensor()</code> </li>
                 <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
@@ -505,14 +504,14 @@
         </li>
         <li> New methods in <code>TopologyBuilder</code>:
             <ul>
-                <li> added overloads for <code>#addSource()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
+                <li> added overloads for <code>#addSource()</code> that allow to define a <code>"auto.offset.reset"</code> policy per source node </li>
                 <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
             </ul>
         </li>
         <li> New methods in <code>KStreamBuilder</code>:
             <ul>
-                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to specify stream specific <code>"auto.offset.reset"</code> policy </li>
-                <li> <code>#table()</code> always require to specify a store name </li>
+                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>"auto.offset.reset"</code> policy per input stream/table </li>
+                <li> <code>#table()</code> always requires to specify a store name </li>
                 <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
             </ul>
         </li>
@@ -536,7 +535,7 @@
         </li>
         <li> Changes to <code>TimestampExtractor</code>:
             <ul>
-                <li> method <code>#extract()</code> got second parameter </li>
+                <li> method <code>#extract()</code> has a second parameter now </li>
                 <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code> </li>
                 <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
             </ul>
