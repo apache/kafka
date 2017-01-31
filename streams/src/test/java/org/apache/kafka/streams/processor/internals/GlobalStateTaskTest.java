@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
@@ -38,11 +39,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class GlobalStateTaskTest {
 
+    private final MockTime time = new MockTime(0);
+    private final int checkpointInterval = 10;
     private Map<TopicPartition, Long> offsets;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManagerStub stateMgr;
@@ -83,7 +88,8 @@ public class GlobalStateTaskTest {
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr);
+        final Checkpointer checkpointer = new Checkpointer(time, stateMgr, checkpointInterval);
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, checkpointer);
     }
 
     @Test
@@ -140,4 +146,17 @@ public class GlobalStateTaskTest {
         assertEquals(expectedOffsets, stateMgr.checkpointedOffsets());
         assertTrue(stateMgr.closed);
     }
+
+    @Test
+    public void shouldCheckpointOffsetsWhenStateIsFlushed() throws Exception {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 102L);
+        expectedOffsets.put(t2, 100L);
+        globalStateTask.initialize();
+        globalStateTask.update(new ConsumerRecord<>("t1", 1, 101, "foo".getBytes(), "foo".getBytes()));
+        time.sleep(checkpointInterval);
+        globalStateTask.flushState();
+        assertThat(stateMgr.checkpointedOffsets(), equalTo(expectedOffsets));
+    }
+
 }

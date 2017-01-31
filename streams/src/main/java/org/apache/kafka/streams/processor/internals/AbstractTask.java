@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -47,6 +48,7 @@ public abstract class AbstractTask {
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
+    protected final Checkpointer checkpointer;
     protected InternalProcessorContext processorContext;
     protected final ThreadCache cache;
     /**
@@ -60,7 +62,9 @@ public abstract class AbstractTask {
                            Consumer<byte[], byte[]> restoreConsumer,
                            boolean isStandby,
                            StateDirectory stateDirectory,
-                           final ThreadCache cache) {
+                           final ThreadCache cache,
+                           final Time time,
+                           final long checkpointInterval) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
@@ -71,7 +75,7 @@ public abstract class AbstractTask {
         // create the processor state manager
         try {
             this.stateMgr = new ProcessorStateManager(id, partitions, restoreConsumer, isStandby, stateDirectory, topology.storeToChangelogTopic());
-
+            this.checkpointer = new Checkpointer(time, stateMgr, checkpointInterval);
         } catch (IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }

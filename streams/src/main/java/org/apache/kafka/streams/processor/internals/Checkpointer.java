@@ -17,25 +17,30 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.common.utils.Time;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
-interface StateManager extends Checkpointable {
-    File baseDir();
+public class Checkpointer {
 
-    void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback);
+    private final Time time;
+    private final Checkpointable checkpointable;
+    private final long checkpointInterval;
+    private long lastCheckpointMs;
 
-    void flush(InternalProcessorContext context);
+    public Checkpointer(final Time time,
+                 final Checkpointable checkpointable,
+                 final long checkpointInterval) {
+        this.time = time;
+        this.checkpointable = checkpointable;
+        this.lastCheckpointMs = time.milliseconds();
+        this.checkpointInterval = checkpointInterval;
+    }
 
-    void close(Map<TopicPartition, Long> offsets) throws IOException;
-
-    StateStore getGlobalStore(final String name);
-
-    StateStore getStore(final String name);
-
-    Map<TopicPartition, Long> checkpointedOffsets();
+    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+        if (checkpointInterval > 0 && time.milliseconds() >= lastCheckpointMs + checkpointInterval) {
+            checkpointable.checkpoint(offsets);
+            lastCheckpointMs = time.milliseconds();
+        }
+    }
 }

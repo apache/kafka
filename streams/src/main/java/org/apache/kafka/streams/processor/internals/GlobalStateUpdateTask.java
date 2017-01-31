@@ -42,6 +42,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
+    private final Checkpointer checkpointer;
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final Map<String, SourceNodeAndDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
@@ -49,11 +50,13 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     public GlobalStateUpdateTask(final ProcessorTopology topology,
                                  final InternalProcessorContext processorContext,
-                                 final GlobalStateManager stateMgr) {
+                                 final GlobalStateManager stateMgr,
+                                 final Checkpointer checkpointer) {
 
         this.topology = topology;
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
+        this.checkpointer = checkpointer;
     }
 
     @SuppressWarnings("unchecked")
@@ -89,6 +92,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     public void flushState() {
         stateMgr.flush(processorContext);
+        checkpointer.checkpoint(offsets);
     }
 
     public void close() throws IOException {
