@@ -433,7 +433,7 @@ public class NetworkClient implements KafkaClient {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;
                 found = node;
-            } else if (log.isTraceEnabled()){
+            } else if (log.isTraceEnabled()) {
                 log.trace("Removing node {} from least loaded node selection: is-blacked-out: {}, in-flight-requests: {}",
                         node, this.connectionStates.isBlackedOut(node.idString(), now), currInflight);
             }
