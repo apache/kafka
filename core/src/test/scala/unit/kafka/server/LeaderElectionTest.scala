@@ -49,6 +49,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val configProps1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, enableControlledShutdown = false)
     val configProps2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, enableControlledShutdown = false)
 
+    configProps1.put("unclean.leader.election.enable", String.valueOf(true))
+    configProps2.put("unclean.leader.election.enable", String.valueOf(true))
+
     // start both servers
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
     val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
