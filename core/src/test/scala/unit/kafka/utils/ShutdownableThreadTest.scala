@@ -19,10 +19,13 @@ package kafka.utils
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.Test
-import org.junit.Assert.{assertTrue, assertEquals}
+import org.junit.{After, Test}
+import org.junit.Assert.{assertEquals, assertTrue}
 
 class ShutdownableThreadTest {
+
+  @After
+  def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
   def testShutdownIfCalledAfterThreadStart(): Unit = {
