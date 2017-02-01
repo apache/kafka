@@ -37,7 +37,7 @@ public class Exit {
     private static final Procedure DEFAULT_EXIT_PROCEDURE = new Procedure() {
         @Override
         public void execute(int statusCode, String message) {
-            Exit.exit(statusCode);
+            System.exit(statusCode);
         }
     };
 
