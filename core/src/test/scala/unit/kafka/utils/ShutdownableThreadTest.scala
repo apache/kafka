@@ -28,13 +28,13 @@ class ShutdownableThreadTest {
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
-  def testShutdownIfCalledAfterThreadStart(): Unit = {
+  def testShutdownWhenCalledAfterThreadStart(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setExitProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
-      // sleep until interrupted to simulate the fact that `System.exit()` never returns
+      // Sleep until interrupted to emulate the fact that `System.exit()` never returns
       Thread.sleep(Long.MaxValue)
-      throw new AssertionError()
+      throw new AssertionError
     }
     val latch = new CountDownLatch(1)
     val thread = new ShutdownableThread("shutdownable-thread-test") {
@@ -52,13 +52,13 @@ class ShutdownableThreadTest {
   }
 
   @Test
-  def testShutdownIfCalledAfterFatalExitExceptionIsThrown(): Unit = {
+  def testShutdownWhenCalledAfterFatalExitExceptionIsThrown(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setExitProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
-      // sleep until interrupted to simulate the fact that `System.exit()` never returns
+      // Sleep until interrupted to simulate the fact that `System.exit()` never returns
       Thread.sleep(Long.MaxValue)
-      throw new AssertionError()
+      throw new AssertionError
     }
 
     val thread = new ShutdownableThread("shutdownable-thread-test") {
