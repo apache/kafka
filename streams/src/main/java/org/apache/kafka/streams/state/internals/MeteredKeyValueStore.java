@@ -35,7 +35,7 @@ import java.util.List;
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
     private final String metricScope;
@@ -129,6 +129,11 @@ public class MeteredKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKey
 
         // register and possibly restore the state from the logs
         metrics.measureLatencyNs(time, initDelegate, this.restoreTime);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
     }
 
     @Override

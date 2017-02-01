@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> {
+class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
     private final ChangeLoggingKeyValueBytesStore innerBytes;
     private final Serde keySerde;
     private final Serde valueSerde;
@@ -58,6 +58,11 @@ class ChangeLoggingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyV
         this.serdes = new StateSerdes<>(innerBytes.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return innerBytes.approximateNumEntries();
     }
 
     @Override

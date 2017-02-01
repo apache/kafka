@@ -30,7 +30,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-class CachingKeyValueStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> implements CachedStateStore<K, V> {
+class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V>, CachedStateStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;

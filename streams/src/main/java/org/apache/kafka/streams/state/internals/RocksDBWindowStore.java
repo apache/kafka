@@ -48,9 +48,7 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         @Override
         public void put(Bytes key, byte[] value, long timestamp) {
-            if (retainDuplicates) {
-                seqnum = (seqnum + 1) & 0x7FFFFFFF;
-            }
+            maybeUpdateSeqnumForDups();
 
             bytesStore.put(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum), value);
         }
@@ -96,9 +94,7 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
     @Override
     public void put(K key, V value, long timestamp) {
-        if (retainDuplicates) {
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
-        }
+        maybeUpdateSeqnumForDups();
 
         bytesStore.put(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes), serdes.rawValue(value));
     }
@@ -107,5 +103,11 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         return new WrappedWindowStoreIterator<>(bytesIterator, serdes);
+    }
+
+    void maybeUpdateSeqnumForDups() {
+        if (retainDuplicates) {
+            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        }
     }
 }

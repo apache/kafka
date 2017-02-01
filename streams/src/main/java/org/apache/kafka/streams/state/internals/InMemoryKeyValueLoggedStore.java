@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class InMemoryKeyValueLoggedStore<K, V> extends WrapperKeyValueStore.AbstractKeyValueStore<K, V> {
+public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
     private final Serde<K> keySerde;
@@ -36,7 +36,7 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrapperKeyValueStore.Abst
     private StoreChangeLogger<K, V> changeLogger;
     private ProcessorContext context;
 
-    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
+    InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
         super(inner);
         this.inner = inner;
         this.keySerde = keySerde;
@@ -66,6 +66,11 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrapperKeyValueStore.Abst
                 }
             });
         }
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
     }
 
     @Override
