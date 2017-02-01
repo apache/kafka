@@ -49,13 +49,13 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
 
 <h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Upgrading a Kafka Streams Application</a></h5>
 <ul>
-    <li> You need to recompile your code. Just swapping the jar file will not work and will break your application. </li>
-    <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
-    <li> <code>KTable#through()</code> always requires a store name. </li>
-    <li> If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
-    <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
     <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
          A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+    <li> You need to recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
+    <li> <code>KTable#through()</code> always requires a store name. </li>
+    <li> If you use a custom (i.e., user implemented) timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
+    <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
 </ul>
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>

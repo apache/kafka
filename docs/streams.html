@@ -491,7 +491,12 @@
         </li>
         <li> Parameter updates in <code>StreamsConfig</code>:
             <ul>
-                <li> parameter "zookeeper.connect" was deprecated </li>
+                <li> parameter <code>zookeeper.connect</code> was deprecated </li>
+                <ul>
+                    <li> a Kafka Streams application does not longer interact with Zookeeper for topic management but uses the new broker admin protocol
+                         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-4+-+Command+line+and+centralized+administrative+operations#KIP-4-Commandlineandcentralizedadministrativeoperations-TopicAdminSchema.1">KIP-4, Section "Topic Admin Schema"</a>) </li>
+                    <li> thus, parameter "zookeeper.connect" is ignored in 0.10.2 and should be removed from <code>StreamsConfig</code> </li>
+                </ul>
                 <li> added many new parameters for metrics, security, and client configurations </li>
             </ul>
         </li>
@@ -504,14 +509,14 @@
         </li>
         <li> New methods in <code>TopologyBuilder</code>:
             <ul>
-                <li> added overloads for <code>#addSource()</code> that allow to define a <code>"auto.offset.reset"</code> policy per source node </li>
+                <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
                 <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
             </ul>
         </li>
         <li> New methods in <code>KStreamBuilder</code>:
             <ul>
-                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>"auto.offset.reset"</code> policy per input stream/table </li>
-                <li> <code>#table()</code> always requires to specify a store name </li>
+                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
+                <li> <code>#table()</code> always requires store name </li>
                 <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
             </ul>
         </li>
@@ -529,7 +534,7 @@
         <li> New window type <em>Session Windows</em>:
             <ul>
                 <li> added class <code>SessionWindows</code> to specify session windows </li>
-                <li> added overlaods for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+                <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
                      to allow session window aggregations </li>
             </ul>
         </li>
@@ -540,7 +545,7 @@
                 <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
             </ul>
         </li>
-        <li> Improved generic types of many DSL interfaces, classes, and methods. </li>
+        <li> Relaxed type constraints of many DSL interfaces, classes, and methods (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-100+-+Relax+Type+constraints+in+Kafka+Streams+API">KIP-100</a>). </li>
     </ul>
 </pre>
 
