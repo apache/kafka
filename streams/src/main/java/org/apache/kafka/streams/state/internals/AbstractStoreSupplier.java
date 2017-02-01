@@ -32,7 +32,12 @@ abstract class AbstractStoreSupplier<K, V, T extends StateStore> implements Stat
     protected final boolean logged;
     protected final Map<String, String> logConfig;
 
-    AbstractStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    AbstractStoreSupplier(final String name,
+                          final Serde<K> keySerde,
+                          final Serde<V> valueSerde,
+                          final Time time,
+                          final boolean logged,
+                          final Map<String, String> logConfig) {
         this.time = time;
         this.name = name;
         this.valueSerde = valueSerde;

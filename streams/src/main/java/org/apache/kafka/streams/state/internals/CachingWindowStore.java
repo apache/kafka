@@ -73,7 +73,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
         this.name = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
 
-        // set cache flush listener
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {

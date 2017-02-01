@@ -93,7 +93,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             T agg = initializer.apply();
 
             try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(key, timestamp - windows.inactivityGap(),
-                                                                                            timestamp + windows.inactivityGap())) {
+                                                                                      timestamp + windows.inactivityGap())) {
                 while (iterator.hasNext()) {
                     final KeyValue<Windowed<K>, T> next = iterator.next();
                     merged.add(next);

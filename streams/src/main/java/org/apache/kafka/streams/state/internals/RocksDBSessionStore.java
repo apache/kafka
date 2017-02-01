@@ -78,10 +78,6 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
         }
     }
 
-    static RocksDBSessionStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner) {
-        return new RocksDBSessionBytesStore(inner);
-    }
-
     @Override
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
