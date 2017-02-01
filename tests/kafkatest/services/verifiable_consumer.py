@@ -136,9 +136,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=DEV_BRANCH, stop_timeout_sec=30):
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO"):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
-        self.log_level = "TRACE"
+        self.log_level = log_level
         
         self.kafka = kafka
         self.topic = topic
