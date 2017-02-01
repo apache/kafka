@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.List;
 
-class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
+class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
 
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -134,10 +134,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
         // if store is open outside as well.
         validateStoreOpen();
 
-        final Bytes binaryKey = Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes));
+        final Bytes keyBytes = WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
-        cache.put(name, binaryKey, entry);
+        cache.put(name, keyBytes, entry);
     }
 
     @Override
@@ -146,11 +146,11 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
         // if store is open outside as well.
         validateStoreOpen();
 
-        Bytes binaryFrom = Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes));
-        Bytes binaryTo = Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes));
+        Bytes fromBytes = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
+        Bytes toBytes = WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes);
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, fromBytes, toBytes);
         return new MergedSortedCacheWindowStoreIterator<>(cacheIterator,
                                                           underlyingIterator,
                                                           new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));

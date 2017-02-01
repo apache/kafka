@@ -55,7 +55,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
             }
 
-            bytesStore.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum)), value);
+            bytesStore.put(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum), value);
         }
 
         @Override
@@ -127,7 +127,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
 
-        bytesStore.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes)), serdes.rawValue(value));
+        bytesStore.put(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
     @Override

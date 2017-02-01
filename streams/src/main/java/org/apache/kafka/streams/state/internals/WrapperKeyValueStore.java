@@ -21,9 +21,9 @@ import org.apache.kafka.streams.state.KeyValueStore;
 /**
  * A {@link KeyValueStore} storage engine wrapper for utilities like logging, caching, and metering.
  */
-interface WrapperKeyValueStore<K, V> extends WrapperStateStore, KeyValueStore<K, V> {
+interface WrapperKeyValueStore<K, V> extends WrappedStateStore, KeyValueStore<K, V> {
 
-    abstract class AbstractKeyValueStore<K, V> extends WrapperStateStore.AbstractStateStore implements WrapperKeyValueStore<K, V> {
+    abstract class AbstractKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements WrapperKeyValueStore<K, V> {
         private final KeyValueStore<?, ?> inner;
 
         AbstractKeyValueStore(KeyValueStore<?, ?> inner) {

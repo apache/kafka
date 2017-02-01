@@ -34,12 +34,12 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes));
+        return WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes);
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        return Bytes.wrap(WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes));
+        return WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes);
     }
 
     @Override

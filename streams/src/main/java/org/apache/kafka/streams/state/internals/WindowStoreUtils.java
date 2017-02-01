@@ -36,18 +36,18 @@ public class WindowStoreUtils {
     static final Serde<byte[]> INNER_VALUE_SERDE = Serdes.ByteArray();
     static final StateSerdes<Bytes, byte[]> INNER_SERDES = new StateSerdes<>("rocksDB-inner", INNER_KEY_SERDE, INNER_VALUE_SERDE);
 
-    static <K> byte[] toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
+    static <K> Bytes toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);
         return toBinaryKey(serializedKey, timestamp, seqnum);
     }
 
-    static byte[] toBinaryKey(byte[] serializedKey, final long timestamp, final int seqnum) {
+    static Bytes toBinaryKey(byte[] serializedKey, final long timestamp, final int seqnum) {
         ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
         buf.put(serializedKey);
         buf.putLong(timestamp);
         buf.putInt(seqnum);
 
-        return buf.array();
+        return Bytes.wrap(buf.array());
     }
 
     static <K> K keyFromBinaryKey(byte[] binaryKey, StateSerdes<K, ?> serdes) {
@@ -58,7 +58,7 @@ public class WindowStoreUtils {
         return serdes.keyFrom(bytes);
     }
 
-    public static Bytes bytesKeyFromBinaryKey(byte[] binaryKey) {
+    static Bytes bytesKeyFromBinaryKey(byte[] binaryKey) {
         byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
 
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);

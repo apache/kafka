@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 
-class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedStateStore implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
+class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
 
     private final SessionStore<Bytes, byte[]> bytesStore;
     private final SessionKeySchema keySchema;

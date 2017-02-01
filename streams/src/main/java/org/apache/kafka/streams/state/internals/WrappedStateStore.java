@@ -34,10 +34,10 @@ interface WrappedStateStore extends StateStore {
      */
     StateStore inner();
 
-    abstract class AbstractWrappedStateStore implements WrappedStateStore {
+    abstract class AbstractStateStore implements WrappedStateStore {
         final StateStore innerState;
 
-        AbstractWrappedStateStore(StateStore inner) {
+        AbstractStateStore(StateStore inner) {
             this.innerState = inner;
         }
 

@@ -34,7 +34,7 @@ abstract class AbstractKeyValueIterator<K, V> implements KeyValueIterator<K, V> 
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
         open = false;
     }
 
