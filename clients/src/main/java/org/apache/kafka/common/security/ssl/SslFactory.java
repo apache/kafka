@@ -21,8 +21,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -31,24 +29,15 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 
 public class SslFactory implements Configurable {
-    private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
-
     private final Mode mode;
     private final String clientAuthConfigOverride;
 
@@ -145,7 +134,7 @@ public class SslFactory implements Configurable {
             String kmfAlgorithm = this.kmfAlgorithm != null ? this.kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
             KeyStore ks = keystore.load();
-            Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
+            Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.getPassword();
             kmf.init(ks, keyPassword.value().toCharArray());
             keyManagers = kmf.getKeyManagers();
         }
@@ -218,135 +207,6 @@ public class SslFactory implements Configurable {
             throw new KafkaException("SSL trust store is specified, but trust store password is not specified.");
         } else if (path != null && password != null) {
             this.truststore = new SecurityStore(type, path, password);
-        }
-    }
-
-    private class SecurityStore {
-        private final String type;
-        private final String path;
-        private final Password password;
-
-        private SecurityStore(String type, String path, Password password) {
-            this.type = type == null ? KeyStore.getDefaultType() : type;
-            this.path = path;
-            this.password = password;
-        }
-
-        private KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
-                KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
-                ks.load(in, password.value().toCharArray());
-                return ks;
-            } finally {
-                if (in != null) in.close();
-            }
-        }
-    }
-
-
-    private class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X509TrustManager {
-        private final SecurityStore trustStore;
-        private TrustManagerFactory tmf;
-        private X509TrustManager trustManager;
-        private long lastReload = 0L;
-        private long minimumDelay = 60 * 1000L;
-
-        public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
-            this.trustStore = trustStore;
-            this.tmf = tmf;
-        }
-
-        public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf, long minimumDelay) {
-            this.trustStore = trustStore;
-            this.tmf = tmf;
-            this.minimumDelay = minimumDelay;
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            reloadTrustManager();
-            trustManager.checkClientTrusted(chain, authType);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            if (trustManager == null) {
-                reloadTrustManager();
-            }
-            trustManager.checkServerTrusted(chain, authType);
-        }
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            reloadTrustManager();
-            return trustManager.getAcceptedIssuers();
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
-            reloadTrustManager();
-            ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, socket);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
-            if (trustManager == null) {
-                reloadTrustManager();
-            }
-            ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, socket);
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
-            reloadTrustManager();
-            ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, sslEngine);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
-            if (trustManager == null) {
-                reloadTrustManager();
-            }
-            ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
-        }
-
-        private void reloadTrustManager() throws KafkaException {
-            try {
-                if (trustManager == null || System.currentTimeMillis() - lastReload > minimumDelay) {
-                    KeyStore ts = trustStore.load();
-
-                    Enumeration<String> alias = ts.aliases();
-                    StringBuilder logMessage = new StringBuilder("Reloaded ").append(mode).append(" trust manager. List of trusted certs: ");
-                    if (alias.hasMoreElements()) {
-                        logMessage.append(alias.nextElement());
-                    }
-                    while (alias.hasMoreElements()) {
-                        logMessage.append(", ").append(alias.nextElement());
-                    }
-                    log.info(logMessage.toString());
-
-                    tmf.init(ts);
-
-                    trustManager = null;
-                    TrustManager[] tms = tmf.getTrustManagers();
-                    for (int i = 0; i < tms.length; i++) {
-                        if (tms[i] instanceof X509TrustManager) {
-                            trustManager = (X509TrustManager) tms[i];
-                        }
-                    }
-
-                    if (trustManager == null) {
-                        throw new NoSuchAlgorithmException("No X509TrustManager in TrustManagerFactory");
-                    }
-
-                    lastReload = System.currentTimeMillis();
-                }
-
-            } catch (Exception ex) {
-                throw new KafkaException(ex);
-            }
         }
     }
 }

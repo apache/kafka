@@ -13,10 +13,18 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
 
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
 import org.junit.Test;
@@ -56,4 +64,42 @@ public class SslFactoryTest {
         assertTrue(engine.getUseClientMode());
     }
 
+    @Test
+    public void testReloadableX509TrustManager() throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Password trustStorePassword = new Password("TrustStorePassword");
+        KeyPair cKP1 = TestSslUtils.generateKeyPair("RSA");
+        X509Certificate cCert1 = TestSslUtils.generateCertificate("CN=localhost, O=client 1", cKP1, 30, "SHA1withRSA");
+        certs.put("client1", cCert1);
+        KeyStore ts = TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+        trustStoreFile.deleteOnExit();
+
+        tmf.init(ts);
+        SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
+
+        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf, 2 * 1000);
+        reloadableX509TrustManager.getAcceptedIssuers();
+
+        // One alias in truststore
+        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
+
+        KeyPair cKP2 = TestSslUtils.generateKeyPair("RSA");
+        X509Certificate cCert2 = TestSslUtils.generateCertificate("CN=localhost, O=client 2", cKP2, 30, "SHA1withRSA");
+        certs.put("client2", cCert2);
+        TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+
+        reloadableX509TrustManager.getAcceptedIssuers();
+
+        // Two aliases in truststore, but not reloaded yet.
+        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
+
+        Thread.sleep(2 * 1000);
+        reloadableX509TrustManager.getAcceptedIssuers();
+
+        // Two aliases in truststore, should have reloaded.
+        assertEquals(2, reloadableX509TrustManager.getTrustKeyStore().size());
+    }
 }

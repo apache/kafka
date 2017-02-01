@@ -150,7 +150,7 @@ public class TestSslUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    public static <T extends Certificate> void createTrustStore(
+    public static <T extends Certificate> KeyStore createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
         try {
@@ -164,6 +164,7 @@ public class TestSslUtils {
             ks.setCertificateEntry(cert.getKey(), cert.getValue());
         }
         saveKeyStore(ks, filename, password);
+        return ks;
     }
 
     private static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,
@@ -228,5 +229,4 @@ public class TestSslUtils {
 
         return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword);
     }
-
 }
