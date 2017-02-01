@@ -133,6 +133,7 @@ public class KafkaStreams {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
     private final StreamsMetadataState streamsMetadataState;
+    private final StreamsKafkaClient streamsKafkaClient;
 
     private final StreamsConfig config;
 
@@ -324,6 +325,7 @@ public class KafkaStreams {
         threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+        streamsKafkaClient = new StreamsKafkaClient(config);
 
         final ProcessorTopology globalTaskTopology = builder.buildGlobalStateTopology();
 
@@ -355,6 +357,7 @@ public class KafkaStreams {
                                           metrics,
                                           time,
                                           streamsMetadataState,
+                                          streamsKafkaClient,
                                           cacheSizeBytes);
             threads[i].setStateListener(new StreamStateListener());
             threadState.put(threads[i].getId(), threads[i].state());
@@ -387,15 +390,8 @@ public class KafkaStreams {
      * @throws StreamsException if brokers have version 0.10.0.x
      */
     private void checkBrokerVersionCompatibility() throws StreamsException {
-        final StreamsKafkaClient client = new StreamsKafkaClient(config);
 
-        client.checkBrokerCompatibility();
-
-        try {
-            client.close();
-        } catch (final IOException e) {
-            log.warn("Could not close StreamKafkaClient.", e);
-        }
+        streamsKafkaClient.checkBrokerCompatibility();
 
     }
 
