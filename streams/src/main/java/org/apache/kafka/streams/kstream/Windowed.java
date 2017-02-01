@@ -25,7 +25,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * If a {@link KStream} gets grouped and aggregated using a window-aggregation the resulting {@link KTable} is a
  * so-called "windowed {@link KTable}" with a combined key type that encodes the corresponding aggregation window and
  * the original record key.
- * Thus, a windowed {@link KTable} has type {@link Windowed &lt;Windowed&lt;K&gt;,V&gt;}
+ * Thus, a windowed {@link KTable} has type {@code <Windowed<K>,V>}.
  *
  * @param <K> type of the key
  * @see KGroupedStream#count(Windows, String)

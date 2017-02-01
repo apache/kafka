@@ -25,7 +25,6 @@ import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
 
 /** DefaultPrincipalBuilder which return transportLayer's peer Principal **/
-
 public class DefaultPrincipalBuilder implements PrincipalBuilder {
 
     public void configure(Map<String, ?> configs) {}

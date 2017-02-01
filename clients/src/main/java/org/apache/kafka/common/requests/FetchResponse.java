@@ -82,6 +82,12 @@ public class FetchResponse extends AbstractResponse {
             this.highWatermark = highWatermark;
             this.records = records;
         }
+
+        @Override
+        public String toString() {
+            return "(errorCode=" + errorCode + ", highWaterMark=" + highWatermark +
+                    ", records=" + records + ")";
+        }
     }
 
     /**

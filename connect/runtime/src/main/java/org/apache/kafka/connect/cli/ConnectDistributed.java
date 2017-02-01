@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
@@ -47,7 +46,6 @@ import java.util.Map;
  * instances.
  * </p>
  */
-@InterfaceStability.Unstable
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 

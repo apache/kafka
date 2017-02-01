@@ -191,7 +191,7 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
     private final Map<TopicPartition, StandbyTask> standbyTasksByPartition;
-    private final Set<TaskId> prevTasks;
+    private final Set<TaskId> prevActiveTasks;
     private final Map<TaskId, StreamTask> suspendedTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
     private final Time time;
@@ -331,7 +331,7 @@ public class StreamThread extends Thread {
         this.standbyTasks = new HashMap<>();
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
-        this.prevTasks = new HashSet<>();
+        this.prevActiveTasks = new HashSet<>();
         this.suspendedTasks = new HashMap<>();
         this.suspendedStandbyTasks = new HashMap<>();
 
@@ -790,8 +790,8 @@ public class StreamThread extends Thread {
     /**
      * Returns ids of tasks that were being executed before the rebalance.
      */
-    public Set<TaskId> prevTasks() {
-        return Collections.unmodifiableSet(prevTasks);
+    public Set<TaskId> prevActiveTasks() {
+        return Collections.unmodifiableSet(prevActiveTasks);
     }
 
     /**
@@ -1019,8 +1019,8 @@ public class StreamThread extends Thread {
         log.info("{} Removing all active tasks [{}]", logPrefix, activeTasks.keySet());
 
         try {
-            prevTasks.clear();
-            prevTasks.addAll(activeTasks.keySet());
+            prevActiveTasks.clear();
+            prevActiveTasks.addAll(activeTasks.keySet());
 
             activeTasks.clear();
             activeTasksByPartition.clear();

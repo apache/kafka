@@ -349,13 +349,7 @@ class LogManager(val logDirs: Array[File],
   /**
    * Get the log if it exists, otherwise return None
    */
-  def getLog(topicPartition: TopicPartition): Option[Log] = {
-    val log = logs.get(topicPartition)
-    if (log == null)
-      None
-    else
-      Some(log)
-  }
+  def getLog(topicPartition: TopicPartition): Option[Log] = Option(logs.get(topicPartition))
 
   /**
    * Create a log for the given topic and the given partition
@@ -363,28 +357,20 @@ class LogManager(val logDirs: Array[File],
    */
   def createLog(topicPartition: TopicPartition, config: LogConfig): Log = {
     logCreationOrDeletionLock synchronized {
-      var log = logs.get(topicPartition)
-      
-      // check if the log has already been created in another thread
-      if(log != null)
-        return log
-      
-      // if not, create it
-      val dataDir = nextLogDir()
-      val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
-      dir.mkdirs()
-      log = new Log(dir, 
-                    config,
-                    recoveryPoint = 0L,
-                    scheduler,
-                    time)
-      logs.put(topicPartition, log)
-      info("Created log for partition [%s,%d] in %s with properties {%s}."
-           .format(topicPartition.topic,
-                   topicPartition.partition,
-                   dataDir.getAbsolutePath,
-                   config.originals.asScala.mkString(", ")))
-      log
+      // create the log if it has not already been created in another thread
+      getLog(topicPartition).getOrElse {
+        val dataDir = nextLogDir()
+        val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
+        dir.mkdirs()
+        val log = new Log(dir, config, recoveryPoint = 0L, scheduler, time)
+        logs.put(topicPartition, log)
+        info("Created log for partition [%s,%d] in %s with properties {%s}."
+          .format(topicPartition.topic,
+            topicPartition.partition,
+            dataDir.getAbsolutePath,
+            config.originals.asScala.mkString(", ")))
+        log
+      }
     }
   }
 

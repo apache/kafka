@@ -19,41 +19,95 @@ import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
+/**
+ * An internal class which represents the API versions supported by a particular node.
+ */
 public class NodeApiVersions {
-    private final Collection<ApiVersion> apiVersions;
+    private static final Short API_NOT_ON_NODE = null;
+    private static final short NODE_TOO_OLD = (short) -1;
+    private static final short NODE_TOO_NEW = (short) -2;
+    private final Collection<ApiVersion> nodeApiVersions;
 
-    // An array of the usable versions of each API, indexed by ApiKeys ID.
+    /**
+     * An array of the usable versions of each API, indexed by the ApiKeys ID.
+     */
     private final Map<ApiKeys, Short> usableVersions = new EnumMap<>(ApiKeys.class);
 
-    public NodeApiVersions(Collection<ApiVersion> apiVersions) {
-        this.apiVersions = apiVersions;
-        for (ApiVersion apiVersion : apiVersions) {
-            int apiKeyId = apiVersion.apiKey;
+    /**
+     * Create a NodeApiVersions object with the current ApiVersions.
+     *
+     * @return A new NodeApiVersions object.
+     */
+    public static NodeApiVersions create() {
+        return create(Collections.EMPTY_LIST);
+    }
+
+    /**
+     * Create a NodeApiVersions object.
+     *
+     * @param overrides API versions to override. Any ApiVersion not specified here will be set to the current client
+     *                  value.
+     * @return A new NodeApiVersions object.
+     */
+    public static NodeApiVersions create(Collection<ApiVersion> overrides) {
+        List<ApiVersion> apiVersions = new LinkedList<>(overrides);
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            boolean exists = false;
+            for (ApiVersion apiVersion : apiVersions) {
+                if (apiVersion.apiKey == apiKey.id) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                apiVersions.add(new ApiVersion(apiKey.id, ProtoUtils.oldestVersion(apiKey.id),
+                    ProtoUtils.latestVersion(apiKey.id)));
+            }
+        }
+        return new NodeApiVersions(apiVersions);
+    }
+
+    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
+        this.nodeApiVersions = nodeApiVersions;
+        for (ApiVersion nodeApiVersion : nodeApiVersions) {
+            int nodeApiKey = nodeApiVersion.apiKey;
             // Newer brokers may support ApiKeys we don't know about, ignore them
-            if (ApiKeys.hasId(apiKeyId)) {
-                short version = Utils.min(ProtoUtils.latestVersion(apiKeyId), apiVersion.maxVersion);
-                if (version >= apiVersion.minVersion && version >= ProtoUtils.oldestVersion(apiKeyId))
-                    usableVersions.put(ApiKeys.forId(apiKeyId), version);
+            if (ApiKeys.hasId(nodeApiKey)) {
+                short v = Utils.min(ProtoUtils.latestVersion(nodeApiKey), nodeApiVersion.maxVersion);
+                if (v < nodeApiVersion.minVersion) {
+                    usableVersions.put(ApiKeys.forId(nodeApiKey), NODE_TOO_NEW);
+                } else if (v < ProtoUtils.oldestVersion(nodeApiKey)) {
+                    usableVersions.put(ApiKeys.forId(nodeApiKey), NODE_TOO_OLD);
+                } else {
+                    usableVersions.put(ApiKeys.forId(nodeApiKey), v);
+                }
             }
         }
     }
 
     /**
-     * Return the most recent version supported by both the client and the server.
+     * Return the most recent version supported by both the node and the local software.
      */
     public short usableVersion(ApiKeys apiKey) {
         Short usableVersion = usableVersions.get(apiKey);
-        if (usableVersion == null) {
-            throw new UnsupportedVersionException("The client cannot send an " +
-                    "API request of type " + apiKey + ", because the " +
-                    "server does not understand any of the versions this client supports.");
-        }
-        return usableVersion;
+        if (usableVersion == API_NOT_ON_NODE)
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+        else if (usableVersion == NODE_TOO_OLD)
+            throw new UnsupportedVersionException("The broker is too old to support " + apiKey +
+                " version " + ProtoUtils.oldestVersion(apiKey.id));
+        else if (usableVersion == NODE_TOO_NEW)
+            throw new UnsupportedVersionException("The broker is too new to support " + apiKey +
+                " version " + ProtoUtils.latestVersion(apiKey.id));
+        else
+            return usableVersion;
     }
 
     /**
@@ -76,11 +130,11 @@ public class NodeApiVersions {
         // a TreeMap before printing it out to ensure that we always print in
         // ascending order.
         TreeMap<Short, String> apiKeysText = new TreeMap<>();
-        for (ApiVersion apiVersion : this.apiVersions)
+        for (ApiVersion apiVersion : this.nodeApiVersions)
             apiKeysText.put(apiVersion.apiKey, apiVersionToText(apiVersion));
 
-        // Also handle the case where some apiKey types are
-        // unknown, which may happen when either the client or server is newer.
+        // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
+        // which may happen when the remote is too old.
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
                 StringBuilder bld = new StringBuilder();
@@ -119,19 +173,20 @@ public class NodeApiVersions {
         }
         if (apiKey != null) {
             Short usableVersion = usableVersions.get(apiKey);
-            if (usableVersion == null) {
-                bld.append(" [usable: NONE]");
-            } else {
+            if (usableVersion == NODE_TOO_OLD)
+                bld.append(" [unusable: node too old]");
+            else if (usableVersion == NODE_TOO_NEW)
+                bld.append(" [unusable: node too new]");
+            else
                 bld.append(" [usable: ").append(usableVersion).append("]");
-            }
         }
         return bld.toString();
     }
 
     public ApiVersion apiVersion(ApiKeys apiKey) {
-        for (ApiVersion apiVersion : apiVersions) {
-            if (apiVersion.apiKey == apiKey.id) {
-                return apiVersion;
+        for (ApiVersion nodeApiVersion : nodeApiVersions) {
+            if (nodeApiVersion.apiKey == apiKey.id) {
+                return nodeApiVersion;
             }
         }
         throw new NoSuchElementException();

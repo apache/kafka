@@ -42,7 +42,7 @@ import java.util.Properties;
  * is an updated count of a single word.
  *
  * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
- * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * and write some data to it (e.g. via bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class WordCountProcessorDemo {
 

@@ -23,7 +23,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):
@@ -122,7 +122,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        kafka_run_class = self.path.script("kafka-run-class.sh", TRUNK)
+        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
               (kafka_run_class, self.connect_setting(), path)
         self.logger.debug(cmd)
