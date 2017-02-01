@@ -130,7 +130,7 @@ public class TopologyBuilderTest {
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldNotAllowOffsetResetSourceWithRepeatedSourceName() {
+    public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
 
