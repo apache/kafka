@@ -12,27 +12,21 @@
  */
 package org.apache.kafka.common.security.ssl;
 
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.test.TestSslUtils;
+import org.junit.Test;
+
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.File;
-import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManagerFactory;
-
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.common.network.Mode;
-import org.junit.Test;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
