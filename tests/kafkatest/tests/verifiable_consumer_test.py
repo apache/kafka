@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition
 
 class VerifiableConsumerTest(KafkaTest):
-    PRODUCER_REQUEST_TIMEOUT_SEC = 20
+    PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
     def __init__(self, test_context, num_consumers=1, num_producers=0,
                  group_id="test_group_id", session_timeout_sec=10, **kwargs):
