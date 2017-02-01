@@ -33,8 +33,6 @@ import kafka.utils.ShutdownableThread
 import kafka.client.ClientUtils
 import java.util.concurrent.atomic.AtomicInteger
 
-import org.apache.kafka.common.internals.FatalExitError
-
 /**
  *  Usage:
  *  Once ConsumerFetcherManager is created, startConnections() and stopAllConnections() can be called repeatedly
@@ -99,7 +97,6 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           topicPartition -> BrokerAndInitialOffset(broker, partitionMap(topicPartition).getFetchOffset())}
         )
       } catch {
-        case e: FatalExitError => throw e
         case t: Throwable =>
           if (!isRunning.get())
             throw t /* If this thread is stopped, propagate this exception to kill the thread. */

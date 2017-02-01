@@ -102,6 +102,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
+      case e: FatalExitError => throw e
       case e: Throwable =>
         if (request.requestObj != null) {
           request.requestObj.handleError(e, requestChannel, request)
@@ -155,6 +156,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       requestChannel.sendResponse(new Response(request, leaderAndIsrResponse))
     } catch {
+      case e: FatalExitError => throw e
       case e: KafkaStorageException =>
         fatal("Disk error during leadership change.", e)
         Exit.halt(1)

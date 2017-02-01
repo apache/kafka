@@ -23,6 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{Time, Utils}
 
 /**
@@ -61,6 +62,7 @@ class KafkaRequestHandler(id: Int,
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {
+        case e: FatalExitError => Exit.exit(e.statusCode)
         case e: Throwable => error("Exception when handling request", e)
       }
     }
