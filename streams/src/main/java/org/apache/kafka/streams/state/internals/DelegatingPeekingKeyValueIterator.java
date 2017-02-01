@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
@@ -24,12 +25,15 @@ import java.util.NoSuchElementException;
 /**
  * Optimized {@link KeyValueIterator} used when the same element could be peeked multiple times.
  */
-class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> implements PeekingKeyValueIterator<K, V> {
+class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
     private final KeyValueIterator<K, V> underlying;
+    private final String storeName;
     private KeyValue<K, V> next;
 
+    private volatile boolean open = true;
+
     public DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
-        super(storeName);
+        this.storeName = storeName;
         this.underlying = underlying;
     }
 
@@ -44,11 +48,14 @@ class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K
     @Override
     public synchronized void close() {
         underlying.close();
-        super.close();
+        open = false;
     }
 
     @Override
     public synchronized boolean hasNext() {
+        if (!open) {
+            throw new InvalidStateStoreException(String.format("Store %s has closed", storeName));
+        }
         if (next != null) {
             return true;
         }
@@ -69,6 +76,11 @@ class DelegatingPeekingKeyValueIterator<K, V> extends AbstractKeyValueIterator<K
         final KeyValue<K, V> result = next;
         next = null;
         return result;
+    }
+
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException("remove() is not supported in DelegatingPeekingKeyValueIterator.");
     }
 
     @Override

@@ -32,7 +32,7 @@ import java.util.NoSuchElementException;
  * @param <K>
  * @param <V>
  */
-abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends AbstractKeyValueIterator<K, V> {
+abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyValueIterator<K, V> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
     private final KeyValueIterator<KS, byte[]> storeIterator;
     protected final StateSerdes<K, V> serdes;
@@ -40,7 +40,6 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                            final KeyValueIterator<KS, byte[]> storeIterator,
                                            final StateSerdes<K, V> serdes) {
-        super(serdes.stateName());
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
         this.serdes = serdes;
@@ -154,11 +153,14 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> extends Abstract
     }
 
     @Override
+    public void remove() {
+        throw new UnsupportedOperationException("remove() is not supported in AbstractMergedSortedCacheStoreIterator.");
+    }
+
+    @Override
     public void close() {
         cacheIterator.close();
         storeIterator.close();
-
-        super.close();
     }
 }
 

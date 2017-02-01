@@ -23,14 +23,14 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.NoSuchElementException;
 
-class SerializedKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> {
+class SerializedKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
 
     private final KeyValueIterator<Bytes, byte[]> bytesIterator;
     private final StateSerdes<K, V> serdes;
 
     SerializedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
                                final StateSerdes<K, V> serdes) {
-        super(serdes.stateName());
+
         this.bytesIterator = bytesIterator;
         this.serdes = serdes;
     }
@@ -38,7 +38,6 @@ class SerializedKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> {
     @Override
     public void close() {
         bytesIterator.close();
-        super.close();
     }
 
     @Override
@@ -62,5 +61,10 @@ class SerializedKeyValueIterator<K, V> extends AbstractKeyValueIterator<K, V> {
         }
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
         return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value));
+    }
+
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException("remove() is not supported in SerializedKeyValueIterator");
     }
 }

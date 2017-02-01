@@ -85,6 +85,4 @@ interface WrappedStateStore extends StateStore {
             innerState.close();
         }
     }
-
-
 }

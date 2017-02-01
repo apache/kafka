@@ -28,21 +28,20 @@ import java.util.NoSuchElementException;
 /**
  * Iterate over multiple Segments
  */
-class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
+class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
     private final Bytes from;
     private final Bytes to;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
-    private KeyValueStore<Bytes, byte[]> currentSegment;
+    private final Iterator<Segment> segments;
+    private final HasNextCondition hasNextCondition;
 
-    SegmentIterator(final String name,
-                    final Iterator<Segment> segments,
+    private KeyValueStore<Bytes, byte[]> currentSegment;
+    private KeyValueIterator<Bytes, byte[]> currentIterator;
+
+    SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
                     final Bytes to) {
-        super(name);
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;
@@ -50,12 +49,6 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
     }
 
     public void close() {
-        closeCurrentIter();
-
-        super.close();
-    }
-
-    private void closeCurrentIter() {
         if (currentIterator != null) {
             currentIterator.close();
             currentIterator = null;
@@ -64,22 +57,18 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
 
     @Override
     public Bytes peekNextKey() {
-        validateIsOpen();
-
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return currentIterator.peekNextKey();
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public boolean hasNext() {
-        validateIsOpen();
-
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
                 && segments.hasNext()) {
-            closeCurrentIter();
+            close();
             currentSegment = segments.next();
             try {
                 currentIterator = currentSegment.range(from, to);
@@ -91,11 +80,13 @@ class SegmentIterator extends AbstractKeyValueIterator<Bytes, byte[]> {
     }
 
     public KeyValue<Bytes, byte[]> next() {
-        validateIsOpen();
-
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return currentIterator.next();
+    }
+
+    public void remove() {
+        throw new UnsupportedOperationException("remove() is not supported in SegmentIterator");
     }
 }

@@ -374,14 +374,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openIterators.clear();
     }
 
-    private class RocksDbIterator extends AbstractKeyValueIterator<K, V> {
+    private class RocksDbIterator implements KeyValueIterator<K, V> {
+        private final String storeName;
         private final RocksIterator iter;
         private final StateSerdes<K, V> serdes;
 
+        private volatile boolean open = true;
+
         RocksDbIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes) {
-            super(storeName);
             this.iter = iter;
             this.serdes = serdes;
+            this.storeName = storeName;
         }
 
         byte[] peekRawKey() {
@@ -394,7 +397,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public synchronized boolean hasNext() {
-            validateIsOpen();
+            if (!open) {
+                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
+            }
 
             return iter.isValid();
         }
@@ -413,10 +418,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
+        public void remove() {
+            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
+        }
+
+        @Override
         public synchronized void close() {
             openIterators.remove(this);
             iter.close();
-            super.close();
+            open = false;
         }
 
         @Override

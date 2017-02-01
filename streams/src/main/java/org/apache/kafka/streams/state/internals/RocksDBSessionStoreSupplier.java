@@ -56,15 +56,14 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     keySchema
-        );
+                                                                                     keySchema);
 
         if (cached && logged) {
             final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
             final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
                                                                                       METRIC_SCOPE, time);
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+                    = RocksDBSessionStore.bytesStore(metered);
 
             return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }
@@ -73,7 +72,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
             final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
                                                                                       METRIC_SCOPE, time);
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+                    = RocksDBSessionStore.bytesStore(metered);
 
             return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }

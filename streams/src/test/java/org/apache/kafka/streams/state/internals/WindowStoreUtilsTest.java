@@ -41,5 +41,4 @@ public class WindowStoreUtilsTest {
         assertEquals(timestamp, parsedTs);
         assertEquals(seqNum, parsedSeqNum);
     }
-
 }
