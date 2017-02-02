@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockValueJoiner;
@@ -143,7 +144,7 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(flatMapJoin);
         verifyCorrectOutput(mapRhs);
         verifyCorrectOutput(mapJoinJoin);
-        verifyLeftJoin(leftJoin);
+        verifyCorrectOutput(leftJoin);
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() throws InterruptedException {
@@ -232,6 +233,13 @@ public class KStreamRepartitionJoinTest {
             Serdes.Integer(),
             Serdes.Integer(),
             Serdes.String())
+            .filterNot(new Predicate<Integer, String>() {
+                @Override
+                public boolean test(Integer key, String value) {
+                    // filter not left-only join results
+                    return value.substring(2).equals("null");
+                }
+            })
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -268,7 +276,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     private JoinWindows getJoinWindow() {
-        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
+        return JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -282,23 +290,12 @@ public class KStreamRepartitionJoinTest {
         }
     }
 
-
     private void verifyCorrectOutput(final ExpectedOutputOnTopic expectedOutputOnTopic)
         throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(),
             expectedOutputOnTopic.expectedOutput.size(),
             expectedOutputOnTopic.outputTopic),
             is(expectedOutputOnTopic.expectedOutput));
-    }
-
-    private void verifyLeftJoin(final ExpectedOutputOnTopic expectedOutputOnTopic)
-        throws InterruptedException, ExecutionException {
-        final List<String> received = receiveMessages(new StringDeserializer(), expectedOutputOnTopic
-            .expectedOutput.size(), expectedOutputOnTopic.outputTopic);
-        if (!received.equals(expectedOutputOnTopic.expectedOutput)) {
-            produceToStreamOne();
-            verifyCorrectOutput(expectedOutputOnTopic.expectedOutput, expectedOutputOnTopic.outputTopic);
-        }
     }
 
     private void produceMessages()
@@ -380,13 +377,8 @@ public class KStreamRepartitionJoinTest {
             numMessages,
             60 * 1000);
         Collections.sort(received);
-        return received;
-    }
 
-    private void verifyCorrectOutput(final List<String> expectedMessages,
-                                     final String topic) throws InterruptedException {
-        assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size(), topic),
-            is(expectedMessages));
+        return received;
     }
 
     private void doJoin(final KStream<Integer, Integer> lhs,
