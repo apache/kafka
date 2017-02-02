@@ -60,7 +60,7 @@ public class StreamsTestUtils {
     public static Properties minimalStreamsConfig() {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, UUID.randomUUID().toString());
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah:9092");
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "anyserver:9092");
         return properties;
     }
 
