@@ -51,26 +51,4 @@ class ShutdownableThreadTest {
     assertEquals(1, statusCodeOption.get)
   }
 
-  @Test
-  def testShutdownWhenCalledAfterFatalExitExceptionIsThrown(): Unit = {
-    @volatile var statusCodeOption: Option[Int] = None
-    Exit.setExitProcedure { (statusCode, _) =>
-      statusCodeOption = Some(statusCode)
-      // Sleep until interrupted to simulate the fact that `System.exit()` never returns
-      Thread.sleep(Long.MaxValue)
-      throw new AssertionError
-    }
-
-    val thread = new ShutdownableThread("shutdownable-thread-test") {
-      override def doWork: Unit = throw new FatalExitError
-    }
-
-    thread.start()
-    TestUtils.waitUntilTrue(() => !thread.isRunning.get, "Thread did not transition to `running` state")
-
-    thread.shutdown()
-    TestUtils.waitUntilTrue(() => statusCodeOption.isDefined, "Status code was not set by exit procedure")
-    assertEquals(1, statusCodeOption.get)
-  }
-
 }

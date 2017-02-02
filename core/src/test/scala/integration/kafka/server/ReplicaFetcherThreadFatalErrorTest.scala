@@ -74,7 +74,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
       }
     }))
     createTopic(zkUtils, "topic")
-    TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete", waitTime = 120000)
+    TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete")
   }
 
   /**
@@ -97,7 +97,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
       }
     }))
     TestUtils.createTopic(zkUtils, "topic", numPartitions = 1, replicationFactor = 2, servers = brokers)
-    TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete", waitTime = 120000)
+    TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete")
   }
 
   private case class FetcherThreadParams(threadName: String, fetcherId: Int, sourceBroker: BrokerEndPoint,
