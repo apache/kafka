@@ -18,11 +18,10 @@
 package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.producer.{OldProducer, NewShinyProducer}
-import kafka.utils.{ToolsUtils, VerifiableProperties, Logging, CommandLineUtils}
+import kafka.producer.{NewShinyProducer, OldProducer}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils, VerifiableProperties}
 import kafka.message.CompressionCodec
 import kafka.serializer._
-
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
 import java.util._
@@ -67,7 +66,7 @@ object ProducerPerformance extends Logging {
       config.dateFormat.format(startMs), config.dateFormat.format(endMs),
       config.compressionCodec.codec, config.messageSize, config.batchSize, totalMBSent,
       totalMBSent / elapsedSecs, totalMessagesSent.get, totalMessagesSent.get / elapsedSecs))
-    System.exit(0)
+    Exit.exit(0)
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {

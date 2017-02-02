@@ -121,7 +121,7 @@ object TestLinearWriteSpeed {
         writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     bytesToWrite = (bytesToWrite / numFiles) * numFiles
