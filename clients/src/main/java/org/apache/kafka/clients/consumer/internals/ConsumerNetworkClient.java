@@ -90,8 +90,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node,
-                                              AbstractRequest.Builder<?> requestBuilder) {
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
@@ -157,6 +156,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void wakeup() {
         // wakeup should be safe without holding the client lock since it simply delegates to
         // Selector's wakeup, which is threadsafe
+        log.trace("Received user wakeup");
         this.wakeup.set(true);
         this.client.wakeup();
     }
@@ -406,6 +406,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void maybeTriggerWakeup() {
         if (wakeupDisabledCount == 0 && wakeup.get()) {
+            log.trace("Raising wakeup exception in response to user wakeup");
             wakeup.set(false);
             throw new WakeupException();
         }
@@ -446,7 +447,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, ApiKeys, AbstractRequest)} has been called.
+     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
      * @param node Node to connect to if possible
      */
     public boolean connectionFailed(Node node) {
@@ -457,7 +458,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Initiate a connection if currently possible. This is only really useful for resetting the failed
-     * status of a socket. If there is an actual request to send, then {@link #send(Node, ApiKeys, AbstractRequest)}
+     * status of a socket. If there is an actual request to send, then {@link #send(Node, AbstractRequest.Builder)}
      * should be used.
      * @param node The node to connect to
      */

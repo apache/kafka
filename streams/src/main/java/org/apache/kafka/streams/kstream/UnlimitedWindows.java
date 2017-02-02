@@ -45,7 +45,7 @@ import java.util.Map;
  * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
-public class UnlimitedWindows extends Windows<UnlimitedWindow> {
+public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
@@ -123,7 +123,7 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public final boolean equals(final Object o) {
+    public boolean equals(final Object o) {
         if (o == this) {
             return true;
         }

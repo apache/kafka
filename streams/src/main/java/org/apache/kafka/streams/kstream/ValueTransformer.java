@@ -25,15 +25,15 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
- * The {@link ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).
+ * The {@code ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object)} is invoked individually for each
  * record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object)} (cf. {@link ValueMapper} for stateless value transformation).
  * Additionally, the interface can be called in regular intervals based on the processing progress
  * (cf. {@link #punctuate(long)}.
- * If {@link ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
+ * If {@code ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
- * Use {@link ValueTransformerSupplier} to provide new instances of {@link ValueTransformer} to Kafka Stream's runtime.
+ * Use {@link ValueTransformerSupplier} to provide new instances of {@code ValueTransformer} to Kafka Stream's runtime.
  * <p>
  * If a record's key and value should be modified {@link Transformer} can be used.
  *
