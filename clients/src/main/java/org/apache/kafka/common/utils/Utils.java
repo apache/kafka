@@ -546,7 +546,7 @@ public class Utils {
      */
     public static void croak(String message) {
         System.err.println(message);
-        System.exit(1);
+        Exit.exit(1);
     }
 
     /**

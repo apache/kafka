@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -127,10 +128,10 @@ public class ClientCompatibilityTest {
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
-                System.exit(0);
+                Exit.exit(0);
             } else {
                 parser.handleError(e);
-                System.exit(1);
+                Exit.exit(1);
             }
         }
         TestConfig testConfig = new TestConfig(res);
@@ -140,10 +141,10 @@ public class ClientCompatibilityTest {
         } catch (Throwable t) {
             System.out.printf("FAILED: Caught exception %s\n\n", t.getMessage());
             t.printStackTrace();
-            System.exit(1);
+            Exit.exit(1);
         }
         System.out.println("SUCCESS.");
-        System.exit(0);
+        Exit.exit(0);
     }
 
     private static String toHexString(byte[] buf) {
@@ -345,7 +346,7 @@ public class ClientCompatibilityTest {
             } catch (RuntimeException e) {
                 System.out.println("The second message in this topic was not ours. Please use a new " +
                     "topic when running this program.");
-                System.exit(1);
+                Exit.exit(1);
             }
         } catch (RecordTooLargeException e) {
             log.debug("Got RecordTooLargeException", e);

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.cli;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
@@ -52,7 +53,7 @@ public class ConnectDistributed {
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
             log.info("Usage: ConnectDistributed worker.properties");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         String workerPropsFile = args[0];
