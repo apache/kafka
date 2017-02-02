@@ -51,7 +51,7 @@
             <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
             <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
             <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like joins and aggregations.</li>
-            <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrived data.</li>
+            <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
             <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
 
         </ul>
@@ -68,14 +68,14 @@
         <ul>
             <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
             <li>A <b>stream processing application</b> is any program that makes use of the Kafka Streams library. It defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
-            <li>A <b>stream processor</b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently producing one or more output records to its downstream processors. </li>
+            <li>A <b>stream processor</b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently produce one or more output records to its downstream processors. </li>
         </ul>
         <img class="centered" src="/{{version}}/images/streams-concepts-topology.jpg">
 
 
         <p>
             Kafka Streams offers two ways to define the stream processing topology: the <a href="#streams_dsl"><b>Kafka Streams DSL</b></a> provides
-            the most common data transformation operations such as <code>map</code> and <code>filter</code>, <code>join</code> and <code>aggregations</code> out of the box; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
+            the most common data transformation operations such as <code>map</code>, <code>filter</code>, <code>join</code> and <code>aggregations</code> out of the box; the lower-level <a href="#streams_processor"><b>Processor API</b></a> allows
             developers define and connect custom processors as well as to interact with <a href="#streams_state">state stores</a>.
         </p>
 
