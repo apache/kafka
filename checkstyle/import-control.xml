@@ -42,6 +42,7 @@
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
 
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />

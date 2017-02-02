@@ -54,7 +54,7 @@ object AclCommand {
       case e: Throwable =>
         println(s"Error while executing ACL command: ${e.getMessage}")
         println(Utils.stackTrace(e))
-        System.exit(-1)
+        Exit.exit(1)
     }
   }
 

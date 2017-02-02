@@ -22,11 +22,13 @@ import java.util.Date
 import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
+
 import joptsimple.OptionParser
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 object JmxTool extends Logging {
 
@@ -71,7 +73,7 @@ object JmxTool extends Logging {
 
     if(options.has(helpOpt)) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))

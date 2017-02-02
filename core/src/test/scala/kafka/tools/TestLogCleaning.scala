@@ -100,7 +100,7 @@ object TestLogCleaning {
 
     if(options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt, numMessagesOpt)
