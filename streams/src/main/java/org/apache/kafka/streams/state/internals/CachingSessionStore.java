@@ -102,7 +102,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @Override
     public void remove(final Windowed<K> sessionKey) {
         validateStoreOpen();
-
         put(sessionKey, null);
     }
 
