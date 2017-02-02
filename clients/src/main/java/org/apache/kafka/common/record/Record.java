@@ -353,7 +353,7 @@ public final class Record {
                 throw new IllegalArgumentException("Cannot up-convert using timestamp type " + upconvertTimestampType);
             timestampType = upconvertTimestampType;
         } else {
-            timestampType = TimestampType.forAttributes(attributes());
+            timestampType = timestampType();
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(convertedSize(toMagic));
