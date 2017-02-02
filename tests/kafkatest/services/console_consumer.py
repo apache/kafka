@@ -150,9 +150,11 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         if self.jmx_object_names is None:
            self.jmx_object_names = []
 
-        self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-        self.jmx_attributes += ["assigned-partitions"]
-        self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
+        if self.new_consumer is True:
+            self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+            self.jmx_attributes += ["assigned-partitions"]
+            self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
 
 
     def prop_file(self, node):
@@ -266,7 +268,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
             for line in itertools.chain([first_line], consumer_output):
                 msg = line.strip()
-
                 if msg == "shutdown_complete":
                     # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
                     if node in self.clean_shutdown_nodes:
