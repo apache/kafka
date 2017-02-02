@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
@@ -57,6 +58,8 @@ import static org.junit.Assert.fail;
 public class GlobalStateManagerImplTest {
 
 
+    private final MockTime time = new MockTime();
+    private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private GlobalStateManagerImpl stateManager;
@@ -67,7 +70,6 @@ public class GlobalStateManagerImplTest {
     private NoOpReadOnlyStore store2;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
-    private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
 
     @Before
     public void before() throws IOException {
@@ -89,7 +91,7 @@ public class GlobalStateManagerImplTest {
 
         context = new NoOpProcessorContext();
         stateDirPath = TestUtils.tempDirectory().getPath();
-        stateDirectory = new StateDirectory("appId", stateDirPath);
+        stateDirectory = new StateDirectory("appId", stateDirPath, time);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         stateManager = new GlobalStateManagerImpl(topology, consumer, stateDirectory);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -108,7 +110,7 @@ public class GlobalStateManagerImplTest {
 
     @Test(expected = LockException.class)
     public void shouldThrowStreamsExceptionIfCantGetLock() throws Exception {
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
+        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, time);
         try {
             stateDir.lockGlobalState(1);
             stateManager.initialize(context);
@@ -306,7 +308,7 @@ public class GlobalStateManagerImplTest {
     public void shouldUnlockGlobalStateDirectoryOnClose() throws Exception {
         stateManager.initialize(context);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
+        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, new MockTime());
         try {
             // should be able to get the lock now as it should've been released in close
             assertTrue(stateDir.lockGlobalState(1));
@@ -370,7 +372,7 @@ public class GlobalStateManagerImplTest {
         } catch (StreamsException e) {
             // expected
         }
-        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath);
+        final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, new MockTime());
         try {
             // should be able to get the lock now as it should've been released
             assertTrue(stateDir.lockGlobalState(1));
