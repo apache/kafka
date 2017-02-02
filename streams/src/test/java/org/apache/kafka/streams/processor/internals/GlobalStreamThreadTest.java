@@ -34,7 +34,11 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -43,6 +47,7 @@ public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private GlobalStreamThread globalStreamThread;
+    private StreamsConfig config;
 
     @Before
     public void before() {
@@ -50,7 +55,7 @@ public class GlobalStreamThreadTest {
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        final StreamsConfig config = new StreamsConfig(properties);
+        config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
@@ -61,7 +66,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAnException() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         try {
@@ -69,6 +74,33 @@ public class GlobalStreamThreadTest {
             fail("Should have thrown StreamsException if start up failed");
         } catch (StreamsException e) {
             // ok
+        }
+        assertFalse(globalStreamThread.stillRunning());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public List<PartitionInfo> partitionsFor(final String topic) {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+        globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
+                                                    config,
+                                                    mockConsumer,
+                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath()),
+                                                    new Metrics(),
+                                                    new MockTime(),
+                                                    "client");
+
+        try {
+            globalStreamThread.start();
+            fail("Should have thrown StreamsException if start up failed");
+        } catch (StreamsException e) {
+            assertThat(e.getCause(), instanceOf(RuntimeException.class));
+            assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }
         assertFalse(globalStreamThread.stillRunning());
     }
