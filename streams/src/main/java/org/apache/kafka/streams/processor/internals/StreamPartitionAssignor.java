@@ -33,8 +33,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,13 +105,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
-
             consumers.add(consumerMemberId);
-
-            state.prevActiveTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.standbyTasks);
-            state.capacity = state.capacity + 1d;
+            state.addPreviousActiveTasks(info.prevTasks);
+            state.addPreviousStandbyTasks(info.standbyTasks);
+            state.incrementCapacity();
         }
 
         @Override
@@ -228,10 +225,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        Set<TaskId> prevTasks = streamThread.prevTasks();
+        final Set<TaskId> previousActiveTasks = streamThread.prevActiveTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
-        standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPoint);
+        standbyTasks.removeAll(previousActiveTasks);
+        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -461,7 +458,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         log.debug("stream-thread [{}] Assigning tasks {} to clients {} with number of replicas {}",
                 streamThread.getName(), partitionsForTask.keySet(), states, numStandbyReplicas);
 
-        TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
+        taskAssignor.assign(numStandbyReplicas);
 
         log.info("stream-thread [{}] Assigned tasks to clients as {}.", streamThread.getName(), states);
 
@@ -476,7 +474,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final ClientState<TaskId> state = entry.getValue().state;
 
-                for (TaskId id : state.activeTasks) {
+                for (final TaskId id : state.activeTasks()) {
                     topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
@@ -487,14 +485,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // within the client, distribute tasks to its owned consumers
         Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            Set<String> consumers = entry.getValue().consumers;
-            ClientState<TaskId> state = entry.getValue().state;
+            final Set<String> consumers = entry.getValue().consumers;
+            final ClientState<TaskId> state = entry.getValue().state;
 
-            ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
-            final int numActiveTasks = state.activeTasks.size();
+            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
+            final int numActiveTasks = state.activeTaskCount();
 
-            taskIds.addAll(state.activeTasks);
-            taskIds.addAll(state.standbyTasks);
+            taskIds.addAll(state.activeTasks());
+            taskIds.addAll(state.standbyTasks());
 
             final int numConsumers = consumers.size();
 
