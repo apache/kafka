@@ -353,7 +353,7 @@ class LogTest extends JUnitSuite {
     val numMessages = 100
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(i.toString.getBytes))
     messageSets.foreach(log.append(_))
-    log.flush
+    log.flush()
 
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
@@ -362,7 +362,7 @@ class LogTest extends JUnitSuite {
       val head = messages.iterator.next()
       assertEquals("Offsets not equal", offset, head.offset)
       assertEquals("Messages not equal at offset " + offset, messageSets(i).shallowEntries.iterator.next().record,
-        head.record.convert(messageSets(i).shallowEntries.iterator.next().record.magic))
+        head.record.convert(messageSets(i).shallowEntries.iterator.next().record.magic, TimestampType.NO_TIMESTAMP_TYPE))
       offset = head.offset + 1
     }
     val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1)).records
