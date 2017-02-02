@@ -58,12 +58,6 @@ public class SimpleRecordTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void cannotUpconvertWithNullTimestampType() {
-        Record record = Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
-        record.convert(Record.MAGIC_VALUE_V1, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
     public void cannotUpconvertWithNoTimestampType() {
         Record record = Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
         record.convert(Record.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE);
@@ -95,7 +89,7 @@ public class SimpleRecordTest {
 
         for (int i = 0; i < keys.length; i++) {
             Record record = Record.create(Record.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
-            Record converted = record.convert(Record.MAGIC_VALUE_V0, null);
+            Record converted = record.convert(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
 
             assertEquals(Record.MAGIC_VALUE_V0, converted.magic());
             assertEquals(Record.NO_TIMESTAMP, converted.timestamp());

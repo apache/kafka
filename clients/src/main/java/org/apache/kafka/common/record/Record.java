@@ -349,8 +349,8 @@ public final class Record {
 
         final TimestampType timestampType;
         if (magic == Record.MAGIC_VALUE_V0) {
-            if (upconvertTimestampType == null || upconvertTimestampType == TimestampType.NO_TIMESTAMP_TYPE)
-                throw new IllegalArgumentException("Cannot upconvert using timestamp type " + upconvertTimestampType);
+            if (upconvertTimestampType == TimestampType.NO_TIMESTAMP_TYPE)
+                throw new IllegalArgumentException("Cannot up-convert using timestamp type " + upconvertTimestampType);
             timestampType = upconvertTimestampType;
         } else {
             timestampType = TimestampType.forAttributes(attributes());
