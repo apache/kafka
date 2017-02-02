@@ -219,7 +219,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             # without gaps in the face of hard failures, so we only log a warning when this happens
             if tp in self.global_position and self.global_position[tp] != consumed_partition["minOffset"]:
                 self.logger.warn("Expected next consumed offset of %d for partition %s, but instead saw %d" %
-                                 (self.global_position[tp], tp, consumed_partition["minOffset"]))
+                                 (self.global_position[tp], str(tp), consumed_partition["minOffset"]))
 
             self.global_position[tp] = consumed_partition["maxOffset"] + 1
 
