@@ -407,8 +407,8 @@ public class StreamThreadTest {
 
         assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
         assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread1.prevTasks(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread2.prevTasks(), equalTo(originalTaskAssignmentThread2));
+        assertThat(thread1.prevActiveTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevActiveTasks(), equalTo(originalTaskAssignmentThread2));
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
