@@ -374,11 +374,6 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfFailedToReadCheckpoints() throws Exception {
-        writeCorruptCheckpoint();
-        stateManager.initialize(context);
-    }
 
     @Test(expected = LockException.class)
     public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() throws Exception {
@@ -395,7 +390,7 @@ public class GlobalStateManagerImplTest {
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
         try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
-            stream.write("0\n1\nblah".getBytes());
+            stream.write("0\n1\nfoo".getBytes());
         }
     }
 
