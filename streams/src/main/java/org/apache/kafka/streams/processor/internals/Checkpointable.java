@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
-// Interface to indicate that an object can be Check pointed
+// Interface to indicate that an object can be checkpointed
 interface Checkpointable {
     void checkpoint(final Map<TopicPartition, Long> offsets);
 }
