@@ -148,15 +148,15 @@ private[kafka] object LogValidator {
    * 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
    * 4. Message format conversion is needed.
    */
-  def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
-                                                 offsetCounter: LongRef,
-                                                 now: Long,
-                                                 sourceCodec: CompressionCodec,
-                                                 targetCodec: CompressionCodec,
-                                                 compactedTopic: Boolean = false,
-                                                 messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
-                                                 messageTimestampType: TimestampType,
-                                                 messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
+  private def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
+                                                         offsetCounter: LongRef,
+                                                         now: Long,
+                                                         sourceCodec: CompressionCodec,
+                                                         targetCodec: CompressionCodec,
+                                                         compactedTopic: Boolean = false,
+                                                         messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
+                                                         messageTimestampType: TimestampType,
+                                                         messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
     // No in place assignment situation 1 and 2
     var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Record.MAGIC_VALUE_V0
 
@@ -186,7 +186,7 @@ private[kafka] object LogValidator {
       if (record.magic != messageFormatVersion)
         inPlaceAssignment = false
 
-      validatedRecords += record.convert(messageFormatVersion)
+      validatedRecords += record.convert(messageFormatVersion, messageTimestampType)
     }
 
     if (!inPlaceAssignment) {
