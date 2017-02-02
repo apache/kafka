@@ -493,7 +493,7 @@
             <ul>
                 <li> parameter <code>zookeeper.connect</code> was deprecated </li>
                 <ul>
-                    <li> a Kafka Streams application does not longer interact with Zookeeper for topic management but uses the new broker admin protocol
+                    <li> a Kafka Streams application does no longer interact with Zookeeper for topic management but uses the new broker admin protocol
                          (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-4+-+Command+line+and+centralized+administrative+operations#KIP-4-Commandlineandcentralizedadministrativeoperations-TopicAdminSchema.1">KIP-4, Section "Topic Admin Schema"</a>) </li>
                     <li> thus, parameter "zookeeper.connect" is ignored in 0.10.2 and should be removed from <code>StreamsConfig</code> </li>
                 </ul>
@@ -541,7 +541,8 @@
         <li> Changes to <code>TimestampExtractor</code>:
             <ul>
                 <li> method <code>#extract()</code> has a second parameter now </li>
-                <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code> </li>
+                <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
+                     (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
                 <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
             </ul>
         </li>
