@@ -35,7 +35,6 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
@@ -87,14 +86,8 @@ public class RocksDBWindowStoreTest {
         }
     };
 
-    private File baseDir;
-    private MockProcessorContext context;
-
-    @Before
-    public void setUp() {
-        baseDir = TestUtils.tempDirectory("test");
-        context = new MockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
-    }
+    private final File baseDir = TestUtils.tempDirectory("test");
+    private final MockProcessorContext context = new MockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
 
     @SuppressWarnings("unchecked")
     private <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {

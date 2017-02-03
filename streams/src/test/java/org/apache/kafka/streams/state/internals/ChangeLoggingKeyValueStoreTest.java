@@ -173,7 +173,7 @@ public class ChangeLoggingKeyValueStoreTest {
         store.put(hello, world);
         store.put(hi, there);
         store.put("zooom", "home");
-        final KeyValueIterator<String, String> range = store.range(hello, "zooom");
+        final KeyValueIterator<String, String> range = store.range(hello, hi);
         assertThat(range.next(), equalTo(KeyValue.pair(hello, world)));
         assertThat(range.next(), equalTo(KeyValue.pair(hi, there)));
         assertFalse(range.hasNext());

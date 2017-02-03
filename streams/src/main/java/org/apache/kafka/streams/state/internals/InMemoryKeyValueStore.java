@@ -49,10 +49,6 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.map = new TreeMap<>();
     }
 
-    InMemoryKeyValueStore(String name) {
-        this(name, null, null);
-    }
-
     public KeyValueStore<K, V> enableLogging() {
         return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
@@ -130,7 +126,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, false).entrySet().iterator()));
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
@@ -151,6 +147,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
+        this.map.clear();
         this.open = false;
     }
 
@@ -184,7 +181,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public K peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() not supported on InMemoryKeyValueIterator");
+            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
         }
     }
 }

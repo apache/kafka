@@ -87,6 +87,6 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     }
 
     public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in SegmentIterator");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }

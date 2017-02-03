@@ -78,7 +78,7 @@ class WrappedWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in WrappedWindowStoreIterator.");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 
     @Override

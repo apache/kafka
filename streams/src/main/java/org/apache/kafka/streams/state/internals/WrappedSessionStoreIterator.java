@@ -84,6 +84,6 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in WrappedSessionStoreIterator.");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }
