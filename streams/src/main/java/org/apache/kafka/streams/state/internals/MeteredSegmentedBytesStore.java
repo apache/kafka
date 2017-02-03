@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractWrappedStateStore implements SegmentedBytesStore {
+class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore implements SegmentedBytesStore {
 
     private final SegmentedBytesStore inner;
     private final String metricScope;
@@ -154,7 +154,5 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractWrappedStateS
         public Bytes peekNextKey() {
             return iter.peekNextKey();
         }
-
     }
-
 }
