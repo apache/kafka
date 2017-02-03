@@ -56,7 +56,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default {@code "auto.offset.reset"} strategy and default key and value deserializers as specified in the
      * {@link StreamsConfig config} are used.
      * <p>
-     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
+     * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -73,7 +73,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KStream} from the specified topics.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
-     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
+     * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -132,7 +132,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
+     * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -153,7 +153,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KStream} from the specified topics.
      * <p>
-     * If multiple topics are specified there are no ordering guaranteed for records from different topics.
+     * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the date before any key based operation
@@ -240,7 +240,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link StreamsConfig config} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
@@ -273,7 +273,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
@@ -309,7 +309,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
@@ -347,7 +347,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KTable} for the specified topic.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
@@ -492,7 +492,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a new instance of {@link KStream} by merging the given {@link KStream}s.
      * <p>
-     * There are nor ordering guaranteed for records from different {@link KStream}s.
+     * There is no ordering guarantee for records from different {@link KStream}s.
      *
      * @param streams the {@link KStream}s to be merged
      * @return a {@link KStream} containing all records of the given streams
