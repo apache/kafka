@@ -208,7 +208,7 @@ public class StateDirectory {
             if (!locks.containsKey(id)) {
                 try {
                     if (lock(id, 0)) {
-                        if (taskDir.lastModified() < time.milliseconds() - cleanupDelayMs) {
+                        if (time.milliseconds() > taskDir.lastModified() + cleanupDelayMs) {
                             log.info("Deleting obsolete state directory {} for task {} as cleanup delay of {} ms has passed", dirName, id, cleanupDelayMs);
                             Utils.delete(taskDir);
                         }
