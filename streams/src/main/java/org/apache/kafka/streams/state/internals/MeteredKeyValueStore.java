@@ -29,16 +29,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.List;
 
 /**
- * Metered KeyValueStore wrapper is used for recording operation metrics, and hence its
+ * Metered {@link KeyValueStore} wrapper is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
  *
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
-    protected final KeyValueStore<K, V> inner;
-    protected final String metricScope;
+    private final KeyValueStore<K, V> inner;
+    private final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
@@ -132,6 +132,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
     }
 
     @Override
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
+    }
+
+    @Override
     public V get(K key) {
         this.key = key;
         metrics.measureLatencyNs(time, getDelegate, this.getTime);
@@ -177,11 +182,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
     }
 
     @Override
-    public long approximateNumEntries() {
-        return this.inner.approximateNumEntries();
-    }
-
-    @Override
     public void flush() {
         metrics.measureLatencyNs(time, flushDelegate, this.flushTime);
     }
@@ -192,7 +192,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
         private final Sensor sensor;
         private final long startNs;
 
-        public MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
+        MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();

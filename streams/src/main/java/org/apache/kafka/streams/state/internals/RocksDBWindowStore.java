@@ -22,7 +22,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -30,38 +29,50 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.NoSuchElementException;
+class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
 
-class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
-
-    private final SegmentedBytesStore bytesStore;
-    private final boolean retainDuplicates;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
+    protected final SegmentedBytesStore bytesStore;
+    protected final boolean retainDuplicates;
+
     private ProcessorContext context;
-    private int seqnum = 0;
-    private StateSerdes<K, V> serdes;
+    protected StateSerdes<K, V> serdes;
+    protected int seqnum = 0;
 
+    // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
+    private static class RocksDBWindowBytesStore extends RocksDBWindowStore<Bytes, byte[]> {
+        RocksDBWindowBytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates) {
+            super(inner, Serdes.Bytes(), Serdes.ByteArray(), retainDuplicates);
+        }
 
-    static RocksDBWindowStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates) {
-        return new RocksDBWindowStore<>(inner, Serdes.Bytes(), Serdes.ByteArray(), retainDuplicates);
+        @Override
+        public void put(Bytes key, byte[] value, long timestamp) {
+            maybeUpdateSeqnumForDups();
+
+            bytesStore.put(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum), value);
+        }
+
+        @Override
+        public WindowStoreIterator<byte[]> fetch(Bytes key, long timeFrom, long timeTo) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, timeFrom, timeTo);
+            return WrappedWindowStoreIterator.bytesIterator(bytesIterator, serdes);
+        }
     }
 
+    static RocksDBWindowStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates) {
+        return new RocksDBWindowBytesStore(inner, retainDuplicates);
+    }
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde,
                        final boolean retainDuplicates) {
+        super(bytesStore);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.retainDuplicates = retainDuplicates;
         this.bytesStore = bytesStore;
-    }
-
-
-    @Override
-    public String name() {
-        return bytesStore.name();
+        this.retainDuplicates = retainDuplicates;
     }
 
     @Override
@@ -77,91 +88,26 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public boolean persistent() {
-        return true;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return bytesStore.isOpen();
-    }
-
-    @Override
-    public void flush() {
-        bytesStore.flush();
-    }
-
-    @Override
-    public void close() {
-        bytesStore.close();
-    }
-
-    @Override
     public void put(K key, V value) {
         put(key, value, context.timestamp());
     }
 
     @Override
     public void put(K key, V value, long timestamp) {
-        if (retainDuplicates) {
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
-        }
-        bytesStore.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes)), serdes.rawValue(value));
+        maybeUpdateSeqnumForDups();
+
+        bytesStore.put(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
-
-    @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        return new TheWindowStoreIterator<>(bytesIterator, serdes);
+        return new WrappedWindowStoreIterator<>(bytesIterator, serdes);
     }
 
-    private static class TheWindowStoreIterator<V> implements WindowStoreIterator<V> {
-        private final KeyValueIterator<Bytes, byte[]> actual;
-        private final StateSerdes<?, V> serdes;
-
-        TheWindowStoreIterator(final KeyValueIterator<Bytes, byte[]> actual, final StateSerdes<?, V> serdes) {
-            this.actual = actual;
-            this.serdes = serdes;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return actual.hasNext();
-        }
-
-        /**
-         * @throws NoSuchElementException if no next element exists
-         */
-        @Override
-        public KeyValue<Long, V> next() {
-            if (!actual.hasNext()) {
-                throw new NoSuchElementException();
-            }
-            final KeyValue<Bytes, byte[]> next = actual.next();
-            final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.key.get());
-            final V value = serdes.valueFrom(next.value);
-            return KeyValue.pair(timestamp, value);
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void close() {
-            actual.close();
-        }
-
-        @Override
-        public Long peekNextKey() {
-            if (!actual.hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return WindowStoreUtils.timestampFromBinaryKey(actual.peekNextKey().get());
+    void maybeUpdateSeqnumForDups() {
+        if (retainDuplicates) {
+            seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
     }
-
 }

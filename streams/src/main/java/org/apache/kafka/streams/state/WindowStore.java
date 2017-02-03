@@ -41,5 +41,4 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * Put a key-value pair with the given timestamp into the corresponding window
      */
     void put(K key, V value, long timestamp);
-
 }

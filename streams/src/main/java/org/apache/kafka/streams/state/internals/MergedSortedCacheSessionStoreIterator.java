@@ -59,7 +59,7 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
     @Override
     public Windowed<K> deserializeStoreKey(Windowed<Bytes> key) {
         final K originalKey = rawSerdes.keyFrom(key.key().get());
-        return new Windowed<K>(originalKey, key.window());
+        return new Windowed<>(originalKey, key.window());
     }
 
     @Override
