@@ -193,7 +193,7 @@ public class Protocol {
                                                                                                                         INT16),
                                                                                                               new Field("base_offset",
                                                                                                                         INT64),
-                                                                                                              new Field("timestamp",
+                                                                                                              new Field("log_append_time",
                                                                                                                         INT64,
                                                                                                                         "The timestamp returned by broker after appending the messages. " +
                                                                                                                             "If CreateTime is used for the topic, the timestamp will be -1. " +

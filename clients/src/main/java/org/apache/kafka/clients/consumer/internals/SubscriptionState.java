@@ -17,7 +17,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
-import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -78,19 +77,19 @@ public class SubscriptionState {
     /* Default offset reset strategy */
     private final OffsetResetStrategy defaultResetStrategy;
 
-    /* Listener to be invoked when assignment changes */
+    /* User-provided listener to be invoked when assignment changes */
     private ConsumerRebalanceListener listener;
 
-    private final Metrics metrics;
+    /* Listeners provide a hook for internal state cleanup (e.g. metrics) on assignment changes */
+    private List<Listener> listeners = new ArrayList<>();
 
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy, Metrics metrics) {
+    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
-        this.metrics = metrics;
         this.subscriptionType = SubscriptionType.NONE;
     }
 
@@ -160,7 +159,8 @@ public class SubscriptionState {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         if (!this.assignment.partitionSet().equals(partitions)) {
-            removeAllLagSensors(partitions);
+            fireOnAssignment(partitions);
+
             Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
             for (TopicPartition partition : partitions) {
                 TopicPartitionState state = assignment.stateValue(partition);
@@ -180,30 +180,24 @@ public class SubscriptionState {
     public void assignFromSubscribed(Collection<TopicPartition> assignments) {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
-        Set<TopicPartition> newAssignment = new HashSet<>(assignments);
-        removeAllLagSensors(newAssignment);
 
-        for (TopicPartition tp : assignments)
-            if (!this.subscription.contains(tp.topic()))
-                throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
+        fireOnAssignment(assignedPartitionStates.keySet());
+
+        if (this.subscribedPattern != null) {
+            for (TopicPartition tp : assignments) {
+                if (!this.subscribedPattern.matcher(tp.topic()).matches())
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic regex pattern; subscription pattern is " + this.subscribedPattern);
+            }
+        } else {
+            for (TopicPartition tp : assignments)
+                if (!this.subscription.contains(tp.topic()))
+                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic; subscription is " + this.subscription);
+        }
 
         // after rebalancing, we always reinitialize the assignment value
-        this.assignment.set(partitionToStateMap(assignments));
+        this.assignment.set(assignedPartitionStates);
         this.needsFetchCommittedOffsets = true;
-    }
-
-    private void removeAllLagSensors(Set<TopicPartition> preservedPartitions) {
-        for (TopicPartition tp : assignment.partitionSet()) {
-            if (!preservedPartitions.contains(tp))
-                metrics.removeSensor(tp + ".records-lag");
-        }
-    }
-
-    private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
-        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
-        for (TopicPartition tp : assignments)
-            map.put(tp, new TopicPartitionState());
-        return map;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -229,9 +223,10 @@ public class SubscriptionState {
         this.assignment.clear();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+        fireOnAssignment(Collections.<TopicPartition>emptySet());
     }
 
-    public Pattern getSubscribedPattern() {
+    public Pattern subscribedPattern() {
         return this.subscribedPattern;
     }
 
@@ -409,6 +404,22 @@ public class SubscriptionState {
         return listener;
     }
 
+    public void addListener(Listener listener) {
+        listeners.add(listener);
+    }
+
+    public void fireOnAssignment(Set<TopicPartition> assignment) {
+        for (Listener listener : listeners)
+            listener.onAssignment(assignment);
+    }
+
+    private static Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
+        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
+        for (TopicPartition tp : assignments)
+            map.put(tp, new TopicPartitionState());
+        return map;
+    }
+
     private static class TopicPartitionState {
         private Long position; // last consumed position
         private Long highWatermark; // the high watermark from last fetch
@@ -464,6 +475,16 @@ public class SubscriptionState {
             return !paused && hasValidPosition();
         }
 
+    }
+
+    public interface Listener {
+        /**
+         * Fired after a new assignment is received (after a group rebalance or when the user manually changes the
+         * assignment).
+         *
+         * @param assignment The topic partitions assigned to the consumer
+         */
+        void onAssignment(Set<TopicPartition> assignment);
     }
 
 }

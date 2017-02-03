@@ -117,7 +117,7 @@ class LogConfigTest {
     p.setProperty(LogConfig.RetentionBytesProp, "100")
     LogConfig.validate(p)
     p.setProperty(LogConfig.RetentionBytesProp, "90")
-    val except = intercept[IllegalArgumentException] {
+    intercept[IllegalArgumentException] {
       LogConfig.validate(p)
     }
   }

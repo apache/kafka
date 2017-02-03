@@ -18,9 +18,11 @@
 package kafka.tools
 
 import java.io.FileWriter
+
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
+
 import scala.collection.JavaConverters._
 
 
@@ -64,7 +66,7 @@ object ExportZkOffsets extends Logging {
     
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
     
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)

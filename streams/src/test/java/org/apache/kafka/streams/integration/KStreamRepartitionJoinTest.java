@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockValueJoiner;
@@ -143,7 +144,7 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(flatMapJoin);
         verifyCorrectOutput(mapRhs);
         verifyCorrectOutput(mapJoinJoin);
-        verifyLeftJoin(leftJoin);
+        verifyCorrectOutput(leftJoin);
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() throws InterruptedException {
@@ -159,7 +160,6 @@ public class KStreamRepartitionJoinTest {
         doJoin(map1, map2, "map-both-streams-and-join-" + testNo);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
-
 
     private ExpectedOutputOnTopic mapMapJoin() throws Exception {
         final KStream<Integer, Integer> mapMapStream = streamOne.map(
@@ -178,8 +178,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-
-    public ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
+    private ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
 
         final KStream<Integer, Integer> keySelected =
             streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
@@ -188,7 +187,6 @@ public class KStreamRepartitionJoinTest {
         doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
-
 
     private ExpectedOutputOnTopic flatMapJoin() throws Exception {
         final KStream<Integer, Integer> flatMapped = streamOne.flatMap(
@@ -221,7 +219,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
     }
 
-    public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
+    private ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
@@ -235,6 +233,13 @@ public class KStreamRepartitionJoinTest {
             Serdes.Integer(),
             Serdes.Integer(),
             Serdes.String())
+            .filterNot(new Predicate<Integer, String>() {
+                @Override
+                public boolean test(Integer key, String value) {
+                    // filter not left-only join results
+                    return value.substring(2).equals("null");
+                }
+            })
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -271,7 +276,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     private JoinWindows getJoinWindow() {
-        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
+        return JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -285,23 +290,12 @@ public class KStreamRepartitionJoinTest {
         }
     }
 
-
     private void verifyCorrectOutput(final ExpectedOutputOnTopic expectedOutputOnTopic)
         throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(),
             expectedOutputOnTopic.expectedOutput.size(),
             expectedOutputOnTopic.outputTopic),
             is(expectedOutputOnTopic.expectedOutput));
-    }
-
-    private void verifyLeftJoin(final ExpectedOutputOnTopic expectedOutputOnTopic)
-        throws InterruptedException, ExecutionException {
-        final List<String> received = receiveMessages(new StringDeserializer(), expectedOutputOnTopic
-            .expectedOutput.size(), expectedOutputOnTopic.outputTopic);
-        if (!received.equals(expectedOutputOnTopic.expectedOutput)) {
-            produceToStreamOne();
-            verifyCorrectOutput(expectedOutputOnTopic.expectedOutput, expectedOutputOnTopic.outputTopic);
-        }
     }
 
     private void produceMessages()
@@ -311,7 +305,6 @@ public class KStreamRepartitionJoinTest {
         produceStreamTwoInputTo(streamFourInput);
 
     }
-
 
     private void produceStreamTwoInputTo(final String streamTwoInput)
         throws ExecutionException, InterruptedException {
@@ -354,9 +347,9 @@ public class KStreamRepartitionJoinTest {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
         streamFourInput = "stream-four-" + testNo;
-        CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput);
-        CLUSTER.createTopic(streamFourInput);
+        CLUSTER.createTopic(streamOneInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamFourInput, 2, 1);
     }
 
 
@@ -384,13 +377,8 @@ public class KStreamRepartitionJoinTest {
             numMessages,
             60 * 1000);
         Collections.sort(received);
-        return received;
-    }
 
-    private void verifyCorrectOutput(final List<String> expectedMessages,
-                                     final String topic) throws InterruptedException {
-        assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size(), topic),
-            is(expectedMessages));
+        return received;
     }
 
     private void doJoin(final KStream<Integer, Integer> lhs,

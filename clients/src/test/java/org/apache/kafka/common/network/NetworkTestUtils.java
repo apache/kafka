@@ -14,11 +14,11 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
@@ -30,8 +30,9 @@ import org.apache.kafka.test.TestUtils;
  */
 public class NetworkTestUtils {
 
-    public static NioEchoServer createEchoServer(SecurityProtocol securityProtocol, Map<String, Object> serverConfigs) throws Exception {
-        NioEchoServer server = new NioEchoServer(securityProtocol, serverConfigs, "localhost");
+    public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
+                                                 AbstractConfig serverConfig) throws Exception {
+        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost");
         server.start();
         return server;
     }
@@ -81,6 +82,6 @@ public class NetworkTestUtils {
                 break;
             }
         }
-        assertTrue(closed);
+        assertTrue("Channel was not closed by timeout", closed);
     }
 }

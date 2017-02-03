@@ -20,12 +20,12 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The {@link Aggregator} interface for aggregating values of the given key.
+ * The {@code Aggregator} interface for aggregating values of the given key.
  * This is a generalization of {@link Reducer} and allows to have different types for input value and aggregation
  * result.
- * {@link Aggregator} is used in combination with {@link Initializer} that provides an initial aggregation value.
+ * {@code Aggregator} is used in combination with {@link Initializer} that provides an initial aggregation value.
  * <p>
- * {@link Aggregator} can be used to implement aggregation functions like count.
+ * {@code Aggregator} can be used to implement aggregation functions like count.
 
  * @param <K> key type
  * @param <V> input value type

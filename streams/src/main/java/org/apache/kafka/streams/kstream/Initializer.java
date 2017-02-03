@@ -20,8 +20,8 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The {@link Initializer} interface for creating an initial value in aggregations.
- * {@link Initializer} is used in combination with {@link Aggregator}.
+ * The {@code Initializer} interface for creating an initial value in aggregations.
+ * {@code Initializer} is used in combination with {@link Aggregator}.
  *
  * @param <VA> aggregate value type
  * @see Aggregator
