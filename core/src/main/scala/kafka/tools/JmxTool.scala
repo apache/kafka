@@ -89,31 +89,8 @@ object JmxTool extends Logging {
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
 
-    var jmxc: JMXConnector = null
-    var mbsc: MBeanServerConnection = null
-    var retries = 0
-    val maxNumRetries = 10
-    var connected = false
-    while (retries < maxNumRetries && !connected) {
-      try {
-        System.err.println("Trying to connect to JMX url: %s".format(url))
-        jmxc = JMXConnectorFactory.connect(url, null)
-        mbsc = jmxc.getMBeanServerConnection()
-        connected = true
-      } catch {
-        case e : Exception =>
-          System.err.println(s"Could not connect to JMX url: ${url}. Exception ${e.getMessage}.")
-          e.printStackTrace()
-          retries += 1
-          Thread.sleep(500)
-      }
-    }
-
-    if (!connected) {
-      System.err.println("Could not connect to JMX url %s after %d retries".format(url, maxNumRetries))
-      System.err.println("Exiting")
-      sys.exit(1)
-    }
+    val jmxc = JMXConnectorFactory.connect(url, null)
+    val mbsc = jmxc.getMBeanServerConnection()
 
     val queries: Iterable[ObjectName] =
       if(options.has(objectNameOpt))
