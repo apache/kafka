@@ -790,13 +790,15 @@
         </p>
         <br>
 
-        <h2><a id="streams_upgrade" href="#streams_upgrade">Upgrade Guide and API Changes</a></h2>
+        <h2><a id="streams_upgrade_and_api_0102" href="#streams_upgrade_and_api_0102">Upgrade Guide and API Changes</a></h2>
 
         <p>
         See the <a href="/documentation/#upgrade_1020_streams">Upgrade Section</a> for upgrading a Kafka Streams Application from 0.10.1.x to 0.10.2.0.
+        It highlights incompatible changes you need to consider to upgrade your code and application.
+        See <a href="#streams_api_changes_0102">below</a> a complete list of API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-        <h3><a id="streams_api_changes" href="#streams_api_changes">Streams API changes in 0.10.2.0</a></h3>
+        <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
         <p>
             New methods in <code>KafkaStreams</code>:
@@ -824,44 +826,46 @@
             <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
             <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
         </ul>
+
         <p> New methods in <code>TopologyBuilder</code>: </p>
-            <ul>
-                <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
-                <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
+            <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
+        </ul>
 
         <p> New methods in <code>KStreamBuilder</code>: </p>
-            <ul>
-                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
-                <li> <code>#table()</code> always requires store name </li>
-                <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
+            <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
+        </ul>
 
         <p> New joins for <code>KStream</code>: </p>
-            <ul>
-                <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
-                <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
+            <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+            <li> note, join semantics in 0.10.2 were improved and thus you might see different result compared to 0.10.0.x and 0.10.1.x
+                 (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics>"Kafka Streams Join Semantics"</a> in the Apache Kafka wiki)
+        </ul>
 
         <p> Aligned <code>null</code>-key handling for <code>KTable</code> joins: </p>
-            <ul>
-                <li> like all other KTable operations, <code>KTable-KTable</code> joins do not throw an exception on <code>null</code> key records anymore, but drop those records silently </li>
-            </ul>
+        <ul>
+            <li> like all other KTable operations, <code>KTable-KTable</code> joins do not throw an exception on <code>null</code> key records anymore, but drop those records silently </li>
+        </ul>
 
         <p> New window type <em>Session Windows</em>: </p>
-            <ul>
-                <li> added class <code>SessionWindows</code> to specify session windows </li>
-                <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
-                     to allow session window aggregations </li>
-            </ul>
+        <ul>
+            <li> added class <code>SessionWindows</code> to specify session windows </li>
+            <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+                 to allow session window aggregations </li>
+        </ul>
 
         <p> Changes to <code>TimestampExtractor</code>: </p>
-            <ul>
-                <li> method <code>#extract()</code> has a second parameter now </li>
-                <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
-                     (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
-                <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
-            </ul>
+        <ul>
+            <li> method <code>#extract()</code> has a second parameter now </li>
+            <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
+                 (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
+            <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
+        </ul>
 
         <p> Relaxed type constraints of many DSL interfaces, classes, and methods (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-100+-+Relax+Type+constraints+in+Kafka+Streams+API">KIP-100</a>). </p>
 </script>
