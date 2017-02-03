@@ -29,12 +29,12 @@ public class Checkpointer {
     private long lastCheckpointMs;
 
     public Checkpointer(final Time time,
-                 final Checkpointable checkpointable,
-                 final long checkpointInterval) {
+                        final Checkpointable checkpointable,
+                        final long checkpointInterval) {
         this.time = time;
         this.checkpointable = checkpointable;
-        this.lastCheckpointMs = time.milliseconds();
         this.checkpointInterval = checkpointInterval;
+        lastCheckpointMs = time.milliseconds();
     }
 
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
