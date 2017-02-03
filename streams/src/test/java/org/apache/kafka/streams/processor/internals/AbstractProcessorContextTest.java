@@ -30,6 +30,7 @@ import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
 
@@ -43,10 +44,15 @@ public class AbstractProcessorContextTest {
         context.setRecordContext(recordContext);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() throws Exception {
         context.initialized();
-        context.register(stateStore, false, null);
+        try {
+            context.register(stateStore, false, null);
+            fail("should throw illegal state exception when context already initialized");
+        } catch (IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
@@ -59,10 +65,15 @@ public class AbstractProcessorContextTest {
         context.register(null, false, null);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() throws Exception {
         context.setRecordContext(null);
-        context.topic();
+        try {
+            context.topic();
+            fail("should throw illegal state exception when record context is null");
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
@@ -76,10 +87,15 @@ public class AbstractProcessorContextTest {
         assertThat(context.topic(), nullValue());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() throws Exception {
         context.setRecordContext(null);
-        context.partition();
+        try {
+            context.partition();
+            fail("should throw illegal state exception when record context is null");
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
@@ -87,10 +103,14 @@ public class AbstractProcessorContextTest {
         assertThat(context.partition(), equalTo(recordContext.partition()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() throws Exception {
         context.setRecordContext(null);
-        context.offset();
+        try {
+            context.offset();
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
@@ -98,10 +118,15 @@ public class AbstractProcessorContextTest {
         assertThat(context.offset(), equalTo(recordContext.offset()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() throws Exception {
         context.setRecordContext(null);
-        context.timestamp();
+        try {
+            context.timestamp();
+            fail("should throw illegal state exception when record context is null");
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
