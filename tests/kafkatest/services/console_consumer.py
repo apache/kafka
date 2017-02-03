@@ -88,7 +88,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             "collect_default": True},
         "jmx_log": {
             "path" : JMX_TOOL_LOG,
-            "collect_default": True}
+            "collect_default": False},
+        "jmx_err_log": {
+            "path": JMX_TOOL_ERROR_LOG,
+            "collect_default": False}
     }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
