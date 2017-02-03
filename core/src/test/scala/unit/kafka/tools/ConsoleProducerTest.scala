@@ -19,11 +19,11 @@ package kafka.tools
 
 import kafka.producer.ProducerConfig
 import ConsoleProducer.LineMessageReader
-import kafka.utils.CommandLineUtils
-import kafka.utils.CommandLineUtils.ExitPolicy
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{Test}
+import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.Exit.Procedure
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.Test
 
 class ConsoleProducerTest {
 
@@ -128,19 +128,22 @@ class ConsoleProducerTest {
     assert(reader.parseKey)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testBrokerListAndBootstrapServerOptionMissing(): Unit = {
-    val args: Array[String] = Array(
-      "--topic",
-      "producerTest"
-    )
-
-    CommandLineUtils.exitPolicy(new ExitPolicy {
-      override def exit(msg: String): Nothing = {
-        throw new IllegalArgumentException
-      }
-    })
-    new ConsoleProducer.ProducerConfig(args)
+    try {
+      val args: Array[String] = Array(
+        "--topic",
+        "producerTest"
+      )
+      Exit.setExitProcedure(new Procedure {
+        override def execute(statusCode: Int, message: String) =
+          throw new IllegalArgumentException("Test exception")
+      })
+      new ConsoleProducer.ProducerConfig(args)
+      fail()
+    } catch {
+      case ex: Exception => assert(ex.getMessage == "Test exception")
+    }
   }
 
 }
