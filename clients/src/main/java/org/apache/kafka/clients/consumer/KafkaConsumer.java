@@ -1122,7 +1122,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         acquire();
         try {
-            coordinator.commitOffsetsSync(offsets, Long.MAX_VALUE);
+            coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
         } finally {
             release();
         }
