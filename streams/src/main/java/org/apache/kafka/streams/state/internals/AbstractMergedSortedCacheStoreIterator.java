@@ -154,7 +154,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 
     @Override

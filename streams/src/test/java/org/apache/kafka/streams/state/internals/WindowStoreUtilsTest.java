@@ -19,6 +19,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Test;
 
@@ -32,13 +33,12 @@ public class WindowStoreUtilsTest {
         final String key = "key1";
         final long timestamp = 99L;
         final int seqNum = 3;
-        byte[] bytes = WindowStoreUtils.toBinaryKey(key, timestamp, seqNum, serdes);
-        final String parsedKey = WindowStoreUtils.keyFromBinaryKey(bytes, serdes);
-        final long parsedTs = WindowStoreUtils.timestampFromBinaryKey(bytes);
-        final int parsedSeqNum = WindowStoreUtils.sequenceNumberFromBinaryKey(bytes);
+        Bytes bytes = WindowStoreUtils.toBinaryKey(key, timestamp, seqNum, serdes);
+        final String parsedKey = WindowStoreUtils.keyFromBinaryKey(bytes.get(), serdes);
+        final long parsedTs = WindowStoreUtils.timestampFromBinaryKey(bytes.get());
+        final int parsedSeqNum = WindowStoreUtils.sequenceNumberFromBinaryKey(bytes.get());
         assertEquals(key, parsedKey);
         assertEquals(timestamp, parsedTs);
         assertEquals(seqNum, parsedSeqNum);
     }
-
 }

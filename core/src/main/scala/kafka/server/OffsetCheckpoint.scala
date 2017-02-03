@@ -22,7 +22,7 @@ import java.util.regex.Pattern
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection._
-import kafka.utils.Logging
+import kafka.utils.{Exit, Logging}
 import kafka.common._
 import java.io._
 
@@ -66,7 +66,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
         case e: FileNotFoundException =>
           if (FileSystems.getDefault.isReadOnly) {
             fatal("Halting writes to offset checkpoint file because the underlying file system is inaccessible : ", e)
-            Runtime.getRuntime.halt(1)
+            Exit.halt(1)
           }
           throw e
       } finally {

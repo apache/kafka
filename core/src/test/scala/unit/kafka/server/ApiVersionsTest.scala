@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package unit.kafka.server
+package kafka.server
 
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, Protocol}

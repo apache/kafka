@@ -25,11 +25,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
 
-public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<Bytes, byte[]> {
+public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]> {
     private final KeyValueStore<Bytes, byte[]> inner;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
-    public ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
+    ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
         this.inner = inner;
     }
@@ -40,6 +40,10 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractW
         this.changeLogger = new StoreChangeLogger<>(inner.name(), context, WindowStoreUtils.INNER_SERDES);
     }
 
+    @Override
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
+    }
 
     @Override
     public void put(final Bytes key, final byte[] value) {
@@ -84,10 +88,5 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractW
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         return inner.all();
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return inner.approximateNumEntries();
     }
 }
