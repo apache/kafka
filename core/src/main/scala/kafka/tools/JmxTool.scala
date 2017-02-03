@@ -92,7 +92,7 @@ object JmxTool extends Logging {
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
     var retries = 0
-    val maxNumRetries = 20
+    val maxNumRetries = 10
     var connected = false
     while (retries < maxNumRetries && !connected) {
       try {
