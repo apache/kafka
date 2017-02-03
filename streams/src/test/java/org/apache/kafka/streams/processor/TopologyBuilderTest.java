@@ -90,15 +90,11 @@ public class TopologyBuilderTest {
     public void shouldAddSourceWithoutOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
-
         final Pattern expectedPattern = Pattern.compile("test-topic");
 
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
 
-
-
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
-
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
@@ -107,36 +103,39 @@ public class TopologyBuilderTest {
     public void shouldAddPatternSourceWithoutOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
-
         final Pattern expectedPattern = Pattern.compile("test-.*");
         
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
-
-
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
-
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldNotAllowOffsetResetSourceWithoutTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
 
-        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
-        fail("Should throw TopologyBuilderException with no topics");
+        try {
+            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
+            fail("Should throw TopologyBuilderException with no topics");
+        } catch (TopologyBuilderException tpe) {
+            //no-op
+        }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
-
-        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
-        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
-        fail("Should throw TopologyBuilderException for duplicate source name");
+        try {
+            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
+            builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
+            fail("Should throw TopologyBuilderException for duplicate source name");
+        } catch (TopologyBuilderException tpe) {
+            //no-op
+        }
     }
 
 
