@@ -112,7 +112,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
 
-        producer_prop_file += "\nrequest.timeout.ms=%d\n" % self.request_timeout_sec
+        producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
