@@ -44,6 +44,8 @@
 
         <p>
         Kafka Streams is a client library for processing and analyzing data stored in Kafka and either write the resulting data back to Kafka or send the final output to an external system. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+        </p>
+        <p>
         Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
         </p>
         <p>
@@ -125,12 +127,13 @@
 
         <p>
             Finally, whenever a Kafka Streams application writes records to Kafka, then it will also assign timestamps to these new records. The way the timestamps are assigned depends on the context:
+        </p>
+
         <ul>
             <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
             <li> When new output records are generated via periodic functions such as <code>punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
             <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
         </ul>
-        </p>
 
         <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
@@ -357,13 +360,13 @@
 
         <p>
         In the above implementation, the following actions are performed:
+        </p>
 
         <ul>
             <li>In the <code>init</code> method, schedule the punctuation every 1 second and retrieve the local state store by its name "Counts".</li>
             <li>In the <code>process</code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this feature later in the section).</li>
             <li>In the <code>punctuate</code> method, iterate the local state store and send the aggregated counts to the downstream processor, and commit the current stream state.</li>
         </ul>
-        </p>
 
 
         <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
@@ -371,6 +374,7 @@
         <p>
         With the customized processors defined in the Processor API, developers can use the <code>TopologyBuilder</code> to build a processor topology
         by connecting these processors together:
+        </p>
 
         <pre>
             TopologyBuilder builder = new TopologyBuilder();
@@ -405,7 +409,6 @@
             <li>Three processor nodes are then added using the <code>addProcessor</code> method; here the first processor is a child of the "SOURCE" node, but is the parent of the other two processors.</li>
             <li>Finally three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
         </ul>
-        </p>
 
         <h4><a id="streams_processor_statestore" href="#streams_processor_statestore">State Stores</a></h4>
 
@@ -415,6 +418,7 @@
         To take advantage of these states, users can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>);
         in practice, though, users usually do not need to customize such a state store from scratch but can simply use the <code>Stores</code> factory to define a state store by specifying whether it should be persistent, log-backed, etc.
         In the following example, a persistent key-value store named “Counts” with key type <code>String</code> and value type <code>Long</code> is created.
+        </p>
 
         <pre>
             StateStoreSupplier countStore = Stores.create("Counts")
@@ -446,7 +450,6 @@
                 .addSink("SINK2", "sink-topic2", "PROCESS2")
                 .addSink("SINK3", "sink-topic3", "PROCESS3");
         </pre>
-        </p>
 
         In the next section we present another way to build the processor topology: the Kafka Streams DSL.
         <br>
