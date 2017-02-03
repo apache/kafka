@@ -30,7 +30,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
     def __init__(self, test_context):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
-        self.num_records = 1000000L
+        self.num_records = 2000000L
         self.replication = 1
 
 
@@ -51,6 +51,7 @@ class StreamsSimpleBenchmarkTest(Test):
         self.zk.start()
         self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=DEV_BRANCH, topics={
             'simpleBenchmarkSourceTopic' : { 'partitions': scale, 'replication-factor': self.replication },
+            'countTopic' : { 'partitions': scale, 'replication-factor': self.replication },
             'simpleBenchmarkSinkTopic' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic1KStreamKStream' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic2KStreamKStream' : { 'partitions': scale, 'replication-factor': self.replication },

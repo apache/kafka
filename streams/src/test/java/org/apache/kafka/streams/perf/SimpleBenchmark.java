@@ -230,7 +230,7 @@ public class SimpleBenchmark {
         }
         Properties props = setProperties("simple-benchmark-count");
         final KafkaStreams streams = createCountStreams(props, countTopic, latch);
-        runGenericBenchmark(streams, "Streams count Performance [MB/s counted]: ", latch);
+        runGenericBenchmark(streams, "Streams Count Performance [MB/s counted]: ", latch);
     }
 
     /**
