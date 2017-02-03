@@ -34,8 +34,8 @@ class StreamsSimpleBenchmarkTest(Test):
         self.replication = 1
 
 
-    @cluster(num_nodes=4)
-    @matrix(test=["all"], scale=[1])
+    @cluster(num_nodes=9)
+    @matrix(test=["all"], scale=[1,2])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark

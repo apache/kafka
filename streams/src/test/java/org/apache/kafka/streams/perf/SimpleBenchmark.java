@@ -66,6 +66,7 @@ public class SimpleBenchmark {
     private static final String SOURCE_TOPIC = "simpleBenchmarkSourceTopic";
     private static final String SINK_TOPIC = "simpleBenchmarkSinkTopic";
 
+    private static final String COUNT_TOPIC = "countTopic";
     private static final String JOIN_TOPIC_1_PREFIX = "joinSourceTopic1";
     private static final String JOIN_TOPIC_2_PREFIX = "joinSourceTopic2";
     private static final ValueJoiner VALUE_JOINER = new ValueJoiner<byte[], byte[], byte[]>() {
@@ -117,6 +118,8 @@ public class SimpleBenchmark {
                 processStreamWithStateStore(SOURCE_TOPIC);
                 // simple stream performance source->cache->store
                 processStreamWithCachedStateStore(SOURCE_TOPIC);
+                // simple aggregation
+                count(COUNT_TOPIC);
                 // simple streams performance KSTREAM-KTABLE join
                 kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
                 // simple streams performance KSTREAM-KSTREAM join
@@ -129,6 +132,9 @@ public class SimpleBenchmark {
                 break;
             case "consume":
                 consume(SOURCE_TOPIC);
+                break;
+            case "count":
+                count(COUNT_TOPIC);
                 break;
             case "processstream":
                 processStream(SOURCE_TOPIC);
@@ -182,7 +188,7 @@ public class SimpleBenchmark {
         benchmark.run();
     }
 
-    private Properties setJoinProperties(final String applicationId) {
+    private Properties setProperties(final String applicationId) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
@@ -192,6 +198,39 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
         return props;
+    }
+
+    private KafkaStreams createCountStreams(Properties streamConfig, String topic, final CountDownLatch latch) {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<Integer, byte[]> input = builder.stream(topic);
+
+        input.groupByKey()
+            .count("tmpStoreName").foreach(new CountDownAction(latch));
+
+        return new KafkaStreams(builder, streamConfig);
+    }
+
+
+    /**
+     * Measure the performance of a simple aggregate like count.
+     * Counts the occurrence of numbers (note that normally people count words, this
+     * example counts numbers)
+     * @param countTopic Topic where numbers are stored
+     * @throws Exception
+     */
+    public void count(String countTopic) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        // initialize topics
+        if (loadPhase) {
+            System.out.println("Initializing countTopic " + countTopic);
+            // WARNING: The keys must be sequential, i.e., unique, otherwise the logic for when this test
+            // stops will not work (in createCountStreams)
+            produce(countTopic, VALUE_SIZE, "simple-benchmark-produce-count", numRecords, true, numRecords, false);
+            return;
+        }
+        Properties props = setProperties("simple-benchmark-count");
+        final KafkaStreams streams = createCountStreams(props, countTopic, latch);
+        runGenericBenchmark(streams, "Streams count Performance [MB/s counted]: ", latch);
     }
 
     /**
@@ -204,17 +243,17 @@ public class SimpleBenchmark {
         // initialize topics
         if (loadPhase) {
             System.out.println("Initializing kStreamTopic " + kStreamTopic);
-            produce(kStreamTopic, VALUE_SIZE, "simple-benchmark-produce-kstream", numRecords, false, numRecords, false);
+            produce(kStreamTopic, VALUE_SIZE, "simple-benchmark-produce-kstream", numRecords, true, numRecords, false);
             System.out.println("Initializing kTableTopic " + kTableTopic);
             produce(kTableTopic, VALUE_SIZE, "simple-benchmark-produce-ktable", numRecords, true, numRecords, false);
             return;
         }
         // setup join
-        Properties props = setJoinProperties("simple-benchmark-kstream-ktable-join");
+        Properties props = setProperties("simple-benchmark-kstream-ktable-join");
         final KafkaStreams streams = createKafkaStreamsKStreamKTableJoin(props, kStreamTopic, kTableTopic, latch);
 
         // run benchmark
-        runJoinBenchmark(streams, "Streams KStreamKTable LeftJoin Performance [MB/s joined]: ", latch);
+        runGenericBenchmark(streams, "Streams KStreamKTable LeftJoin Performance [MB/s joined]: ", latch);
     }
 
     /**
@@ -234,11 +273,11 @@ public class SimpleBenchmark {
         }
 
         // setup join
-        Properties props = setJoinProperties("simple-benchmark-kstream-kstream-join");
+        Properties props = setProperties("simple-benchmark-kstream-kstream-join");
         final KafkaStreams streams = createKafkaStreamsKStreamKStreamJoin(props, kStreamTopic1, kStreamTopic2, latch);
 
         // run benchmark
-        runJoinBenchmark(streams, "Streams KStreamKStream LeftJoin Performance [MB/s joined]: ", latch);
+        runGenericBenchmark(streams, "Streams KStreamKStream LeftJoin Performance [MB/s joined]: ", latch);
     }
 
     /**
@@ -258,14 +297,14 @@ public class SimpleBenchmark {
         }
 
         // setup join
-        Properties props = setJoinProperties("simple-benchmark-ktable-ktable-join");
+        Properties props = setProperties("simple-benchmark-ktable-ktable-join");
         final KafkaStreams streams = createKafkaStreamsKTableKTableJoin(props, kTableTopic1, kTableTopic2, latch);
 
         // run benchmark
-        runJoinBenchmark(streams, "Streams KTableKTable LeftJoin Performance [MB/s joined]: ", latch);
+        runGenericBenchmark(streams, "Streams KTableKTable LeftJoin Performance [MB/s joined]: ", latch);
     }
 
-    private void runJoinBenchmark(final KafkaStreams streams, final String nameOfBenchmark, final CountDownLatch latch) {
+    private void runGenericBenchmark(final KafkaStreams streams, final String nameOfBenchmark, final CountDownLatch latch) {
         streams.start();
 
         long startTime = System.currentTimeMillis();
@@ -284,7 +323,6 @@ public class SimpleBenchmark {
 
         streams.close();
     }
-
 
 
     public void processStream(String topic) throws Exception {
@@ -475,6 +513,9 @@ public class SimpleBenchmark {
         if (sequential) {
             if (upperRange < numRecords) throw new Exception("UpperRange must be >= numRecords");
         }
+        if (!sequential) {
+            System.out.println("WARNING: You are using non-sequential keys. If your tests' exit logic expects to see a final key, random keys may not work.");
+        }
         Properties props = new Properties();
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -640,13 +681,13 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
-    private class CountDownAction implements ForeachAction<Integer, byte[]> {
+    private class CountDownAction<V> implements ForeachAction<Integer, V> {
         private CountDownLatch latch;
         CountDownAction(final CountDownLatch latch) {
             this.latch = latch;
         }
         @Override
-        public void apply(Integer key, byte[] value) {
+        public void apply(Integer key, V value) {
             if (key.compareTo(endKey) >= 0) {
                 this.latch.countDown();
             }
