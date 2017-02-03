@@ -85,7 +85,7 @@ class AdminClient(val time: Time,
     response.apiVersions.asScala.toList
   }
 
-  private def findAllBrokers(): List[Node] = {
+  def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
     val errors = response.errors
