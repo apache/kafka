@@ -147,11 +147,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
-        if self.jmx_object_names is None:
-           self.jmx_object_names = []
-
-
         if self.new_consumer is True:
+            if self.jmx_object_names is None:
+                self.jmx_object_names = []
             self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
             self.jmx_attributes += ["assigned-partitions"]
             self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
