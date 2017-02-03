@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.Map;
+import java.util.Objects;
 
 
 public abstract class AbstractProcessorContext implements InternalProcessorContext {
@@ -95,7 +96,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
-
+        Objects.requireNonNull(store, "store must not be null");
         stateManager.register(store, loggingEnabled, stateRestoreCallback);
     }
 
@@ -108,7 +109,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
         }
 
-        String topic = recordContext.topic();
+        final String topic = recordContext.topic();
 
         if (topic.equals(NONEXIST_TOPIC)) {
             return null;
