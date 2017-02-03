@@ -43,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 public class KGroupedTableImplTest {
 
     private final KStreamBuilder builder = new KStreamBuilder();
+    private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
     private KStreamTestDriver driver = null;
 
@@ -67,8 +68,7 @@ public class KGroupedTableImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnAggregate() throws Exception {
-        String storeName = "~foo bar~";
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, storeName);
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
@@ -103,8 +103,7 @@ public class KGroupedTableImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnReduce() throws Exception {
-        String storeName = "~foo bar~";
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, storeName);
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)

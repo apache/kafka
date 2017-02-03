@@ -359,7 +359,8 @@ public interface KTable<K, V> {
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
-     * @param storeName the state store name used for the result {@code KTable}; valid characters are ASCII alphanumerics, '.', '_' and '-'
+     * @param storeName the state store name used for the result {@code KTable}; valid characters are ASCII
+     *                  alphanumerics, '.', '_' and '-'
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
