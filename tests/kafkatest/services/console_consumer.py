@@ -143,13 +143,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
-        if self.new_consumer is True:
-            if self.jmx_object_names is None:
-                self.jmx_object_names = []
-            self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-            self.jmx_attributes += ["assigned-partitions"]
-            self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
-
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -258,6 +251,13 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         if first_line is not None:
             self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
+            if self.new_consumer is True:
+                if self.jmx_object_names is None:
+                    self.jmx_object_names = []
+                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+                self.jmx_attributes += ["assigned-partitions"]
+                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
             self.start_jmx_tool(idx, node)
 
             for line in itertools.chain([first_line], consumer_output):
@@ -295,6 +295,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.security_config.clean_node(node)
 
     def has_partitions_assigned(self, node):
+       if self.new_consumer is False:
+          return False
        idx = self.idx(node)
        self.start_jmx_tool(idx, node)
        self.read_jmx_output(idx, node)
