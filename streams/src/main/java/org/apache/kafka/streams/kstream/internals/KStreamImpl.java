@@ -57,6 +57,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String FILTER_NAME = "KSTREAM-FILTER-";
 
+    public static final String PEEK_NAME = "KSTREAM-PEEK-";
+
     private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
 
     private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
@@ -315,6 +317,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(FOREACH_NAME);
 
         topology.addProcessor(name, new KStreamForeach<>(action), this.name);
+    }
+
+    @Override
+    public KStream<K, V> peek(final ForeachAction<? super K, ? super V> action) {
+        Objects.requireNonNull(action, "action can't be null");
+        final String name = topology.newName(PEEK_NAME);
+
+        topology.addProcessor(name, new KStreamPeek<>(action), this.name);
+
+        return new KStreamImpl<>(topology, name, sourceNodes, repartitionRequired);
     }
 
     @Override
