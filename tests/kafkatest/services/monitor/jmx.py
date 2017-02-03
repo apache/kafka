@@ -56,7 +56,7 @@ class JmxMixin(object):
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:
             cmd += " --attributes %s" % jmx_attribute
-        cmd += " 1>> %s" % self.jmx_tool_log
+        cmd += " 1>> %s &" % self.jmx_tool_log
         # cmd += " 2>> %s &" % self.jmx_tool_err_log
 
         self.logger.debug("%s: Start JmxTool %d command: %s" % (node.account, idx, cmd))
