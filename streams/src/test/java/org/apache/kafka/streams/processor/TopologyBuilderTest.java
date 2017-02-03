@@ -129,8 +129,9 @@ public class TopologyBuilderTest {
     public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
+
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
         try {
-            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
             builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
             fail("Should throw TopologyBuilderException for duplicate source name");
         } catch (TopologyBuilderException tpe) {
