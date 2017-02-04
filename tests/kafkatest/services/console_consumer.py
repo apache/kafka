@@ -254,13 +254,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         if first_line is not None:
             self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
-            if self.new_consumer is True:
-                if self.jmx_object_names is None:
-                    self.jmx_object_names = []
-                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes += ["assigned-partitions"]
-                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
-
+            self.init_jmx_attributes()
             self.start_jmx_tool(idx, node)
 
             for line in itertools.chain([first_line], consumer_output):
@@ -301,9 +295,19 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
        if self.new_consumer is False:
           return False
        idx = self.idx(node)
+       self.init_jmx_attributes()
        self.start_jmx_tool(idx, node)
        self.read_jmx_output(idx, node)
        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
            return False
        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
+
+    def init_jmx_attributes(self):
+        if self.new_consumer is True:
+            if self.jmx_object_names is None:
+                self.jmx_object_names = []
+                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+                self.jmx_attributes += ["assigned-partitions"]
+                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
