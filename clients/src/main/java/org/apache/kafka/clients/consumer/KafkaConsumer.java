@@ -1088,7 +1088,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync() {
         acquire();
         try {
-            commitSync(subscriptions.allConsumed());
+            coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {
             release();
         }
