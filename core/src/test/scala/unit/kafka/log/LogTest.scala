@@ -659,8 +659,10 @@ class LogTest extends JUnitSuite {
     // The rebuilt time index should be empty
     log = new Log(logDir, config, recoveryPoint = numMessages + 1, time.scheduler, time)
     val segArray = log.logSegments.toArray
-    for (i <- 0 until segArray.size - 1)
+    for (i <- 0 until segArray.size - 1) {
       assertEquals("The time index should be empty", 0, segArray(i).timeIndex.entries)
+      assertEquals("The time index file size should be 0", 0, segArray(i).timeIndex.file.length)
+    }
 
   }
 
