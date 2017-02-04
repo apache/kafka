@@ -297,7 +297,7 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         //clientId may already contain application id, removing to avoid duplication
-        threadClientId = clientId.replace(applicationId,"") + "-" + threadName;
+        threadClientId = clientId.replace(applicationId, "") + "-" + threadName;
         this.streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
