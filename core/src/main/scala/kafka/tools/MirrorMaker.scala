@@ -566,6 +566,16 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def cleanup() {
+      // This is needed to unblock zookeeper listener thread if zookeeper
+      // listener thread calls requestAndWaitForCommit() after MirrorMaker thread
+      // has already exited loop of consuming and producing messages.
+      this.synchronized {
+        iter = null
+        if (immediateCommitRequested) {
+          immediateCommitRequested = false
+          this.notifyAll()
+        }
+      }
       connector.shutdown()
     }
 
