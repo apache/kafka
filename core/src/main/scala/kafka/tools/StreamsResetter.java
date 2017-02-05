@@ -143,7 +143,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics created using through() method). For these topics, the tool will skip to the end.")
+        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics used in the through() method). For these topics, the tool will skip to the end.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
@@ -272,15 +272,23 @@ public class StreamsResetter {
     }
 
     private void printHelp(OptionParser parser) throws IOException {
-        System.err.println("The Application Reset Tool allows you to quickly reset an application in order to reprocess its data from scratch.\n" +
-                "* This tool will reset offsets of input topics to 0 and it skips to the end of intermediate topics (topics created with the through() method).\n" +
-                "* This tool will deletes the internal topics that were created automatically (topics ending in -changelog and -repartition).\n  You do not need to specify internal topics the tool finds them automatically.\n" +
-                "* This tool will not delete output topics (if you want to delete them, you need to do it yourself through bin/kafka-topics.sh command)\n" +
-                "* This tool will does not clean up the local state on the stream application instances (the persisted stores used to cache aggregation results).\n  You need to call KafkaStreams#cleanUp() in your application or manually delete them from the directory specified by state.dir configuration (usually /tmp/kafka-streams/<application.id>\n\n" +
-                "*** Important! You will get wrong output if you don't clean up the statestore after running the reset tool!\n\n"
+        System.err.println("The Application Reset Tool allows you to quickly reset an application in order to reprocess "
+                + "its data from scratch.\n"
+                + "* This tool resets offsets of input topics to 0 and it skips to the end of intermediate topics "
+                + "(topics used in the through() method).\n"
+                + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
+                + "\"<application.id>-\").\n"
+                + "You do not need to specify internal topics because the tool finds them automatically.\n"
+                + "* This tool will not delete output topics (if you want to delete them, you need to do it yourself "
+                + "with the bin/kafka-topics.sh command).\n"
+                + "* This tool will not clean up the local state on the stream application instances (the persisted "
+                + "stores used to cache aggregation results).\n"
+                + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
+                + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n\n"
+                + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
+                + "reset tool!\n\n"
         );
         parser.printHelpOn(System.err);
-
     }
 
     public static void main(final String[] args) {
