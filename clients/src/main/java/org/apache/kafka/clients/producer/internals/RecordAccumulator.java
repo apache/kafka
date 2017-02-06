@@ -183,22 +183,33 @@ public final class RecordAccumulator {
             ByteBuffer buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
-                if (closed)
+                if (closed) {
+                    free.deallocate(buffer);
                     throw new IllegalStateException("Cannot send after the producer is closed.");
+                }
 
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
+                RecordAppendResult appendResult = null;
+                try {
+                    appendResult = tryAppend(timestamp, key, value, callback, dq);
+                } catch (Exception e) {
+                    free.deallocate(buffer);
+                    throw e;
+                }
+
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     free.deallocate(buffer);
-                    return appendResult;
-                }
-                MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, compression, TimestampType.CREATE_TIME, this.batchSize);
-                RecordBatch batch = new RecordBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
+                } else {
+                    MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, compression, TimestampType.CREATE_TIME, this.batchSize);
+                    RecordBatch batch = new RecordBatch(tp, recordsBuilder, time.milliseconds());
+                    FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
-                dq.addLast(batch);
-                incomplete.add(batch);
-                return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
+                    dq.addLast(batch);
+                    incomplete.add(batch);
+                    appendResult = new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
+                }
+
+                return appendResult;
             }
         } finally {
             appendsInProgress.decrementAndGet();
