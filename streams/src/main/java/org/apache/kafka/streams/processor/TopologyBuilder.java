@@ -63,6 +63,8 @@ public class TopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
 
+    private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
+
     // node factories in a topological order
     private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
@@ -112,8 +114,6 @@ public class TopologyBuilder {
     private final Set<Pattern> earliestResetPatterns = new HashSet<>();
 
     private final Set<Pattern> latestResetPatterns = new HashSet<>();
-
-    private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 

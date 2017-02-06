@@ -25,7 +25,7 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Exit, Logging}
 
 import scala.collection.JavaConverters._
 import org.apache.commons.io.IOUtils
@@ -355,7 +355,7 @@ object MiniKdc {
         start(workDir, config, keytabFile, principals)
       case _ =>
         println("Arguments: <WORKDIR> <MINIKDCPROPERTIES> <KEYTABFILE> [<PRINCIPALS>]+")
-        sys.exit(1)
+        Exit.exit(1)
     }
   }
 

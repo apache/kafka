@@ -19,8 +19,7 @@ package kafka.tools
 
 import joptsimple.OptionParser
 import org.apache.kafka.common.security._
-
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
@@ -39,7 +38,7 @@ object VerifyConsumerRebalance extends Logging {
 
     if (options.has("help")) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)

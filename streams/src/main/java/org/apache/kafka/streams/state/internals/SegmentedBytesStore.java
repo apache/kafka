@@ -65,13 +65,12 @@ public interface SegmentedBytesStore extends StateStore {
      */
     byte[] get(Bytes key);
 
-
     interface KeySchema {
         /**
          * Given a record-key and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.
          * @see SessionKeySchema#upperRange
-         * @see WindowStoreKeySchema#upperRange
+         * @see WindowKeySchema#upperRange
          * @param key
          * @param to
          * @return      The key that represents the upper range to search for in the store
@@ -82,7 +81,7 @@ public interface SegmentedBytesStore extends StateStore {
          * Given a record-key and a time, construct a Segmented key that represents
          * the lower range of keys to search when performing range queries.
          * @see SessionKeySchema#lowerRange
-         * @see WindowStoreKeySchema#lowerRange
+         * @see WindowKeySchema#lowerRange
          * @param key
          * @param from
          * @return      The key that represents the lower range to search for in the store
@@ -93,7 +92,7 @@ public interface SegmentedBytesStore extends StateStore {
          * Extract the timestamp of the segment from the key. The key is a composite of
          * the record-key, any timestamps, plus any additional information.
          * @see SessionKeySchema#lowerRange
-         * @see WindowStoreKeySchema#lowerRange
+         * @see WindowKeySchema#lowerRange
          * @param key
          * @return
          */

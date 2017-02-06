@@ -47,14 +47,16 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<ol>
-    <li>Upgrading a Kafka Streams Applications:
-        <ul>
-            <li>You need to recompile your code. Just swapping the jar file will not work and will break your appliation.</li>
-            <li>If you use a custom timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed.</li>
-        </ul>
-    </li>
-</ol>
+<h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Upgrading a Kafka Streams Application</a></h5>
+<ul>
+    <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
+         A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+    <li> You need to recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
+    <li> <code>KTable#through()</code> always requires a store name. </li>
+    <li> If you use a custom (i.e., user implemented) timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
+    <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
+</ul>
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
 <ul>
@@ -67,6 +69,8 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
         A new close API with timeout has been added to <code>KafkaConsumer</code> to control the maximum wait time.</li>
     <li>Multiple regular expressions separated by commas can be passed to MirrorMaker with the new Java consumer via the --whitelist option. This
         makes the behaviour consistent with MirrorMaker when used the old Scala consumer.</li>
+    <li>Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
+        A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though).</li>
     <li>The Zookeeper dependency was removed from the Streams API. The Streams API now uses the Kafka protocol to manage internal topics instead of
         modifying Zookeeper directly. This eliminates the need for privileges to access Zookeeper directly and "StreamsConfig.ZOOKEEPER_CONFIG"
         should not be set in the Streams app any more. If the Kafka cluster is secured, Streams apps must have the required security privileges to create new topics.</li>

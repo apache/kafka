@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
@@ -33,11 +32,10 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-
 public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
+    private static final String METRIC_SCOPE = "rocksdb-session";
     private static final int NUM_SEGMENTS = 3;
-    public static final String METRIC_SCOPE = "rocksdb-session-store";
     private final long retentionPeriod;
     private final boolean cached;
 
@@ -56,15 +54,14 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
                                                                                      NUM_SEGMENTS,
-                                                                                     keySchema
-        );
+                                                                                     keySchema);
 
         if (cached && logged) {
             final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
             final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
                                                                                       METRIC_SCOPE, time);
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+                    = RocksDBSessionStore.bytesStore(metered);
 
             return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }
@@ -73,7 +70,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
             final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
                                                                                       METRIC_SCOPE, time);
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = new RocksDBSessionStore<>(metered, Serdes.Bytes(), Serdes.ByteArray());
+                    = RocksDBSessionStore.bytesStore(metered);
 
             return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
         }

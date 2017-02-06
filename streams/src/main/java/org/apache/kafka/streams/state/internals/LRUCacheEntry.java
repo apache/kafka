@@ -25,12 +25,12 @@ class LRUCacheEntry implements RecordContext {
 
     public final byte[] value;
     private final long offset;
-    private final long timestamp;
     private final String topic;
-    boolean isDirty;
     private final int partition;
-    private long sizeBytes = 0;
+    private final long timestamp;
 
+    private long sizeBytes;
+    private boolean isDirty;
 
     LRUCacheEntry(final byte[] value) {
         this(value, false, -1, -1, -1, "");
@@ -51,13 +51,6 @@ class LRUCacheEntry implements RecordContext {
                 8 + // offset
                 4 + // partition
                 (topic == null ? 0 : topic.length());
-
-    }
-
-
-
-    void markClean() {
-        isDirty = false;
     }
 
     @Override
@@ -78,6 +71,10 @@ class LRUCacheEntry implements RecordContext {
     @Override
     public int partition() {
         return partition;
+    }
+
+    void markClean() {
+        isDirty = false;
     }
 
     boolean isDirty() {

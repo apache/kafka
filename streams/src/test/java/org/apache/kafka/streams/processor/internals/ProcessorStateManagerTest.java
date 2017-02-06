@@ -233,6 +233,7 @@ public class ProcessorStateManagerTest {
                 put(nonPersistentStoreName, nonPersistentStoreName);
             }
         });
+
         try {
             stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
         } finally {

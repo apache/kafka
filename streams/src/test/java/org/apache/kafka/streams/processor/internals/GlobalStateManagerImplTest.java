@@ -70,6 +70,7 @@ public class GlobalStateManagerImplTest {
     private NoOpReadOnlyStore store2;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
+    private ProcessorTopology topology;
 
     @Before
     public void before() throws IOException {
@@ -82,12 +83,12 @@ public class GlobalStateManagerImplTest {
         storeToProcessorNode.put(store1, new MockProcessorNode(-1));
         store2 = new NoOpReadOnlyStore("t2-store");
         storeToProcessorNode.put(store2, new MockProcessorNode(-1));
-        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                                                 Collections.<String, SourceNode>emptyMap(),
-                                                                 Collections.<String, SinkNode>emptyMap(),
-                                                                 Collections.<StateStore>emptyList(),
-                                                                 storeToTopic,
-                                                                 Arrays.<StateStore>asList(store1, store2));
+        topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                                         Collections.<String, SourceNode>emptyMap(),
+                                         Collections.<String, SinkNode>emptyMap(),
+                                         Collections.<StateStore>emptyList(),
+                                         storeToTopic,
+                                         Arrays.<StateStore>asList(store1, store2));
 
         context = new NoOpProcessorContext();
         stateDirPath = TestUtils.tempDirectory().getPath();
@@ -109,7 +110,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test(expected = LockException.class)
-    public void shouldThrowStreamsExceptionIfCantGetLock() throws Exception {
+    public void shouldThrowLockExceptionIfCantGetLock() throws Exception {
         final StateDirectory stateDir = new StateDirectory("appId", stateDirPath, time);
         try {
             stateDir.lockGlobalState(1);
@@ -137,10 +138,7 @@ public class GlobalStateManagerImplTest {
 
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws Exception {
-        final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
-        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
-            stream.write("0\n1\nblah".getBytes());
-        }
+        writeCorruptCheckpoint();
         stateManager.initialize(context);
     }
 
@@ -363,10 +361,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws Exception {
-        final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
-        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
-            stream.write("0\n1\nblah".getBytes());
-        }
+        writeCorruptCheckpoint();
         try {
             stateManager.initialize(context);
         } catch (StreamsException e) {
@@ -378,6 +373,30 @@ public class GlobalStateManagerImplTest {
             assertTrue(stateDir.lockGlobalState(1));
         } finally {
             stateDir.unlockGlobalState();
+        }
+    }
+
+    @Test
+    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() throws Exception {
+        stateManager = new GlobalStateManagerImpl(topology, consumer, new StateDirectory("appId", stateDirPath, time) {
+            @Override
+            public boolean lockGlobalState(final int retry) throws IOException {
+                throw new IOException("KABOOM!");
+            }
+        });
+
+        try {
+            stateManager.initialize(context);
+            fail("Should have thrown LockException");
+        } catch (final LockException e) {
+            // pass
+        }
+    }
+
+    private void writeCorruptCheckpoint() throws IOException {
+        final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
+            stream.write("0\n1\nfoo".getBytes());
         }
     }
 

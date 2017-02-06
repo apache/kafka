@@ -26,13 +26,15 @@ import kafka.log.LogConfig
 import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_10_1_IV1, KAFKA_0_10_1_IV2, KAFKA_0_9_0}
 import kafka.common.KafkaStorageException
 import ReplicaFetcherThread._
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.network.{ChannelBuilders, Mode, NetworkReceive, Selectable, Selector}
+import kafka.utils.Exit
+import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
@@ -143,7 +145,7 @@ class ReplicaFetcherThread(name: String,
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)
-        Runtime.getRuntime.halt(1)
+        Exit.halt(1)
     }
   }
 
@@ -181,11 +183,11 @@ class ReplicaFetcherThread(name: String,
       // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
       if (!LogConfig.fromProps(brokerConfig.originals, AdminUtils.fetchEntityConfig(replicaMgr.zkUtils,
         ConfigType.Topic, topicPartition.topic)).uncleanLeaderElectionEnable) {
-        // Log a fatal error and shutdown the broker to ensure that data loss does not unexpectedly occur.
-        fatal("Exiting because log truncation is not allowed for partition %s,".format(topicPartition) +
-          " Current leader %d's latest offset %d is less than replica %d's latest offset %d"
-          .format(sourceBroker.id, leaderEndOffset, brokerConfig.brokerId, replica.logEndOffset.messageOffset))
-        System.exit(1)
+        // Log a fatal error and shutdown the broker to ensure that data loss does not occur unexpectedly.
+        fatal(s"Exiting because log truncation is not allowed for partition $topicPartition, current leader " +
+          s"${sourceBroker.id}'s latest offset $leaderEndOffset is less than replica ${brokerConfig.brokerId}'s latest " +
+          s"offset ${replica.logEndOffset.messageOffset}")
+        throw new FatalExitError
       }
 
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"
