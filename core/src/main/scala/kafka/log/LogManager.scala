@@ -338,6 +338,7 @@ class LogManager(val logDirs: Array[File],
         diff -= segment.size
         true
       } else {
+        diff = 0
         false
       }
     }
