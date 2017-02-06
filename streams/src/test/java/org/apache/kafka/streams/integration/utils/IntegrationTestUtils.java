@@ -53,7 +53,6 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    public static final int UNLIMITED_MESSAGES = -1;
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
 
     /**
@@ -72,19 +71,6 @@ public class IntegrationTestUtils {
             returnList.add(kv.value);
         }
         return returnList;
-    }
-
-    /**
-     * Returns as many messages as possible from the topic until a (currently hardcoded) timeout is
-     * reached.
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @param waitTime       Maximum wait time in milliseconds
-     * @return The KeyValue elements retrieved via the consumer.
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final long waitTime) {
-        return readKeyValues(topic, consumerConfig, waitTime, UNLIMITED_MESSAGES);
     }
 
     /**
@@ -210,7 +196,7 @@ public class IntegrationTestUtils {
         final TestCondition valuesRead = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig, waitTime);
+                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
                 return accumData.size() >= expectedNumRecords;
             }
