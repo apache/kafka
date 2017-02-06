@@ -61,6 +61,7 @@ public class ProcessorTopologyTest {
     private static final String INPUT_TOPIC_2 = "input-topic-2";
     private static final String OUTPUT_TOPIC_1 = "output-topic-1";
     private static final String OUTPUT_TOPIC_2 = "output-topic-2";
+    private static final String THROUGH_TOPIC_1 = "through-topic-1";
 
     private static long timestamp = 1000L;
     private final TopologyBuilder builder = new TopologyBuilder();
@@ -235,6 +236,17 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingInternalRepartitioningTopology() {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology());
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
+    }
+
+    @Test
     public void shouldCreateStringWithSourceAndTopics() throws Exception {
         builder.addSource("source", "topic1", "topic2");
         final ProcessorTopology topology = builder.build(null);
@@ -337,6 +349,13 @@ public class ProcessorTopologyTest {
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    private TopologyBuilder createInternalRepartitioningTopology() {
+        return builder.addSource("source", INPUT_TOPIC_1)
+            .addInternalTopic(THROUGH_TOPIC_1)
+            .addSink("sink0", THROUGH_TOPIC_1, "source")
+            .addSource("source1", THROUGH_TOPIC_1)
+            .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
 
     private TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return builder.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)

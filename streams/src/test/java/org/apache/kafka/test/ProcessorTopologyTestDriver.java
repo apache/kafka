@@ -20,10 +20,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -150,6 +152,7 @@ public class ProcessorTopologyTestDriver {
     private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
+    private final Set<String> internalTopics = new HashSet<>();
     private final ProcessorTopology globalTopology;
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
     private StreamTask task;
@@ -176,14 +179,17 @@ public class ProcessorTopologyTestDriver {
         };
         restoreStateConsumer = createRestoreConsumer(id, storeNames);
 
+        // Identify internal topics for forwarding in process ...
+        for (TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
+            internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
+        }
+
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
             TopicPartition tp = new TopicPartition(topic, 1);
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
-
-
 
         consumer.assign(offsetsByTopicPartition.keySet());
 
@@ -250,6 +256,11 @@ public class ProcessorTopologyTestDriver {
                     outputRecordsByTopic.put(record.topic(), outputRecords);
                 }
                 outputRecords.add(record);
+
+                // Forward back into the topology if the produced record is to an internal topic ...
+                if (internalTopics.contains(record.topic())) {
+                    process(record.topic(), record.key(), record.value());
+                }
             }
         } else {
             final TopicPartition global = globalPartitionsByTopic.get(topicName);
