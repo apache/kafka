@@ -160,6 +160,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public void clearPartitionRecords() {
+        struct.clear();
         partitionRecords.clear();
     }
 

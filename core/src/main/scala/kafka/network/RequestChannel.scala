@@ -84,7 +84,7 @@ object RequestChannel extends Logging {
         }
       } else
         null
-    var body: AbstractRequest =
+    val body: AbstractRequest =
       if (requestObj == null)
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
@@ -98,12 +98,6 @@ object RequestChannel extends Logging {
         }
       else
         null
-
-    def takeBodyOwnership: AbstractRequest = {
-      val requestBody = body
-      body = null
-      return requestBody
-    }
 
     buffer = null
 
