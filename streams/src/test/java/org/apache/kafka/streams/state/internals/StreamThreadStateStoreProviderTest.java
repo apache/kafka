@@ -98,7 +98,7 @@ public class StreamThreadStateStoreProviderTest {
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(applicationId, stateConfigDir);
+        stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
         tasks.put(new TaskId(0, 0),

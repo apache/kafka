@@ -339,7 +339,7 @@ public class KafkaStreams {
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
                                                         clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG)),
+                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
                                                         metrics,
                                                         time,
                                                         clientId);
@@ -559,8 +559,8 @@ public class KafkaStreams {
             localApplicationDir,
             appId);
 
-        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
-        stateDirectory.cleanRemovedTasks();
+        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir, Time.SYSTEM);
+        stateDirectory.cleanRemovedTasks(0);
     }
 
     /**

@@ -122,7 +122,7 @@ public class StreamTaskTest {
         source1.addChild(processor);
         source2.addChild(processor);
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory("applicationId", baseDir.getPath());
+        stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
     }
 
     @After
