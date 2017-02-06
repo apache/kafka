@@ -129,7 +129,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code state.cleanup.delay} */
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
-    private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated.";
+    private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least state.cleanup.delay.ms will be removed";
 
     /** {@code timestamp.extractor} */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
@@ -291,7 +291,7 @@ public class StreamsConfig extends AbstractConfig {
                     BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
                     Type.LONG,
-                    60000,
+                    10 * 60 * 1000,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
