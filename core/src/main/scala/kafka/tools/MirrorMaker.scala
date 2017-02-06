@@ -572,8 +572,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       this.synchronized {
         iter = null
         if (immediateCommitRequested) {
-          immediateCommitRequested = false
-          this.notifyAll()
+          notifyCommit()
         }
       }
       connector.shutdown()
