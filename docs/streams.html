@@ -209,14 +209,14 @@
 
         <p>
         Kafka Streams allows the user to configure the number of <b>threads</b> that the library can use to parallelize processing within an application instance.
-        Each thread can execute one or more tasks with their processor topologies independently. For example, The following diagram shows one stream thread running two stream tasks.
+        Each thread can execute one or more tasks with their processor topologies independently. For example, the following diagram shows one stream thread running two stream tasks.
         </p>
         <img class="centered" src="/{{version}}/images/streams-architecture-threads.jpg" style="width:400px">
 
         <p>
         Starting more stream threads or more instances of the application merely amounts to replicating the topology and having it process a different subset of Kafka partitions, effectively parallelizing processing.
         It is worth noting that there is no shared state amongst the threads, so no inter-thread coordination is necessary. This makes it very simple to run topologies in parallel across the application instances and threads.
-        The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Client-side+Assignment+Proposal">Kafka's server-side coordination</a> functionality.
+        The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Client-side+Assignment+Proposal">Kafka's coordination</a> functionality.
         </p>
 
         <p>
@@ -240,7 +240,7 @@
         </p>
 
         <p>
-        The following diagram shows wwo stream tasks with their dedicated local state stores.
+        The following diagram shows two stream tasks with their dedicated local state stores.
         </p>
         <img class="centered" src="/{{version}}/images/streams-architecture-states.jpg" style="width:400px">
         <br>
@@ -288,8 +288,8 @@
 
         <p>
         As mentioned in the <a href="#streams_concepts">Core Concepts</a> section, a stream processor is a node in the processor topology that represents a single processing step.
-        With the <code>Processor</code> API developers can define arbitrary stream processors that processes one received record at a time, and connect these processors with
-        their associated state stores to compose the processor topology that represents their customized processing logic .
+        With the <code>Processor</code> API developers can define arbitrary stream processors that process one received record at a time, and connect these processors with
+        their associated state stores to compose the processor topology that represents their customized processing logic.
         </p>
 
         <p>
@@ -431,9 +431,11 @@
               .build();
         </pre>
 
+        <p>
         To take advantage of these state stores, developers can use the <code>TopologyBuilder.addStateStore</code> method when building the
         processor topology to create the local state and associate it with the processor nodes that needs to access it; or they can connect a created
         state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
+        </p>
 
         <pre>
             TopologyBuilder builder = new TopologyBuilder();
@@ -763,10 +765,6 @@
             # from the fat jar named `path-to-app-fatjar.jar`.
             $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         </pre>
-
-        <p>
-        If there are other instances of this stream processing application running elsewhere (e.g., on another machine),
-        </p>
 
         <p>
         When the application instance starts running, the defined processor topology will be initialized as one or more stream tasks that can be executed in parallel by the stream threads within the instance.
