@@ -68,9 +68,9 @@ class Replica(val brokerId: Int,
    */
   def updateLogReadResult(logReadResult : LogReadResult) {
     if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
-      _lastCaughtUpTimeMs = logReadResult.fetchTimeMs
+      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, logReadResult.fetchTimeMs)
     else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
-      _lastCaughtUpTimeMs = lastFetchTimeMs
+      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, lastFetchTimeMs)
 
     logEndOffset = logReadResult.info.fetchOffsetMetadata
     lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
@@ -130,6 +130,7 @@ class Replica(val brokerId: Int,
     replicaString.append("; Topic: " + partition.topic)
     replicaString.append("; Partition: " + partition.partitionId)
     replicaString.append("; isLocal: " + isLocal)
+    replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
     if (isLocal) replicaString.append("; Highwatermark: " + highWatermark)
     replicaString.toString
   }

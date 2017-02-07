@@ -177,21 +177,21 @@ subprojects {
   }
 
   jar {
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
   }
 
   task srcJar(type: Jar) {
     classifier = 'sources'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier 'javadoc'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from javadoc.destinationDir
   }
 
@@ -213,15 +213,15 @@ subprojects {
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
       classifier = 'test'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.output
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
       classifier = 'test-sources'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.allSource
     }
 
@@ -234,8 +234,8 @@ subprojects {
   plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from scaladoc.destinationDir
     }
 
@@ -511,7 +511,7 @@ project(':core') {
                                ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
-    from project.file("../docs")
+    from project.file("$rootDir/docs")
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -519,10 +519,10 @@ project(':core') {
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${versions.baseScala}-${version}"
     compression = Compression.GZIP
-    from(project.file("../bin")) { into "bin/" }
-    from(project.file("../config")) { into "config/" }
-    from '../LICENSE'
-    from '../NOTICE'
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
@@ -606,12 +606,12 @@ project(':clients') {
   task determineCommitId {
     ext.commitId = "unknown"
     def takeFromHash = 16
-    if (file("../.git/HEAD").exists()) {
-      def headRef = file("../.git/HEAD").text
+    if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("../.git/$headRef").exists()) {
-        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+        if (file("$rootDir/.git/$headRef").exists()) {
+        commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
         }
       } else {
         commitId = headRef.trim().take(takeFromHash)

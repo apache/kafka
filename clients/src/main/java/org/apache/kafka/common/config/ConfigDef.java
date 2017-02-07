@@ -426,24 +426,26 @@ public class ConfigDef {
         }
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
-        for (ConfigKey key : configKeys.values()) {
-            Object value;
-            // props map contains setting - assign ConfigKey value
-            if (props.containsKey(key.name)) {
-                value = parseType(key.name, props.get(key.name), key.type);
-                // props map doesn't contain setting, the key is required because no default value specified - its an error
-            } else if (key.defaultValue == NO_DEFAULT_VALUE) {
-                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-            } else {
-                // otherwise assign setting its default value
-                value = key.defaultValue;
-            }
-            if (key.validator != null) {
-                key.validator.ensureValid(key.name, value);
-            }
-            values.put(key.name, value);
-        }
+        for (ConfigKey key : configKeys.values())
+            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name)));
         return values;
+    }
+
+    Object parseValue(ConfigKey key, Object value, boolean isSet) {
+        Object parsedValue;
+        if (isSet) {
+            parsedValue = parseType(key.name, value, key.type);
+        // props map doesn't contain setting, the key is required because no default value specified - its an error
+        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+            throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
+        } else {
+            // otherwise assign setting its default value
+            parsedValue = key.defaultValue;
+        }
+        if (key.validator != null) {
+            key.validator.ensureValid(key.name, parsedValue);
+        }
+        return parsedValue;
     }
 
     /**
@@ -638,7 +640,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Integer.parseInt(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 32-bit integer, but it was a " + value.getClass().getName());
                     }
                 case SHORT:
                     if (value instanceof Short) {
@@ -646,7 +648,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 16-bit integer (short), but it was a " + value.getClass().getName());
                     }
                 case LONG:
                     if (value instanceof Integer)
@@ -656,14 +658,14 @@ public class ConfigDef {
                     else if (value instanceof String)
                         return Long.parseLong(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 64-bit integer (long), but it was a " + value.getClass().getName());
                 case DOUBLE:
                     if (value instanceof Number)
                         return ((Number) value).doubleValue();
                     else if (value instanceof String)
                         return Double.parseDouble(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a double, but it was a " + value.getClass().getName());
                 case LIST:
                     if (value instanceof List)
                         return (List<?>) value;

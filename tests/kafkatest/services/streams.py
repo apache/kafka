@@ -160,3 +160,11 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
+
+
+class StreamsBrokerCompatibilityService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsBrokerCompatibilityService, self).__init__(test_context,
+                                                                kafka,
+                                                                "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
+                                                                "dummy")

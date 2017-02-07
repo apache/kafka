@@ -34,7 +34,7 @@ public final class ProduceRequestResult {
     private final CountDownLatch latch = new CountDownLatch(1);
     private final TopicPartition topicPartition;
 
-    private volatile long baseOffset = -1L;
+    private volatile Long baseOffset = null;
     private volatile long logAppendTime = Record.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
@@ -48,16 +48,24 @@ public final class ProduceRequestResult {
     }
 
     /**
-     * Mark this request as complete and unblock any threads waiting on its completion.
+     * Set the result of the produce request.
      *
      * @param baseOffset The base offset assigned to the record
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param error The error that occurred if there was one, or null
      */
-    public void done(long baseOffset, long logAppendTime, RuntimeException error) {
+    public void set(long baseOffset, long logAppendTime, RuntimeException error) {
         this.baseOffset = baseOffset;
         this.logAppendTime = logAppendTime;
         this.error = error;
+    }
+
+    /**
+     * Mark this request as complete and unblock any threads waiting on its completion.
+     */
+    public void done() {
+        if (baseOffset == null)
+            throw new IllegalStateException("The method `set` must be invoked before this method.");
         this.latch.countDown();
     }
 

@@ -22,11 +22,11 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 
 <h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
-<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.10.0.1/kafka_2.11-0.10.0.1.tgz" title="Kafka downloads">Download</a> the 0.10.0.1 release and un-tar it.
+<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.10.2.0/kafka_2.11-0.10.2.0.tgz" title="Kafka downloads">Download</a> the 0.10.2.0 release and un-tar it.
 
 <pre>
-&gt; <b>tar -xzf kafka_2.11-0.10.0.1.tgz</b>
-&gt; <b>cd kafka_2.11-0.10.0.1</b>
+&gt; <b>tar -xzf kafka_2.11-0.10.2.0.tgz</b>
+&gt; <b>cd kafka_2.11-0.10.2.0</b>
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -184,7 +184,7 @@ my test message 2
 On Windows use:
 <pre>
 &gt; <b>wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"</b>
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.10-0.10.1.0.jar"  kafka.Kafka config\server-1.properties    <i>644</i>
+java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.10-0.10.2.0.jar"  kafka.Kafka config\server-1.properties    <i>644</i>
 &gt; <b>taskkill /pid 644 /f</b>
 </pre>
 
@@ -279,18 +279,30 @@ data in the topic (or use custom consumer code to process it):
 <p>
 Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
 This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
-of the <code>WordCountDemo</code> example code (converted to use Java 8 lambda expressions for easy reading).
+of the <code><a href="https://github.com/apache/kafka/blob/{dotVersion}/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a></code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
 <pre>
-KTable<String, Long> wordCounts = textLines
+// Serializers/deserializers (serde) for String and Long types
+final Serde&lt;String&gt; stringSerde = Serdes.String();
+final Serde&lt;Long&gt; longSerde = Serdes.Long();
+
+// Construct a `KStream` from the input topic ""streams-file-input", where message values
+// represent lines of text (for the sake of this example, we ignore whatever may be stored
+// in the message keys).
+KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "streams-file-input");
+
+KTable&lt;String, Long&gt; wordCounts = textLines
     // Split each text line, by whitespace, into words.
     .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 
-    // Ensure the words are available as record keys for the next aggregate operation.
-    .map((key, value) -> new KeyValue<>(value, value))
+    // Group the text words as message keys
+    .groupBy((key, value) -> value)
 
-    // Count the occurrences of each word (record key) and store the results into a table named "Counts".
-    .countByKey("Counts")
+    // Count the occurrences of each word (message key).
+    .count("Counts")
+
+// Store the running counts as a changelog stream to the output topic.
+wordCounts.to(stringSerde, longSerde, "streams-wordcount-output");
 </pre>
 
 <p>
@@ -303,7 +315,7 @@ unbounded input data, it will periodically output its current state and results 
 because it cannot know when it has processed "all" the input data.
 </p>
 <p>
-We will now prepare input data to a Kafka topic, which will subsequently be processed by a Kafka Streams application.
+As the first step, we will prepare input data to a Kafka topic, which will subsequently be processed by a Kafka Streams application.
 </p>
 
 <!--
@@ -329,7 +341,8 @@ Or on Windows:
 </pre>
 
 <p>
-Next, we send this input data to the input topic named <b>streams-file-input</b> using the console producer (in practice,
+Next, we send this input data to the input topic named <b>streams-file-input</b> using the console producer,
+which reads the data from STDIN line-by-line, and publishes each line as a separate Kafka message with null key and value encoded a string to the topic (in practice,
 stream data will likely be flowing continuously into Kafka where the application will be up and running):
 </p>
 
@@ -343,7 +356,7 @@ stream data will likely be flowing continuously into Kafka where the application
 
 
 <pre>
-&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt</b>
+&gt; <b>cat file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
 </pre>
 
 <p>
@@ -355,7 +368,9 @@ We can now run the WordCount demo application to process the input data:
 </pre>
 
 <p>
-There won't be any STDOUT output except log entries as the results are continuously written back into another topic named <b>streams-wordcount-output</b> in Kafka.
+The demo application will read from the input topic <b>streams-file-input</b>, perform the computations of the WordCount algorithm on each of the read messages,
+and continuously write its current results to the output topic <b>streams-wordcount-output</b>.
+Hence there won't be any STDOUT output except log entries as the results are written back into in Kafka.
 The demo will run for a few seconds and then, unlike typical stream processing applications, terminate automatically.
 </p>
 <p>
@@ -379,9 +394,12 @@ with the following output data being printed to the console:
 
 <pre>
 all     1
+streams 1
 lead    1
 to      1
+kafka   1
 hello   1
+kafka   2
 streams 2
 join    1
 kafka   3
@@ -389,9 +407,32 @@ summit  1
 </pre>
 
 <p>
-Here, the first column is the Kafka message key, and the second column is the message value, both in in <code>java.lang.String</code> format.
+Here, the first column is the Kafka message key in <code>java.lang.String</code> format, and the second column is the message value in <code>java.lang.Long</code> format.
 Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
 an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
+</p>
+
+<p>
+The two diagrams below illustrate what is essentially happening behind the scenes.
+The first column shows the evolution of the current state of the <code>KTable&lt;String, Long&gt;</code> that is counting word occurrences for <code>count</code>.
+The second column shows the change records that result from state updates to the KTable and that are being sent to the output Kafka topic <b>streams-wordcount-output</b>.
+</p>
+
+<p>
+First the text line “all streams lead to kafka” is being processed.
+The <code>KTable</code> is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream <code>KStream</code>.
+</p>
+<img class="centered" src="/{{version}}/images/streams-table-updates-01.png">
+<p>
+When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words “kafka” and for “streams”). And again, change records are being sent to the output topic.
+</p>
+<img class="centered" src="/{{version}}/images/streams-table-updates-01.png">
+<p>
+And so on (we skip the illustration of how the third line is being processed). This explains why the output topic has the contents we showed above, because it contains the full record of changes.
+</p>
+
+<p>
+Looking beyond the scope of this concrete example, what Kafka Streams is doing here is to leverage the duality between a table and a changelog stream (here: table = the KTable, changelog stream = the downstream KStream): you can publish every change of the table to a stream, and if you consume the entire changelog stream from beginning to end, you can reconstruct the contents of the table.
 </p>
 
 <p>

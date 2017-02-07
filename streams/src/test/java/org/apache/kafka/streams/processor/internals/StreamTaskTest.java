@@ -134,8 +134,8 @@ public class StreamTaskTest {
         source1.addChild(processor);
         source2.addChild(processor);
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(applicationId, baseDir.getPath());
         config = createConfig(baseDir);
+        stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
                               restoreStateConsumer, config, streamsMetrics, stateDirectory, null, time, recordCollector);
     }
@@ -414,10 +414,15 @@ public class StreamTaskTest {
         assertTrue(flushed.get());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
-        task.punctuate(processor, 10);
+        try {
+            task.punctuate(processor, 10);
+            fail("Should throw illegal state exception as current node is not null");
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @Test
@@ -448,26 +453,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseTopology() throws Exception {
-        final MockSourceNode processorNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
-            @Override
-            public void close() {
-                throw new RuntimeException("KABOOM!");
-            }
-        };
-        final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
-        final Map<String, SourceNode> sourceNodes
-                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
-        final ProcessorTopology topology = new ProcessorTopology(processorNodes,
-                                                                 sourceNodes,
-                                                                 Collections.<String, SinkNode>emptyMap(),
-                                                                 Collections.<StateStore>emptyList(),
-                                                                 Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore>emptyList());
-
-
-        task = new StreamTask(taskId00, applicationId, partitions,
-                              topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
-
+        task = createTaskThatThrowsExceptionOnClose();
         try {
             task.closeTopology();
             fail("should have thrown runtime exception");
@@ -476,9 +462,21 @@ public class StreamTaskTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseAllProcessorNodesWhenExceptionsRaised() throws Exception {
+        task = createTaskThatThrowsExceptionOnClose();
+        try {
+            task.closeTopology();
+        } catch (RuntimeException e) {
+            // expected
+        }
+        assertTrue(processor.closed);
+        assertTrue(source1.closed);
+        assertTrue(source2.closed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private StreamTask createTaskThatThrowsExceptionOnClose() {
         final MockSourceNode processorNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
             @Override
             public void close() {
@@ -496,17 +494,8 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore>emptyList());
 
 
-        task = new StreamTask(taskId00, applicationId, partitions,
+        return new StreamTask(taskId00, applicationId, partitions,
                               topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
-
-        try {
-            task.closeTopology();
-        } catch (RuntimeException e) {
-
-        }
-        assertTrue(processor.closed);
-        assertTrue(source1.closed);
-        assertTrue(source2.closed);
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

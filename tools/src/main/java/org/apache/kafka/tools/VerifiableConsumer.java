@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -602,7 +603,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            System.exit(0);
+            Exit.exit(0);
         }
 
         try {
@@ -617,7 +618,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            System.exit(1);
+            Exit.exit(1);
         }
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
 
@@ -25,14 +26,14 @@ import java.util.Map;
  * maintain duration.
  * <p>
  * If not explicitly specified, the default maintain duration is 1 day.
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link TimestampExtractor}.
  *
  * @param <W> type of the window instance
  * @see TimeWindows
  * @see UnlimitedWindows
  * @see JoinWindows
  * @see SessionWindows
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
 public abstract class Windows<W extends Window> {

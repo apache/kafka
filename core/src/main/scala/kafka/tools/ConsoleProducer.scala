@@ -20,7 +20,7 @@ package kafka.tools
 import kafka.common._
 import kafka.message._
 import kafka.serializer._
-import kafka.utils.{CommandLineUtils, ToolsUtils}
+import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
@@ -62,12 +62,12 @@ object ConsoleProducer {
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
-        System.exit(1)
+        Exit.exit(1)
       case e: Exception =>
         e.printStackTrace
-        System.exit(1)
+        Exit.exit(1)
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 
   def getReaderProps(config: ProducerConfig): Properties = {
@@ -306,6 +306,7 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
+      print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>

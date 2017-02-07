@@ -24,7 +24,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import TRUNK, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
 from kafkatest.utils.remote_account import line_count
 
 
@@ -50,8 +50,8 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None,
-                 stop_timeout_sec=150):
+                 message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
+                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO"):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -64,6 +64,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         compression types, one per producer (could be "none").
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
+        self.log_level = log_level
 
         self.kafka = kafka
         self.topic = topic
@@ -82,6 +83,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.clean_shutdown_nodes = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
+        self.request_timeout_sec = request_timeout_sec
 
     def prop_file(self, node):
         idx = self.idx(node)
@@ -109,6 +111,8 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         if self.acks is not None:
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
+
+        producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
@@ -181,9 +185,9 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         cmd = ""
         if node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from trunk to the classpath
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, TRUNK)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+            # the tools jar from the development branch to the classpath
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
 
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar

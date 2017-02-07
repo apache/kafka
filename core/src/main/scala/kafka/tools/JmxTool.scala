@@ -22,12 +22,21 @@ import java.util.Date
 import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
+
 import joptsimple.OptionParser
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
+
+/**
+  * A program for reading JMX metrics from a given endpoint.
+  *
+  * This tool only works reliably if the JmxServer is fully initialized prior to invoking the tool. See KAFKA-4620 for
+  * details.
+  */
 object JmxTool extends Logging {
 
   def main(args: Array[String]) {
@@ -71,7 +80,7 @@ object JmxTool extends Logging {
 
     if(options.has(helpOpt)) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))
@@ -80,8 +89,32 @@ object JmxTool extends Logging {
     val attributesWhitelist = if(attributesWhitelistExists) Some(options.valueOf(attributesOpt).split(",")) else None
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
-    val jmxc = JMXConnectorFactory.connect(url, null)
-    val mbsc = jmxc.getMBeanServerConnection()
+
+    var jmxc: JMXConnector = null
+    var mbsc: MBeanServerConnection = null
+    var retries = 0
+    val maxNumRetries = 10
+    var connected = false
+    while (retries < maxNumRetries && !connected) {
+      try {
+        System.err.println(s"Trying to connect to JMX url: $url.")
+        jmxc = JMXConnectorFactory.connect(url, null)
+        mbsc = jmxc.getMBeanServerConnection
+        connected = true
+      } catch {
+        case e : Exception =>
+          System.err.println(s"Could not connect to JMX url: $url. Exception ${e.getMessage}.")
+          e.printStackTrace()
+          retries += 1
+          Thread.sleep(500)
+      }
+    }
+
+    if (!connected) {
+      System.err.println(s"Could not connect to JMX url $url after $maxNumRetries retries.")
+      System.err.println("Exiting.")
+      sys.exit(1)
+    }
 
     val queries: Iterable[ObjectName] =
       if(options.has(objectNameOpt))
