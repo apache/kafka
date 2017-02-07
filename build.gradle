@@ -119,7 +119,7 @@ subprojects {
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {
     apply plugin: 'eclipse'
-    fineTuneEclipseClasspathFile(eclipse)
+    fineTuneEclipseClasspathFile(eclipse, project)
   }
   apply plugin: 'maven'
   apply plugin: 'signing'
@@ -292,7 +292,7 @@ subprojects {
   }
 }
 
-def fineTuneEclipseClasspathFile(eclipse) {
+def fineTuneEclipseClasspathFile(eclipse, project) {
   eclipse.classpath.file {
     beforeMerged { cp ->
       cp.entries.clear()
