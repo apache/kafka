@@ -24,14 +24,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 public class OffsetFetchResponse extends AbstractResponse {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.OFFSET_FETCH.id);
-    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id);
     private static final String RESPONSES_KEY_NAME = "responses";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
@@ -85,51 +82,16 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for the latest version.
-     * @param error Potential coordinator or group level error code
+     * Constructor for all versions.
+     * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
      */
     public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
-        this(error, responseData, CURRENT_VERSION);
-    }
-
-    /**
-     * Unified constructor for all versions.
-     * @param error Potential coordinator or group level error code (for api version 2 and later)
-     * @param responseData Fetched offset information grouped by topic-partition
-     * @param version The request API version
-     */
-    public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData, int version) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.OFFSET_FETCH.id, version)));
-
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
-        List<Struct> topicArray = new ArrayList<>();
-        for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
-            Struct topicData = this.struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entries.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
-                PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
-                partitionData.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
-                partitionArray.add(partitionData);
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
-        }
-
-        this.struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
         this.responseData = responseData;
         this.error = error;
-        if (version > 1)
-            this.struct.set(ERROR_CODE_KEY_NAME, this.error.code());
     }
 
     public OffsetFetchResponse(Struct struct) {
-        super(struct);
         Errors topLevelError = Errors.NONE;
         this.responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
@@ -175,12 +137,37 @@ public class OffsetFetchResponse extends AbstractResponse {
         return responseData;
     }
 
-    public static OffsetFetchResponse parse(ByteBuffer buffer, int version) {
-        Schema schema = ProtoUtils.responseSchema(ApiKeys.OFFSET_FETCH.id, version);
-        return new OffsetFetchResponse(schema.read(buffer));
+    public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {
+        return new OffsetFetchResponse(ProtoUtils.parseResponse(ApiKeys.OFFSET_FETCH.id, version, buffer));
     }
 
-    public static OffsetFetchResponse parse(ByteBuffer buffer) {
-        return new OffsetFetchResponse(CURRENT_SCHEMA.read(buffer));
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.OFFSET_FETCH.id, version));
+
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        List<Struct> topicArray = new ArrayList<>();
+        for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
+            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, entries.getKey());
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
+                PartitionData fetchPartitionData = partitionEntry.getValue();
+                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
+                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
+                partitionData.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionArray.add(partitionData);
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+
+        if (version > 1)
+            struct.set(ERROR_CODE_KEY_NAME, this.error.code());
+
+        return struct;
     }
 }

@@ -32,8 +32,7 @@ public class GroupCoordinatorRequest extends AbstractRequest {
         }
 
         @Override
-        public GroupCoordinatorRequest build() {
-            short version = version();
+        public GroupCoordinatorRequest build(short version) {
             return new GroupCoordinatorRequest(this.groupId, version);
         }
 
@@ -49,14 +48,12 @@ public class GroupCoordinatorRequest extends AbstractRequest {
     private final String groupId;
 
     private GroupCoordinatorRequest(String groupId, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.GROUP_COORDINATOR.id, version)),
-                version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
+        super(version);
         this.groupId = groupId;
     }
 
     public GroupCoordinatorRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+        super(versionId);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
 
@@ -76,12 +73,15 @@ public class GroupCoordinatorRequest extends AbstractRequest {
         return groupId;
     }
 
-    public static GroupCoordinatorRequest parse(ByteBuffer buffer, int versionId) {
+    public static GroupCoordinatorRequest parse(ByteBuffer buffer, short versionId) {
         return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer),
-                (short) versionId);
+                versionId);
     }
 
-    public static GroupCoordinatorRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.GROUP_COORDINATOR.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.GROUP_COORDINATOR.id, version()));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        return struct;
     }
 }

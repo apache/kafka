@@ -112,12 +112,12 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = send(request, ApiKeys.DELETE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
     DeleteTopicsResponse.parse(response, request.version)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = send(request, ApiKeys.METADATA)
-    MetadataResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.METADATA)
+    MetadataResponse.parse(response, request.version)
   }
 }

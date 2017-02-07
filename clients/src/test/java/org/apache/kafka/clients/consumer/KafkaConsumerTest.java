@@ -1436,7 +1436,7 @@ public class KafkaConsumerTest {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
                     1L, partitionOffset.getValue()));
         }
-        return new ListOffsetResponse(partitionData, 1);
+        return new ListOffsetResponse(partitionData);
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {

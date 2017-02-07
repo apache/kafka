@@ -58,11 +58,11 @@ public class OffsetFetchRequest extends AbstractRequest {
         }
 
         @Override
-        public OffsetFetchRequest build() {
-            if (isAllTopicPartitions() && version() < 2)
+        public OffsetFetchRequest build(short version) {
+            if (isAllTopicPartitions() && version < 2)
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                        "v" + version() + ", but we need v2 or newer to request all topic partitions.");
-            return new OffsetFetchRequest(groupId, partitions, version());
+                        "v" + version + ", but we need v2 or newer to request all topic partitions.");
+            return new OffsetFetchRequest(groupId, partitions, version);
         }
 
         @Override
@@ -80,39 +80,18 @@ public class OffsetFetchRequest extends AbstractRequest {
     private final List<TopicPartition> partitions;
 
     public static OffsetFetchRequest forAllPartitions(String groupId) {
-        return new OffsetFetchRequest.Builder(groupId, null).setVersion((short) 2).build();
+        return new OffsetFetchRequest.Builder(groupId, null).build((short) 2);
     }
 
     // v0, v1, and v2 have the same fields.
     private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version)), version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        if (partitions != null) {
-            Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
-
-            List<Struct> topicArray = new ArrayList<>();
-            for (Map.Entry<String, List<Integer>> entries : topicsData.entrySet()) {
-                Struct topicData = struct.instance(TOPICS_KEY_NAME);
-                topicData.set(TOPIC_KEY_NAME, entries.getKey());
-                List<Struct> partitionArray = new ArrayList<>();
-                for (Integer partitionId : entries.getValue()) {
-                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                    partitionData.set(PARTITION_KEY_NAME, partitionId);
-                    partitionArray.add(partitionData);
-                }
-                topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-                topicArray.add(topicData);
-            }
-            struct.set(TOPICS_KEY_NAME, topicArray.toArray());
-        } else
-            struct.set(TOPICS_KEY_NAME, null);
-
+        super(version);
         this.groupId = groupId;
         this.partitions = partitions;
     }
 
-    public OffsetFetchRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public OffsetFetchRequest(Struct struct, short version) {
+        super(version);
 
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
@@ -150,7 +129,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
-                return new OffsetFetchResponse(error, responsePartitions, versionId);
+                return new OffsetFetchResponse(error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id)));
@@ -170,16 +149,38 @@ public class OffsetFetchRequest extends AbstractRequest {
         return partitions;
     }
 
-    public static OffsetFetchRequest parse(ByteBuffer buffer, int versionId) {
-        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer),
-                (short) versionId);
-    }
-
-    public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id));
+    public static OffsetFetchRequest parse(ByteBuffer buffer, short versionId) {
+        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer), versionId);
     }
 
     public boolean isAllPartitions() {
         return partitions == null;
+    }
+
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version()));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        if (partitions != null) {
+            Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
+
+            List<Struct> topicArray = new ArrayList<>();
+            for (Map.Entry<String, List<Integer>> entries : topicsData.entrySet()) {
+                Struct topicData = struct.instance(TOPICS_KEY_NAME);
+                topicData.set(TOPIC_KEY_NAME, entries.getKey());
+                List<Struct> partitionArray = new ArrayList<>();
+                for (Integer partitionId : entries.getValue()) {
+                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                    partitionData.set(PARTITION_KEY_NAME, partitionId);
+                    partitionArray.add(partitionData);
+                }
+                topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+                topicArray.add(topicData);
+            }
+            struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        } else
+            struct.set(TOPICS_KEY_NAME, null);
+
+        return struct;
     }
 }

@@ -129,7 +129,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   }
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    if(request.body.asInstanceOf[org.apache.kafka.common.requests.ProduceRequest].acks == 0) {
+    if (request.body[org.apache.kafka.common.requests.ProduceRequest].acks == 0) {
         requestChannel.closeConnection(request.processor, request)
     }
     else {

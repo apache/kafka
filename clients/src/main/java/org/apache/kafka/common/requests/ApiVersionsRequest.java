@@ -22,13 +22,14 @@ import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
+
         public Builder() {
             super(ApiKeys.API_VERSIONS);
         }
 
         @Override
-        public ApiVersionsRequest build() {
-            return new ApiVersionsRequest(version());
+        public ApiVersionsRequest build(short version) {
+            return new ApiVersionsRequest(version);
         }
 
         @Override
@@ -38,12 +39,16 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public ApiVersionsRequest(short version) {
-        this(new Struct(ProtoUtils.requestSchema(ApiKeys.API_VERSIONS.id, version)),
-                version);
+        super(version);
     }
 
-    public ApiVersionsRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public ApiVersionsRequest(Struct struct, short version) {
+        super(version);
+    }
+
+    @Override
+    protected Struct toStruct() {
+        return new Struct(ProtoUtils.requestSchema(ApiKeys.API_VERSIONS.id, version()));
     }
 
     @Override
@@ -58,13 +63,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         }
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ApiVersionsRequest(
-                ProtoUtils.parseRequest(ApiKeys.API_VERSIONS.id, versionId, buffer),
-                (short) versionId);
+    public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
+        return new ApiVersionsRequest(ProtoUtils.parseRequest(ApiKeys.API_VERSIONS.id, version, buffer), version);
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.API_VERSIONS.id));
-    }
 }

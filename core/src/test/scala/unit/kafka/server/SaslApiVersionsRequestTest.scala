@@ -20,14 +20,13 @@ import java.io.IOException
 import java.net.Socket
 import java.util.Collections
 
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.junit.Test
 import org.junit.Assert._
 import kafka.api.SaslTestHarness
-import org.apache.kafka.common.protocol.types.Struct
 
 class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -42,8 +41,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   def testApiVersionsRequestBeforeSaslHandshakeRequest() {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
-      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket,
-          new ApiVersionsRequest.Builder().setVersion(0).build())
+      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
     } finally {
@@ -57,8 +55,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
     try {
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
       try {
-        sendApiVersionsRequest(plaintextSocket,
-            new ApiVersionsRequest.Builder().setVersion(0).build())
+        sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
         fail("Versions Request during Sasl handshake did not fail")
       } catch {
         case _: IOException => // expected exception
@@ -72,12 +69,10 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   def testApiVersionsRequestWithUnsupportedVersion() {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
-      val apiVersionsRequest = new ApiVersionsRequest(
-        new Struct(ProtoUtils.requestSchema(ApiKeys.API_VERSIONS.id, 0)), Short.MaxValue);
-      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, apiVersionsRequest)
+      val apiVersionsRequest = new ApiVersionsRequest(0)
+      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, apiVersionsRequest, Some(Short.MaxValue))
       assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)
-      val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket,
-          new ApiVersionsRequest.Builder().setVersion(0).build())
+      val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
     } finally {
@@ -85,15 +80,17 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
     }
   }
 
-  private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS, socket)
-    ApiVersionsResponse.parse(response)
+  private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest,
+                                     apiVersion: Option[Short] = None): ApiVersionsResponse = {
+    val response = send(request, ApiKeys.API_VERSIONS, socket, apiVersion)
+    ApiVersionsResponse.parse(response, request.version)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
-    val response = send(new SaslHandshakeRequest("PLAIN"), ApiKeys.SASL_HANDSHAKE, socket)
-    val handshakeResponse = SaslHandshakeResponse.parse(response)
+    val request = new SaslHandshakeRequest("PLAIN")
+    val response = send(request, ApiKeys.SASL_HANDSHAKE, socket)
+    val handshakeResponse = SaslHandshakeResponse.parse(response, request.version)
     assertEquals(Errors.NONE, handshakeResponse.error)
-    assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms())
+    assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms)
   }
 }
