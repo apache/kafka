@@ -527,7 +527,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def requestAndWaitForCommit() {
       this.synchronized {
-        // skip wait() if mirrorMakerConsumer has not been initialized
+        // only wait() if mirrorMakerConsumer has been initialized and it has not been cleaned up.
         if (iter != null) {
           immediateCommitRequested = true
           this.wait()
@@ -566,6 +566,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def cleanup() {
+      // We need to set the iterator to null and notify the rebalance listener thread.
+      // This is to handle the case that the consumer rebalance is triggered when the
+      // mirror maker thread is shutting down and the rebalance listener is waiting for the offset commit.
+      this.synchronized {
+        iter = null
+        if (immediateCommitRequested) {
+          notifyCommit()
+        }
+      }
       connector.shutdown()
     }
 

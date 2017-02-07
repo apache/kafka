@@ -136,7 +136,7 @@ object ReplicaVerificationTool extends Logging {
 
     if (filteredTopicMetadata.isEmpty) {
       error("No topics found. " + topicWhiteListOpt + ", if specified, is either filtering out all topics or there is no topic.")
-      System.exit(1)
+      Exit.exit(1)
     }
 
     val topicPartitionReplicaList: Seq[TopicPartitionReplica] = filteredTopicMetadata.flatMap(
@@ -302,7 +302,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
                         + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
                         + messageInfoFromFirstReplica.offset + " doesn't match replica "
                         + replicaId + "'s offset " + logEntry.offset)
-                      System.exit(1)
+                      Exit.exit(1)
                     }
                     if (messageInfoFromFirstReplica.checksum != logEntry.record.checksum)
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition "

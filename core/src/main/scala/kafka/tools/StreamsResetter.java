@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -271,7 +272,7 @@ public class StreamsResetter {
     }
 
     public static void main(final String[] args) {
-        System.exit(new StreamsResetter().run(args));
+        Exit.exit(new StreamsResetter().run(args));
     }
 
 }

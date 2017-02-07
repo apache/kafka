@@ -23,14 +23,16 @@ from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition
 
 class VerifiableConsumerTest(KafkaTest):
+    PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
     def __init__(self, test_context, num_consumers=1, num_producers=0,
-                 group_id="test_group_id", session_timeout_sec=10,  **kwargs):
+                 group_id="test_group_id", session_timeout_sec=10, **kwargs):
         super(VerifiableConsumerTest, self).__init__(test_context, **kwargs)
         self.num_consumers = num_consumers
         self.num_producers = num_producers
         self.group_id = group_id
         self.session_timeout_sec = session_timeout_sec
+        self.consumption_timeout_sec = max(self.PRODUCER_REQUEST_TIMEOUT_SEC + 5, 2 * session_timeout_sec)
 
     def _all_partitions(self, topic, num_partitions):
         partitions = set()
@@ -56,11 +58,14 @@ class VerifiableConsumerTest(KafkaTest):
     def setup_consumer(self, topic, enable_autocommit=False, assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor"):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
                                   topic, self.group_id, session_timeout_sec=self.session_timeout_sec,
-                                  assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit)
+                                  assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit,
+                                  log_level="TRACE")
 
     def setup_producer(self, topic, max_messages=-1):
         return VerifiableProducer(self.test_context, self.num_producers, self.kafka, topic,
-                                  max_messages=max_messages, throughput=500)
+                                  max_messages=max_messages, throughput=500,
+                                  request_timeout_sec=self.PRODUCER_REQUEST_TIMEOUT_SEC,
+                                  log_level="DEBUG")
 
     def await_produced_messages(self, producer, min_messages=1000, timeout_sec=10):
         current_acked = producer.num_acked
@@ -70,7 +75,7 @@ class VerifiableConsumerTest(KafkaTest):
     def await_consumed_messages(self, consumer, min_messages=1):
         current_total = consumer.total_consumed()
         wait_until(lambda: consumer.total_consumed() >= current_total + min_messages,
-                   timeout_sec=self.session_timeout_sec*2,
+                   timeout_sec=self.consumption_timeout_sec,
                    err_msg="Timed out waiting for consumption")
 
     def await_members(self, consumer, num_consumers):
