@@ -551,7 +551,6 @@
   Here is our production server configuration:
   <pre>
   # Replication configurations
-  num.replica.fetchers=4
   replica.fetch.max.bytes=1048576
   replica.fetch.wait.max.ms=500
   replica.high.watermark.checkpoint.interval.ms=5000
@@ -560,7 +559,6 @@
   replica.lag.time.max.ms=10000
 
   controller.socket.timeout.ms=30000
-  controller.message.queue.size=10
 
   # Log configuration
   num.partitions=8
@@ -569,9 +567,6 @@
   log.index.interval.bytes=4096
   log.index.size.max.bytes=10485760
   log.retention.hours=168
-  log.flush.interval.ms=10000
-  log.flush.interval.messages=20000
-  log.flush.scheduler.interval.ms=2000
   log.roll.hours=168
   log.retention.check.interval.ms=300000
   log.segment.bytes=1073741824
@@ -586,7 +581,7 @@
   socket.request.max.bytes=104857600
   socket.receive.buffer.bytes=1048576
   socket.send.buffer.bytes=1048576
-  queued.max.requests=16
+  queued.max.requests=500
   fetch.purgatory.purge.interval.requests=100
   producer.purgatory.purge.interval.requests=100
   </pre>
