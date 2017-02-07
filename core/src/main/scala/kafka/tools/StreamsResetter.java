@@ -138,7 +138,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .defaultsTo("localhost:2181")
             .describedAs("url");
-        inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to 0.")
+        inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
@@ -274,8 +274,8 @@ public class StreamsResetter {
     private void printHelp(OptionParser parser) throws IOException {
         System.err.println("The Application Reset Tool allows you to quickly reset an application in order to reprocess "
                 + "its data from scratch.\n"
-                + "* This tool resets offsets of input topics to 0 and it skips to the end of intermediate topics "
-                + "(topics used in the through() method).\n"
+                + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
+                + "intermediate topics (topics used in the through() method).\n"
                 + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
                 + "\"<application.id>-\").\n"
                 + "You do not need to specify internal topics because the tool finds them automatically.\n"
