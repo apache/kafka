@@ -13,41 +13,86 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
-
+from ducktape.mark import parametrize, matrix
 from kafkatest.tests.kafka_test import KafkaTest
+
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import KafkaService
+from kafkatest.version import DEV_BRANCH
 
-
-class StreamsSimpleBenchmarkTest(KafkaTest):
+class StreamsSimpleBenchmarkTest(Test):
     """
     Simple benchmark of Kafka Streams.
     """
 
     def __init__(self, test_context):
-        super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1,topics={
-            'simpleBenchmarkSourceTopic' : { 'partitions': 1, 'replication-factor': 1 },
-            'simpleBenchmarkSinkTopic' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic1KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic2KStreamKStream' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic1KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic2KStreamKTable' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic1KTableKTable' : { 'partitions': 1, 'replication-factor': 1 },
-            'joinSourceTopic2KTableKTable' : { 'partitions': 1, 'replication-factor': 1 }
-        })
+        super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
+        self.num_records = 2000000L
+        self.replication = 1
 
-        self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
-    @cluster(num_nodes=3)
-    def test_simple_benchmark(self):
+    @cluster(num_nodes=9)
+    @matrix(test=["all"], scale=[1])
+    def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
         """
+        self.driver = [None] * (scale + 1)
+        node = [None] * (scale)
+        data = [None] * (scale)
 
-        self.driver.start()
-        self.driver.wait()
-        self.driver.stop()
-        node = self.driver.node
-        node.account.ssh("grep Performance %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        #############
+        # SETUP PHASE
+        #############
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
+        self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=DEV_BRANCH, topics={
+            'simpleBenchmarkSourceTopic' : { 'partitions': scale, 'replication-factor': self.replication },
+            'countTopic' : { 'partitions': scale, 'replication-factor': self.replication },
+            'simpleBenchmarkSinkTopic' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic1KStreamKStream' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic2KStreamKStream' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic1KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic2KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic1KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
+            'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication }
+        })
+        self.kafka.start()
+ 
+        ################
+        # LOAD PHASE
+        ################
+        self.load_driver = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                         self.num_records * scale, "true", test)
+        self.load_driver.start()
+        self.load_driver.wait()
+        self.load_driver.stop()
 
-        return self.driver.collect_data(node)
+        ################
+        # RUN PHASE
+        ################
+        for num in range(0, scale):
+            self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                             self.num_records/(scale), "false", test)
+            self.driver[num].start()
+
+        #######################
+        # STOP + COLLECT PHASE
+        #######################
+        for num in range(0, scale):    
+            self.driver[num].wait()    
+            self.driver[num].stop()
+            node[num] = self.driver[num].node
+            node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
+            data[num] = self.driver[num].collect_data(node[num], "" )
+                
+
+        final = {}
+        for num in range(0, scale):
+            for key in data[num]:
+                final[key + str(num)] = data[num][key]
+        
+        return final
