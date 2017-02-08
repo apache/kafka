@@ -167,8 +167,8 @@ public class SimpleBenchmark {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
         String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
         numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
-        boolean loadPhase = false; //args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
-        String testName = "all"; //args.length > 4 ? args[4].toLowerCase(Locale.ROOT) : ALL_TESTS;
+        boolean loadPhase = args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
+        String testName = args.length > 4 ? args[4].toLowerCase(Locale.ROOT) : ALL_TESTS;
 
         final File stateDir = new File(stateDirStr);
         stateDir.mkdir();
