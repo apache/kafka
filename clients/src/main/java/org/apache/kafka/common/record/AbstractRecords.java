@@ -55,10 +55,10 @@ public abstract class AbstractRecords implements Records {
      * Convert this message set to use the specified message format.
      */
     @Override
-    public Records toMessageFormat(byte toMagic) {
+    public Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType) {
         List<LogEntry> converted = new ArrayList<>();
         for (LogEntry entry : deepEntries())
-            converted.add(LogEntry.create(entry.offset(), entry.record().convert(toMagic)));
+            converted.add(LogEntry.create(entry.offset(), entry.record().convert(toMagic, upconvertTimestampType)));
 
         if (converted.isEmpty()) {
             // This indicates that the message is too large, which indicates that the buffer is not large

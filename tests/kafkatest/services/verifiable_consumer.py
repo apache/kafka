@@ -55,12 +55,17 @@ class ConsumerEventHandler(object):
                 partition = offset_commit["partition"]
                 tp = TopicPartition(topic, partition)
                 offset = offset_commit["offset"]
-                assert tp in self.assignment, "Committed offsets for a partition not assigned"
-                assert self.position[tp] >= offset, "The committed offset was greater than the current position"
+                assert tp in self.assignment, \
+                    "Committed offsets for partition %s not assigned (current assignment: %s)" % \
+                    (str(tp), str(self.assignment))
+                assert self.position[tp] >= offset, \
+                    "The committed offset %d was greater than the current position %d for partition %s" % \
+                    (offset, self.position[t], str(tp))
                 self.committed[tp] = offset
 
     def handle_records_consumed(self, event):
-        assert self.state == ConsumerState.Joined, "Consumed records should only be received when joined"
+        assert self.state == ConsumerState.Joined, \
+            "Consumed records should only be received when joined (current state: %s)" % str(self.state)
 
         for record_batch in event["partitions"]:
             tp = TopicPartition(topic=record_batch["topic"],
@@ -68,9 +73,12 @@ class ConsumerEventHandler(object):
             min_offset = record_batch["minOffset"]
             max_offset = record_batch["maxOffset"]
 
-            assert tp in self.assignment, "Consumed records for a partition not assigned"
+            assert tp in self.assignment, \
+                "Consumed records for partition %s which is not assigned (current assignment: %s)" % \
+                (str(tp), str(self.assignment))
             assert tp not in self.position or self.position[tp] == min_offset, \
-                "Consumed from an unexpected offset (%s, %s)" % (str(self.position[tp]), str(min_offset))
+                "Consumed from an unexpected offset (%d, %d) for partition %s" % \
+                (self.position[tp], min_offset, str(tp))
             self.position[tp] = max_offset + 1 
 
         self.total_consumed += event["count"]
@@ -136,9 +144,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=DEV_BRANCH, stop_timeout_sec=30):
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO"):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
-        self.log_level = "TRACE"
+        self.log_level = log_level
         
         self.kafka = kafka
         self.topic = topic
@@ -204,13 +212,14 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
             if tp in self.global_committed:
                 # verify that the position never gets behind the current commit.
                 assert self.global_committed[tp] <= consumed_partition["minOffset"], \
-                    "Consumed position %d is behind the current committed offset %d" % (consumed_partition["minOffset"], self.global_committed[tp])
+                    "Consumed position %d is behind the current committed offset %d for partition %s" % \
+                    (consumed_partition["minOffset"], self.global_committed[tp], str(tp))
 
             # the consumer cannot generally guarantee that the position increases monotonically
             # without gaps in the face of hard failures, so we only log a warning when this happens
             if tp in self.global_position and self.global_position[tp] != consumed_partition["minOffset"]:
-                self.logger.warn("Expected next consumed offset of %d, but instead saw %d" %
-                                 (self.global_position[tp], consumed_partition["minOffset"]))
+                self.logger.warn("Expected next consumed offset of %d for partition %s, but instead saw %d" %
+                                 (self.global_position[tp], str(tp), consumed_partition["minOffset"]))
 
             self.global_position[tp] = consumed_partition["maxOffset"] + 1
 
@@ -220,7 +229,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
                 tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
                 offset = offset_commit["offset"]
                 assert self.global_position[tp] >= offset, \
-                    "committed offset is ahead of the current partition"
+                    "Committed offset %d for partition %s is ahead of the current position %d" % \
+                    (offset, str(tp), self.global_position[tp])
                 self.global_committed[tp] = offset
 
     def start_cmd(self, node):

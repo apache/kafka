@@ -98,7 +98,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("b", "b");
         stubOneUnderlying.put("c", "c");
 
-        final List<KeyValue<String, String>> results = toList(theStore.range("a", "c"));
+        final List<KeyValue<String, String>> results = toList(theStore.range("a", "b"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertEquals(2, results.size());

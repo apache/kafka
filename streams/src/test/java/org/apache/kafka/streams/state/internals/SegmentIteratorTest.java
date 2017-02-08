@@ -79,9 +79,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldIterateOverAllSegments() throws Exception {
-        iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
                 Bytes.wrap("z".getBytes()));
@@ -107,9 +105,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
-        iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
                 Bytes.wrap("b".getBytes()));
@@ -127,9 +123,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
-        iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),
                 Bytes.wrap("h".getBytes()));
@@ -139,9 +133,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
-        iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),
                 Bytes.wrap("h".getBytes()));

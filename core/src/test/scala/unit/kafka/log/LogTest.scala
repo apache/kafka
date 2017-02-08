@@ -353,7 +353,7 @@ class LogTest extends JUnitSuite {
     val numMessages = 100
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(i.toString.getBytes))
     messageSets.foreach(log.append(_))
-    log.flush
+    log.flush()
 
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
@@ -362,7 +362,7 @@ class LogTest extends JUnitSuite {
       val head = messages.iterator.next()
       assertEquals("Offsets not equal", offset, head.offset)
       assertEquals("Messages not equal at offset " + offset, messageSets(i).shallowEntries.iterator.next().record,
-        head.record.convert(messageSets(i).shallowEntries.iterator.next().record.magic))
+        head.record.convert(messageSets(i).shallowEntries.iterator.next().record.magic, TimestampType.NO_TIMESTAMP_TYPE))
       offset = head.offset + 1
     }
     val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1)).records
@@ -659,8 +659,10 @@ class LogTest extends JUnitSuite {
     // The rebuilt time index should be empty
     log = new Log(logDir, config, recoveryPoint = numMessages + 1, time.scheduler, time)
     val segArray = log.logSegments.toArray
-    for (i <- 0 until segArray.size - 1)
+    for (i <- 0 until segArray.size - 1) {
       assertEquals("The time index should be empty", 0, segArray(i).timeIndex.entries)
+      assertEquals("The time index file size should be 0", 0, segArray(i).timeIndex.file.length)
+    }
 
   }
 

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.cli;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
@@ -57,7 +58,7 @@ public class ConnectStandalone {
 
         if (args.length < 2) {
             log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         String workerPropsFile = args[0];

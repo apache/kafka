@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,7 +34,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
 
     @Before
     public void setUp() throws Exception {
-        store = new InMemoryKeyValueStore<>(name);
+        store = new InMemoryKeyValueStore<>(name, Serdes.String(), Serdes.String());
     }
 
     @Test

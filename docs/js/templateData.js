@@ -18,4 +18,5 @@ limitations under the License.
 // Define variables for doc templates
 var context={
     "version": "0101"
+    "dotVersion": "0.10.1"
 };

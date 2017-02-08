@@ -299,7 +299,7 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0);
+        Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
         assertTrue("No message should be there", shallowEntries(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
@@ -316,7 +316,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
         }
     }
@@ -332,7 +332,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
         }
     }
@@ -348,7 +348,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
         }
     }
@@ -364,7 +364,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
         }
     }

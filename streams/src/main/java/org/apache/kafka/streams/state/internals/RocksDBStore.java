@@ -152,12 +152,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, false, new StateRestoreCallback() {
-
             @Override
             public void restore(byte[] key, byte[] value) {
                 putInternal(key, value);
             }
         });
+
         open = true;
     }
 
@@ -283,7 +283,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
         // query rocksdb
-        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(db.newIterator(), serdes, from, to);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
         return rocksDBRangeIterator;
     }
@@ -294,7 +294,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        final RocksDbIterator rocksDbIterator = new RocksDbIterator(innerIter, serdes);
+        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter, serdes);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -312,6 +312,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
      */
     @Override
     public long approximateNumEntries() {
+        validateStoreOpen();
         long value;
         try {
             value = this.db.getLongProperty("rocksdb.estimate-num-keys");
@@ -375,15 +376,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openIterators.clear();
     }
 
-
-    class RocksDbIterator implements KeyValueIterator<K, V> {
+    private class RocksDbIterator implements KeyValueIterator<K, V> {
+        private final String storeName;
         private final RocksIterator iter;
         private final StateSerdes<K, V> serdes;
-        private boolean open = true;
 
-        RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
+        private volatile boolean open = true;
+
+        RocksDbIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
+            this.storeName = storeName;
         }
 
         byte[] peekRawKey() {
@@ -397,8 +400,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException("store %s has closed");
+                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
             }
+
             return iter.isValid();
         }
 
@@ -415,19 +419,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return entry;
         }
 
-        /**
-         * @throws UnsupportedOperationException
-         */
         @Override
         public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove");
+            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
         }
 
         @Override
         public synchronized void close() {
-            open = false;
             openIterators.remove(this);
             iter.close();
+            open = false;
         }
 
         @Override
@@ -436,9 +437,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 throw new NoSuchElementException();
             }
             return serdes.keyFrom(iter.key());
-
         }
-
     }
 
     private class RocksDBRangeIterator extends RocksDbIterator {
@@ -448,8 +447,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private byte[] rawToKey;
 
-        RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
-            super(iter, serdes);
+        RocksDBRangeIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
+            super(storeName, iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
         }

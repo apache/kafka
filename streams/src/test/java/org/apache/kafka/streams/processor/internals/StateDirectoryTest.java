@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.TestUtils;
@@ -32,11 +33,13 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StateDirectoryTest {
 
+    private final MockTime time = new MockTime();
     private File stateDir;
     private String applicationId = "applicationId";
     private StateDirectory directory;
@@ -45,7 +48,7 @@ public class StateDirectoryTest {
     @Before
     public void before() {
         stateDir = new File(TestUtils.IO_TMP_DIR, TestUtils.randomString(5));
-        directory = new StateDirectory(applicationId, stateDir.getPath());
+        directory = new StateDirectory(applicationId, stateDir.getPath(), time);
         appDir = new File(stateDir, applicationId);
     }
 
@@ -139,18 +142,29 @@ public class StateDirectoryTest {
         directory.lock(task1, 0);
         directory.directoryForTask(new TaskId(2, 0));
 
-        directory.cleanRemovedTasks();
+        directory.cleanRemovedTasks(0);
         final List<File> files = Arrays.asList(appDir.listFiles());
         assertEquals(2, files.size());
         assertTrue(files.contains(new File(appDir, task0.toString())));
         assertTrue(files.contains(new File(appDir, task1.toString())));
+    }
 
+    @Test
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() throws Exception {
+        final File dir = directory.directoryForTask(new TaskId(2, 0));
+        final int cleanupDelayMs = 60000;
+        directory.cleanRemovedTasks(cleanupDelayMs);
+        assertTrue(dir.exists());
+
+        time.sleep(cleanupDelayMs + 1);
+        directory.cleanRemovedTasks(cleanupDelayMs);
+        assertFalse(dir.exists());
     }
 
     @Test
     public void shouldNotRemoveNonTaskDirectoriesAndFiles() throws Exception {
         final File otherDir = TestUtils.tempDirectory(stateDir.toPath(), "foo");
-        directory.cleanRemovedTasks();
+        directory.cleanRemovedTasks(0);
         assertTrue(otherDir.exists());
     }
 
@@ -170,7 +184,7 @@ public class StateDirectoryTest {
     public void shouldCreateDirectoriesIfParentDoesntExist() throws Exception {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
-        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath());
+        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath(), time);
         final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
