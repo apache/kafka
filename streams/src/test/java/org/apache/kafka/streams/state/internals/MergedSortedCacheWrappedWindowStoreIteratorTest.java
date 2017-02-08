@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -34,7 +35,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-public class MergedSortedCacheWindowStoreIteratorTest {
+public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
     private final List<KeyValue<Long, byte[]>> windowStoreKvPairs = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache("testCache", 1000000L,  new MockStreamsMetrics(new Metrics()));
@@ -49,17 +50,17 @@ public class MergedSortedCacheWindowStoreIteratorTest {
             final KeyValue<Long, byte[]> v1 = KeyValue.pair(t, v1Bytes);
             windowStoreKvPairs.add(v1);
             expectedKvPairs.add(KeyValue.pair(t, v1Bytes));
-            final byte[] keyBytes = WindowStoreUtils.toBinaryKey("a", t + 10, 0, stateSerdes);
+            final Bytes keyBytes = WindowStoreUtils.toBinaryKey("a", t + 10, 0, stateSerdes);
             final byte[] valBytes = String.valueOf(t + 10).getBytes();
             expectedKvPairs.add(KeyValue.pair(t + 10, valBytes));
             cache.put(namespace, keyBytes, new LRUCacheEntry(valBytes));
         }
 
-        byte[] binaryFrom = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
-        byte[] binaryTo = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
-        final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("name", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
+        Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
+        Bytes toBytes = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
+        final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
 
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, binaryFrom, binaryTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, fromBytes, toBytes);
 
         final MergedSortedCacheWindowStoreIterator<byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Long(), Serdes.ByteArray()));
         int index = 0;
@@ -75,10 +76,10 @@ public class MergedSortedCacheWindowStoreIteratorTest {
     public void shouldPeekNextKey() throws Exception {
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
         cache.put(namespace, WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes), new LRUCacheEntry("b".getBytes()));
-        byte[] binaryFrom = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
-        byte[] binaryTo = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
-        final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("name", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, binaryFrom, binaryTo);
+        Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
+        Bytes toBytes = WindowStoreUtils.toBinaryKey("a", 100, 0, stateSerdes);
+        final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, fromBytes, toBytes);
         final MergedSortedCacheWindowStoreIterator<byte[]> iterator = new MergedSortedCacheWindowStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.Long(), Serdes.ByteArray()));
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();

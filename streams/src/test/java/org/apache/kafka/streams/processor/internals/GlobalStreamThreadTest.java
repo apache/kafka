@@ -46,6 +46,7 @@ import static org.junit.Assert.fail;
 public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockTime time = new MockTime();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
 
@@ -59,7 +60,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath()),
+                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
                                                     "client");
@@ -90,7 +91,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath()),
+                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
                                                     "client");

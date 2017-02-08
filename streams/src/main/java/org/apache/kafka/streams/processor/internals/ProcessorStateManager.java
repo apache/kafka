@@ -138,7 +138,6 @@ public class ProcessorStateManager implements StateManager {
 
         // check that the underlying change log topic exist or not
         String topic = storeToChangelogTopic.get(store.name());
-
         if (topic == null) {
             this.stores.put(store.name(), store);
             return;

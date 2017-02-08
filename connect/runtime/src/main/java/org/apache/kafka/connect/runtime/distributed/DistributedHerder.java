@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -205,7 +206,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Herder stopped");
         } catch (Throwable t) {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
-            System.exit(1);
+            Exit.exit(1);
         }
     }
 

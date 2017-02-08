@@ -21,7 +21,7 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{ConsumerConfig, SimpleConsumer}
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.{KafkaException, TopicAndPartition}
-import kafka.utils.{CoreUtils, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.JaasUtils
@@ -86,6 +86,6 @@ object UpdateOffsetsInZK {
 
   private def usage() = {
     println("USAGE: " + UpdateOffsetsInZK.getClass.getName + " [earliest | latest] consumer.properties topic")
-    System.exit(1)
+    Exit.exit(1)
   }
 }

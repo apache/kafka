@@ -46,19 +46,19 @@ import static org.junit.Assert.assertNull;
 public class CachingWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
+    private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10000L;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
     private ThreadCache cache;
     private String topic;
-    private static final long DEFAULT_TIMESTAMP = 10L;
-    private WindowStoreKeySchema keySchema;
+    private WindowKeySchema keySchema;
     private RocksDBWindowStore<Bytes, byte[]> windowStore;
 
     @Before
     public void setUp() throws Exception {
-        keySchema = new WindowStoreKeySchema();
+        keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
         windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
@@ -152,7 +152,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() throws Exception {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.INNER_SERDES)), "a".getBytes());
+        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.INNER_SERDES), "a".getBytes());
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());

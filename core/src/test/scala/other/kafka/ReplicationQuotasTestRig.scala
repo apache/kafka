@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.jfree.chart.plot.PlotOrientation
@@ -70,7 +70,7 @@ object ReplicationQuotasTestRig {
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
     if (!displayChartsOnScreen)
-      System.exit(0)
+      Exit.exit(0)
   }
 
   def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean) {

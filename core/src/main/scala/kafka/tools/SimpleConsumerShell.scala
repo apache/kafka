@@ -133,7 +133,7 @@ object SimpleConsumerShell extends Logging {
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
     if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating partition id
@@ -141,7 +141,7 @@ object SimpleConsumerShell extends Logging {
     val partitionMetadataOpt = partitionsMetadata.find(p => p.partitionId == partitionId)
     if (partitionMetadataOpt.isEmpty) {
       System.err.println("Error: partition %d does not exist for topic %s".format(partitionId, topic))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating replica id and initializing target broker
@@ -151,7 +151,7 @@ object SimpleConsumerShell extends Logging {
       replicaOpt = partitionMetadataOpt.get.leader
       if (replicaOpt.isEmpty) {
         System.err.println("Error: user specifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     else {
@@ -159,7 +159,7 @@ object SimpleConsumerShell extends Logging {
       replicaOpt = replicasForPartition.find(r => r.id == replicaId)
       if(replicaOpt.isEmpty) {
         System.err.println("Error: replica %d does not exist for partition (%s, %d)".format(replicaId, topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     fetchTargetBroker = replicaOpt.get
@@ -167,7 +167,7 @@ object SimpleConsumerShell extends Logging {
     // initializing starting offset
     if(startingOffset < OffsetRequest.EarliestTime) {
       System.err.println("Invalid starting offset: %d".format(startingOffset))
-      System.exit(1)
+      Exit.exit(1)
     }
     if (startingOffset < 0) {
       val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host,
@@ -180,7 +180,7 @@ object SimpleConsumerShell extends Logging {
       } catch {
         case t: Throwable =>
           System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
-          System.exit(1)
+          Exit.exit(1)
       } finally {
         if (simpleConsumer != null)
           simpleConsumer.close()
@@ -240,7 +240,7 @@ object SimpleConsumerShell extends Logging {
                 System.err.println("Unable to write to standard out, closing consumer.")
                 formatter.close()
                 simpleConsumer.close()
-                System.exit(1)
+                Exit.exit(1)
               }
             }
           }

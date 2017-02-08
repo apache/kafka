@@ -41,9 +41,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -128,7 +128,7 @@ public class StreamTaskTest {
         source1.addChild(processor);
         source2.addChild(processor);
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory("applicationId", baseDir.getPath());
+        stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
     }
 
     @After
@@ -443,11 +443,12 @@ public class StreamTaskTest {
         assertTrue(flushed.get());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldCheckpointOffsetsOnCommit() throws Exception {
         final String storeName = "test";
         final String changelogTopic = ProcessorStateManager.storeChangelogTopic("appId", storeName);
-        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName) {
+        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
             @Override
             public void init(final ProcessorContext context, final StateStore root) {
                 context.register(root, true, null);

@@ -338,7 +338,7 @@ public class StreamThread extends Thread {
         // standby ktables
         this.standbyRecords = new HashMap<>();
 
-        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -750,7 +750,7 @@ public class StreamThread extends Thread {
         long now = time.milliseconds();
 
         if (now > lastCleanMs + cleanTimeMs) {
-            stateDirectory.cleanRemovedTasks();
+            stateDirectory.cleanRemovedTasks(cleanTimeMs);
             lastCleanMs = now;
         }
     }

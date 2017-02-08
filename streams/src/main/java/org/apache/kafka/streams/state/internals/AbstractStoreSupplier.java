@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import java.util.Map;
 
 
-public abstract class AbstractStoreSupplier<K, V, T extends StateStore> implements StateStoreSupplier<T> {
+abstract class AbstractStoreSupplier<K, V, T extends StateStore> implements StateStoreSupplier<T> {
     protected final String name;
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
@@ -32,7 +32,12 @@ public abstract class AbstractStoreSupplier<K, V, T extends StateStore> implemen
     protected final boolean logged;
     protected final Map<String, String> logConfig;
 
-    public AbstractStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    AbstractStoreSupplier(final String name,
+                          final Serde<K> keySerde,
+                          final Serde<V> valueSerde,
+                          final Time time,
+                          final boolean logged,
+                          final Map<String, String> logConfig) {
         this.time = time;
         this.name = name;
         this.valueSerde = valueSerde;

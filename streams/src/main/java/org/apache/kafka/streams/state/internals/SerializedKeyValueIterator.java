@@ -65,6 +65,6 @@ class SerializedKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("remove not supported by SerializedKeyValueIterator");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }

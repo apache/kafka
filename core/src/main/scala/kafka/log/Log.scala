@@ -206,6 +206,7 @@ class Log(@volatile var dir: File,
         val timeIndexFile = Log.timeIndexFilename(dir, start)
 
         val indexFileExists = indexFile.exists()
+        val timeIndexFileExists = timeIndexFile.exists()
         val segment = new LogSegment(dir = dir,
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval,
@@ -217,6 +218,9 @@ class Log(@volatile var dir: File,
         if (indexFileExists) {
           try {
             segment.index.sanityCheck()
+            // Resize the time index file to 0 if it is newly created.
+            if (!timeIndexFileExists)
+              segment.timeIndex.resize(0)
             segment.timeIndex.sanityCheck()
           } catch {
             case e: java.lang.IllegalArgumentException =>

@@ -35,7 +35,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class MergedSortedCacheSessionStoreIteratorTest {
+public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     private final String storeKey = "a";
     private final String cacheKey = "b";
