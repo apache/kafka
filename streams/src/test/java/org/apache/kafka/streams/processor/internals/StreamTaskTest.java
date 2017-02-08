@@ -345,6 +345,7 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
+        task.close();
 
         task  = new StreamTask(taskId00, applicationId, partitions,
                                                      topology, consumer, restoreStateConsumer, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
@@ -453,6 +454,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseTopology() throws Exception {
+        task.close();
         task = createTaskThatThrowsExceptionOnClose();
         try {
             task.closeTopology();
@@ -464,6 +466,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseAllProcessorNodesWhenExceptionsRaised() throws Exception {
+        task.close();
         task = createTaskThatThrowsExceptionOnClose();
         try {
             task.closeTopology();
