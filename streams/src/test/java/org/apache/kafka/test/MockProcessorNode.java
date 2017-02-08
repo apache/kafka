@@ -25,12 +25,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
 
-    public static final String NAME = "MOCK-PROCESS-";
-    public static final AtomicInteger INDEX = new AtomicInteger(1);
-
-    public int numReceived = 0;
+    private static final String NAME = "MOCK-PROCESS-";
+    private static final AtomicInteger INDEX = new AtomicInteger(1);
 
     public final MockProcessorSupplier<K, V> supplier;
+    public boolean closed;
+    public long punctuatedAt;
     public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
@@ -51,7 +51,18 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
 
     @Override
     public void process(K key, V value) {
-        this.numReceived++;
         processor().process(key, value);
+    }
+
+    @Override
+    public void punctuate(final long timestamp) {
+        super.punctuate(timestamp);
+        this.punctuatedAt = timestamp;
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        this.closed = true;
     }
 }
