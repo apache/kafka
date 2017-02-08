@@ -56,6 +56,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
 
+/**
+ * Class that provides support for a series of benchmarks. It is usually driven by
+ * tests/kafkatest/benchmarks/streams/streams_simple_benchmark_test.py.
+ * If ran manually through the main() function below, you must do the following:
+ * 1. Have ZK and a Kafka broker set up
+ * 2. Run the loading step first: SimpleBenchmark localhost:9092 /tmp/statedir numRecords true "all"
+ * 3. Run the stream processing step second: SimpleBenchmark localhost:9092 /tmp/statedir numRecords false "all"
+ * Note that what changed is the 4th parameter, from "true" indicating that is a load phase, to "false" indicating
+ * that this is a real run.
+ */
 public class SimpleBenchmark {
 
     private final String kafka;
