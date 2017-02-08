@@ -93,6 +93,6 @@ class StreamsSimpleBenchmarkTest(Test):
         final = {}
         for num in range(0, scale):
             for key in data[num]:
-                final[key] = final.get(key, 0) + data[num][key]
+                final[key + str(num)] = data[num][key]
         
         return final
