@@ -296,9 +296,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
             try {
                 consumer.commitSync(consumedOffsetsAndMetadata);
-            } catch (CommitFailedException cfe) {
+            } catch (final CommitFailedException cfe) {
                 for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataEntry : consumedOffsetsAndMetadata.entrySet()) {
-                    logConsumerOffsets(topicPartitionOffsetAndMetadataEntry.getKey(), topicPartitionOffsetAndMetadataEntry.getValue());
+                    log.warn("FAILED COMMIT: topic={} partition={} offset={}",
+                            topicPartitionOffsetAndMetadataEntry.getKey().topic(),
+                            topicPartitionOffsetAndMetadataEntry.getKey().partition(),
+                            topicPartitionOffsetAndMetadataEntry.getValue().offset());
                 }
 
                 throw cfe;
@@ -307,20 +310,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
 
         commitRequested = false;
-    }
-
-    /**
-     * Helper method to log the failed offsets from {@link #commitOffsets()}.
-     *
-     * @param topicPartition Holds topic and partition information.
-     * @param offsetAndMetadata Holds offset and metadata information.
-     *
-     * @see {@link TopicPartition}
-     * @see {@link OffsetAndMetadata}
-     */
-    private void logConsumerOffsets(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
-        log.warn("FAILED COMMIT: topic={} partition={} offset={}",
-                topicPartition.topic(), topicPartition.partition(), offsetAndMetadata.offset());
     }
 
     /**
