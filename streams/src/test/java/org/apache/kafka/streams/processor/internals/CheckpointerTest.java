@@ -64,15 +64,7 @@ public class CheckpointerTest {
         checkpointer.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         assertThat(checkpointable.callCount, equalTo(1));
     }
-
-    @Test
-    public void shouldNotCheckpointIfIntervalLessThanOrEqualToZero() throws Exception {
-        final Checkpointer checkpointer = new Checkpointer(time, checkpointable, 0);
-        time.sleep(1000);
-        checkpointer.checkpoint(Collections.<TopicPartition, Long>emptyMap());
-        assertThat(checkpointable.callCount, equalTo(0));
-    }
-
+    
     class CheckpointableStub implements Checkpointable {
         int callCount = 0;
         @Override

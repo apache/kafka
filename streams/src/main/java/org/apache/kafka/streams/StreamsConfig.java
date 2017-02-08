@@ -217,8 +217,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code statestore.checkpoint.interval.ms} */
     public static final String STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG = "statestore.checkpoint.interval.ms";
     private static final String STATESTORE_CHECKPOINT_INTERVAL_MS_DOC = "The minimum frequency at which state stores will be checkpointed. " +
-            "This enables some control over the amount of data that will need to be restored in the event of a hard crash. " +
-            "A value <= 0 turns checkpointing off.";
+            "This enables some control over the amount of data that will need to be restored in the event of a hard crash.";
 
     static {
         CONFIG = new ConfigDef()
@@ -393,6 +392,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     5 * 60 * 1000,
+                    atLeast(0),
                     Importance.LOW,
                     STATESTORE_CHECKPOINT_INTERVAL_MS_DOC);
     }

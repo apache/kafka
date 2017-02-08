@@ -38,7 +38,7 @@ public class Checkpointer {
     }
 
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
-        if (checkpointInterval > 0 && time.milliseconds() >= lastCheckpointMs + checkpointInterval) {
+        if (time.milliseconds() >= lastCheckpointMs + checkpointInterval) {
             checkpointable.checkpoint(offsets);
             lastCheckpointMs = time.milliseconds();
         }
