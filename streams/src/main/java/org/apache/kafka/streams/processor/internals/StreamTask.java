@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -293,11 +294,33 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
-            consumer.commitSync(consumedOffsetsAndMetadata);
+            try {
+                consumer.commitSync(consumedOffsetsAndMetadata);
+            } catch (CommitFailedException cfe) {
+                for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataEntry : consumedOffsetsAndMetadata.entrySet()) {
+                    logConsumerOffsets(topicPartitionOffsetAndMetadataEntry.getKey(), topicPartitionOffsetAndMetadataEntry.getValue());
+                }
+
+                throw cfe;
+            }
             commitOffsetNeeded = false;
         }
 
         commitRequested = false;
+    }
+
+    /**
+     * Helper method to log the failed offsets from {@link #commitOffsets()}.
+     *
+     * @param topicPartition Holds topic and partition information.
+     * @param offsetAndMetadata Holds offset and metadata information.
+     *
+     * @see {@link TopicPartition}
+     * @see {@link OffsetAndMetadata}
+     */
+    private void logConsumerOffsets(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
+        log.warn("FAILED COMMIT: topic={} partition={} offset={}",
+                topicPartition.topic(), topicPartition.partition(), offsetAndMetadata.offset());
     }
 
     /**
