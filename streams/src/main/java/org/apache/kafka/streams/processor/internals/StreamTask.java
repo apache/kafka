@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -294,7 +295,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
-            consumer.commitSync(consumedOffsetsAndMetadata);
+            try {
+                consumer.commitSync(consumedOffsetsAndMetadata);
+            } catch (final CommitFailedException cfe) {
+                log.warn("FAILED COMMITS: {} ", consumedOffsetsAndMetadata);
+                throw cfe;
+            }
             commitOffsetNeeded = false;
         }
 
