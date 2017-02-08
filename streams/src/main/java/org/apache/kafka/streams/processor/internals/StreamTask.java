@@ -297,7 +297,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             try {
                 consumer.commitSync(consumedOffsetsAndMetadata);
             } catch (final CommitFailedException cfe) {
-                for (Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataEntry : consumedOffsetsAndMetadata.entrySet()) {
+                for (final Map.Entry<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataEntry : consumedOffsetsAndMetadata.entrySet()) {
                     log.warn("FAILED COMMIT: topic={} partition={} offset={}",
                             topicPartitionOffsetAndMetadataEntry.getKey().topic(),
                             topicPartitionOffsetAndMetadataEntry.getKey().partition(),
