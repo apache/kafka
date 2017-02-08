@@ -76,7 +76,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             recordCollector.flush();
             // 3) write checkpoints for any local state
             checkpointer.checkpoint(recordCollectorOffsets());
-            // 3) commit consumed offsets if it is dirty already
+            // 4) commit consumed offsets if it is dirty already
             commitOffsets();
         }
     };
