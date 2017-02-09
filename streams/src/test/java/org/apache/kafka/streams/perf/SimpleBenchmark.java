@@ -717,7 +717,7 @@ public class SimpleBenchmark {
 
 
     private double megaBytePerSec(long time, int numRecords, int recordSizeBytes) {
-        return (double) (recordSizeBytes * numRecords / 1024 / 1024) / ((double) time / 1000);
+        return (double) ((long) recordSizeBytes * numRecords / 1024 / 1024) / ((double) time / 1000);
     }
 
     private double recordsPerSec(long time, int numRecords) {
