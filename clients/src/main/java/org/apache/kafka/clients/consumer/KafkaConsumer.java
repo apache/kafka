@@ -33,9 +33,13 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -527,7 +531,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
+    private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private volatile boolean closed = false;
+    private volatile long lastPollEndTimestamp = 0;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -707,7 +713,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
-
+            kafkaConsumerMetrics = new KafkaConsumerMetrics(metricGrpPrefix);
             log.debug("Kafka consumer created");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
@@ -745,6 +751,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        String metricGrpPrefix = "consumer";
+        kafkaConsumerMetrics = new KafkaConsumerMetrics(metricGrpPrefix);
     }
 
     /**
@@ -981,6 +989,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
         acquire();
+        long start = time.milliseconds();
         try {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
@@ -989,7 +998,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
 
             // poll for new data until the timeout expires
-            long start = time.milliseconds();
             long remaining = timeout;
             do {
                 Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
@@ -1016,6 +1024,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             return ConsumerRecords.empty();
         } finally {
+            lastPollEndTimestamp = time.milliseconds();
+            kafkaConsumerMetrics.pollTime.record(lastPollEndTimestamp - start);
             release();
         }
     }
@@ -1632,5 +1642,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void release() {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
+    }
+
+    private class KafkaConsumerMetrics {
+        public final Sensor pollTime;
+
+        public KafkaConsumerMetrics(String metricGrpPrefix) {
+            this.pollTime = metrics.sensor("poll-time");
+            this.pollTime.add(metrics.metricName("poll-time-avg", metricGrpPrefix + "-metrics", "The average time taken for a poll"), new Avg());
+            this.pollTime.add(metrics.metricName("poll-time-max", metricGrpPrefix + "-metrics", "The max time taken for a poll"), new Max());
+            Measurable timeSinceLastPoll = new Measurable() {
+                @Override
+                public double measure(MetricConfig config, long now) {
+                    return now - lastPollEndTimestamp;
+                }
+            };
+            metrics.addMetric(metrics.metricName("time-since-last-poll-ms", metricGrpPrefix + "-metrics", "the number of milliseconds since the last poll completed"), timeSinceLastPoll);
+        }
     }
 }
