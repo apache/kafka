@@ -355,7 +355,8 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
         sslServerConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
 
-        server = NetworkTestUtils.createEchoServer(SecurityProtocol.SSL, sslServerConfigs);
+        ListenerName clientListenerName = new ListenerName("client");
+        server = NetworkTestUtils.createEchoServer(clientListenerName, SecurityProtocol.SSL, new TestSecurityConfig(sslServerConfigs));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
