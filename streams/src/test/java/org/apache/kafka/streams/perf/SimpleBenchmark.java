@@ -65,6 +65,11 @@ import java.util.Random;
  * 3. Run the stream processing step second: SimpleBenchmark localhost:9092 /tmp/statedir numRecords false "all"
  * Note that what changed is the 4th parameter, from "true" indicating that is a load phase, to "false" indicating
  * that this is a real run.
+ *
+ * Note that "all" is a convenience option when running this test locally and will not work when running the test
+ * at scale (through tests/kafkatest/benchmarks/streams/streams_simple_benchmark_test.py). That is due to exact syncronization
+ * needs for each test (e.g., you wouldn't want one instance to run "count" while another
+ * is still running "consume"
  */
 public class SimpleBenchmark {
 
