@@ -58,9 +58,10 @@ public class InternalTopicManager {
     public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
-                final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic();
+                final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+                final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
+                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
@@ -73,7 +74,8 @@ public class InternalTopicManager {
      * Get the number of partitions for the given topics
      */
     public Map<String, Integer> getNumPartitions(final Set<String> topics) {
-        final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic();
+        final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+        final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
         existingTopicPartitions.keySet().retainAll(topics);
 
         return existingTopicPartitions;
@@ -108,11 +110,10 @@ public class InternalTopicManager {
         return topicsToBeCreated;
     }
 
-    private Map<String, Integer> fetchExistingPartitionCountByTopic() {
+    private Map<String, Integer> fetchExistingPartitionCountByTopic(final MetadataResponse metadata) {
         // The names of existing topics and corresponding partition counts
         final Map<String, Integer> existingPartitionCountByTopic = new HashMap<>();
-
-        Collection<MetadataResponse.TopicMetadata> topicsMetadata = streamsKafkaClient.fetchTopicsMetadata();
+        final Collection<MetadataResponse.TopicMetadata> topicsMetadata = metadata.topicMetadata();
 
         for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
             existingPartitionCountByTopic.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
