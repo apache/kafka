@@ -27,7 +27,7 @@ class StreamsSmokeTest(KafkaTest):
     """
 
     def __init__(self, test_context):
-        super(StreamsSmokeTest, self).__init__(test_context, num_zk=1, num_brokers=2, topics={
+        super(StreamsSmokeTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 1 },
             'data' : { 'partitions': 5, 'replication-factor': 1 },
             'min' : { 'partitions': 5, 'replication-factor': 1 },
@@ -46,7 +46,7 @@ class StreamsSmokeTest(KafkaTest):
         self.processor3 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
         self.processor4 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
-    @cluster(num_nodes=8)
+    @cluster(num_nodes=9)
     def test_streams(self):
         """
         Start a few smoke test clients, then repeat start a new one, stop (cleanly) running one a few times.
