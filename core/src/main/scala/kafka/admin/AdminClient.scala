@@ -16,10 +16,10 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
 import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
+
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
@@ -28,6 +28,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
+import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
@@ -66,9 +68,17 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  def findCoordinator(groupId: String): Node = {
+  var timerMs: Long = 0
+
+  def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
-    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+    var response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+
+    while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - timerMs < timeoutMs) {
+      Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
+      response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+    }
+
     response.error.maybeThrow()
     response.node
   }
@@ -165,14 +175,31 @@ class AdminClient(val time: Time,
                                   consumers: Option[List[ConsumerSummary]],
                                   coordinator: Node)
 
-  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
-    val coordinator = findCoordinator(groupId)
+  def describeConsumerGroupHandler(coordinator: Node, groupId: String): GroupMetadata = {
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
         new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)
     if (metadata == null)
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
+    metadata
+  }
+
+  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = describeConsumerGroup(groupId, 0)
+
+  def describeConsumerGroup(groupId: String, timeoutMs: Long): ConsumerGroupSummary = {
+    timerMs = time.milliseconds
+
+    val coordinator = findCoordinator(groupId, timeoutMs)
+    var metadata = describeConsumerGroupHandler(coordinator, groupId)
+
+    while (metadata.state != "Dead" && metadata.state != "Empty" &&
+           metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE &&
+           time.milliseconds - timerMs < timeoutMs) {
+      Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
+      metadata = describeConsumerGroupHandler(coordinator, groupId)
+    }
+
     if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
       throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
 
@@ -204,6 +231,8 @@ object AdminClient {
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
+  val DefaultGroupQueryRetryIntervalMs: Long = 100
+
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
     val config = new ConfigDef()

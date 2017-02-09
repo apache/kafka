@@ -396,7 +396,7 @@ object ConsumerGroupCommand extends Logging {
     }
 
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
-      val consumerGroupSummary = adminClient.describeConsumerGroup(group)
+      val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.groupInitializationTimeoutMsOpt))
       (Some(consumerGroupSummary.state),
         consumerGroupSummary.consumers match {
           case None =>
@@ -502,7 +502,10 @@ object ConsumerGroupCommand extends Logging {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
+    val GroupInitializationTimeoutMsDoc = "Used when describing the group, it specifies the maximum amount of time " +
+      "in milliseconds to wait before the group stabilizes (when the group is just created, or is going through some changes)."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
+
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -524,6 +527,11 @@ object ConsumerGroupCommand extends Logging {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
+    val groupInitializationTimeoutMsOpt = parser.accepts("group-init-timeout", GroupInitializationTimeoutMsDoc)
+                                                 .withRequiredArg
+                                                 .describedAs("group initialization timeout (ms)")
+                                                 .ofType(classOf[Long])
+                                                 .defaultsTo(1000)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")
@@ -531,11 +539,15 @@ object ConsumerGroupCommand extends Logging {
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
+    val describeOptPresent = options.has(describeOpt)
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt)
 
     def checkArgs() {
       // check required args
+      if (options.has(groupInitializationTimeoutMsOpt) && (!describeOptPresent || useOldConsumer))
+        CommandLineUtils.printUsageAndDie(parser, s"Option '$groupInitializationTimeoutMsOpt' is valid only when both '$bootstrapServerOpt' and '$describeOpt' are used.")
+
       if (useOldConsumer) {
         if (options.has(bootstrapServerOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option '$bootstrapServerOpt' is not valid with '$zkConnectOpt'.")
@@ -550,7 +562,7 @@ object ConsumerGroupCommand extends Logging {
             "committed offset for that group expires.")
       }
 
-      if (options.has(describeOpt))
+      if (describeOptPresent)
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
