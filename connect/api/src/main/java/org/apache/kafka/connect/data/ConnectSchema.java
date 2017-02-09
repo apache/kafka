@@ -209,7 +209,7 @@ public class ConnectSchema implements Schema {
     public static void validateValue(Schema schema, Object value) {
         if (value == null) {
             if (!schema.isOptional())
-                throw new DataException("Invalid value: null used for required field");
+                throw new DataException("Null value");
             else
                 return;
         }

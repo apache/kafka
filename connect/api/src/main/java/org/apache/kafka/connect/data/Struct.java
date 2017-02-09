@@ -229,7 +229,11 @@ public class Struct {
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
                 continue;
-            ConnectSchema.validateValue(fieldSchema, value);
+            try {
+                ConnectSchema.validateValue(fieldSchema, value);
+            } catch(DataException e) {
+                throw new DataException("Invalid value: null used for required field: "  + field.name() + ", schema type: " + fieldSchema.type());
+            }
         }
     }
 
