@@ -23,12 +23,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
-import java.util.ArrayList;
+
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
@@ -54,20 +55,45 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldPutAll() {
-        final List<String> initialValues = Arrays.asList("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine");
-        final List<String> updateValues = Arrays.asList("ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen");
-        final List<Integer> initialKeys = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-        final List<Integer> updateKeys = Arrays.asList(11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
-        final List<KeyValue<Integer, String>> initialKeyValues = fillKeyValueList(initialKeys, initialValues);
-        final List<KeyValue<Integer, String>> updateKeyValues = fillKeyValueList(updateKeys, updateValues);
+    public void shouldPutAllKeyValuePairs() {
+        final List<KeyValue<Integer, String>> kvPairs = Arrays.asList(KeyValue.pair(1, "1"),
+                KeyValue.pair(2, "2"),
+                KeyValue.pair(3, "3"));
 
-        store.putAll(initialKeyValues);
-        assertEquals(10, driver.sizeOf(store));
-        store.putAll(updateKeyValues);
-        assertEquals(10, driver.sizeOf(store));
-        store.flush();
-        assertEquals(10, driver.numFlushedEntryRemoved());
+        store.putAll(kvPairs);
+
+        assertThat(store.approximateNumEntries(), equalTo(3L));
+
+        for (KeyValue<Integer, String> kvPair : kvPairs) {
+            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+        }
+    }
+
+    @Test
+    public void shouldUpdateValuesForExistingKeysOnPutAll() {
+        final List<KeyValue<Integer, String>> kvPairs = Arrays.asList(KeyValue.pair(1, "1"),
+                KeyValue.pair(2, "2"),
+                KeyValue.pair(3, "3"));
+
+        store.putAll(kvPairs);
+
+        assertThat(store.approximateNumEntries(), equalTo(3L));
+
+        for (KeyValue<Integer, String> kvPair : kvPairs) {
+            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+        }
+
+        final List<KeyValue<Integer, String>> updatedKvPairs = Arrays.asList(KeyValue.pair(1, "ONE"),
+                KeyValue.pair(2, "TWO"),
+                KeyValue.pair(3, "THREE"));
+
+        store.putAll(updatedKvPairs);
+
+        assertThat(store.approximateNumEntries(), equalTo(3L));
+        
+        for (KeyValue<Integer, String> kvPair : updatedKvPairs) {
+            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+        }
     }
 
     @Test
@@ -116,16 +142,5 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         assertTrue(driver.flushedEntryRemoved(3));
         assertEquals(3, driver.numFlushedEntryRemoved());
     }
-
-
-    private List<KeyValue<Integer, String>> fillKeyValueList(List<Integer> keys, List<String> values) {
-        final Iterator<Integer> keysIterator = keys.iterator();
-        final Iterator<String> valuesIterator = values.iterator();
-
-        final List<KeyValue<Integer, String>> keyValueList = new ArrayList<>(keys.size());
-        while (keysIterator.hasNext() && valuesIterator.hasNext()) {
-            keyValueList.add(new KeyValue<>(keysIterator.next(), valuesIterator.next()));
-        }
-        return keyValueList;
-    }
+    
 }
