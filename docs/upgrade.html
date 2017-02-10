@@ -15,9 +15,8 @@
  limitations under the License.
 -->
 
-<h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
-<p>0.10.2.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
-However, please review the <a href="#upgrade_1020_notable">notable changes in 0.10.2.0</a> before upgrading.
+<h4><a id="upgrade_10_3_0" href="#upgrade_10_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x, 0.10.2.x to 0.10.3.0</a></h4>
+<p>Please review the <a href="#upgrade_1030_notable">notable changes in 0.10.3.0</a> before upgrading.
 </p>
 
 <p>Starting with version 0.10.2, Java clients (producer and consumer) have acquired the ability to communicate with older brokers. Version 0.10.2
@@ -58,6 +57,12 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
 </ul>
 
+<h5><a id="upgrade_1030_notable" href="#upgrade_1030_notable">Notable changes in 0.10.3.0</a></h5>
+<ul>
+    <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this replication factor requirement.</li>
+</ul>
+<h5>
+
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
 <ul>
     <li>The Java clients (producer and consumer) have acquired the ability to communicate with older brokers. Version 0.10.2 clients
@@ -76,7 +81,6 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
         should not be set in the Streams app any more. If the Kafka cluster is secured, Streams apps must have the required security privileges to create new topics.</li>
     <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to
         StreamsConfig class. User should pay attenntion to the default values and set these if needed. For more details please refer to <a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
-    <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this replication factor requirement.</li>
 </ul>
 
 <h5><a id="upgrade_1020_new_protocols" href="#upgrade_1020_new_protocols">New Protocol Versions</a></h5>
