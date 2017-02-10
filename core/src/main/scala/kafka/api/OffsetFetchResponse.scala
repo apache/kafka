@@ -41,24 +41,24 @@ object OffsetFetchResponse extends Logging {
         val partitionId = buffer.getInt
         val offset = buffer.getLong
         val metadata = readShortString(buffer)
-        val error = buffer.getShort
+        val error = Errors.forCode(buffer.getShort)
         (TopicAndPartition(topic, partitionId), OffsetMetadataAndError(offset, metadata, error))
       })
     })
 
-    val errorCode = requestVersion match {
-      case 0 | 1 => Errors.NONE.code
-      case _ => buffer.getShort
+    val error = requestVersion match {
+      case 0 | 1 => Errors.NONE
+      case _ => Errors.forCode(buffer.getShort)
     }
 
-    OffsetFetchResponse(Map(pairs:_*), requestVersion, correlationId, errorCode)
+    OffsetFetchResponse(Map(pairs:_*), requestVersion, correlationId, error)
   }
 }
 
 case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
                                requestVersion: Int = OffsetFetchRequest.CurrentVersion,
                                correlationId: Int = 0,
-                               errorCode: Short = Errors.NONE.code)
+                               error: Errors = Errors.NONE)
     extends RequestOrResponse() {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
@@ -73,13 +73,13 @@ case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadat
         buffer.putInt(t2._1.partition)
         buffer.putLong(t2._2.offset)
         writeShortString(buffer, t2._2.metadata)
-        buffer.putShort(t2._2.error)
+        buffer.putShort(t2._2.error.code)
       })
     })
 
     // the top level error_code was introduced in v2
     if (requestVersion > 1)
-      buffer.putShort(errorCode)
+      buffer.putShort(error.code)
   }
 
   override def sizeInBytes =

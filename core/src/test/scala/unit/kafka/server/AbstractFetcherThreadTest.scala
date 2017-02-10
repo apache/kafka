@@ -92,7 +92,7 @@ class AbstractFetcherThreadTest {
   }
 
   class TestPartitionData(records: MemoryRecords = MemoryRecords.EMPTY) extends PartitionData {
-    override def errorCode: Short = Errors.NONE.code
+    override def error: Errors = Errors.NONE
 
     override def toRecords: MemoryRecords = records
 

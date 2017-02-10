@@ -66,7 +66,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
                 List<String> enabledMechanisms = Collections.emptyList();
-                return new SaslHandshakeResponse(Errors.forException(e).code(), enabledMechanisms);
+                return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id)));

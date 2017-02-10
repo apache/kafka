@@ -51,8 +51,7 @@ public class ApiVersionsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                short errorCode = Errors.forException(e).code();
-                return new ApiVersionsResponse(errorCode, Collections.<ApiVersionsResponse.ApiVersion>emptyList());
+                return new ApiVersionsResponse(Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.API_VERSIONS.id)));

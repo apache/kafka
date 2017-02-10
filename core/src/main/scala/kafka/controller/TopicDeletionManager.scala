@@ -384,8 +384,8 @@ class TopicDeletionManager(controller: KafkaController,
     debug("Delete topic callback invoked for %s".format(stopReplicaResponse))
     val responseMap = stopReplicaResponse.responses.asScala
     val partitionsInError =
-      if (stopReplicaResponse.errorCode != Errors.NONE.code) responseMap.keySet
-      else responseMap.filter { case (_, error) => error != Errors.NONE.code }.keySet
+      if (stopReplicaResponse.error != Errors.NONE) responseMap.keySet
+      else responseMap.filter { case (_, error) => error != Errors.NONE }.keySet
     val replicasInError = partitionsInError.map(p => PartitionAndReplica(p.topic, p.partition, replicaId))
     inLock(controllerContext.controllerLock) {
       // move all the failed replicas to ReplicaDeletionIneligible

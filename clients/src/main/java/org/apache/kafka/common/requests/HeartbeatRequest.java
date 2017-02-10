@@ -80,7 +80,7 @@ public class HeartbeatRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new HeartbeatResponse(Errors.forException(e).code());
+                return new HeartbeatResponse(Errors.forException(e));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.HEARTBEAT.id)));

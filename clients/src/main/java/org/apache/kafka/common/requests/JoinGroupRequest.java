@@ -170,7 +170,7 @@ public class JoinGroupRequest extends AbstractRequest {
             case 1:
                 return new JoinGroupResponse(
                         versionId,
-                        Errors.forException(e).code(),
+                        Errors.forException(e),
                         JoinGroupResponse.UNKNOWN_GENERATION_ID,
                         JoinGroupResponse.UNKNOWN_PROTOCOL,
                         JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId

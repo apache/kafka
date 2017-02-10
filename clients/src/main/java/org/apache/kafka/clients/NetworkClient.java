@@ -544,9 +544,9 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
+        if (apiVersionsResponse.error() != Errors.NONE) {
             log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
-                    node, Errors.forCode(apiVersionsResponse.errorCode()));
+                    node, apiVersionsResponse.error());
             this.selector.close(node);
             processDisconnection(responses, node, now);
             return;

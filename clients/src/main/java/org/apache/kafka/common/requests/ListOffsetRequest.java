@@ -241,12 +241,12 @@ public class ListOffsetRequest extends AbstractRequest {
         short versionId = version();
         if (versionId == 0) {
             for (Map.Entry<TopicPartition, PartitionData> entry : offsetData.entrySet()) {
-                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), new ArrayList<Long>());
+                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e), new ArrayList<Long>());
                 responseData.put(entry.getKey(), partitionResponse);
             }
         } else {
             for (Map.Entry<TopicPartition, Long> entry : partitionTimestamps.entrySet()) {
-                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), -1L, -1L);
+                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e), -1L, -1L);
                 responseData.put(entry.getKey(), partitionResponse);
             }
         }

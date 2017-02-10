@@ -14,6 +14,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -41,14 +42,14 @@ public class ControlledShutdownResponse extends AbstractResponse {
      * BROKER_NOT_AVAILABLE(8)
      * STALE_CONTROLLER_EPOCH(11)
      */
-    private final short errorCode;
+    private final Errors error;
 
     private final Set<TopicPartition> partitionsRemaining;
 
-    public ControlledShutdownResponse(short errorCode, Set<TopicPartition> partitionsRemaining) {
+    public ControlledShutdownResponse(Errors error, Set<TopicPartition> partitionsRemaining) {
         super(new Struct(CURRENT_SCHEMA));
 
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
 
         List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());
         for (TopicPartition topicPartition : partitionsRemaining) {
@@ -59,13 +60,13 @@ public class ControlledShutdownResponse extends AbstractResponse {
         }
         struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
 
-        this.errorCode = errorCode;
+        this.error = error;
         this.partitionsRemaining = partitionsRemaining;
     }
 
     public ControlledShutdownResponse(Struct struct) {
         super(struct);
-        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         Set<TopicPartition> partitions = new HashSet<>();
         for (Object topicPartitionObj : struct.getArray(PARTITIONS_REMAINING_KEY_NAME)) {
             Struct topicPartition = (Struct) topicPartitionObj;
@@ -76,8 +77,8 @@ public class ControlledShutdownResponse extends AbstractResponse {
         partitionsRemaining = partitions;
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public Set<TopicPartition> partitionsRemaining() {

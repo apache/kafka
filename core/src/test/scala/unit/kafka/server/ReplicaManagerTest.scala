@@ -228,10 +228,10 @@ class ReplicaManagerTest {
           responseCallback = produceCallback)
       
       var fetchCallbackFired = false
-      var fetchError = 0
+      var fetchError = Errors.NONE
       var fetchedRecords: Records = null
       def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
-        fetchError = responseStatus.map(_._2).head.error.code
+        fetchError = responseStatus.map(_._2).head.error
         fetchedRecords = responseStatus.map(_._2).head.records
         fetchCallbackFired = true
       }
@@ -248,7 +248,7 @@ class ReplicaManagerTest {
         
       
       assertTrue(fetchCallbackFired)
-      assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+      assertEquals("Should not give an exception", Errors.NONE, fetchError)
       assertTrue("Should return some data", fetchedRecords.shallowEntries.iterator.hasNext)
       fetchCallbackFired = false
       
@@ -263,7 +263,7 @@ class ReplicaManagerTest {
         responseCallback = fetchCallback)
           
         assertTrue(fetchCallbackFired)
-        assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+        assertEquals("Should not give an exception", Errors.NONE, fetchError)
         assertEquals("Should return empty response", MemoryRecords.EMPTY, fetchedRecords)
     } finally {
       rm.shutdown(checkpointHW = false)
