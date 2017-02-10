@@ -497,25 +497,31 @@
 
         <p>
         The same mechanism is used, for example, to replicate databases via change data capture (CDC) and, within Kafka Streams, to replicate its so-called state stores across machines for fault-tolerance.
-        The stream-table duality is such an important concept that Kafka Streams models it explicitly via the <a href="#streams_kstream_ktable">KStream and KTable</a> interfaces, which we describe in the next sections.
+        The stream-table duality is such an important concept that Kafka Streams models it explicitly via the <a href="#streams_kstream_ktable">KStream, KTable, and GlobalKTable</a> interfaces, which we describe in the next sections.
         </p>
 
-        <h5><a id="streams_kstream_ktable" href="#streams_kstream_ktable">KStream and KTable</a></h5>
-        The DSL uses two main abstractions. A <b>KStream</b> is an abstraction of a record stream, where each data record represents a self-contained datum in the unbounded data set.
+        <h5><a id="streams_kstream_ktable" href="#streams_kstream_ktable">KStream, KTable, and GlobalKTable</a></h5>
+        The DSL uses three main abstractions. A <b>KStream</b> is an abstraction of a record stream, where each data record represents a self-contained datum in the unbounded data set.
         A <b>KTable</b> is an abstraction of a changelog stream, where each data record represents an update. More precisely, the value in a data record is considered to be an update of the last value for the same record key,
-        if any (if a corresponding key doesn't exist yet, the update will be considered a create). To illustrate the difference between KStreams and KTables, let's imagine the following two data records are being sent to the stream:
+        if any (if a corresponding key doesn't exist yet, the update will be considered a create).
+        Like a <b>KTable</b>, a <b>GlobalKTable</b> is an abstraction of a changelog stream, where each data record represents an update.
+        However, a <b>GlobalKTable</b> is different from a <b>KTable</b> in that it is fully replicated on each KafkaStreams instance.
+        <b>GlobalKTable</b> also provides the ability to look up current values of data records by keys.
+        This table-lookup functionality is available through <a href="#streams_dsl_joins">join operations</a>.
+
+        To illustrate the difference between KStreams and KTables/GlobalKTables, let’s imagine the following two data records are being sent to the stream:
 
         <pre>
             ("alice", 1) --> ("alice", 3)
         </pre>
 
-        If these records a KStream and the stream processing application were to sum the values it would return <code>4</code>. If these records were a KTable, the return would be <code>3</code>, since the last record would be considered as an update.
+        If these records a KStream and the stream processing application were to sum the values it would return <code>4</code>. If these records were a KTable or GlobalKTable, the return would be <code>3</code>, since the last record would be considered as an update.
 
         <h4><a id="streams_dsl_source" href="#streams_dsl_source">Create Source Streams from Kafka</a></h4>
 
         <p>
-        Either a <b>record stream</b> (defined as <code>KStream</code>) or a <b>changelog stream</b> (defined as <code>KTable</code>)
-        can be created as a source stream from one or more Kafka topics (for <code>KTable</code> you can only create the source stream
+        Either a <b>record stream</b> (defined as <code>KStream</code>) or a <b>changelog stream</b> (defined as <code>KTable</code> or <code>GlobalKTable</code>)
+        can be created as a source stream from one or more Kafka topics (for <code>KTable</code> and <code>GlobalKTable</code> you can only create the source stream
         from a single topic).
         </p>
 
@@ -524,6 +530,7 @@
 
             KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
             KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
+            GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4", "globalStoreName");
         </pre>
 
         <h4><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h4>
@@ -551,7 +558,13 @@
         <li><b>KStream-to-KStream Joins</b> are always windowed joins, since otherwise the memory and state required to compute the join would grow infinitely in size. Here, a newly received record from one of the streams is joined with the other stream's records within the specified window interval to produce one result for each matching pair based on user-provided <code>ValueJoiner</code>. A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
         
         <li><b>KTable-to-KTable Joins</b> are join operations designed to be consistent with the ones in relational databases. Here, both changelog streams are materialized into local state stores first. When a new record is received from one of the streams, it is joined with the other stream's materialized state stores to produce one result for each matching pair based on user-provided ValueJoiner. A new <code>KTable</code> instance representing the result stream of the join, which is also a changelog stream of the represented table, is returned from this operator.</li>
-        <li><b>KStream-to-KTable Joins</b> allow you to perform table lookups against a changelog stream (<code>KTable</code>) upon receiving a new record from another record stream (KStream). An example use case would be to enrich a stream of user activities (<code>KStream</code>) with the latest user profile information (<code>KTable</code>). Only records received from the record stream will trigger the join and produce results via <code>ValueJoiner</code>, not vice versa (i.e., records received from the changelog stream will be used only to update the materialized state store). A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
+        <li><b>KStream-to-KTable Joins</b> allow you to perform table lookups against a changelog stream (<code>KTable</code>) upon receiving a new record from another record stream (<code>KStream</code>). An example use case would be to enrich a stream of user activities (<code>KStream</code>) with the latest user profile information (<code>KTable</code>). Only records received from the record stream will trigger the join and produce results via <code>ValueJoiner</code>, not vice versa (i.e., records received from the changelog stream will be used only to update the materialized state store). A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
+        <li><b>KStream-to-GlobalKTable Joins</b> allow you to perform table lookups against a fully replicated changelog stream (<code>GlobalKTable</code>) upon receiving a new record from another record stream (<code>KStream</code>).
+            Joins with a <code>GlobalKTable</code> don't require repartitioning of the input <code>KStream</code> as all partitions of the <code>GlobalKTable</code> are available on every KafkaStreams instance.
+            The <code>KeyValueMapper</code> provided with the join operation is applied to each KStream record to extract the join-key that is used to do the lookup to the GlobalKTable so non-record-key joins are possible.
+            An example use case would be to enrich a stream of user activities (<code>KStream</code>) with the latest user profile information (<code>GlobalKTable</code>).
+            Only records received from the record stream will trigger the join and produce results via <code>ValueJoiner</code>, not vice versa (i.e., records received from the changelog stream will be used only to update the materialized state store).
+            A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
         </ul>
 
         Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>. Their semantics are similar to the corresponding operators in relational databases.
