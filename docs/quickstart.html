@@ -359,7 +359,7 @@ stream data will likely be flowing continuously into Kafka where the application
 
 
 <pre>
-&gt; <b>cat file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
+&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt</b>
 </pre>
 
 <p>
@@ -397,12 +397,9 @@ with the following output data being printed to the console:
 
 <pre>
 all     1
-streams 1
 lead    1
 to      1
-kafka   1
 hello   1
-kafka   2
 streams 2
 join    1
 kafka   3
