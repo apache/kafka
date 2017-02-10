@@ -90,6 +90,8 @@ This is for `core`, `examples` and `clients`
     ./gradlew eclipse
     ./gradlew idea
 
+*Note - The Eclipse plugin for Gradle is configured to setup the build output directory to `${project_dir}/build_eclipse`. This is because the default build output directory for Eclipse is `${project_dir}/bin` and this clashes with the scripts directory under some projects. Also this has been configured to be different from the default for gradle which is `${project_dir}/build` to avoid conflicts with the commandline gradle build.*
+
 ### Building the jar for all scala versions and for all projects ###
     ./gradlew jarAll
 
