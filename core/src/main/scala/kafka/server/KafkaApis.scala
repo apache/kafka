@@ -246,15 +246,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       val response = new OffsetCommitResponse(results.asJava)
       requestChannel.sendResponse(new RequestChannel.Response(request, response))
     } else {
-      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
-        case (topicPartition, _) =>
-          val authorizedForDescribe = authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
-          val exists = metadataCache.contains(topicPartition.topic)
-          if (!authorizedForDescribe && exists)
+      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
+        offsetCommitRequest.offsetData
+          .asScala
+          .toMap
+          .partition { case (topicPartition, _) =>
+            val authorizedForDescribe = authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
+            val exists = metadataCache.contains(topicPartition.topic)
+            if (!authorizedForDescribe && exists)
               debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning UNKNOWN_TOPIC_OR_PARTITION")
-          authorizedForDescribe && exists
-      }
+            authorizedForDescribe && exists
+          }
 
       val (authorizedTopics, unauthorizedForReadTopics) = existingAndAuthorizedForDescribeTopics.partition {
         case (topicPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicPartition.topic))
@@ -351,9 +354,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.bodyAndSize.size
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
-    }
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
+      produceRequest.partitionRecords
+        .asScala
+        .toMap
+        .partition { case (topicPartition, _) =>
+          authorize(
+            request.session,
+            Describe,
+            new Resource(auth.Topic, topicPartition.topic)
+          ) && metadataCache.contains(topicPartition.topic)
+        }
 
     val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
       case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
@@ -572,9 +583,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
-    }
+    val (authorizedRequestInfo, unauthorizedRequestInfo) =
+      offsetRequest.offsetData
+        .asScala
+        .toMap
+        .partition { case (topicPartition, _) =>
+          authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
+        }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
       new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION, List[JLong]().asJava)
@@ -623,9 +638,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.partitionTimestamps.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
-    }
+    val (authorizedRequestInfo, unauthorizedRequestInfo) =
+      offsetRequest.partitionTimestamps
+        .asScala
+        .toMap
+        .partition { case (topicPartition, _) =>
+          authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
+        }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
       new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
@@ -1082,7 +1101,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.groupId(),
         syncGroupRequest.generationId(),
         syncGroupRequest.memberId(),
-        syncGroupRequest.groupAssignment().asScala.mapValues(Utils.toArray),
+        syncGroupRequest.groupAssignment().asScala.toMap.mapValues(Utils.toArray),
         sendResponseCallback
       )
     }

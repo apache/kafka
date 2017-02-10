@@ -34,9 +34,6 @@ import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
-
-
 /**
  *  For verifying the consistency among replicas.
  *
@@ -106,7 +103,7 @@ object ReplicaVerificationTool extends Logging {
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
     val regex = options.valueOf(topicWhiteListOpt)
-    val topicWhiteListFiler = new Whitelist(regex)
+    val topicWhiteListFiler = Whitelist(regex)
 
     try {
       Pattern.compile(regex)

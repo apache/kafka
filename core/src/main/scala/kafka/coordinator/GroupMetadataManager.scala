@@ -147,7 +147,9 @@ class GroupMetadataManager(val brokerId: Int,
           GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion))
 
         val groupMetadataPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
-        val groupMetadataRecords = Map(groupMetadataPartition -> MemoryRecords.withRecords(timestampType, compressionType, record))
+        val groupMetadataRecords = immutable.Map(
+          groupMetadataPartition -> MemoryRecords.withRecords(timestampType, compressionType, record)
+        )
         val generationId = group.generationId
 
         // set the callback function to insert the created group into cache after log append completed
@@ -241,7 +243,9 @@ class GroupMetadataManager(val brokerId: Int,
 
         val offsetTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
 
-        val entries = Map(offsetTopicPartition -> MemoryRecords.withRecords(timestampType, compressionType, records:_*))
+        val entries = immutable.Map(
+          offsetTopicPartition -> MemoryRecords.withRecords(timestampType, compressionType, records:_*)
+        )
 
         // set the callback function to insert offsets into cache after log append completed
         def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
@@ -326,7 +330,7 @@ class GroupMetadataManager(val brokerId: Int,
    * The most important guarantee that this API provides is that it should never return a stale offset. i.e., it either
    * returns the current offset or it begins to sync the cache from the log (and returns an error code).
    */
-  def getOffsets(groupId: String, topicPartitionsOpt: Option[Seq[TopicPartition]]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
+  def getOffsets(groupId: String, topicPartitionsOpt: Option[Seq[TopicPartition]]): immutable.Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     trace("Getting offsets of %s for group %s.".format(topicPartitionsOpt.getOrElse("all partitions"), groupId))
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
@@ -458,7 +462,7 @@ class GroupMetadataManager(val brokerId: Int,
           }
         }
 
-        val (groupOffsets, emptyGroupOffsets) = loadedOffsets
+        val (groupOffsets, emptyGroupOffsets) = loadedOffsets.toMap
           .groupBy(_._1.group)
           .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset)} )
           .partition { case (group, _) => loadedGroups.contains(group) }
@@ -492,7 +496,7 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
-  private def loadGroup(group: GroupMetadata, offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
+  private def loadGroup(group: GroupMetadata, offsets: immutable.Map[TopicPartition, OffsetAndMetadata]): Unit = {
     // offsets are initialized prior to loading the group into the cache to ensure that clients see a consistent
     // view of the group's offsets
     val loadedOffsets = offsets.mapValues { offsetAndMetadata =>
@@ -1072,8 +1076,8 @@ object GroupMetadataManager {
 
 }
 
-case class DelayedStore(partitionRecords: Map[TopicPartition, MemoryRecords],
-                        callback: Map[TopicPartition, PartitionResponse] => Unit)
+case class DelayedStore(partitionRecords: immutable.Map[TopicPartition, MemoryRecords],
+                        callback: immutable.Map[TopicPartition, PartitionResponse] => Unit)
 
 case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
 

@@ -121,7 +121,7 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> {
         try {
           listGroups(broker)
@@ -141,11 +141,11 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+    listAllGroups().values.flatten.toList
   }
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    listAllGroupsFlattened().filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
@@ -154,13 +154,13 @@ class AdminClient(val time: Time,
     val response = responseBody.asInstanceOf[OffsetFetchResponse]
     if (response.hasError)
       throw response.error.exception
-    response.maybeThrowFirstPartitionError
+    response.maybeThrowFirstPartitionError()
     response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
-    findAllBrokers.map { broker =>
-      broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+    findAllBrokers().map { broker =>
+      broker -> Try(new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 
   /**

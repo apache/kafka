@@ -209,19 +209,15 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
       throw new IllegalStateException("Cannot select protocol for empty group")
 
     // select the protocol for this group which is supported by all members
-    val candidates = candidateProtocols
-
+    val candidates = candidateProtocols()
     // let each member vote for one of the protocols and choose the one with the most votes
-    val votes: List[(String, Int)] = allMemberMetadata
-      .map(_.vote(candidates))
-      .groupBy(identity)
+    allMemberMetadata
+      .groupBy(_.vote(candidates))
       .mapValues(_.size)
-      .toList
-
-    votes.maxBy(_._2)._1
+      .maxBy(_._2)._1
   }
 
-  private def candidateProtocols = {
+  private def candidateProtocols() = {
     // get the set of protocols that are commonly supported by all members
     allMemberMetadata
       .map(_.protocols)
@@ -229,7 +225,7 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
   }
 
   def supportsProtocols(memberProtocols: Set[String]) = {
-    members.isEmpty || (memberProtocols & candidateProtocols).nonEmpty
+    members.isEmpty || (memberProtocols & candidateProtocols()).nonEmpty
   }
 
   def initNextGeneration() = {

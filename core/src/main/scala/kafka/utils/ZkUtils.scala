@@ -31,9 +31,6 @@ import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMars
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -128,45 +125,32 @@ object ZkUtils {
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 
-  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
+  //  TODO: Does this comment mean we cannot get duplicates of TopicAndPartition in the resulting Seq?
+  /** Parses without deduplicate keys so the data can be checked before allowing reassignment to proceed */
   def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("partitions") match {
-          case Some(partitionsSeq) =>
-            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
-              val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
-              TopicAndPartition(topic, partition) -> newReplicas
-            })
-          case None =>
-            Seq.empty
-        }
-      case None =>
-        Seq.empty
+    for {
+      json <- Json.parseFull(jsonData).toSeq
+      partitionsSeq <- json.asInstanceOf[Map[String, Any]].get("partitions").toSeq
+      p <- partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
+    } yield {
+//      TODO: Option#get throws exception for None, we should do something meaningful.
+      val topic = p.get("topic").get.asInstanceOf[String]
+      val partition = p.get("partition").get.asInstanceOf[Int]
+      val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
+      TopicAndPartition(topic, partition) -> newReplicas
     }
   }
 
-  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] =
+  def parsePartitionReassignmentData(jsonData: String): immutable.Map[TopicAndPartition, Seq[Int]] =
     parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
 
   def parseTopicsData(jsonData: String): Seq[String] = {
-    var topics = List.empty[String]
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("topics") match {
-          case Some(partitionsSeq) =>
-            val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
-            mapPartitionSeq.foreach(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              topics ++= List(topic)
-            })
-          case None =>
-        }
-      case None =>
-    }
-    topics
+    for {
+      m <- Json.parseFull(jsonData).toSeq
+      partitionsSeq <- m.asInstanceOf[Map[String, Any]].get("topics").toSeq
+      p <- partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
+//      TODO: What if "topic" is not part of json? None#get throws exception.
+    } yield p.get("topic").get.asInstanceOf[String]
   }
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
@@ -699,23 +683,21 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getPartitionsForTopics(topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
-    getPartitionAssignmentForTopics(topics).map { topicAndPartitionMap =>
-      val topic = topicAndPartitionMap._1
-      val partitionMap = topicAndPartitionMap._2
-      debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
-      topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
+    getPartitionAssignmentForTopics(topics).map {
+      case (topic, partitionMap) =>
+        debug(s"partition assignment of /brokers/topics/$topic is $partitionMap")
+        topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
     }
   }
 
-  def getPartitionsBeingReassigned(): Map[TopicAndPartition, ReassignedPartitionsContext] = {
-    // read the partitions and their new replica list
-    val jsonPartitionMapOpt = readDataMaybeNull(ReassignPartitionsPath)._1
-    jsonPartitionMapOpt match {
-      case Some(jsonPartitionMap) =>
-        val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
-      case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
-    }
+  /** Read the partitions and their new replica list */
+  def getPartitionsBeingReassigned(): immutable.Map[TopicAndPartition, ReassignedPartitionsContext] = {
+    val reassignedPartitions = for {
+      jsonPartitionMap <- readDataMaybeNull(ReassignPartitionsPath)._1.toSeq
+      (tp, replicas) <- parsePartitionReassignmentData(jsonPartitionMap)
+    } yield tp -> ReassignedPartitionsContext(replicas)
+
+    reassignedPartitions.toMap
   }
 
   def updatePartitionReassignmentData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]) {

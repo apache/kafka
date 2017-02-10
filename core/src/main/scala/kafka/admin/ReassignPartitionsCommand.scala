@@ -183,7 +183,10 @@ object ReassignPartitionsCommand extends Logging {
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
     val duplicateReassignedPartitions = CoreUtils.duplicates(partitionsToBeReassigned.map { case (tp, _) => tp })
     if (duplicateReassignedPartitions.nonEmpty)
-      throw new AdminCommandFailedException("Partition reassignment contains duplicate topic partitions: %s".format(duplicateReassignedPartitions.mkString(",")))
+      throw new AdminCommandFailedException(
+        s"Partition reassignment contains duplicate topic partitions: ${duplicateReassignedPartitions.mkString(",")}"
+      )
+
     val duplicateEntries = partitionsToBeReassigned
       .map { case (tp, replicas) => (tp, CoreUtils.duplicates(replicas))}
       .filter { case (_, duplicatedReplicas) => duplicatedReplicas.nonEmpty }
@@ -204,7 +207,8 @@ object ReassignPartitionsCommand extends Logging {
     partitionsToBeReassigned
   }
 
-  private def checkIfReassignmentSucceeded(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
+  private def checkIfReassignmentSucceeded(zkUtils: ZkUtils,
+                                           partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
   :Map[TopicAndPartition, ReassignmentStatus] = {
     val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
     partitionsToBeReassigned.keys.map { topicAndPartition =>

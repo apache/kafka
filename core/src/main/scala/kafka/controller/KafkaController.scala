@@ -1432,6 +1432,7 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
   def doHandleDataDeleted(dataPath: String) {}
 }
 
+//TODO: Very dangerous, if put into map as key and later any var will change, magic will happen!!!
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
                                        var isrChangeListener: ReassignedPartitionsIsrChangeListener = null)
 

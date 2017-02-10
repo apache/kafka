@@ -27,11 +27,10 @@ import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
-import kafka.zk.ZooKeeperTestHarness
 import kafka.common.MessageStreamsExistException
 import org.junit.Test
 
-import scala.collection.JavaConversions
+import scala.collection.JavaConverters._
 
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
@@ -65,7 +64,14 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
-    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(
+      toJavaMap(Map(topic -> numNodes*numParts/2)),
+      new StringDecoder(),
+      new StringDecoder()
+    ).asScala
+     .toMap
+     .mapValues(_.asScala.toList)
+
 
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1.sorted, receivedMessages1.sorted)
@@ -95,8 +101,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       for (partition <- 0 until numParts) {
         val ms = 0.until(messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
         messages ++= ms
-        import JavaConversions._
-        javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)): java.util.List[KeyedMessage[Int, String]])
+        javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)).asJava)
       }
       javaProducer.close
     }
@@ -104,12 +109,9 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   def getMessages(nMessagesPerThread: Int,
-                  jTopicMessageStreams: java.util.Map[String, java.util.List[KafkaStream[String, String]]]): List[String] = {
-    var messages: List[String] = Nil
-    import scala.collection.JavaConversions._
+                  jTopicMessageStreams: Map[String, List[KafkaStream[String, String]]]): List[String] = {
     val topicMessageStreams = jTopicMessageStreams.mapValues(_.toList)
-    messages = TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
-    messages
+    TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
   }
 
   private def toJavaMap(scalaMap: Map[String, Int]): java.util.Map[String, java.lang.Integer] = {
