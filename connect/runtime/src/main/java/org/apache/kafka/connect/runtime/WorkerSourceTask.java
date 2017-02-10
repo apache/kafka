@@ -193,12 +193,11 @@ class WorkerSourceTask extends WorkerTask {
                 commitTaskRecord(preTransformRecord);
                 continue;
             }
-            // ensure invalid timestamps are handled prior to instantiating ProduceRecord
-            Long timestamp = record.timestamp() <= Record.NO_TIMESTAMP ? null : record.timestamp();
 
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), timestamp, key, value);
+            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
+                    (record.timestamp() <= Record.NO_TIMESTAMP) ? null : record.timestamp(), key, value);
             log.trace("Appending record with key {}, value {}", record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
