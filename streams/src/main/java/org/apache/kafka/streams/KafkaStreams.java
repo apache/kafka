@@ -635,6 +635,8 @@ public class KafkaStreams {
      *   <li>this is a point in time view and it may change due to partition reassignment</li>
      *   <li>the key may not exist in the {@link StateStore}; this method provides a way of finding which host it
      *       <em>would</em> exist on</li>
+     *   <li>if this is for a window store the serializer should be the serializer for the record key,
+     *       not the window serializer</li>
      * </ul>
      *
      * @param storeName     the {@code storeName} to find metadata for
