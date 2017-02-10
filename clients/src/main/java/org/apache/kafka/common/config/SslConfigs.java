@@ -70,7 +70,7 @@ public class SslConfigs {
     public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
-    public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. ";
+    public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. If a password is not set access to the truststore is still available, but integrity checking is disabled.";
 
     public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
     public static final String SSL_KEYMANAGER_ALGORITHM_DOC = "The algorithm used by key manager factory for SSL connections. "

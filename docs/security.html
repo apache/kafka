@@ -143,6 +143,8 @@
             ssl.truststore.location=/var/private/ssl/kafka.server.truststore.jks
             ssl.truststore.password=test1234</pre>
 
+            Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled.
+
             Optional settings that are worth considering:
             <ol>
                 <li>ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)</li>
@@ -192,11 +194,14 @@
             ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
             ssl.truststore.password=test1234</pre>
 
+            Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled.
+
             If client authentication is required, then a keystore must be created like in step 1 and the following must also be configured:
             <pre>
             ssl.keystore.location=/var/private/ssl/kafka.client.keystore.jks
             ssl.keystore.password=test1234
             ssl.key.password=test1234</pre>
+
             Other configuration settings that may also be needed depending on our requirements and the broker configuration:
                 <ol>
                     <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
