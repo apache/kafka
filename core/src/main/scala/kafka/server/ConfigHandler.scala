@@ -60,9 +60,11 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
-      if (logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
+      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+        || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
+        && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
         warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
-          s"${LogConfig.MessageTimestampDifferenceMaxMsProp} value of ${logConfig.messageTimestampDifferenceMaxMs}. " +
+          s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
           s"This may result in potential frequent log rolling.")
       logs.foreach(_.config = logConfig)
     }
