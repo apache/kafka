@@ -290,6 +290,10 @@ subprojects {
       }
     }
   }
+
+  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+  task reportCoverage(dependsOn: [coverageGen])
+
 }
 
 def fineTuneEclipseClasspathFile(eclipse, project) {
@@ -347,7 +351,7 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
 for ( sv in ['2_10', '2_11', '2_12'] ) {
   String svInDot = sv.replaceAll( "_", ".")
