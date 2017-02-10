@@ -537,53 +537,40 @@
   <h3><a id="config" href="#config">6.3 Kafka Configuration</a></h3>
 
   <h4><a id="clientconfig" href="#clientconfig">Important Client Configurations</a></h4>
-  The most important producer configurations control
+  The most important old Scala producer configurations control
   <ul>
+      <li>acks</li>
       <li>compression</li>
       <li>sync vs async production</li>
       <li>batch size (for async producers)</li>
+  </ul>
+  The most important new Java producer configurations control
+  <ul>
+      <li>acks</li>
+      <li>compression</li>
+      <li>batch size</li>
   </ul>
   The most important consumer configuration is the fetch size.
   <p>
   All configurations are documented in the <a href="#configuration">configuration</a> section.
   <p>
   <h4><a id="prodconfig" href="#prodconfig">A Production Server Config</a></h4>
-  Here is our production server configuration:
+  Here is an example production server configuration:
   <pre>
-  # Replication configurations
-  replica.fetch.max.bytes=1048576
-  replica.fetch.wait.max.ms=500
-  replica.high.watermark.checkpoint.interval.ms=5000
-  replica.socket.timeout.ms=30000
-  replica.socket.receive.buffer.bytes=65536
-  replica.lag.time.max.ms=10000
-
-  controller.socket.timeout.ms=30000
+  # ZooKeeper
+  zookeeper.connect=[list of ZooKeeper servers]
 
   # Log configuration
   num.partitions=8
-  message.max.bytes=1000000
-  auto.create.topics.enable=true
-  log.index.interval.bytes=4096
-  log.index.size.max.bytes=10485760
-  log.retention.hours=168
-  log.roll.hours=168
-  log.retention.check.interval.ms=300000
-  log.segment.bytes=1073741824
+  default.replication.factor=3
+  log.dir=[List of directories. Kafka should have its own dedicated disk(s) or SSD(s).]
 
-  # ZK configuration
-  zookeeper.connection.timeout.ms=6000
-  zookeeper.sync.time.ms=2000
-
-  # Socket server configuration
-  num.io.threads=8
-  num.network.threads=8
-  socket.request.max.bytes=104857600
-  socket.receive.buffer.bytes=1048576
-  socket.send.buffer.bytes=1048576
-  queued.max.requests=500
-  fetch.purgatory.purge.interval.requests=100
-  producer.purgatory.purge.interval.requests=100
+  # Other configurations
+  broker.id=[An integer. Start with 0 and increment by 1 for each new broker.]
+  listeners=[list of listeners]
+  auto.create.topics.enable=false
+  min.insync.replicas=2
+  queued.max.requests=[number of concurrent requests]
   </pre>
 
   Our client configuration varies a fair amount between different use cases.

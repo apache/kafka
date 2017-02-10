@@ -161,8 +161,8 @@ case class OffsetCommitRequest(groupId: String,
     })
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorCode = Errors.forException(e).code
-    val commitStatus = requestInfo.mapValues(_ => errorCode)
+    val error = Errors.forException(e)
+    val commitStatus = requestInfo.mapValues(_ => error)
     val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
 
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))

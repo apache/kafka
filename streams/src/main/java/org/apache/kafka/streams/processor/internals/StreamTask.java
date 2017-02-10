@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -293,7 +295,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
-            consumer.commitSync(consumedOffsetsAndMetadata);
+            try {
+                consumer.commitSync(consumedOffsetsAndMetadata);
+            } catch (final CommitFailedException cfe) {
+                log.warn("{} Failed offset commits: {} ", logPrefix, consumedOffsetsAndMetadata);
+                throw cfe;
+            }
             commitOffsetNeeded = false;
         }
 
@@ -389,6 +396,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private ProcessorRecordContext createRecordContext(final StampedRecord currRecord) {
         return new ProcessorRecordContext(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic());
+    }
+
+    // Visible for testing
+    ProcessorContext processorContext() {
+        return processorContext;
     }
 
     /**

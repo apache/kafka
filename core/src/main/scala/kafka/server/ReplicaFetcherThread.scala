@@ -276,7 +276,7 @@ class ReplicaFetcherThread(name: String,
     val clientResponse = sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
     val partitionData = response.responseData.get(topicPartition)
-    Errors.forCode(partitionData.errorCode) match {
+    partitionData.error match {
       case Errors.NONE =>
         if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
           partitionData.offset
@@ -321,7 +321,7 @@ object ReplicaFetcherThread {
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
 
-    def errorCode: Short = underlying.errorCode
+    def error = underlying.error
 
     def toRecords: MemoryRecords = {
       underlying.records.asInstanceOf[MemoryRecords]
@@ -329,7 +329,7 @@ object ReplicaFetcherThread {
 
     def highWatermark: Long = underlying.highWatermark
 
-    def exception: Option[Throwable] = Errors.forCode(errorCode) match {
+    def exception: Option[Throwable] = error match {
       case Errors.NONE => None
       case e => Some(e.exception)
     }

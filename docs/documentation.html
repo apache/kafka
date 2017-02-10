@@ -20,6 +20,7 @@
 <!--#include virtual="../includes/_header.htm" -->
 <!--#include virtual="../includes/_top.htm" -->
 
+
 <div class="content documentation documentation--current">
 	<!--#include virtual="../includes/_nav.htm" -->
 	<div class="right">
@@ -27,134 +28,8 @@
     <h1>Documentation</h1>
     <h3>Kafka 0.10.2 Documentation</h3>
     Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documentation.html">0.8.0</a>, <a href="/081/documentation.html">0.8.1.X</a>, <a href="/082/documentation.html">0.8.2.X</a>, <a href="/090/documentation.html">0.9.0.X</a>, <a href="/0100/documentation.html">0.10.0.X</a>, <a href="/0101/documentation.html">0.10.1.X</a>.
-    </ul>
 
-    <ul class="toc">
-        <li><a href="#gettingStarted">1. Getting Started</a>
-             <ul>
-                 <li><a href="#introduction">1.1 Introduction</a>
-                 <li><a href="#uses">1.2 Use Cases</a>
-                 <li><a href="#quickstart">1.3 Quick Start</a>
-                 <li><a href="#ecosystem">1.4 Ecosystem</a>
-                 <li><a href="#upgrade">1.5 Upgrading</a>
-             </ul>
-        </li>
-        <li><a href="#api">2. APIs</a>
-              <ul>
-                  <li><a href="#producerapi">2.1 Producer API</a>
-                  <li><a href="#consumerapi">2.2 Consumer API</a>
-                  <li><a href="#streamsapi">2.3 Streams API</a>
-    			  <li><a href="#connectapi">2.4 Connect API</a>
-    			  <li><a href="#legacyapis">2.5 Legacy APIs</a>
-              </ul>
-        </li>
-        <li><a href="#configuration">3. Configuration</a>
-            <ul>
-                <li><a href="#brokerconfigs">3.1 Broker Configs</a>
-                <li><a href="#producerconfigs">3.2 Producer Configs</a>
-                <li><a href="#consumerconfigs">3.3 Consumer Configs</a>
-                    <ul>
-                        <li><a href="#newconsumerconfigs">3.3.1 New Consumer Configs</a>
-                        <li><a href="#oldconsumerconfigs">3.3.2 Old Consumer Configs</a>
-                    </ul>
-                <li><a href="#connectconfigs">3.4 Kafka Connect Configs</a>
-                <li><a href="#streamsconfigs">3.5 Kafka Streams Configs</a>
-            </ul>
-        </li>
-        <li><a href="#design">4. Design</a>
-            <ul>
-                 <li><a href="#majordesignelements">4.1 Motivation</a>
-                 <li><a href="#persistence">4.2 Persistence</a>
-                 <li><a href="#maximizingefficiency">4.3 Efficiency</a>
-                 <li><a href="#theproducer">4.4 The Producer</a>
-                 <li><a href="#theconsumer">4.5 The Consumer</a>
-                 <li><a href="#semantics">4.6 Message Delivery Semantics</a>
-                 <li><a href="#replication">4.7 Replication</a>
-                 <li><a href="#compaction">4.8 Log Compaction</a>
-                 <li><a href="#design_quotas">4.9 Quotas</a>
-            </ul>
-        </li>
-        <li><a href="#implementation">5. Implementation</a>
-            <ul>
-                  <li><a href="#apidesign">5.1 API Design</a>
-                  <li><a href="#networklayer">5.2 Network Layer</a>
-                  <li><a href="#messages">5.3 Messages</a>
-                  <li><a href="#messageformat">5.4 Message format</a>
-                  <li><a href="#log">5.5 Log</a>
-                  <li><a href="#distributionimpl">5.6 Distribution</a>
-            </ul>
-        </li>
-        <li><a href="#operations">6. Operations</a>
-            <ul>
-                 <li><a href="#basic_ops">6.1 Basic Kafka Operations</a>
-                    <ul>
-                         <li><a href="#basic_ops_add_topic">Adding and removing topics</a>
-                         <li><a href="#basic_ops_modify_topic">Modifying topics</a>
-                         <li><a href="#basic_ops_restarting">Graceful shutdown</a>
-                         <li><a href="#basic_ops_leader_balancing">Balancing leadership</a>
-                         <li><a href="#basic_ops_consumer_lag">Checking consumer position</a>
-                         <li><a href="#basic_ops_mirror_maker">Mirroring data between clusters</a>
-                         <li><a href="#basic_ops_cluster_expansion">Expanding your cluster</a>
-                         <li><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a>
-                         <li><a href="#basic_ops_increase_replication_factor">Increasing replication factor</a>
-                    </ul>
-                 <li><a href="#datacenters">6.2 Datacenters</a>
-                 <li><a href="#config">6.3 Important Configs</a>
-                     <ul>
-                         <li><a href="#clientconfig">Important Client Configs</a>
-                         <li><a href="#prodconfig">A Production Server Configs</a>
-                     </ul>
-                   <li><a href="#java">6.4 Java Version</a>
-                   <li><a href="#hwandos">6.5 Hardware and OS</a>
-                    <ul>
-                        <li><a href="#os">OS</a>
-                        <li><a href="#diskandfs">Disks and Filesystems</a>
-                        <li><a href="#appvsosflush">Application vs OS Flush Management</a>
-                        <li><a href="#linuxflush">Linux Flush Behavior</a>
-                        <li><a href="#ext4">Ext4 Notes</a>
-                    </ul>
-                  <li><a href="#monitoring">6.6 Monitoring</a>
-                  <li><a href="#zk">6.7 ZooKeeper</a>
-                    <ul>
-                        <li><a href="#zkversion">Stable Version</a>
-                        <li><a href="#zkops">Operationalization</a>
-                    </ul>
-            </ul>
-        </li>
-        <li><a href="#security">7. Security</a>
-            <ul>
-                <li><a href="#security_overview">7.1 Security Overview</a></li>
-                <li><a href="#security_ssl">7.2 Encryption and Authentication using SSL</a></li>
-                <li><a href="#security_sasl">7.3 Authentication using SASL</a></li>
-                <li><a href="#security_authz">7.4 Authorization and ACLs</a></li>
-                <li><a href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></li>
-                <li><a href="#zk_authz">7.6 ZooKeeper Authentication</a></li>
-                <ul>
-                    <li><a href="#zk_authz_new">New Clusters</a></li>
-                    <li><a href="#zk_authz_migration">Migrating Clusters</a></li>
-                    <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a></li>
-                </ul>
-            </ul>
-        </li>
-        <li><a href="#connect">8. Kafka Connect</a>
-            <ul>
-                <li><a href="#connect_overview">8.1 Overview</a></li>
-                <li><a href="#connect_user">8.2 User Guide</a></li>
-                <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
-            </ul>
-        </li>
-        <li><a href="#streams">9. Kafka Streams</a>
-            <ul>
-                <li><a href="#streams_overview">9.1 Overview</a></li>
-                <li><a href="#streams_developer">9.2 Developer Guide</a></li>
-                <ul>
-                    <li><a href="#streams_concepts">Core Concepts</a></li>
-                    <li><a href="#streams_processor">Low-Level Processor API</a></li>
-                    <li><a href="#streams_dsl">High-Level Streams DSL</a></li>
-                </ul>
-            </ul>
-        </li>
-    </ul>
+    <!--#include virtual="toc.html" -->
 
     <h2><a id="gettingStarted" href="#gettingStarted">1. Getting Started</a></h2>
       <h3><a id="introduction" href="#introduction">1.1 Introduction</a></h3>
@@ -194,8 +69,15 @@
     <h2><a id="connect" href="#connect">8. Kafka Connect</a></h2>
     <!--#include virtual="connect.html" -->
 
-    <h2><a id="streams" href="#streams">9. Kafka Streams</a></h2>
-    <!--#include virtual="streams.html" -->
+    <h2><a id="streams" href="/0102/documentation/streams">9. Kafka Streams</a></h2>
+    <p>
+        Kafka Streams is a client library for processing and analyzing data stored in Kafka and either write the resulting data back to Kafka or send the final output to an external system. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+    </p>
+    <p>
+        Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
+    </p>
 
-<!--#include virtual="../includes/footer.html" -->
+    <p>Learn More about Kafka Streams read <a href="/0102/documentation/streams">this</a> Section.</p>
+
+<!--#include virtual="../includes/_footer.htm" -->
 <!--#include virtual="../includes/_docs_footer.htm" -->

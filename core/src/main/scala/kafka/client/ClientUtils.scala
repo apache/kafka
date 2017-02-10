@@ -168,7 +168,7 @@ object ClientUtils extends Logging{
            val response = queryChannel.receive()
            val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
-           if (consumerMetadataResponse.errorCode == Errors.NONE.code)
+           if (consumerMetadataResponse.error == Errors.NONE)
              coordinatorOpt = consumerMetadataResponse.coordinatorOpt
            else {
              debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."

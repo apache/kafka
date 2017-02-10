@@ -47,7 +47,7 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void send() {
-        client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
         RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
@@ -59,13 +59,13 @@ public class ConsumerNetworkClientTest {
 
         ClientResponse clientResponse = future.value();
         HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
-        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertEquals(Errors.NONE, response.error());
     }
 
     @Test
     public void multiSend() {
-        client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
-        client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
         RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
         RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
@@ -150,7 +150,7 @@ public class ConsumerNetworkClientTest {
         } catch (WakeupException e) {
         }
 
-        client.respond(heartbeatResponse(Errors.NONE.code()));
+        client.respond(heartbeatResponse(Errors.NONE));
         consumerClient.poll(future);
         assertTrue(future.isDone());
     }
@@ -201,11 +201,11 @@ public class ConsumerNetworkClientTest {
 
         // Enable send, the un-expired send should succeed on poll
         isReady.set(true);
-        client.prepareResponse(heartbeatResponse(Errors.NONE.code()));
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
         consumerClient.poll(future2);
         ClientResponse clientResponse = future2.value();
         HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
-        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertEquals(Errors.NONE, response.error());
 
         // Disable ready flag to delay send and queue another send. Disconnection should remove pending send
         isReady.set(false);
@@ -224,7 +224,7 @@ public class ConsumerNetworkClientTest {
         return new HeartbeatRequest.Builder("group", 1, "memberId");
     }
 
-    private HeartbeatResponse heartbeatResponse(short error) {
+    private HeartbeatResponse heartbeatResponse(Errors error) {
         return new HeartbeatResponse(error);
     }
 

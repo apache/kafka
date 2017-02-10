@@ -459,7 +459,7 @@ public class KafkaConsumerTest {
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 50L), Errors.NONE.code()));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 50L), Errors.NONE));
         client.prepareResponse(fetchResponse(tp0, 50L, 5));
 
         ConsumerRecords<String, String> records = consumer.poll(0);
@@ -493,7 +493,7 @@ public class KafkaConsumerTest {
         consumer.assign(singletonList(tp0));
 
         // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // fetch offset for one topic
@@ -991,7 +991,7 @@ public class KafkaConsumerTest {
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
 
         // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
@@ -1009,7 +1009,7 @@ public class KafkaConsumerTest {
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 10L), Errors.NONE.code()));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 10L), Errors.NONE));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
         ConsumerRecords<String, String> records = consumer.poll(0);
@@ -1056,7 +1056,7 @@ public class KafkaConsumerTest {
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, autoCommitIntervalMs);
 
         // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
@@ -1074,7 +1074,7 @@ public class KafkaConsumerTest {
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 10L), Errors.NONE.code()));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 10L), Errors.NONE));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
         ConsumerRecords<String, String> records = consumer.poll(0);
@@ -1117,7 +1117,7 @@ public class KafkaConsumerTest {
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
 
         // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
@@ -1139,8 +1139,8 @@ public class KafkaConsumerTest {
         assertEquals(0, consumer.committed(tp1).offset());
 
         // fetch and verify consumer's position in the two partitions
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 3L), Errors.NONE.code()));
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp1, 3L), Errors.NONE.code()));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 3L), Errors.NONE));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp1, 3L), Errors.NONE));
         assertEquals(3L, consumer.position(tp0));
         assertEquals(3L, consumer.position(tp1));
 
@@ -1183,10 +1183,10 @@ public class KafkaConsumerTest {
 
     @Test
     public void testGracefulClose() throws Exception {
-        Map<TopicPartition, Short> response = new HashMap<>();
-        response.put(tp0, Errors.NONE.code());
+        Map<TopicPartition, Errors> response = new HashMap<>();
+        response.put(tp0, Errors.NONE);
         OffsetCommitResponse commitResponse = offsetCommitResponse(response);
-        LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(Errors.NONE.code());
+        LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(Errors.NONE);
         consumerCloseTest(5000, Arrays.asList(commitResponse, leaveGroupResponse), 0, false);
     }
 
@@ -1197,8 +1197,8 @@ public class KafkaConsumerTest {
 
     @Test
     public void testLeaveGroupTimeout() throws Exception {
-        Map<TopicPartition, Short> response = new HashMap<>();
-        response.put(tp0, Errors.NONE.code());
+        Map<TopicPartition, Errors> response = new HashMap<>();
+        response.put(tp0, Errors.NONE);
         OffsetCommitResponse commitResponse = offsetCommitResponse(response);
         consumerCloseTest(5000, Arrays.asList(commitResponse), 5000, false);
     }
@@ -1332,7 +1332,7 @@ public class KafkaConsumerTest {
     private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
         if (coordinator == null) {
             // lookup coordinator
-            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
             coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
         }
 
@@ -1344,10 +1344,10 @@ public class KafkaConsumerTest {
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(joinGroupRequest.groupProtocols().get(0).metadata());
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
-        }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+        }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
 
         return coordinator;
     }
@@ -1355,15 +1355,15 @@ public class KafkaConsumerTest {
     private Node prepareRebalance(MockClient client, Node node, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
         if (coordinator == null) {
             // lookup coordinator
-            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node), node);
+            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE, node), node);
             coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
         }
 
         // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
 
         return coordinator;
     }
@@ -1376,15 +1376,15 @@ public class KafkaConsumerTest {
                 heartbeatReceived.set(true);
                 return true;
             }
-        }, new HeartbeatResponse(Errors.NONE.code()), coordinator);
+        }, new HeartbeatResponse(Errors.NONE), coordinator);
         return heartbeatReceived;
     }
 
     private AtomicBoolean prepareOffsetCommitResponse(MockClient client, Node coordinator, final Map<TopicPartition, Long> partitionOffsets) {
         final AtomicBoolean commitReceived = new AtomicBoolean(true);
-        Map<TopicPartition, Short> response = new HashMap<>();
+        Map<TopicPartition, Errors> response = new HashMap<>();
         for (TopicPartition partition : partitionOffsets.keySet())
-            response.put(partition, Errors.NONE.code());
+            response.put(partition, Errors.NONE);
 
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
@@ -1408,16 +1408,16 @@ public class KafkaConsumerTest {
         return prepareOffsetCommitResponse(client, coordinator, Collections.singletonMap(partition, offset));
     }
 
-    private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Short> responseData) {
+    private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Errors> responseData) {
         return new OffsetCommitResponse(responseData);
     }
 
-    private JoinGroupResponse joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, short error) {
+    private JoinGroupResponse joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, Errors error) {
         return new JoinGroupResponse(error, generationId, assignor.name(), memberId, leaderId,
                 Collections.<String, ByteBuffer>emptyMap());
     }
 
-    private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, short error) {
+    private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
         ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
         return new SyncGroupResponse(error, buf);
     }
@@ -1430,7 +1430,7 @@ public class KafkaConsumerTest {
         return new OffsetFetchResponse(Errors.NONE, partitionData);
     }
 
-    private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets, short error) {
+    private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets, Errors error) {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
@@ -1448,7 +1448,7 @@ public class KafkaConsumerTest {
             MemoryRecordsBuilder records = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, fetchOffset);
             for (int i = 0; i < fetchCount; i++)
                 records.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE.code(), 0, records.build()));
+            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, records.build()));
         }
         return new FetchResponse(tpResponses, 0);
     }

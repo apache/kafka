@@ -115,8 +115,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
     val response1 = producer.send(produceRequest("test", 0, messageSet1, acks = 1))
 
-    assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    assertEquals(Errors.MESSAGE_TOO_LARGE.code, response1.status(TopicAndPartition("test", 0)).error)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
     assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
     val safeSize = configs.head.messageMaxBytes - Message.MinMessageOverhead - Message.TimestampLength - MessageSet.LogOverhead - 1
@@ -124,8 +124,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))
 
-    assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("test", 0)).error)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("test", 0)).error)
     assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
 
@@ -174,7 +174,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(3, response.status.size)
     response.status.values.foreach {
       case ProducerResponseStatus(error, nextOffset, timestamp) =>
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, error)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
         assertEquals(-1L, nextOffset)
         assertEquals(Message.NoTimestamp, timestamp)
     }
@@ -191,13 +191,13 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(3, response2.status.size)
 
     // the first and last message should have been accepted by broker
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic1", 0)).error)
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic3", 0)).error)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic1", 0)).error)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic3", 0)).error)
     assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
     assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
 
     // the middle message should have been rejected because broker doesn't lead partition
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                         response2.status(TopicAndPartition("topic2", 0)).error)
     assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
   }
@@ -262,6 +262,6 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val response = producer.send(produceRequest(topicName, 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
 
-    assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, response.status(TopicAndPartition(topicName, 0)).error)
+    assertEquals(Errors.NOT_ENOUGH_REPLICAS, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

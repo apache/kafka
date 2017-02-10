@@ -637,7 +637,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
-            Errors error = Errors.forCode(partitionData.errorCode);
+            Errors error = partitionData.error;
             if (error == Errors.NONE) {
                 if (partitionData.offsets != null) {
                     // Handle v0 response
@@ -750,7 +750,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         int bytes = 0;
         int recordsCount = 0;
         PartitionRecords<K, V> parsedRecords = null;
-        Errors error = Errors.forCode(partition.errorCode);
+        Errors error = partition.error;
 
         try {
             if (!subscriptions.isFetchable(tp)) {

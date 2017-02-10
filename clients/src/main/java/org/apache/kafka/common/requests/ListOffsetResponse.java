@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -33,7 +34,7 @@ import java.util.Map;
 public class ListOffsetResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -63,7 +64,7 @@ public class ListOffsetResponse extends AbstractResponse {
     private final Map<TopicPartition, PartitionData> responseData;
 
     public static final class PartitionData {
-        public final short errorCode;
+        public final Errors error;
         // The offsets list is only used in ListOffsetResponse v0.
         @Deprecated
         public final List<Long> offsets;
@@ -74,8 +75,8 @@ public class ListOffsetResponse extends AbstractResponse {
          * Constructor for ListOffsetResponse v0
          */
         @Deprecated
-        public PartitionData(short errorCode, List<Long> offsets) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, List<Long> offsets) {
+            this.error = error;
             this.offsets = offsets;
             this.timestamp = null;
             this.offset = null;
@@ -84,8 +85,8 @@ public class ListOffsetResponse extends AbstractResponse {
         /**
          * Constructor for ListOffsetResponse v1
          */
-        public PartitionData(short errorCode, long timestamp, long offset) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, long timestamp, long offset) {
+            this.error = error;
             this.timestamp = timestamp;
             this.offset = offset;
             this.offsets = null;
@@ -95,7 +96,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData{").
-                append("errorCode: ").append((int) errorCode).
+                append("errorCode: ").append((int) error.code()).
                 append(", timestamp: ").append(timestamp).
                 append(", offset: ").append(offset).
                 append(", offsets: ");
@@ -130,7 +131,7 @@ public class ListOffsetResponse extends AbstractResponse {
                 PartitionData offsetPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(ERROR_CODE_KEY_NAME, offsetPartitionData.errorCode);
+                partitionData.set(ERROR_CODE_KEY_NAME, offsetPartitionData.error.code());
                 if (version == 0)
                     partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
                 else {
@@ -155,18 +156,18 @@ public class ListOffsetResponse extends AbstractResponse {
             for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
+                Errors error = Errors.forCode(partitionResponse.getShort(ERROR_CODE_KEY_NAME));
                 PartitionData partitionData;
                 if (partitionResponse.hasField(OFFSETS_KEY_NAME)) {
                     Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
                     List<Long> offsetsList = new ArrayList<Long>();
                     for (Object offset : offsets)
                         offsetsList.add((Long) offset);
-                    partitionData = new PartitionData(errorCode, offsetsList);
+                    partitionData = new PartitionData(error, offsetsList);
                 } else {
                     long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
                     long offset = partitionResponse.getLong(OFFSET_KEY_NAME);
-                    partitionData = new PartitionData(errorCode, timestamp, offset);
+                    partitionData = new PartitionData(error, timestamp, offset);
                 }
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }

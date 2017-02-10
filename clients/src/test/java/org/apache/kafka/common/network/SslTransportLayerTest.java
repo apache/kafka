@@ -344,6 +344,24 @@ public class SslTransportLayerTest {
             // Expected exception
         }
     }
+
+    /**
+     * Tests that client connections can be created to a server
+     * if null truststore password is used
+     */
+    @Test
+    public void testNullTruststorePassword() throws Exception {
+        String node = "0";
+        sslClientConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        sslServerConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
     
     /**
      * Tests that client connections cannot be created to a server

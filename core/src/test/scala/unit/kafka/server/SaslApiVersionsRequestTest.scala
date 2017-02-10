@@ -75,7 +75,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
       val apiVersionsRequest = new ApiVersionsRequest(
         new Struct(ProtoUtils.requestSchema(ApiKeys.API_VERSIONS.id, 0)), Short.MaxValue);
       val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, apiVersionsRequest)
-      assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.errorCode)
+      assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)
       val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket,
           new ApiVersionsRequest.Builder().setVersion(0).build())
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
@@ -93,7 +93,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
     val response = send(new SaslHandshakeRequest("PLAIN"), ApiKeys.SASL_HANDSHAKE, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response)
-    assertEquals(Errors.NONE.code, handshakeResponse.errorCode())
+    assertEquals(Errors.NONE, handshakeResponse.error)
     assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms())
   }
 }

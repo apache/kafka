@@ -25,8 +25,8 @@ from kafkatest.version import DEV_BRANCH, LATEST_0_10_1, LATEST_0_10_0, KafkaVer
 
 class StreamsBrokerCompatibility(Test):
     """
-    These tests validate that Streams v0.10.2+ can connect to older brokers v0.10+
-    and that Streams fails fast for pre-0.10 brokers
+    These tests validate that Streams v0.10.2+ can connect to older brokers v0.10.1+
+    and that Streams fails fast for pre-0.10.0 brokers
     """
 
     input = "brokerCompatibilitySourceTopic"
