@@ -477,7 +477,7 @@ public class StreamThread extends Thread {
         firstException.compareAndSet(null, flushAllState());
         // only commit after all state has been flushed and there hasn't been an exception
         if (firstException.get() == null) {
-            firstException.set(commitOffsets());
+            commitOffsets();
         }
         // remove the changelog partitions from restore consumer
         firstException.compareAndSet(null, unAssignChangeLogPartitions());
