@@ -90,6 +90,10 @@ This is for `core`, `examples` and `clients`
     ./gradlew eclipse
     ./gradlew idea
 
+The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+to avoid known issues with this configuration.
+
 ### Building the jar for all scala versions and for all projects ###
     ./gradlew jarAll
 
