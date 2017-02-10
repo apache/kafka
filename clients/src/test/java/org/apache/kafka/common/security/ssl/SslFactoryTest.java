@@ -17,6 +17,7 @@ import java.util.Map;
 
 import javax.net.ssl.SSLEngine;
 
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
 import org.junit.Test;
@@ -25,6 +26,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
@@ -43,6 +45,20 @@ public class SslFactoryTest {
         String[] expectedProtocols = {"TLSv1.2"};
         assertArrayEquals(expectedProtocols, engine.getEnabledProtocols());
         assertEquals(false, engine.getUseClientMode());
+    }
+
+    @Test
+    public void testSslFactoryWithoutPasswordConfiguration() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        // unset the password
+        serverSslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        try {
+            sslFactory.configure(serverSslConfig);
+        } catch (Exception e) {
+            fail("An exception was thrown when configuring the truststore without a password: " + e);
+        }
     }
 
     @Test
