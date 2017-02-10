@@ -45,6 +45,13 @@ class CommandLineUtilsTest {
   }
 
   @Test
+  def testParseWithEquals() {
+    val argArray = Array("my.property=abc=123")
+    val props = CommandLineUtils.parseKeyValueArgs(argArray)
+    assertEquals("Value of a single property should be 'abc=123'", props.getProperty("my.property"), "abc=123")
+  }
+
+  @Test
   def testParseArgs() {
     val argArray = Array("first.property=first","second.property=second")
     val props = CommandLineUtils.parseKeyValueArgs(argArray, false)
