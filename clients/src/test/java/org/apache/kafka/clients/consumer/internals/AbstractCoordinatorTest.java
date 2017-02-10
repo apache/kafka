@@ -467,20 +467,20 @@ public class AbstractCoordinatorTest {
     }
 
     private GroupCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new GroupCoordinatorResponse(error.code(), node);
+        return new GroupCoordinatorResponse(error, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {
-        return new HeartbeatResponse(error.code());
+        return new HeartbeatResponse(error);
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error.code(), generationId, "dummy-subprotocol", memberId, leaderId,
+        return new JoinGroupResponse(error, generationId, "dummy-subprotocol", memberId, leaderId,
                 Collections.<String, ByteBuffer>emptyMap());
     }
 
     private SyncGroupResponse syncGroupResponse(Errors error) {
-        return new SyncGroupResponse(error.code(), ByteBuffer.allocate(0));
+        return new SyncGroupResponse(error, ByteBuffer.allocate(0));
     }
 
     public class DummyCoordinator extends AbstractCoordinator {

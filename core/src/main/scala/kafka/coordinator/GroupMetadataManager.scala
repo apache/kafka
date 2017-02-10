@@ -224,7 +224,7 @@ class GroupMetadataManager(val brokerId: Int,
                           consumerId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Short] => Unit): Option[DelayedStore] = {
+                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Option[DelayedStore] = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -254,7 +254,7 @@ class GroupMetadataManager(val brokerId: Int,
           // the offset and metadata to cache if the append status has no error
           val status = responseStatus(offsetTopicPartition)
 
-          val responseCode =
+          val response =
             group synchronized {
               if (status.error == Errors.NONE) {
                 if (!group.is(Dead)) {
@@ -262,7 +262,7 @@ class GroupMetadataManager(val brokerId: Int,
                     group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
-                Errors.NONE.code
+                Errors.NONE
               } else {
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
@@ -291,16 +291,16 @@ class GroupMetadataManager(val brokerId: Int,
                   case other => other
                 }
 
-                responseError.code
+                responseError
               }
             }
 
           // compute the final error codes for the commit response
           val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
-              (topicPartition, responseCode)
+              (topicPartition, response)
             else
-              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
+              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
           }
 
           // finally trigger the callback logic passed from the API layer
@@ -315,7 +315,7 @@ class GroupMetadataManager(val brokerId: Int,
 
       case None =>
         val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
-          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
+          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP)
         }
         responseCallback(commitStatus)
         None

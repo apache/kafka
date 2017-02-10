@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -40,28 +41,28 @@ public class SyncGroupResponse extends AbstractResponse {
      * GROUP_AUTHORIZATION_FAILED (30)
      */
 
-    private final short errorCode;
+    private final Errors error;
     private final ByteBuffer memberState;
 
-    public SyncGroupResponse(short errorCode, ByteBuffer memberState) {
+    public SyncGroupResponse(Errors error, ByteBuffer memberState) {
         super(new Struct(CURRENT_SCHEMA));
 
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
         struct.set(MEMBER_ASSIGNMENT_KEY_NAME, memberState);
 
-        this.errorCode = errorCode;
+        this.error = error;
         this.memberState = memberState;
     }
 
     public SyncGroupResponse(Struct struct) {
         super(struct);
 
-        this.errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.memberState = struct.getBytes(MEMBER_ASSIGNMENT_KEY_NAME);
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public ByteBuffer memberAssignment() {

@@ -69,19 +69,19 @@ class AdminClient(val time: Time,
   def findCoordinator(groupId: String): Node = {
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
     val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
-    Errors.forCode(response.errorCode).maybeThrow()
+    response.error.maybeThrow()
     response.node
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
     val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
-    Errors.forCode(response.errorCode).maybeThrow()
+    response.error.maybeThrow()
     response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
   }
 
   def getApiVersions(node: Node): List[ApiVersion] = {
     val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
-    Errors.forCode(response.errorCode).maybeThrow()
+    response.error.maybeThrow()
     response.apiVersions.asScala.toList
   }
 
@@ -164,7 +164,7 @@ class AdminClient(val time: Time,
     if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
       throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
 
-    Errors.forCode(metadata.errorCode()).maybeThrow()
+    metadata.error.maybeThrow()
     val consumers = metadata.members.asScala.map { consumer =>
       ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
         case "Stable" =>

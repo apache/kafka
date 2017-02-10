@@ -420,7 +420,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
-            Errors error = Errors.forCode(joinResponse.errorCode());
+            Errors error = joinResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful JoinGroup response for group {}: {}", groupId, joinResponse);
                 sensors.joinLatency.record(response.requestLatencyMs());
@@ -509,7 +509,7 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
-            Errors error = Errors.forCode(syncResponse.errorCode());
+            Errors error = syncResponse.error();
             if (error == Errors.NONE) {
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
@@ -562,7 +562,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
-            Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
+            Errors error = groupCoordinatorResponse.error();
             clearFindCoordinatorFuture();
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
@@ -688,7 +688,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
-            Errors error = Errors.forCode(leaveResponse.errorCode());
+            Errors error = leaveResponse.error();
             if (error == Errors.NONE) {
                 log.debug("LeaveGroup request for group {} returned successfully", groupId);
                 future.complete(null);
@@ -712,7 +712,7 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
-            Errors error = Errors.forCode(heartbeatResponse.errorCode());
+            Errors error = heartbeatResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response for group {}", groupId);
                 future.complete(null);

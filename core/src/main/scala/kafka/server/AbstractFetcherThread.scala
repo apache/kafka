@@ -141,7 +141,7 @@ abstract class AbstractFetcherThread(name: String,
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
             // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
             if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.offset) {
-              Errors.forCode(partitionData.errorCode) match {
+              partitionData.error match {
                 case Errors.NONE =>
                   try {
                     val records = partitionData.toRecords
@@ -259,7 +259,7 @@ object AbstractFetcherThread {
   }
 
   trait PartitionData {
-    def errorCode: Short
+    def error: Errors
     def exception: Option[Throwable]
     def toRecords: MemoryRecords
     def highWatermark: Long

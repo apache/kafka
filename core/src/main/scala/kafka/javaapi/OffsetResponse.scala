@@ -23,10 +23,10 @@ class OffsetResponse(private val underlying: kafka.api.OffsetResponse) {
 
   def hasError = underlying.hasError
 
-
-  def errorCode(topic: String, partition: Int) =
+  def error(topic: String, partition: Int) =
     underlying.partitionErrorAndOffsets(TopicAndPartition(topic, partition)).error
 
+  def errorCode(topic: String, partition: Int) = error(topic, partition).code
 
   def offsets(topic: String, partition: Int) =
     underlying.partitionErrorAndOffsets(TopicAndPartition(topic, partition)).offsets.toArray

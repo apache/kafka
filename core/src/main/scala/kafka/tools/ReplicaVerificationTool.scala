@@ -239,7 +239,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
 
   private def offsetResponseStringWithError(offsetResponse: OffsetResponse): String = {
     offsetResponse.partitionErrorAndOffsets.filter { case (_, partitionOffsetsResponse) =>
-      partitionOffsetsResponse.error != Errors.NONE.code
+      partitionOffsetsResponse.error != Errors.NONE
     }.mkString
   }
 

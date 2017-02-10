@@ -212,7 +212,7 @@ public class FetchRequest extends AbstractRequest {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
-            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
+            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e),
                     FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY);
 
             responseData.put(entry.getKey(), partitionResponse);

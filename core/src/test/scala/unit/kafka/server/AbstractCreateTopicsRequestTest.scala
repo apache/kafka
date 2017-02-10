@@ -126,7 +126,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     val metadata = sendMetadataRequest(
       new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
-    assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE))
+    assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE))
   }
 
   protected def replicaAssignmentToJava(assignments: Map[Int, List[Int]]) = {

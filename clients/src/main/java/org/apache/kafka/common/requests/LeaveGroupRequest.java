@@ -71,7 +71,7 @@ public class LeaveGroupRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new LeaveGroupResponse(Errors.forException(e).code());
+                return new LeaveGroupResponse(Errors.forException(e));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LEAVE_GROUP.id)));
