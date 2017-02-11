@@ -444,7 +444,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask();
 
         List<SourceRecord> records = Collections.singletonList(
-                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, -1L)
+                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();

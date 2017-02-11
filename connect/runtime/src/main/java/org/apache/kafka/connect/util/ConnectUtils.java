@@ -19,14 +19,13 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.errors.CorruptRecordException;
 
-public final class RecordUtil {
-        public static Long convertTimestamp (Long timestamp) {
-            if (timestamp == null || timestamp > 0)
-                return timestamp;
-            else if(timestamp == Record.NO_TIMESTAMP)
-                return null;
-            else
-                throw new CorruptRecordException(String.format("Invalid recrod timestamp %d", timestamp));
-
-        }
+public final class ConnectUtils {
+    public static Long checkAndConvertTimestamp(Long timestamp) {
+        if (timestamp == null || timestamp >= 0)
+            return timestamp;
+        else if (timestamp == Record.NO_TIMESTAMP)
+            return null;
+        else
+            throw new CorruptRecordException(String.format("Invalid recrod timestamp %d", timestamp));
+    }
 }
