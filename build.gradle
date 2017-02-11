@@ -445,6 +445,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile libs.apacheCommonsNet
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala

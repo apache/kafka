@@ -23,6 +23,7 @@ ext {
 }
 
 versions += [
+  apacheCommonsNet: "3.5",
   apacheda: "1.0.0-M33",
   apacheds: "2.0.0-M21",
   argparse4j: "0.7.0",
@@ -72,6 +73,7 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
+  apacheCommonsNet: "commons-net:commons-net:$versions.apacheCommonsNet",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
   apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
   apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
