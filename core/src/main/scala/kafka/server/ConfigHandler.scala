@@ -49,7 +49,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the configurations.
-    val configNamesToExclude = getExcludedConfigs(topic, topicConfig)
+    val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
     if (logs.nonEmpty) {
@@ -97,7 +97,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
   }
   
-  def getExcludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+  def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     val excludeConfigs: mutable.Set[String] = new mutable.HashSet[String]
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
