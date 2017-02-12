@@ -18,16 +18,18 @@ package kafka.security.auth
 
 import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 
+import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
+import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
+import org.apache.commons.net.util.SubnetUtils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
@@ -165,11 +167,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       acl.permissionType == permissionType &&
         (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
         (operations == acl.operation || acl.operation == All) &&
-        (acl.host == host || acl.host == Acl.WildCardHost)
+        aclHostMatch(acl, host)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operations on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  private def aclHostMatch(acl: Acl, host: String): Boolean = {
+    (acl.host == host || acl.host == Acl.WildCardHost) ||
+      (acl.host.contains("/") && new SubnetUtils(acl.host).getInfo.isInRange(host))
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
