@@ -1314,7 +1314,125 @@
     </tbody>
   </table>
 
-  <h5><a id="others_monitoring" href="#others_monitoring">Others</a></h5>
+
+
+  <h4><a id="kafka_streams_monitoring" href="#kafka_streams_monitoring">Kafka Streams Metrics</a></h4>
+
+  A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to streams. By default Kafka Streams has metrics with two recording levels: debug and info. The debug level records all metrics, while the info level records only some of them.  Use the following configuration option to specify which metrics you want collected:
+<pre>metrics.recording.level="info"</pre>
+
+<h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
+All the following metrics have a recording level of ``info``:
+<table class="data-table">
+    <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>[commit | poll | process | punctuate]-latency-[avg | max]</td>
+        <td>The [average | maximum] execution time in ms, for the respective operation, across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+      </tr>
+      <tr>
+        <td>[commit | poll | process | punctuate]-rate</td>
+        <td>The average number of respective operations per second across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+      </tr>
+      <tr>
+        <td>task-created-rate</td>
+        <td>The average number of newly created tasks per second.</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+      </tr>
+      <tr>
+        <td>task-closed-rate</td>
+        <td>The average number of tasks closed per second.</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+      </tr>
+      <tr>
+        <td>skipped-records-rate</td>
+        <td>The average number of skipped records per second. </td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+      </tr>
+ </tbody>
+</table>
+
+<h5><a id="kafka_streams_task_monitoring" href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
+All the following metrics have a recording level of ``debug``:
+ <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>commit-latency-[avg | max]</td>
+        <td>The [average | maximum] commit time in ns for this task. </td>
+        <td>kafka.streams:type=stream-task-metrics,streams-task-id=[taskId]</td>
+      </tr>
+      <tr>
+        <td>commit-rate</td>
+        <td>The average number of commit calls per second. </td>
+        <td>kafka.streams:type=stream-task-metrics,streams-task-id=[taskId]</td>
+      </tr>
+ </tbody>
+</table>
+
+ <h5><a id="kafka_streams_node_monitoring" href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
+All the following metrics have a recording level of ``debug``:
+ <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>[process | punctuate | create | destroy]-latency-[avg | max]</td>
+        <td>The [average | maximum] execution time in ns, for the respective operation. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+      </tr>
+      <tr>
+        <td>[process | punctuate | create | destroy]-rate</td>
+        <td>The average number of respective operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+      </tr>
+      <tr>
+        <td>forward-rate</td>
+        <td>The average rate of records being forwarded downstream, from source nodes only, per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+      </tr>
+ </tbody>
+ </table>
+
+ <h5><a id="kafka_streams_store_monitoring" href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
+All the following metrics have a recording level of ``debug``:
+
+ <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>[put | put-if-absent | get | delete | put-all | all | range | flush | restore]-latency-[avg | max]</td>
+        <td>The average execution time in ns, for the respective operation. </td>
+        <td>kafka.streams:type=stream-[store-type]-metrics</td>
+      </tr>
+        <tr>
+        <td>[put | put-if-absent | get | delete | put-all | all | range | flush | restore]-rate</td>
+        <td>The average rate of respective operations per second for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-metrics</td>
+      </tr>
+      
+    </tbody>
+</table>
+
+
+  <h4><a id="others_monitoring" href="#others_monitoring">Others</a></h4>
 
   We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 
