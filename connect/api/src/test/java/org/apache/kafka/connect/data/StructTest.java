@@ -250,7 +250,7 @@ public class StructTest {
 
         Struct struct = new Struct(schema);
         thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid value: null used for required field: one, schema type: STRING");
+        thrown.expectMessage("Validate failed for required field: \"one\", reason: [ Null value for schema type STRING ].");
         struct.validate();
     }
 }

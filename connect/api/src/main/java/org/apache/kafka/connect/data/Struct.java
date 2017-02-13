@@ -232,7 +232,8 @@ public class Struct {
             try {
                 ConnectSchema.validateValue(fieldSchema, value);
             } catch(DataException e) {
-                throw new DataException("Invalid value: null used for required field: "  + field.name() + ", schema type: " + fieldSchema.type());
+                throw new DataException("Validate failed for required field: \""  + field.name() + "\", "
+                        + "reason: [ " + e.getMessage() + " ].", e);
             }
         }
     }
