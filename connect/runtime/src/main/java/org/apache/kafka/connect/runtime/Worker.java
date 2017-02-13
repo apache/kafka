@@ -25,6 +25,8 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -355,6 +357,9 @@ public class Worker {
                                        Converter valueConverter) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
+            // merging connector config with worker config to apply producer overrides
+            // on the connector
+            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "producer");
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
@@ -362,14 +367,31 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, time);
+                    valueConverter, transformationChain, producer, offsetReader, offsetWriter, mergedConfig, time);
         } else if (task instanceof SinkTask) {
+            // merging connector config with worker config to apply consumer overrides
+            // on the connector
+            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "consumer");
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
-            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
+            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, mergedConfig, keyConverter,
                     valueConverter, transformationChain, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
+        }
+    }
+
+    // visible for testing
+    static WorkerConfig getMergedConfig(WorkerConfig workerConfig, ConnectorConfig connConfig, String prefix) {
+        Map<String, String> mergedConfigs = new HashMap<>(workerConfig.originals().size() + connConfig.originals().size());
+
+        mergedConfigs.putAll(workerConfig.originalsStrings());
+        mergedConfigs.putAll(connConfig.originalsStringsWithPrefixIntact(prefix));
+
+        if (workerConfig instanceof DistributedConfig) {
+            return new DistributedConfig(mergedConfigs);
+        } else {
+            return new StandaloneConfig(mergedConfigs);
         }
     }
 

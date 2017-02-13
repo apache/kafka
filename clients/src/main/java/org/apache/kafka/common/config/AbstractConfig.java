@@ -158,6 +158,26 @@ public class AbstractConfig {
     }
 
     /**
+     * Gets all original settings with the given prefix, leaving the prefix before adding it to the output.
+     *
+     * @param prefix the prefix to use as a filter
+     * @return a Map containing the settings with the prefix
+     * @throws ClassCastException if any of the values are not strings
+     */
+    public Map<String, String> originalsStringsWithPrefixIntact(String prefix) {
+        Map<String, String> result = new RecordingMap<>(prefix, false);
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (!(entry.getValue() instanceof String))
+                throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
+                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
+
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
+                result.put(entry.getKey(), (String) entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
      * put all the remaining keys with the prefix stripped and their parsed values in the result map.
      *

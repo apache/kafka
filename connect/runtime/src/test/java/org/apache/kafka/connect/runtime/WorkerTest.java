@@ -27,6 +27,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -55,8 +56,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
@@ -546,6 +550,116 @@ public class WorkerTest extends ThreadedTest {
         assertEquals("bar", valueConverter.getValue().configs.get("extra.config"));
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void test_ProducerOverrides() {
+        // fill in values for props w/o defaults
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("bootstrap.servers", "localhost:9092");
+        workerProps.put("producer.acks", "1");
+        workerProps.put("producer.compression.type", "gzip");
+        workerProps.put("offset.storage.topic", "_offsets");
+        workerProps.put("key.converter", TestConverter.class.getName());
+        workerProps.put("value.converter", TestConverter.class.getName());
+        workerProps.put("config.storage.topic", "_storage");
+        workerProps.put("internal.value.converter", TestConverter.class.getName());
+        workerProps.put("internal.key.converter", TestConverter.class.getName());
+        workerProps.put("group.id", "test-group");
+        workerProps.put("status.storage.topic", "_status");
+
+        // override some of the worker configs by prefixing them with 'producer'
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put("producer.acks", "all");
+        connectorProps.put("producer.key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        connectorProps.put("connector.class", WorkerTestConnector.class.getName());
+        connectorProps.put("name", "test-connector");
+
+        // check for the code path for DistributedConfig
+        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
+        ConnectorConfig connectorConfig = new ConnectorConfig(connectorProps);
+
+        Map<String, String> mergedProps = Worker.getMergedConfig(distributedConfig, connectorConfig, "producer").originalsStrings();
+
+        // assert worker configs that weren't prefixed with 'producer' remain, and that
+        // connector configs prefixed with 'producer' overwrote the worker configs with
+        // the same name
+        assertThat(mergedProps.get("bootstrap.servers"), is("localhost:9092"));
+        assertThat(mergedProps.get("producer.acks"), is("all"));
+        assertThat(mergedProps.get("producer.compression.type"), is("gzip"));
+        assertThat(mergedProps.get("producer.key.serializer"), is("org.apache.kafka.common.serialization.ByteArraySerializer"));
+        // assert the connector configs without the prefix weren't merged over
+        assertThat(mergedProps.get("name"), is(nullValue()));
+        assertThat(mergedProps.get("connector.class"), is(nullValue()));
+
+        // test the code path for StandaloneConfig
+        workerProps.put("offset.storage.file.filename", "offsets.txt");
+        StandaloneConfig standaloneConfig = new StandaloneConfig(workerProps);
+
+        mergedProps = Worker.getMergedConfig(standaloneConfig, connectorConfig, "producer").originalsStrings();
+
+        // assert worker configs that weren't prefixed with 'producer' remain, and that
+        // connector configs prefixed with 'producer' overwrote the worker configs with
+        // the same name
+        assertThat(mergedProps.get("bootstrap.servers"), is("localhost:9092"));
+        assertThat(mergedProps.get("producer.acks"), is("all"));
+        assertThat(mergedProps.get("producer.compression.type"), is("gzip"));
+        assertThat(mergedProps.get("producer.key.serializer"), is("org.apache.kafka.common.serialization.ByteArraySerializer"));
+        // assert the connector configs without the prefix weren't merged over
+        assertThat(mergedProps.get("name"), is(nullValue()));
+        assertThat(mergedProps.get("connector.class"), is(nullValue()));
+    }
+
+    @Test
+    public void test_ConsumerOverrides() {
+        // fill in values for props w/o defaults
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("bootstrap.servers", "localhost:9092");
+        workerProps.put("producer.compression.type", "gzip");
+        workerProps.put("offset.storage.file.filename", "offsets.txt");
+        workerProps.put("offset.storage.topic", "_offsets");
+        workerProps.put("config.storage.topic", "_storage");
+        workerProps.put("status.storage.topic", "_status");
+        workerProps.put("key.converter", TestConverter.class.getName());
+        workerProps.put("value.converter", TestConverter.class.getName());
+        workerProps.put("internal.value.converter", TestConverter.class.getName());
+        workerProps.put("internal.key.converter", TestConverter.class.getName());
+        workerProps.put("group.id", "test-group");
+
+        // override some of the worker configs by prefixing them with 'producer'
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put("consumer.group.id", "overridden.group");
+        connectorProps.put("connector.class", WorkerTestConnector.class.getName());
+        connectorProps.put("name", "test-connector");
+
+        // check for the code path for DistributedConfig
+        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
+        ConnectorConfig connectorConfig = new ConnectorConfig(connectorProps);
+
+        Map<String, String> mergedProps = Worker.getMergedConfig(distributedConfig, connectorConfig, "consumer").originalsStrings();
+
+        // assert worker configs that weren't prefixed with 'producer' remain, and that
+        // connector configs prefixed with 'producer' overwrote the worker configs with
+        // the same name
+        assertThat(mergedProps.get("bootstrap.servers"), is("localhost:9092"));
+        assertThat(mergedProps.get("consumer.group.id"), is("overridden.group"));
+        // assert the connector configs without the prefix weren't merged over
+        assertThat(mergedProps.get("name"), is(nullValue()));
+        assertThat(mergedProps.get("connector.class"), is(nullValue()));
+
+        // test the code path for StandaloneConfig
+        StandaloneConfig standaloneConfig = new StandaloneConfig(workerProps);
+
+        mergedProps = Worker.getMergedConfig(standaloneConfig, connectorConfig, "consumer").originalsStrings();
+
+        // assert worker configs that weren't prefixed with 'producer' remain, and that
+        // connector configs prefixed with 'producer' overwrote the worker configs with
+        // the same name
+        assertThat(mergedProps.get("bootstrap.servers"), is("localhost:9092"));
+        assertThat(mergedProps.get("consumer.group.id"), is("overridden.group"));
+        // assert the connector configs without the prefix weren't merged over
+        assertThat(mergedProps.get("name"), is(nullValue()));
+        assertThat(mergedProps.get("connector.class"), is(nullValue()));
     }
 
     private void expectStartStorage() {

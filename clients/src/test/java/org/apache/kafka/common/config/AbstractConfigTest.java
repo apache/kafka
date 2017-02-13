@@ -64,6 +64,19 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testOriginalsStringWithPrefixIntact() {
+        Properties props = new Properties();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+        TestConfig config = new TestConfig(props);
+        Map<String, String> originalsWithPrefix = config.originalsStringsWithPrefixIntact("foo");
+
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("foo.bar", "abc");
+        assertEquals(expected, originalsWithPrefix);
+    }
+
+    @Test
     public void testValuesWithPrefixOverride() {
         String prefix = "prefix.";
         Properties props = new Properties();
