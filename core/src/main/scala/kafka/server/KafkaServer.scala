@@ -101,12 +101,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var shutdownLatch = new CountDownLatch(1)
 
   private val jmxPrefix: String = "kafka.server"
-  private val reporters: java.util.List[MetricsReporter] = config.metricReporterClasses
-  reporters.add(new JmxReporter(jmxPrefix))
 
   var metrics: Metrics = null
-
-  private val metricConfig: MetricConfig = KafkaServer.metricConfig(config)
 
   val brokerState: BrokerState = new BrokerState
 
@@ -182,9 +178,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        metrics = new Metrics(metricConfig, reporters, time, true)
-        quotaManagers = QuotaFactory.instantiate(config, metrics, time)
-
         brokerState.newState(Starting)
 
         /* start scheduler */
@@ -197,15 +190,23 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         _clusterId = getOrGenerateClusterId(zkUtils)
         info(s"Cluster ID = $clusterId")
 
+        /* generate brokerId */
+        config.brokerId =  getBrokerId
+        this.logIdent = "[Kafka Server " + config.brokerId + "], "
+
+        /* create and configure metrics */
+        val reporters = config.getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter],
+            Map[String, AnyRef](KafkaConfig.BrokerIdProp -> (config.brokerId.toString)).asJava)
+        reporters.add(new JmxReporter(jmxPrefix))
+        val metricConfig = KafkaServer.metricConfig(config)
+        metrics = new Metrics(metricConfig, reporters, time, true)
+
+        quotaManagers = QuotaFactory.instantiate(config, metrics, time)
         notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)
         logManager.startup()
-
-        /* generate brokerId */
-        config.brokerId =  getBrokerId
-        this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         metadataCache = new MetadataCache(config.brokerId)
         credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)

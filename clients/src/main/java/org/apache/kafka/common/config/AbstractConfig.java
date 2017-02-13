@@ -233,10 +233,25 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
+        return getConfiguredInstances(key, t, Collections.EMPTY_MAP);
+    }
+
+    /**
+     * Get a list of configured instances of the given class specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * @param key The configuration key for the class
+     * @param t The interface the class should implement
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(String key, Class<T> t, Map<String, Object> configOverrides) {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         if (klasses == null)
             return objects;
+        Map<String, Object> configPairs = originals();
+        configPairs.putAll(configOverrides);
         for (Object klass : klasses) {
             Object o;
             if (klass instanceof String) {
@@ -252,7 +267,7 @@ public class AbstractConfig {
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
-                ((Configurable) o).configure(originals());
+                ((Configurable) o).configure(configPairs);
             objects.add(t.cast(o));
         }
         return objects;
