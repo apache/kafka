@@ -44,7 +44,6 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @Test
   def testBatchSizeZero() {
     val producerProps = new Properties()
-    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
     producerProps.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "0")
     val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
     sendAndVerify(producer)
