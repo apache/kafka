@@ -64,8 +64,13 @@ object KafkaMetricReporterClusterIdTest {
       val brokerId = configs.get(KafkaConfig.BrokerIdProp)
       if (brokerId == null)
         setupError.compareAndSet("", "No value was set for the broker id.")
-      else if (!brokerId.isInstanceOf[Integer])
-        setupError.compareAndSet("", "The value set for the broker id was not an integer.")
+      else if (!brokerId.isInstanceOf[String])
+        setupError.compareAndSet("", "The value set for the broker id was not a string.")
+      try
+        Integer.parseInt(brokerId.asInstanceOf[String])
+      catch {
+        case e: Exception => setupError.compareAndSet("", "Error parsing broker id " + e.toString)
+      }
     }
   }
 }
@@ -80,6 +85,8 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
     props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
+    props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
     server = KafkaServerStartable.fromProps(props)
     server.startup()
