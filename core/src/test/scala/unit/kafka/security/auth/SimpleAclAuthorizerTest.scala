@@ -135,6 +135,22 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testSubnetAclV6() {
+    val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = InetAddress.getByName("2001:db8::1")
+    val host2 = InetAddress.getByName("2001:db8::2")
+
+    val acl = new Acl(user, Allow, "2001:db8::1/128", Read)
+    changeAclAndVerify(Set.empty[Acl], Set(acl), Set.empty[Acl])
+
+    val host1Session = new Session(user, host1)
+    val host2Session = new Session(user, host2)
+
+    assertTrue("User should have READ access from host1", simpleAclAuthorizer.authorize(host1Session, Read, resource))
+    assertFalse("User1 should not have READ access from host2 due to denyAcl", simpleAclAuthorizer.authorize(host2Session, Read, resource))
+  }
+
+  @Test
   def testDenyTakesPrecedence() {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host = InetAddress.getByName("192.168.2.1")
