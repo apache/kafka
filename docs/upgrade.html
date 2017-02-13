@@ -77,6 +77,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to
         StreamsConfig class. User should pay attenntion to the default values and set these if needed. For more details please refer to <a href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
     <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this replication factor requirement.</li>
+    <li>The default value of <code>message.timestamp.difference.max.ms</code> has been changed to the same as <code>retention.ms</code></li>
 </ul>
 
 <h5><a id="upgrade_1020_new_protocols" href="#upgrade_1020_new_protocols">New Protocol Versions</a></h5>
