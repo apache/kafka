@@ -232,8 +232,7 @@ public class Struct {
             try {
                 ConnectSchema.validateValue(fieldSchema, value);
             } catch(DataException e) {
-                throw new DataException("Validate failed for required field: \""  + field.name() + "\", "
-                        + "reason: [ " + e.getMessage() + " ].", e);
+                throw new DataException("Validate failed for required field: \""  + field.name() + "\".");
             }
         }
     }
