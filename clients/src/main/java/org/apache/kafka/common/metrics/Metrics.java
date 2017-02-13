@@ -443,6 +443,10 @@ public class Metrics implements Closeable {
         return this.metrics;
     }
 
+    public List<MetricsReporter> reporters() {
+        return this.reporters;
+    }
+
     public KafkaMetric metric(MetricName metricName) {
         return this.metrics.get(metricName);
     }
