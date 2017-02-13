@@ -96,7 +96,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Test
   def testSendOffset() {
     val producer = createProducer(brokerList)
-    val partition = new Integer(0)
+    val partition = 0
 
     object callback extends Callback {
       var offset = 0L
@@ -175,8 +175,33 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
+  protected def sendAndVerify(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                              numRecords: Int = numRecords,
+                              timeoutMs: Long = 20000L) {
+    val partition = 0
+    try {
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+
+      val recordAndFutures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord(topic, partition, s"key$i".getBytes, s"value$i".getBytes)
+        (record, producer.send(record))
+      }
+      producer.close(timeoutMs, TimeUnit.MILLISECONDS)
+      val lastOffset = recordAndFutures.foldLeft(0) { case (offset, (record, future)) =>
+        val recordMetadata = future.get
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+        assertEquals(offset, recordMetadata.offset)
+        offset + 1
+      }
+      assertEquals(numRecords, lastOffset)
+    } finally {
+      producer.close()
+    }
+  }
+
   protected def sendAndVerifyTimestamp(producer: KafkaProducer[Array[Byte], Array[Byte]], timestampType: TimestampType) {
-    val partition = new Integer(0)
+    val partition = 0
 
     val baseTimestamp = 123456L
     val startTime = System.currentTimeMillis()
@@ -212,7 +237,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
-        val record = new ProducerRecord(topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
+        val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes, s"value$i".getBytes)
         (record, producer.send(record, callback))
       }
       producer.close(20000L, TimeUnit.MILLISECONDS)

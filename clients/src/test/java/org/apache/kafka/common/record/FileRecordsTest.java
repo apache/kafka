@@ -381,11 +381,11 @@ public class FileRecordsTest {
     }
 
     private static List<LogEntry> shallowEntries(Records buffer) {
-        return TestUtils.toList(buffer.shallowEntries().iterator());
+        return TestUtils.toList(buffer.shallowEntries());
     }
 
     private static List<LogEntry> deepEntries(Records buffer) {
-        return TestUtils.toList(buffer.deepEntries().iterator());
+        return TestUtils.toList(buffer.deepEntries());
     }
 
     private FileRecords createFileRecords(Record ... records) throws IOException {

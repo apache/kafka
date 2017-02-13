@@ -40,14 +40,14 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   def testIteratorIsConsistent() {
     val m = createMessageSet(messages)
     // two iterators over the same set should give the same results
-    TestUtils.checkEquals(m.iterator, m.iterator)
+    TestUtils.checkEquals(m, m)
   }
 
   @Test
   def testIteratorIsConsistentWithCompression() {
     val m = createMessageSet(messages, DefaultCompressionCodec)
     // two iterators over the same set should give the same results
-    TestUtils.checkEquals(m.iterator, m.iterator)
+    TestUtils.checkEquals(m, m)
   }
 
   @Test
