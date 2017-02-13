@@ -308,6 +308,10 @@ public class TestUtils {
         assertEquals(toList(it1.iterator()), toList(it2.iterator()));
     }
 
+    public static <T> List<T> toList(Iterable<? extends T> iterable) {
+        return toList(iterable.iterator());
+    }
+
     public static <T> List<T> toList(Iterator<? extends T> iterator) {
         List<T> res = new ArrayList<>();
         while (iterator.hasNext())

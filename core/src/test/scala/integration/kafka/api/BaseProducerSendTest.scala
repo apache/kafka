@@ -175,6 +175,29 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
+  protected def sendAndVerify(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int = numRecords) {
+    val partition = new Integer(0)
+    try {
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+
+      val recordAndFutures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord(topic, partition, "key".getBytes, "value".getBytes)
+        (record, producer.send(record))
+      }
+      producer.close(20000L, TimeUnit.MILLISECONDS)
+      val lastOffset = recordAndFutures.foldLeft(0) { case (offset, (record, future)) =>
+        val recordMetadata = future.get
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+        assertEquals(offset, recordMetadata.offset)
+        offset + 1
+      }
+      assertEquals(numRecords, lastOffset)
+    } finally {
+      producer.close()
+    }
+  }
+
   protected def sendAndVerifyTimestamp(producer: KafkaProducer[Array[Byte], Array[Byte]], timestampType: TimestampType) {
     val partition = new Integer(0)
 
