@@ -25,14 +25,13 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
+import net.ripe.commons.ip.{Ipv4, Ipv4Range, Ipv6, Ipv6Range}
 import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
-import org.apache.commons.net.util.SubnetUtils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-
-import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 object SimpleAclAuthorizer {
@@ -175,8 +174,19 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def aclHostMatch(acl: Acl, host: String): Boolean = {
-    (acl.host == host || acl.host == Acl.WildCardHost) ||
-      (acl.host.contains("/") && new SubnetUtils(acl.host).getInfo.isInRange(host))
+    if (acl.host == host || acl.host == Acl.WildCardHost) return true
+    if (acl.host.contains("/")) {
+      return try {
+        if (acl.host.contains(":")) {
+          Ipv6Range.parseCidr(acl.host).contains(Ipv6.of(host))
+        } else {
+          Ipv4Range.parseCidr(acl.host).contains(Ipv4.of(host))
+        }
+      } catch {
+        case _: Throwable => false
+      }
+    }
+    false
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
