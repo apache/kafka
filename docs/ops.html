@@ -14,8 +14,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-
 <script id="ops-template" type="text/x-handlebars-template">
+  
   Here is some information on actually running Kafka as a production system based on usage and experience at LinkedIn. Please send us any additional tips you know of.
 
   <h3><a id="basic_ops" href="#basic_ops">6.1 Basic Kafka Operations</a></h3>
@@ -1316,7 +1316,7 @@
 
 
 
-  <h4><a id="kafka_streams_monitoring" href="#kafka_streams_monitoring">Kafka Streams Metrics</a></h4>
+  <h4><a id="kafka_streams_monitoring" href="#kafka_streams_monitoring">Streams Monitoring</a></h4>
 
   A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to streams. By default Kafka Streams has metrics with two recording levels: debug and info. The debug level records all metrics, while the info level records only some of them.  Use the following configuration option to specify which metrics you want collected:
 <pre>metrics.recording.level="info"</pre>
@@ -1333,27 +1333,27 @@ All the following metrics have a recording level of ``info``:
       <tr>
         <td>[commit | poll | process | punctuate]-latency-[avg | max]</td>
         <td>The [average | maximum] execution time in ms, for the respective operation, across all running tasks of this thread.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>[commit | poll | process | punctuate]-rate</td>
         <td>The average number of respective operations per second across all tasks.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>task-created-rate</td>
         <td>The average number of newly created tasks per second.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>task-closed-rate</td>
         <td>The average number of tasks closed per second.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>skipped-records-rate</td>
         <td>The average number of skipped records per second. </td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=[threadId]</td>
+        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
@@ -1370,12 +1370,12 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>commit-latency-[avg | max]</td>
         <td>The [average | maximum] commit time in ns for this task. </td>
-        <td>kafka.streams:type=stream-task-metrics,streams-task-id=[taskId]</td>
+        <td>kafka.streams:type=stream-task-metrics,streams-task-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-rate</td>
         <td>The average number of commit calls per second. </td>
-        <td>kafka.streams:type=stream-task-metrics,streams-task-id=[taskId]</td>
+        <td>kafka.streams:type=stream-task-metrics,streams-task-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
@@ -1392,17 +1392,17 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>[process | punctuate | create | destroy]-latency-[avg | max]</td>
         <td>The [average | maximum] execution time in ns, for the respective operation. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>[process | punctuate | create | destroy]-rate</td>
         <td>The average number of respective operations per second. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>forward-rate</td>
         <td>The average rate of records being forwarded downstream, from source nodes only, per second. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=[nodeId]</td>
+        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
       </tr>
  </tbody>
  </table>
