@@ -466,7 +466,7 @@ public class StreamTaskTest {
                                                      stateDirectory, new ThreadCache("testCache", 0, streamsMetrics),
                                                      time, recordCollector);
 
-        time.sleep(config.getLong(StreamsConfig.STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG));
+        time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
         streamTask.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),

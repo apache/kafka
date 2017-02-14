@@ -119,7 +119,7 @@ public class StandbyTaskTest {
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
                 setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
-                setProperty(StreamsConfig.STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG, "1");
+                setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1");
             }
         });
     }
@@ -370,7 +370,7 @@ public class StandbyTaskTest {
                                                                            serializedValue,
                                                                            serializedValue)));
 
-        time.sleep(config.getLong(StreamsConfig.STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG));
+        time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
         task.commit();
 
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),

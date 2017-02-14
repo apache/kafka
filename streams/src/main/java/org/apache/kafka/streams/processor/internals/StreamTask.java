@@ -108,7 +108,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       ThreadCache cache,
                       Time time,
                       final RecordCollector recordCollector) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache, time, config.getLong(StreamsConfig.STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG));
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache, time, config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);

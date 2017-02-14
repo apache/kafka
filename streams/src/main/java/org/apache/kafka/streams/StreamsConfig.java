@@ -214,11 +214,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
-    /** {@code statestore.checkpoint.interval.ms} */
-    public static final String STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG = "statestore.checkpoint.interval.ms";
-    private static final String STATESTORE_CHECKPOINT_INTERVAL_MS_DOC = "The minimum frequency at which state stores will be checkpointed. " +
-            "This enables some control over the amount of data that will need to be restored in the event of a hard crash.";
-
     static {
         CONFIG = new ConfigDef()
             .define(APPLICATION_ID_CONFIG, // required with no default value
@@ -388,13 +383,7 @@ public class StreamsConfig extends AbstractConfig {
                     40 * 1000,
                     atLeast(0),
                     ConfigDef.Importance.MEDIUM,
-                    REQUEST_TIMEOUT_MS_DOC)
-            .define(STATESTORE_CHECKPOINT_INTERVAL_MS_CONFIG,
-                    Type.LONG,
-                    5 * 60 * 1000,
-                    atLeast(0),
-                    Importance.LOW,
-                    STATESTORE_CHECKPOINT_INTERVAL_MS_DOC);
+                    REQUEST_TIMEOUT_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
