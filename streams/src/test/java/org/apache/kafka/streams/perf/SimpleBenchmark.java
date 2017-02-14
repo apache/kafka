@@ -65,6 +65,11 @@ import java.util.Random;
  * 3. Run the stream processing step second: SimpleBenchmark localhost:9092 /tmp/statedir numRecords false "all"
  * Note that what changed is the 4th parameter, from "true" indicating that is a load phase, to "false" indicating
  * that this is a real run.
+ *
+ * Note that "all" is a convenience option when running this test locally and will not work when running the test
+ * at scale (through tests/kafkatest/benchmarks/streams/streams_simple_benchmark_test.py). That is due to exact syncronization
+ * needs for each test (e.g., you wouldn't want one instance to run "count" while another
+ * is still running "consume"
  */
 public class SimpleBenchmark {
 
@@ -334,7 +339,7 @@ public class SimpleBenchmark {
             processedRecords + "/" +
             latency + "/" +
             recordsPerSec(latency, processedRecords) + "/" +
-            megaBytePerSec(latency, processedRecords, RECORD_SIZE));
+            megabytesPerSec(latency, processedRecords, RECORD_SIZE));
     }
 
     private void runGenericBenchmark(final KafkaStreams streams, final String nameOfBenchmark, final CountDownLatch latch) {
@@ -488,7 +493,7 @@ public class SimpleBenchmark {
                 numRecords + "/" +
                 (endTime - startTime) + "/" +
                 recordsPerSec(endTime - startTime, numRecords) + "/" +
-                megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
+                megabytesPerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
         }
     }
 
@@ -536,7 +541,7 @@ public class SimpleBenchmark {
             consumedRecords + "/" +
             (endTime - startTime) + "/" +
             recordsPerSec(endTime - startTime, consumedRecords) + "/" +
-            megaBytePerSec(endTime - startTime, consumedRecords, RECORD_SIZE));
+            megabytesPerSec(endTime - startTime, consumedRecords, RECORD_SIZE));
     }
 
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
@@ -716,8 +721,8 @@ public class SimpleBenchmark {
     }
 
 
-    private double megaBytePerSec(long time, int numRecords, int recordSizeBytes) {
-        return (double) (recordSizeBytes * numRecords / 1024 / 1024) / ((double) time / 1000);
+    private double megabytesPerSec(long time, int numRecords, int recordSizeBytes) {
+        return  ((double) recordSizeBytes * numRecords / 1024 / 1024) / (time / 1000.0);
     }
 
     private double recordsPerSec(long time, int numRecords) {

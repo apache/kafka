@@ -14,6 +14,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -31,21 +32,21 @@ public class UpdateMetadataResponse extends AbstractResponse {
      *
      * STALE_CONTROLLER_EPOCH (11)
      */
-    private final short errorCode;
+    private final Errors error;
 
-    public UpdateMetadataResponse(short errorCode) {
+    public UpdateMetadataResponse(Errors error) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
-        this.errorCode = errorCode;
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        this.error = error;
     }
 
     public UpdateMetadataResponse(Struct struct) {
         super(struct);
-        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer) {

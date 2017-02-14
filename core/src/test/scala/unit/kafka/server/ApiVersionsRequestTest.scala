@@ -54,7 +54,7 @@ class ApiVersionsRequestTest extends BaseRequestTest {
     val apiVersionsRequest = new ApiVersionsRequest(
       new Struct(ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id)), Short.MaxValue)
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.errorCode)
+    assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {

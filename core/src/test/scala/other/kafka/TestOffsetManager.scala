@@ -92,7 +92,7 @@ object TestOffsetManager {
         numCommits.getAndIncrement
         commitTimer.time {
           val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
-          if (response.commitStatus.exists(_._2 != Errors.NONE.code)) numErrors.getAndIncrement
+          if (response.commitStatus.exists(_._2 != Errors.NONE)) numErrors.getAndIncrement
         }
         offset += 1
       }
@@ -155,7 +155,7 @@ object TestOffsetManager {
 
           fetchTimer.time {
             val response = OffsetFetchResponse.readFrom(channel.receive().payload())
-            if (response.requestInfo.exists(_._2.error != Errors.NONE.code)) {
+            if (response.requestInfo.exists(_._2.error != Errors.NONE)) {
               numErrors.getAndIncrement
             }
           }

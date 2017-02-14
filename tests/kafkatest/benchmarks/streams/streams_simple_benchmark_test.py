@@ -35,7 +35,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
 
     @cluster(num_nodes=9)
-    @matrix(test=["all"], scale=[1])
+    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 2, 3])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark

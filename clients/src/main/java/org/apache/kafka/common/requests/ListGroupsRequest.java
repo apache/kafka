@@ -51,8 +51,7 @@ public class ListGroupsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                short errorCode = Errors.forException(e).code();
-                return new ListGroupsResponse(errorCode, Collections.<ListGroupsResponse.Group>emptyList());
+                return new ListGroupsResponse(Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_GROUPS.id)));

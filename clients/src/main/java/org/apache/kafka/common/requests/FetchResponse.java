@@ -21,6 +21,7 @@ import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -37,7 +38,7 @@ import java.util.Map;
  * This wrapper supports all versions of the Fetch API
  */
 public class FetchResponse extends AbstractResponse {
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.FETCH.id);
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -73,19 +74,19 @@ public class FetchResponse extends AbstractResponse {
     private final int throttleTime;
 
     public static final class PartitionData {
-        public final short errorCode;
+        public final Errors error;
         public final long highWatermark;
         public final Records records;
 
-        public PartitionData(short errorCode, long highWatermark, Records records) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, long highWatermark, Records records) {
+            this.error = error;
             this.highWatermark = highWatermark;
             this.records = records;
         }
 
         @Override
         public String toString() {
-            return "(errorCode=" + errorCode + ", highWaterMark=" + highWatermark +
+            return "(error=" + error.toString() + ", highWaterMark=" + highWatermark +
                     ", records=" + records + ")";
         }
     }
@@ -128,10 +129,10 @@ public class FetchResponse extends AbstractResponse {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 Struct partitionResponseHeader = partitionResponse.getStruct(PARTITION_HEADER_KEY_NAME);
                 int partition = partitionResponseHeader.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME);
+                Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-                PartitionData partitionData = new PartitionData(errorCode, highWatermark, records);
+                PartitionData partitionData = new PartitionData(error, highWatermark, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -237,7 +238,7 @@ public class FetchResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.errorCode);
+                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);

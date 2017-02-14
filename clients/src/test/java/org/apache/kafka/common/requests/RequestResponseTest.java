@@ -204,7 +204,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, records));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000, records));
 
         FetchResponse v0Response = new FetchResponse(0, responseData, 0);
         FetchResponse v1Response = new FetchResponse(1, responseData, 10);
@@ -252,7 +252,7 @@ public class RequestResponseTest {
         response.writeTo(buffer);
         buffer.rewind();
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer);
-        assertEquals(response.errorCode(), deserialized.errorCode());
+        assertEquals(response.error(), deserialized.error());
         assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
     }
 
@@ -287,7 +287,7 @@ public class RequestResponseTest {
     }
 
     private GroupCoordinatorResponse createGroupCoordinatorResponse() {
-        return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
+        return new GroupCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
     }
 
     private FetchRequest createFetchRequest(int version) {
@@ -301,7 +301,7 @@ public class RequestResponseTest {
     private FetchResponse createFetchResponse() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, records));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000, records));
         return new FetchResponse(responseData, 25);
     }
 
@@ -310,7 +310,7 @@ public class RequestResponseTest {
     }
 
     private HeartbeatResponse createHeartBeatResponse() {
-        return new HeartbeatResponse(Errors.NONE.code());
+        return new HeartbeatResponse(Errors.NONE);
     }
 
     @SuppressWarnings("deprecation")
@@ -331,7 +331,7 @@ public class RequestResponseTest {
         Map<String, ByteBuffer> members = new HashMap<>();
         members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
         members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
-        return new JoinGroupResponse(Errors.NONE.code(), 1, "range", "consumer1", "leader", members);
+        return new JoinGroupResponse(Errors.NONE, 1, "range", "consumer1", "leader", members);
     }
 
     private ListGroupsRequest createListGroupsRequest() {
@@ -340,7 +340,7 @@ public class RequestResponseTest {
 
     private ListGroupsResponse createListGroupsResponse() {
         List<ListGroupsResponse.Group> groups = Arrays.asList(new ListGroupsResponse.Group("test-group", "consumer"));
-        return new ListGroupsResponse(Errors.NONE.code(), groups);
+        return new ListGroupsResponse(Errors.NONE, groups);
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
@@ -353,7 +353,7 @@ public class RequestResponseTest {
         ByteBuffer empty = ByteBuffer.allocate(0);
         DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
                 clientId, clientHost, empty, empty);
-        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE.code(),
+        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE,
                 "STABLE", "consumer", "roundrobin", Arrays.asList(member));
         return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
     }
@@ -363,7 +363,7 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupResponse createLeaveGroupResponse() {
-        return new LeaveGroupResponse(Errors.NONE.code());
+        return new LeaveGroupResponse(Errors.NONE);
     }
 
     @SuppressWarnings("deprecation")
@@ -386,11 +386,11 @@ public class RequestResponseTest {
     private ListOffsetResponse createListOffsetResponse(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE, Arrays.asList(100L)));
             return new ListOffsetResponse(responseData);
         } else if (version == 1) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), 10000L, 100L));
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L));
             return new ListOffsetResponse(responseData, 1);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
@@ -430,8 +430,8 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitResponse createOffsetCommitResponse() {
-        Map<TopicPartition, Short> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), Errors.NONE.code());
+        Map<TopicPartition, Errors> responseData = new HashMap<>();
+        responseData.put(new TopicPartition("test", 0), Errors.NONE);
         return new OffsetCommitResponse(responseData);
     }
 
@@ -467,9 +467,9 @@ public class RequestResponseTest {
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
-        Map<TopicPartition, Short> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
-        return new StopReplicaResponse(Errors.NONE.code(), responses);
+        Map<TopicPartition, Errors> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE);
+        return new StopReplicaResponse(Errors.NONE, responses);
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
@@ -481,7 +481,7 @@ public class RequestResponseTest {
                 new TopicPartition("test2", 5),
                 new TopicPartition("test1", 10)
         ));
-        return new ControlledShutdownResponse(Errors.NONE.code(), topicPartitions);
+        return new ControlledShutdownResponse(Errors.NONE, topicPartitions);
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest() {
@@ -504,9 +504,9 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        Map<TopicPartition, Short> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
-        return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
+        Map<TopicPartition, Errors> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE);
+        return new LeaderAndIsrResponse(Errors.NONE, responses);
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
@@ -545,7 +545,7 @@ public class RequestResponseTest {
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {
-        return new UpdateMetadataResponse(Errors.NONE.code());
+        return new UpdateMetadataResponse(Errors.NONE);
     }
 
     private SaslHandshakeRequest createSaslHandshakeRequest() {
@@ -553,7 +553,7 @@ public class RequestResponseTest {
     }
 
     private SaslHandshakeResponse createSaslHandshakeResponse() {
-        return new SaslHandshakeResponse(Errors.NONE.code(), singletonList("GSSAPI"));
+        return new SaslHandshakeResponse(Errors.NONE, singletonList("GSSAPI"));
     }
 
     private ApiVersionsRequest createApiVersionRequest() {
@@ -562,7 +562,7 @@ public class RequestResponseTest {
 
     private ApiVersionsResponse createApiVersionResponse() {
         List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
-        return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
+        return new ApiVersionsResponse(Errors.NONE, apiVersions);
     }
 
     private CreateTopicsRequest createCreateTopicRequest(int version) {

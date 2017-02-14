@@ -324,7 +324,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void handleSaslHandshakeResponse(SaslHandshakeResponse response) {
-        Errors error = Errors.forCode(response.errorCode());
+        Errors error = response.error();
         switch (error) {
             case NONE:
                 break;
@@ -336,7 +336,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     mechanism, response.enabledMechanisms()));
             default:
                 throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
-                    response.errorCode(), mechanism, response.enabledMechanisms()));
+                    response.error(), mechanism, response.enabledMechanisms()));
         }
     }
 }
