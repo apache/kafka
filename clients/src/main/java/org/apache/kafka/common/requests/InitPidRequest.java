@@ -19,42 +19,39 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class InitPIDRequest extends AbstractRequest {
-    private static final String APP_ID_KEY_NAME = "appid";
-    private final String appId;
+public class InitPidRequest extends AbstractRequest {
+    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
 
-    public static class Builder extends AbstractRequest.Builder<InitPIDRequest> {
-        private String appId;
-        public Builder(String appId) {
+    private final String transactionalId;
+
+    public static class Builder extends AbstractRequest.Builder<InitPidRequest> {
+        private final String transactionalId;
+
+        public Builder(String transactionalId) {
             super(ApiKeys.API_VERSIONS);
-            this.appId = appId;
-        }
-
-        public void setAppId(String appId) {
-            this.appId = appId;
+            this.transactionalId = transactionalId;
         }
 
         @Override
-        public InitPIDRequest build(short version) {
-            return new InitPIDRequest(this.appId, version);
-
+        public InitPidRequest build(short version) {
+            return new InitPidRequest(this.transactionalId, version);
         }
 
         @Override
         public String toString() {
-            return "(type=InitPIDRequest)";
+            return "(type=InitPidRequest)";
         }
 
     }
 
-    public InitPIDRequest(Struct struct, short version) {
+    public InitPidRequest(Struct struct, short version) {
         super(version);
-        this.appId = struct.getString(APP_ID_KEY_NAME);
+        this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
     }
 
-    private InitPIDRequest(String appId, short version) {
+    private InitPidRequest(String transactionalId, short version) {
         super(version);
-        this.appId = appId;
+        this.transactionalId = transactionalId;
     }
 
     @Override
@@ -62,18 +59,18 @@ public class InitPIDRequest extends AbstractRequest {
         return new InitPIDResponse(Errors.forException(e));
     }
 
-    public static InitPIDRequest parse(ByteBuffer buffer, short version) {
-        return new InitPIDRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
+    public static InitPidRequest parse(ByteBuffer buffer, short version) {
+        return new InitPidRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
     }
 
-    public String appId() {
-        return  appId;
+    public String transactionalId() {
+        return transactionalId;
     }
 
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.requestSchema(version()));
-        struct.set(APP_ID_KEY_NAME, appId);
+        struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         return struct;
     }
 

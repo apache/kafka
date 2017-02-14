@@ -1178,9 +1178,9 @@ public class Protocol {
 
     /* Transactions API */
     public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
-            new Field("appid",
+            new Field("transactional_id",
                     NULLABLE_STRING,
-                    "The appid whose pid we want to retrieve or generate.")
+                    "The transactional id whose pid we want to retrieve or generate.")
     );
 
     public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
@@ -1189,10 +1189,10 @@ public class Protocol {
                     "An integer error code."),
             new Field("pid",
                     INT64,
-                    "The PID for the input appid. If the input appid was empty, then this is used only for ensuring idempotence of messages"),
+                    "The pid for the input transactional id. If the input id was empty, then this is used only for ensuring idempotence of messages"),
             new Field("epoch",
                     INT16,
-                    "The epoch for the PID. Will always be 0 if no appId was specified in the request.")
+                    "The epoch for the pid. Will always be 0 if no transactional id was specified in the request.")
     );
 
     public static final Schema[] INIT_PRODUCER_ID_REQUEST = new Schema[] {INIT_PRODUCER_ID_REQUEST_V0};

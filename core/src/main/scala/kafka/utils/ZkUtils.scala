@@ -31,9 +31,6 @@ import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMars
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -65,6 +62,7 @@ object ZkUtils {
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
   val ConfigChangesPath = s"$ConfigPath/changes"
+  val PidBlockPath = "/latest_pid_block"
 
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
@@ -76,7 +74,8 @@ object ZkUtils {
                               ControllerEpochPath,
                               IsrChangeNotificationPath,
                               KafkaAclPath,
-                              KafkaAclChangesPath)
+                              KafkaAclChangesPath,
+                              PidBlockPath)
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -217,7 +216,8 @@ class ZkUtils(val zkClient: ZkClient,
                               getEntityConfigRootPath(ConfigType.Client),
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
-                              IsrChangeNotificationPath)
+                              IsrChangeNotificationPath,
+                              PidBlockPath)
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
 
@@ -529,12 +529,12 @@ class ZkUtils(val zkClient: ZkClient,
           case Some(checker) => checker(this, path, data)
           case _ =>
             debug("Checker method is not passed skipping zkData match")
-            warn("Conditional update of path %s with data %s and expected version %d failed due to %s"
+            debug("Conditional update of path %s with data %s and expected version %d failed due to %s"
               .format(path, data,expectVersion, e1.getMessage))
             (false, -1)
         }
       case e2: Exception =>
-        warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
           expectVersion, e2.getMessage))
         (false, -1)
     }
@@ -622,6 +622,20 @@ class ZkUtils(val zkClient: ZkClient,
                           (None, stat)
                       }
     dataAndStat
+  }
+
+  def readDataAndVersionMaybeNull(path: String): (Option[String], Int) = {
+    val stat = new Stat()
+    try {
+      val data: String = zkClient.readData(path, stat)
+      if (data == null.asInstanceOf[String])
+        (None, stat.getVersion)
+      else
+      (Some(data), stat.getVersion)
+    } catch {
+      case _: ZkNoNodeException =>
+        (None, stat.getVersion)
+    }
   }
 
   def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
@@ -717,6 +731,14 @@ class ZkUtils(val zkClient: ZkClient,
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
       topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
     }
+  }
+
+  def getTopicPartitionCount(topic: String): Option[Int] = {
+    val topicData = getPartitionAssignmentForTopics(Seq(topic))
+    if (topicData(topic).nonEmpty)
+      Some(topicData(topic).size)
+    else
+      None
   }
 
   def getPartitionsBeingReassigned(): Map[TopicAndPartition, ReassignedPartitionsContext] = {

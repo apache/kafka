@@ -790,8 +790,8 @@ public class RequestResponseTest {
         return new DeleteTopicsResponse(errors);
     }
 
-    private InitPIDRequest createInitPIDRequest() {
-        return new InitPIDRequest.Builder(null).build();
+    private InitPidRequest createInitPIDRequest() {
+        return new InitPidRequest.Builder(null).build();
     }
 
     private InitPIDResponse createInitPIDResponse() {
