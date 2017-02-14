@@ -70,7 +70,6 @@ public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -213,13 +212,14 @@ public class StreamThread extends Thread {
     private boolean processStandbyRecords = false;
 
     private ThreadCache cache;
+    private StoreChangelogReader storeChangelogReader;
 
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
-
+            final long start = System.currentTimeMillis();
             try {
                 if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
@@ -227,20 +227,25 @@ public class StreamThread extends Thread {
                 }
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                     StreamThread.this.getName(), assignment);
-
+                storeChangelogReader = new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000);
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
                 closeNonAssignedSuspendedTasks();
                 addStreamTasks(assignment);
+                storeChangelogReader.restore();
                 addStandbyTasks();
-                lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
+                lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 setStateWhenNotInPendingShutdown(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
+            } finally {
+                if (log.isDebugEnabled()) {
+                    log.debug("{} partition assignment took {} ms", logPrefix, System.currentTimeMillis() - start);
+                }
             }
         }
 
@@ -323,7 +328,6 @@ public class StreamThread extends Thread {
         this.consumer = clientSupplier.getConsumer(consumerConfigs);
         log.info("{} Creating restore consumer client", logPrefix);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
-
         // initialize the task list
         // activeTasks needs to be concurrent as it can be accessed
         // by QueryableState
@@ -831,8 +835,16 @@ public class StreamThread extends Thread {
 
         final ProcessorTopology topology = builder.build(id.topicGroupId);
         final RecordCollector recordCollector = new RecordCollectorImpl(producer, id.toString());
-        return new StreamTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
+        final long start = System.currentTimeMillis();
+        try {
+            return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
+        } finally {
+            if (log.isDebugEnabled()) {
+                log.debug("{} creation of active task {} took {} ms", logPrefix, id, System.currentTimeMillis() - start);
+            }
+        }
     }
+
 
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspendedTasks.containsKey(taskId)) {
@@ -945,7 +957,7 @@ public class StreamThread extends Thread {
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStores().isEmpty()) {
-            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, streamsMetrics, stateDirectory);
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
         } else {
             return null;
         }

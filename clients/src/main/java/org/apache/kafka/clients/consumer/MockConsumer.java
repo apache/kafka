@@ -152,17 +152,24 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             updateFetchPosition(tp);
 
         // update the consumed offset
+        final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
+        for (final TopicPartition topicPartition : records.keySet()) {
+            results.put(topicPartition, new ArrayList<ConsumerRecord<K, V>>());
+        }
+
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
             if (!subscriptions.isPaused(entry.getKey())) {
-                List<ConsumerRecord<K, V>> recs = entry.getValue();
-                if (!recs.isEmpty())
-                    this.subscriptions.position(entry.getKey(), recs.get(recs.size() - 1).offset() + 1);
+                final List<ConsumerRecord<K, V>> recs = entry.getValue();
+                for (final ConsumerRecord<K, V> rec : recs) {
+                    if (rec.offset() >= subscriptions.position(entry.getKey())) {
+                        results.get(entry.getKey()).add(rec);
+                        subscriptions.position(entry.getKey(), rec.offset() + 1);
+                    }
+                }
             }
         }
 
-        ConsumerRecords<K, V> copy = new ConsumerRecords<K, V>(this.records);
-        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
-        return copy;
+        return new ConsumerRecords<>(results);
     }
 
     public void addRecord(ConsumerRecord<K, V> record) {

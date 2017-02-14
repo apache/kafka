@@ -332,7 +332,7 @@ public class Metrics implements Closeable {
                     children.add(s);
                 }
             }
-            log.debug("Added sensor with name {}", name);
+            log.trace("Added sensor with name {}", name);
         }
         return s;
     }
