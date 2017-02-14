@@ -908,11 +908,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           // version 0 reads offsets from ZK
           val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
-            val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
             try {
               if (!metadataCache.contains(topicPartition.topic))
                 (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
               else {
+                val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
                 val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
                 payloadOpt match {
                   case Some(payload) =>
@@ -943,13 +943,20 @@ class KafkaApis(val requestChannel: RequestChannel,
               new OffsetFetchResponse(Errors.NONE, authorizedPartitionData.asJava)
             }
           } else {
-            val (authorizedPartitions, unauthorizedPartitions) = offsetFetchRequest.partitions.asScala
-              .partition(authorizeTopicDescribe)
-            val (error, authorizedPartitionData) = coordinator.handleFetchOffsets(offsetFetchRequest.groupId,
-              Some(authorizedPartitions))
+            val (authorizedPartitions, unauthorizedPartitions) =
+              offsetFetchRequest.partitions.asScala.partition(authorizeTopicDescribe)
+            val (error, authorizedPartitionData) =
+              coordinator.handleFetchOffsets(offsetFetchRequest.groupId, Some(authorizedPartitions))
             if (error != Errors.NONE)
               offsetFetchRequest.getErrorResponse(error)
             else {
+              val authorizedAndValidatedPartitionData = authorizedPartitionData.map {
+                case (topicPartition, offsetInfo) =>
+                  if (metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition).isEmpty)
+                    (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
+                  else
+                    (topicPartition, offsetInfo)
+              }
               val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
               new OffsetFetchResponse(Errors.NONE, (authorizedPartitionData ++ unauthorizedPartitionData).asJava)
             }

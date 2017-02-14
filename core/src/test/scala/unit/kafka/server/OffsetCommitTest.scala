@@ -118,7 +118,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val fetchRequest2 = OffsetFetchRequest(group, Seq(unknownTopicAndPartition))
     val fetchResponse2 = simpleConsumer.fetchOffsets(fetchRequest2)
 
-    assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse2.requestInfo.get(unknownTopicAndPartition).get)
+    assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, fetchResponse2.requestInfo.get(unknownTopicAndPartition).get)
     assertEquals(1, fetchResponse2.requestInfo.size)
   }
 
@@ -164,14 +164,14 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.error)
 
     assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.error)
-    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.error)
-    assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.error)
+    assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get)
 
     assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.error)
     assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get)
 
-    assertEquals(Errors.NONE, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
-    assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
+    assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get)
 
     assertEquals("metadata one", fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.metadata)
     assertEquals("metadata two", fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.metadata)
@@ -328,7 +328,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     val fetchRequest = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)))
     val offsetMetadataAndErrorMap = simpleConsumer.fetchOffsets(fetchRequest)
     val offsetMetadataAndError = offsetMetadataAndErrorMap.requestInfo(topicPartition)
-    assertEquals(OffsetMetadataAndError.NoOffset, offsetMetadataAndError)
+    assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, offsetMetadataAndError)
   }
 
 }

@@ -760,8 +760,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testListOffsetsWithNoTopicAccess() {
-    val partitionInfos = this.consumers.head.partitionsFor(topic)
-    assertNull(partitionInfos)
+    try {
+      val partitionInfos = this.consumers.head.partitionsFor(topic)
+      fail("KafkaException should have been raised")
+    } catch {
+      case e: KafkaException => // expected
+        assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
+        assertEquals(s"Topic '$topic' may not exist or the user may not have Describe access to it", e.getMessage)
+      case e: Throwable =>
+        fail("Unexpected exception occurred")
+    }
   }
 
   @Test

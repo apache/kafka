@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -712,10 +713,17 @@ public class FetcherTest {
     public void testGetTopicMetadataUnknownTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
-        Map<String, List<PartitionInfo>> topicMetadata =
-                fetcher.getTopicMetadata(
-                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
-        assertNull(topicMetadata.get(topicName));
+        try {
+            fetcher.getTopicMetadata(
+                    new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+            fail("KafkaException should have been raised");
+        } catch (KafkaException e) {
+            assertEquals(UnknownTopicOrPartitionException.class, e.getCause().getClass());
+            assertEquals("Topic '" + topicName + "' may not exist or the user may not have Describe access to it",
+                    e.getMessage());
+        } catch (Throwable e) {
+            fail("Unexpected exception occurred");
+        }
     }
 
     @Test

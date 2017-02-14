@@ -21,7 +21,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
@@ -309,7 +309,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(0, consumer0.assignment().size)
 
-    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this 
+    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this
     consumer0.subscribe(pattern1, new TestConsumerReassignmentListener)
     consumer0.poll(50)
 
@@ -538,7 +538,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testPositionAndCommit() {
     sendRecords(5)
 
-    assertNull(this.consumers.head.committed(new TopicPartition(topic, 15)))
+    // committed() on a partition that doesn't exist throws an exception
+    intercept[KafkaException] {
+      this.consumers.head.committed(new TopicPartition(topic, 15))
+    }
 
     // position() on a partition that we aren't subscribed to throws an exception
     intercept[IllegalArgumentException] {

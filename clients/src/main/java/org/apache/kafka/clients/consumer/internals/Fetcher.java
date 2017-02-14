@@ -307,9 +307,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                         if (error == Errors.INVALID_TOPIC_EXCEPTION)
                             throw new InvalidTopicException("Topic '" + topic + "' is invalid");
                         else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION)
-                            // if a requested topic is unknown, we just continue and let it be absent
-                            // in the returned map
-                            continue;
+                            throw new KafkaException("Topic '" + topic + "' may not exist or the user may not have " +
+                                    "Describe access to it", error.exception());
                         else if (error.exception() instanceof RetriableException)
                             shouldRetry = true;
                         else
