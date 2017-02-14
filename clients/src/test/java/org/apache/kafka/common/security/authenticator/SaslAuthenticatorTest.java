@@ -138,7 +138,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForAuthenticationFailureAndClose(selector, node);
     }
 
     /**
@@ -153,7 +153,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForAuthenticationFailureAndClose(selector, node);
     }
 
     /**
@@ -287,7 +287,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForAuthenticationFailureAndClose(selector, node);
     }
 
     /**
@@ -306,7 +306,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForAuthenticationFailureAndClose(selector, node);
     }
 
     /**
@@ -324,7 +324,7 @@ public class SaslAuthenticatorTest {
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createClientConnection(securityProtocol, node);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForAuthenticationFailureAndClose(selector, node);
 
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
         createAndCheckClientConnection(securityProtocol, "2");

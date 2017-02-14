@@ -183,10 +183,10 @@ public class SaslClientAuthenticator implements Authenticator {
                 byte[] serverToken = receiveResponseOrToken();
                 if (serverToken != null) {
                     sendSaslToken(serverToken, false);
-                }
-                if (saslClient.isComplete()) {
-                    setSaslState(SaslState.COMPLETE);
-                    transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+                    if (saslClient.isComplete()) {
+                        setSaslState(SaslState.COMPLETE);
+                        transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+                    }
                 }
                 break;
             case COMPLETE:
@@ -207,7 +207,8 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void sendSaslToken(byte[] serverToken, boolean isInitial) throws IOException {
-        if (!saslClient.isComplete()) {
+        // Only empty tokens are expected from server if authentication is successful.
+        if (!saslClient.isComplete() || serverToken.length > 0) {
             byte[] saslToken = createSaslToken(serverToken, isInitial);
             if (saslToken != null)
                 send(new NetworkSend(node, ByteBuffer.wrap(saslToken)));
@@ -273,7 +274,14 @@ public class SaslClientAuthenticator implements Authenticator {
             else
                 return Subject.doAs(subject, new PrivilegedExceptionAction<byte[]>() {
                     public byte[] run() throws SaslException {
-                        return saslClient.evaluateChallenge(saslToken);
+                        try {
+                            return saslClient.evaluateChallenge(saslToken);
+                        } catch (Exception e) {
+                            if (authenticationFailed(saslToken))
+                                throw Errors.AUTHENTICATION_FAILED.exception();
+                            else
+                                throw e;
+                        }
                     }
                 });
         } catch (PrivilegedActionException e) {
@@ -336,5 +344,21 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new AuthenticationException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
                     response.error(), mechanism, response.enabledMechanisms()));
         }
+    }
+
+    /**
+     * When Kafka broker SASL server fails authentication of a client connection (eg. bad password),
+     * a two byte error code corresponding to {@link Errors#AUTHENTICATION_FAILED} is returned to
+     * the client. This is an invalid token for GSSAPI/PLAIN/SCRAM and is interpreted by the client
+     * as authentication failure. This is a workaround to log and handle authentication failures in clients
+     * since SASL itself doesn't have a consistent protocol for reporting authentication failures.
+     * Broker closes the client connection after sending the error code, so no more data is expected
+     * from the client after this.
+     */
+    private boolean authenticationFailed(byte[] token) {
+        if (token.length != 2)
+            return false;
+        else
+            return ByteBuffer.wrap(token).getShort() == Errors.AUTHENTICATION_FAILED.code();
     }
 }

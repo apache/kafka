@@ -56,6 +56,8 @@ final class ClusterConnectionStates {
         NodeConnectionState state = nodeState.get(id);
         if (state == null)
             return false;
+        else if (state.authFailed) // connections with authentication failures are blacked out forever
+            return true;
         else
             return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs < this.reconnectBackoffMs;
     }
@@ -107,6 +109,22 @@ final class ClusterConnectionStates {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
+    }
+
+    public void authFailed(String id, long now) {
+        NodeConnectionState nodeState = nodeState(id);
+        nodeState.authFailed = true;
+    }
+
+    public boolean authFailed() {
+        boolean authFailed = !nodeState.isEmpty();
+        for (NodeConnectionState state : nodeState.values()) {
+            if (!state.authFailed) {
+                authFailed = false;
+                break;
+            }
+        }
+        return authFailed;
     }
 
     /**
@@ -173,6 +191,7 @@ final class ClusterConnectionStates {
     private static class NodeConnectionState {
 
         ConnectionState state;
+        boolean authFailed;
         long lastConnectAttemptMs;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt) {

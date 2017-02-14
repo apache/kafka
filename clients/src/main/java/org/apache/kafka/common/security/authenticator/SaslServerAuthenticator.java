@@ -206,6 +206,9 @@ public class SaslServerAuthenticator implements Authenticator {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
 
+        if (saslState == SaslState.FAILED)
+            throw Errors.AUTHENTICATION_FAILED.exception();
+
         if (saslServer != null && saslServer.isComplete()) {
             setSaslState(SaslState.COMPLETE);
             return;
@@ -231,15 +234,20 @@ public class SaslServerAuthenticator implements Authenticator {
                         // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
                         // This is required for interoperability with 0.9.0.x clients which do not send handshake request
                     case AUTHENTICATE:
-                        byte[] response = saslServer.evaluateResponse(clientToken);
-                        if (response != null) {
-                            netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
-                            flushNetOutBufferAndUpdateInterestOps();
+                        try {
+                            byte[] response = saslServer.evaluateResponse(clientToken);
+                            if (response != null) {
+                                netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
+                                flushNetOutBufferAndUpdateInterestOps();
+                            }
+                            // When the authentication exchange is complete and no more tokens are expected from the client,
+                            // update SASL state. Current SASL state will be updated when outgoing writes to the client complete.
+                            if (saslServer.isComplete())
+                                setSaslState(SaslState.COMPLETE);
+                        } catch (SaslException e) {
+                            if (failAuthentication())
+                                throw e;
                         }
-                        // When the authentication exchange is complete and no more tokens are expected from the client,
-                        // update SASL state. Current SASL state will be updated when outgoing writes to the client complete.
-                        if (saslServer.isComplete())
-                            setSaslState(SaslState.COMPLETE);
                         break;
                     default:
                         break;
@@ -273,6 +281,20 @@ public class SaslServerAuthenticator implements Authenticator {
             this.pendingSaslState = null;
             this.saslState = saslState;
             LOG.debug("Set SASL server state to {}", saslState);
+        }
+    }
+
+    private boolean failAuthentication() {
+        setSaslState(SaslState.FAILED);
+        ByteBuffer response = ByteBuffer.allocate(2);
+        response.putShort(Errors.AUTHENTICATION_FAILED.code());
+        response.rewind();
+        netOutBuffer = new NetworkSend(node, response);
+        try {
+            return flushNetOutBufferAndUpdateInterestOps();
+        } catch (IOException e) {
+            LOG.debug("Authentication error could not be sent to the client", e);
+            return true;
         }
     }
 

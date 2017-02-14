@@ -68,6 +68,12 @@ public interface KafkaClient extends Closeable {
     boolean connectionFailed(Node node);
 
     /**
+     * Check if authentication failed to all available nodes
+     * @return true if connections to all available nodes failed with authentication errors
+     */
+    boolean authFailed();
+
+    /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * @param request The request
      * @param now The current timestamp

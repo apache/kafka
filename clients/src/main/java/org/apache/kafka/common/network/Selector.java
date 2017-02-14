@@ -40,6 +40,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -93,6 +94,7 @@ public class Selector implements Selectable {
     private final Map<String, KafkaChannel> closingChannels;
     private final List<String> disconnected;
     private final List<String> connected;
+    private final List<String> authFailed;
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
@@ -140,6 +142,7 @@ public class Selector implements Selectable {
         this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
+        this.authFailed = new ArrayList<>();
         this.failedSends = new ArrayList<>();
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
@@ -375,7 +378,10 @@ public class Selector implements Selectable {
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof IOException)
+                if (e instanceof AuthenticationException) {
+                    authFailed.add(channel.id());
+                    log.warn("Authentication failed for connection with {}; closing connection", desc, e);
+                } else if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
@@ -397,6 +403,11 @@ public class Selector implements Selectable {
     @Override
     public List<String> disconnected() {
         return this.disconnected;
+    }
+
+    @Override
+    public List<String> authFailed() {
+        return this.authFailed;
     }
 
     @Override
@@ -461,6 +472,7 @@ public class Selector implements Selectable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+        this.authFailed.clear();
         // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();

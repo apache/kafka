@@ -232,6 +232,11 @@ public class NetworkClient implements KafkaClient {
         return connectionStates.connectionState(node.idString()).equals(ConnectionState.DISCONNECTED);
     }
 
+    @Override
+    public boolean authFailed() {
+        return connectionStates.authFailed();
+    }
+
     /**
      * Check if the node with the given id is ready to send more requests.
      *
@@ -576,6 +581,10 @@ public class NetworkClient implements KafkaClient {
             log.debug("Node {} disconnected.", node);
             processDisconnection(responses, node, now);
         }
+        for (String node : this.selector.authFailed()) {
+            log.debug("Node {} authentication failed.", node);
+            connectionStates.authFailed(node, now);
+        }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
             metadataUpdater.requestUpdate();
@@ -679,15 +688,19 @@ public class NetworkClient implements KafkaClient {
                 return metadataTimeout;
             }
 
-            // Beware that the behavior of this method and the computation of timeouts for poll() are
-            // highly dependent on the behavior of leastLoadedNode.
-            Node node = leastLoadedNode(now);
-            if (node == null) {
-                log.debug("Give up sending metadata request since no node is available");
-                return reconnectBackoffMs;
+            if (authFailed()) {
+                log.debug("Give up sending metadata request since authentication failed to all nodes");
+                return requestTimeoutMs;
+            } else {
+                // Beware that the behavior of this method and the computation of timeouts for poll() are
+                // highly dependent on the behavior of leastLoadedNode.
+                Node node = leastLoadedNode(now);
+                if (node == null) {
+                    log.debug("Give up sending metadata request since no node is available");
+                    return reconnectBackoffMs;
+                }
+                return maybeUpdate(now, node);
             }
-
-            return maybeUpdate(now, node);
         }
 
         @Override
