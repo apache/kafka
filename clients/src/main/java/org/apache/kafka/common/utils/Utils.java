@@ -183,7 +183,7 @@ public class Utils {
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
         byte[] dest = new byte[size];
         if (buffer.hasArray()) {
-            System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, size);
+            System.arraycopy(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, dest, 0, size);
         } else {
             int pos = buffer.position();
             buffer.get(dest);
@@ -705,15 +705,6 @@ public class Utils {
         Crc32 crc = new Crc32();
         crc.update(buffer, start, size);
         return crc.getValue();
-    }
-
-    /**
-     * Compute the checksum of a range of data
-     * @param buffer Buffer containing the data to checksum
-     * @return the computed checksum
-     */
-    public static long computeChecksum(byte[] buffer) {
-        return computeChecksum(buffer, 0, buffer.length);
     }
 
     /**

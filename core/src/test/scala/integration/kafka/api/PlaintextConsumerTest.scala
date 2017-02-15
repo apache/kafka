@@ -981,6 +981,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(s"value will not be modified", new String(record.value()))
   }
 
+  @Test
   def testConsumeMessagesWithCreateTime() {
     val numRecords = 50
     // Test non-compressed messages

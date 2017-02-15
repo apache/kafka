@@ -52,12 +52,12 @@ private[kafka] object LogValidator extends Logging {
                                                       sourceCodec: CompressionCodec,
                                                       targetCodec: CompressionCodec,
                                                       compactedTopic: Boolean = false,
-                                                      messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
+                                                      messageFormatVersion: Byte = LogEntry.CURRENT_MAGIC_VALUE,
                                                       messageTimestampType: TimestampType,
                                                       messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
-      if (!records.hasMatchingShallowMagic(messageFormatVersion))
+      if (!records.hasMatchingMagic(messageFormatVersion))
         convertAndAssignOffsetsNonCompressed(records, offsetCounter, compactedTopic, now, messageTimestampType,
           messageTimestampDiffMaxMs, messageFormatVersion)
       else
@@ -78,7 +78,7 @@ private[kafka] object LogValidator extends Logging {
                                                    messageTimestampDiffMaxMs: Long,
                                                    toMagicValue: Byte): ValidationAndOffsetAssignResult = {
     val sizeInBytesAfterConversion = if (toMagicValue > 1)
-      EosLogEntry.LOG_ENTRY_OVERHEAD + records.records.asScala.map(record => EosLogRecord.sizeOf(record.key, record.value)).sum
+      EosLogEntry.sizeInBytes(offsetCounter.value, records.records)
     else
       records.entries.asScala.map { logEntry =>
       if (logEntry.magic > 1)
@@ -119,7 +119,7 @@ private[kafka] object LogValidator extends Logging {
                                          compactedTopic: Boolean,
                                          timestampType: TimestampType,
                                          timestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
-    var maxTimestamp = Record.NO_TIMESTAMP
+    var maxTimestamp = LogEntry.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
@@ -131,7 +131,7 @@ private[kafka] object LogValidator extends Logging {
         validateKey(record, compactedTopic)
         val offset = offsetCounter.getAndIncrement()
 
-        if (entry.magic > Record.MAGIC_VALUE_V0) {
+        if (entry.magic > LogEntry.MAGIC_VALUE_V0) {
           validateTimestamp(entry, record, now, timestampType, timestampDiffMaxMs)
 
           if (record.timestamp > maxTimestamp) {
@@ -141,7 +141,7 @@ private[kafka] object LogValidator extends Logging {
         }
       }
 
-      if (entry.magic > Record.MAGIC_VALUE_V1)
+      if (entry.magic > LogEntry.MAGIC_VALUE_V1)
         entry.setOffset(baseOffset)
       else
         entry.setOffset(offsetCounter.value - 1)
@@ -176,7 +176,7 @@ private[kafka] object LogValidator extends Logging {
                                                  sourceCodec: CompressionCodec,
                                                  targetCodec: CompressionCodec,
                                                  compactedTopic: Boolean = false,
-                                                 messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
+                                                 messageFormatVersion: Byte = LogEntry.CURRENT_MAGIC_VALUE,
                                                  messageTimestampType: TimestampType,
                                                  messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
       // Deal with compressed messages
@@ -187,9 +187,9 @@ private[kafka] object LogValidator extends Logging {
       // 4. Message format conversion is needed.
 
       // No in place assignment situation 1 and 2
-      var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Record.MAGIC_VALUE_V0
+      var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > LogEntry.MAGIC_VALUE_V0
 
-      var maxTimestamp = Record.NO_TIMESTAMP
+      var maxTimestamp = LogEntry.NO_TIMESTAMP
       val expectedInnerOffset = new LongRef(0)
       val validatedRecords = new mutable.ArrayBuffer[LogRecord]
 
@@ -202,7 +202,7 @@ private[kafka] object LogValidator extends Logging {
           record.ensureValid()
           validateKey(record, compactedTopic)
 
-          if (!record.hasMagic(Record.MAGIC_VALUE_V0) && messageFormatVersion > Record.MAGIC_VALUE_V0) {
+          if (!record.hasMagic(LogEntry.MAGIC_VALUE_V0) && messageFormatVersion > LogEntry.MAGIC_VALUE_V0) {
             // No in place assignment situation 3
             // Validate the timestamp
             validateTimestamp(entry, record, now, messageTimestampType, messageTimestampDiffMaxMs)
@@ -237,7 +237,7 @@ private[kafka] object LogValidator extends Logging {
         val firstOffset = offsetCounter.value
         val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
 
-        if (messageFormatVersion > Record.MAGIC_VALUE_V1)
+        if (messageFormatVersion > LogEntry.MAGIC_VALUE_V1)
           entry.setOffset(firstOffset)
         else
           entry.setOffset(lastOffset)
@@ -257,7 +257,8 @@ private[kafka] object LogValidator extends Logging {
   private def buildRecordsAndAssignOffsets(magic: Byte, offsetCounter: LongRef, timestampType: TimestampType,
                                            compressionType: CompressionType, logAppendTime: Long,
                                            validatedRecords: Seq[LogRecord]): ValidationAndOffsetAssignResult = {
-    val buffer = ByteBuffer.allocate(AbstractRecords.estimatedSizeRecords(compressionType, validatedRecords.asJava))
+    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType, validatedRecords.asJava)
+    val buffer = ByteBuffer.allocate(estimatedSize)
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value, logAppendTime)
 
     validatedRecords.foreach { record =>

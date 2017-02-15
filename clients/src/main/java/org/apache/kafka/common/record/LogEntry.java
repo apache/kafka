@@ -19,9 +19,53 @@ package org.apache.kafka.common.record;
 import java.nio.ByteBuffer;
 
 /**
- * An offset and record pair
+ * A log entry is a container for log records. In old versions of the message format (versions 0 and 1),
+ * a log entry consisted always of a single record if no compression was enabled, but could contain
+ * many records otherwise. Newer versions (magic 2 and above will generally contain many records regardless
+ * of compression.
+ *
+ * For magic 2, the following schema is used:
+ *
+ * LogEntry =>
+ *  FirstOffset => int64
+ *  Length => int32
+ *  CRC => int32
+ *  Magic => int8
+ *  Attributes => int16
+ *  LastOffsetDelta => int32
+ *  FirstTimestamp => int64
+ *  MaxTimestamp => int64
+ *  PID => int64
+ *  Epoch => int16
+ *  FirstSequence => int32
+ *  Records => Record1, Record2, … , RecordN
  */
 public interface LogEntry extends Iterable<LogRecord> {
+
+    /**
+     * The "magic" values
+     */
+    byte MAGIC_VALUE_V0 = 0;
+    byte MAGIC_VALUE_V1 = 1;
+    byte MAGIC_VALUE_V2 = 2;
+
+    /**
+     * The current "magic" value
+     */
+    byte CURRENT_MAGIC_VALUE = MAGIC_VALUE_V2;
+
+    /**
+     * Timestamp value for records without a timestamp
+     */
+    long NO_TIMESTAMP = -1L;
+
+    /**
+     * Values used in the new message format by non-idempotent/transactional producers or when
+     * up-converting from an older message format.
+     */
+    long NO_PID = -1L;
+    short NO_EPOCH = -1;
+    int NO_SEQUENCE = -1;
 
     /**
      * Check whether the checksum of this entry is correct.
@@ -45,10 +89,9 @@ public interface LogEntry extends Iterable<LogRecord> {
     /**
      * Get the timestamp of this entry. This is the max timestamp among all records contained in this log entry.
      *
-     * TODO: rename to maxTimestamp()?
      * @return The max timestamp
      */
-    long timestamp();
+    long maxTimestamp();
 
     /**
      * Get the timestamp type of this entry. This will be {@link TimestampType#CREATE_TIME}
@@ -92,7 +135,6 @@ public interface LogEntry extends Iterable<LogRecord> {
     /**
      * Get the PID (producer ID) for this log entry. For older magic versions, this will return 0.
      *
-     * TODO: Maybe use -1 as sentinel instead of 0?
      * @return The PID or 0 if there is none
      */
     long pid();
@@ -141,7 +183,6 @@ public interface LogEntry extends Iterable<LogRecord> {
      * @param buffer The buffer to write the entry to
      */
     void writeTo(ByteBuffer buffer);
-
 
     /**
      * A mutable log entry is one that can be modified in place (without copying).

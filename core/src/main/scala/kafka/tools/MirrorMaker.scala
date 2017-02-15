@@ -38,7 +38,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.LogEntry
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
@@ -752,7 +752,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
-      val timestamp: java.lang.Long = if (record.timestamp == Record.NO_TIMESTAMP) null else record.timestamp
+      val timestamp: java.lang.Long = if (record.timestamp == LogEntry.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, timestamp, record.key, record.value))
     }
   }

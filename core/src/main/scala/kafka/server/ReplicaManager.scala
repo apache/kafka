@@ -339,7 +339,7 @@ class ReplicaManager(val config: KafkaConfig,
       // Just return an error and don't handle the request at all
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
         topicPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UnknownLogAppendInfo.firstOffset, Record.NO_TIMESTAMP)
+          LogAppendInfo.UnknownLogAppendInfo.firstOffset, LogEntry.NO_TIMESTAMP)
       }
       responseCallback(responseStatus)
     }

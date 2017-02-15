@@ -69,7 +69,7 @@ public class RecordAccumulatorTest {
     private MockTime time = new MockTime();
     private byte[] key = "key".getBytes();
     private byte[] value = "value".getBytes();
-    private int msgSize = EosLogRecord.sizeOf(key, value);
+    private int msgSize = EosLogRecord.sizeInBytes(0, 0, key, value);
     private Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3),
             Collections.<String>emptySet(), Collections.<String>emptySet());
     private Metrics metrics = new Metrics(time);
@@ -97,6 +97,7 @@ public class RecordAccumulatorTest {
         }
 
         // this append doesn't fit in the first batch, so a new batch is created and the first batch is closed
+
         accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
         Deque<ProducerBatch> partitionBatches = accum.batches().get(tp1);
         assertEquals(2, partitionBatches.size());

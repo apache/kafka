@@ -26,7 +26,7 @@ import joptsimple._
 import kafka.log._
 import kafka.message._
 import kafka.utils._
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, TimestampType}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.math._
@@ -105,9 +105,8 @@ object TestLinearWriteSpeed {
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
-      val builder = MemoryRecords.builder(compressionType, TimestampType.CREATE_TIME, 0L)
-      (0 until numMessages).foreach(_ => builder.append(createTime, null, new Array[Byte](messageSize)))
-      builder.build()
+      val records = (0 until numMessages).map(_ => new KafkaRecord(createTime, null, new Array[Byte](messageSize)))
+      MemoryRecords.withRecords(compressionType, records: _*)
     }
 
     val writables = new Array[Writable](numFiles)

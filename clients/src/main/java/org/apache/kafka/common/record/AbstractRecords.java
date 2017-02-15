@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -33,7 +34,7 @@ public abstract class AbstractRecords implements Records {
     };
 
     @Override
-    public boolean hasMatchingShallowMagic(byte magic) {
+    public boolean hasMatchingMagic(byte magic) {
         for (LogEntry entry : entries())
             if (entry.magic() != magic)
                 return false;
@@ -49,12 +50,16 @@ public abstract class AbstractRecords implements Records {
     }
 
     /**
-     * Convert this message set to use the specified message format.
+     * Convert this message set to a compatible magic format.
+     *
+     * @param toMagic The maximum magic version to convert to. Entries with larger magic values
+     *                will be converted to this magic; entries with equal or lower magic will not
+     *                be converted at all.
      */
     @Override
-    public Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType) {
-        List<LogRecord> records = Utils.toList(records().iterator());
-        if (records.isEmpty()) {
+    public Records downConvert(byte toMagic) {
+        List<? extends LogEntry> entries = Utils.toList(entries().iterator());
+        if (entries.isEmpty()) {
             // This indicates that the message is too large, which indicates that the buffer is not large
             // enough to hold a full log entry. We just return all the bytes in the file message set.
             // Even though the message set does not have the right format version, we expect old clients
@@ -62,39 +67,50 @@ public abstract class AbstractRecords implements Records {
             // are not enough available bytes in the response to read the full message.
             return this;
         } else {
-            // We use the first message to determine the compression type for the resulting message set.
-            // This could result in message sets which are either larger or smaller than the original size.
-            // For example, it could end up larger if most messages were previously compressed, but
-            // it just so happens that the first one is not. There is also some risk that this can
-            // cause some timestamp information to be lost (e.g. if the timestamp type was changed) since
-            // we are essentially merging multiple message sets. However, currently this method is only
-            // used for down-conversion, so we've ignored the problem.
-            LogEntry firstEntry = entries().iterator().next();
+            List<LogEntryAndRecords> logEntryAndRecordsList = new ArrayList<>(entries.size());
+            int totalSizeEstimate = 0;
 
-            // FIXME: Using the timestamp and compression type from the first message is almost certainly wrong
-            //        We also need to take into account pid information
-            TimestampType timestampType = firstEntry.timestampType();
-            if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
-                timestampType = upconvertTimestampType;
+            for (LogEntry entry : entries) {
+                if (entry.magic() <= toMagic) {
+                    totalSizeEstimate += entry.sizeInBytes();
+                    logEntryAndRecordsList.add(new LogEntryAndRecords(entry, null, null));
+                } else {
+                    List<LogRecord> logRecords = Utils.toList(entry.iterator());
+                    final long baseOffset;
+                    if (entry.magic() >= LogEntry.MAGIC_VALUE_V2)
+                        baseOffset = entry.baseOffset();
+                    else
+                        baseOffset = logRecords.get(0).offset();
+                    totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, entry.compressionType(), logRecords);
+                    logEntryAndRecordsList.add(new LogEntryAndRecords(entry, logRecords, baseOffset));
+                }
+            }
 
-            return convert(toMagic, timestampType, firstEntry.compressionType(), firstEntry.timestamp(), records);
+            ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
+            for (LogEntryAndRecords logEntryAndRecords : logEntryAndRecordsList) {
+                if (logEntryAndRecords.entry.magic() <= toMagic)
+                    logEntryAndRecords.entry.writeTo(buffer);
+                else
+                    buffer = convertLogEntry(toMagic, buffer, logEntryAndRecords);
+            }
+
+            buffer.flip();
+            return MemoryRecords.readableRecords(buffer);
         }
     }
 
-    private MemoryRecords convert(byte magic,
-                                  TimestampType timestampType,
-                                  CompressionType compressionType,
-                                  long logAppendTime,
-                                  List<LogRecord> records) {
+    private ByteBuffer convertLogEntry(byte magic, ByteBuffer buffer, LogEntryAndRecords logEntryAndRecords) {
+        LogEntry entry = logEntryAndRecords.entry;
+        final TimestampType timestampType = entry.timestampType();
+        long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? entry.maxTimestamp() : LogEntry.NO_TIMESTAMP;
 
-        LogRecord firstRecord = records.iterator().next();
-        long firstOffset = firstRecord.offset();
-        ByteBuffer buffer = ByteBuffer.allocate(estimatedSizeRecords(compressionType, records));
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType,
-                firstOffset, logAppendTime, 0L, (short) 0, 0);
-        for (LogRecord record : records)
-            builder.appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
-        return builder.build();
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, entry.compressionType(),
+                timestampType, logEntryAndRecords.baseOffset, logAppendTime);
+        for (LogRecord logRecord : logEntryAndRecords.records)
+            builder.append(logRecord);
+
+        builder.close();
+        return builder.buffer();
     }
 
     /**
@@ -126,11 +142,47 @@ public abstract class AbstractRecords implements Records {
         };
     }
 
-    public static int estimatedSizeRecords(CompressionType compressionType, Iterable<LogRecord> records) {
+    public static int estimateSizeInBytes(byte magic,
+                                          long baseOffset,
+                                          CompressionType compressionType,
+                                          Iterable<LogRecord> records) {
         int size = 0;
-        for (LogRecord record : records)
-            size += record.sizeInBytes();
-        // TODO: Account for header overhead
+        if (magic <= LogEntry.MAGIC_VALUE_V1) {
+            for (LogRecord record : records)
+                size += Records.LOG_OVERHEAD + Record.recordSize(magic, record.key(), record.value());
+        } else {
+            size = EosLogEntry.sizeInBytes(baseOffset, records);
+        }
+        return estimateCompressedSizeInBytes(size, compressionType);
+    }
+
+    public static int estimateSizeInBytes(byte magic,
+                                          CompressionType compressionType,
+                                          Iterable<KafkaRecord> records) {
+        int size = 0;
+        if (magic <= LogEntry.MAGIC_VALUE_V1) {
+            for (KafkaRecord record : records)
+                size += Records.LOG_OVERHEAD + Record.recordSize(magic, record.key(), record.value());
+        } else {
+            size = EosLogEntry.sizeInBytes(records);
+        }
+        return estimateCompressedSizeInBytes(size, compressionType);
+    }
+
+    private static int estimateCompressedSizeInBytes(int size, CompressionType compressionType) {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
+
+    private static class LogEntryAndRecords {
+        private final LogEntry entry;
+        private final List<LogRecord> records;
+        private final Long baseOffset;
+
+        private LogEntryAndRecords(LogEntry entry, List<LogRecord> records, Long baseOffset) {
+            this.entry = entry;
+            this.records = records;
+            this.baseOffset = baseOffset;
+        }
+    }
+
 }

@@ -107,6 +107,7 @@ public interface LogRecord {
      * returns true if the passed magic is greater than or equal to 2.
      * @param magic the magic value to check
      * @return true if the record has a magic field (versions prior to 2) and the value matches
+     * FIXME: maybe this should be hasCompatibleMagic or something
      */
     boolean hasMagic(byte magic);
 

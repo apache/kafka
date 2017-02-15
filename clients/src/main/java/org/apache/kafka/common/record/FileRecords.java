@@ -276,7 +276,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition) {
         for (LogEntry logEntry : entriesFrom(startingPosition)) {
-            if (logEntry.timestamp() >= targetTimestamp) {
+            if (logEntry.maxTimestamp() >= targetTimestamp) {
                 // We found a message
                 for (LogRecord record : logEntry) {
                     long timestamp = record.timestamp();
@@ -284,7 +284,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         return new TimestampAndOffset(timestamp, record.offset());
                 }
                 throw new IllegalStateException(String.format("The message set (max timestamp = %s, max offset = %s)" +
-                        " should contain target timestamp %s but it does not.", logEntry.timestamp(),
+                        " should contain target timestamp %s but it does not.", logEntry.maxTimestamp(),
                         logEntry.lastOffset(), targetTimestamp));
             }
         }
@@ -297,11 +297,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return The largest timestamp of the messages after the given position.
      */
     public TimestampAndOffset largestTimestampAfter(int startingPosition) {
-        long maxTimestamp = Record.NO_TIMESTAMP;
+        long maxTimestamp = LogEntry.NO_TIMESTAMP;
         long offsetOfMaxTimestamp = -1L;
 
         for (LogEntry logEntry : entriesFrom(startingPosition)) {
-            long timestamp = logEntry.timestamp();
+            long timestamp = logEntry.maxTimestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
                 offsetOfMaxTimestamp = logEntry.lastOffset();

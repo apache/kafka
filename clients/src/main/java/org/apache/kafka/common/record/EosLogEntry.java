@@ -31,8 +31,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
 
-import static org.apache.kafka.common.record.Record.COMPRESSION_CODEC_MASK;
-import static org.apache.kafka.common.record.Record.NO_TIMESTAMP;
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
 public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
@@ -61,6 +59,8 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
     public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
 
+    private static final int COMPRESSION_CODEC_MASK = 0x07;
+
     private final ByteBuffer buffer;
 
     public EosLogEntry(ByteBuffer buffer) {
@@ -80,7 +80,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     @Override
-    public long timestamp() {
+    public long maxTimestamp() {
         return buffer.getLong(TIMESTAMP_OFFSET);
     }
 
@@ -149,7 +149,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         // them. The trick perhaps is ensuring that the underlying stream always gets cleaned up.
         Deque<LogRecord> records = new ArrayDeque<>();
         try {
-            Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? timestamp() : null;
+            Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             while (true) {
                 try {
                     records.add(EosLogRecord.readFrom(stream, baseOffset(), firstSequence(), logAppendTime));
@@ -179,7 +179,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                 ByteBuffer buf = buffer.duplicate();
                 buf.position(position);
 
-                Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? timestamp() : null;
+                Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
                 EosLogRecord record = EosLogRecord.readFrom(buf, baseOffset(), firstSequence(), logAppendTime);
                 if (record == null)
                     return allDone();
@@ -199,28 +199,28 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     public void setOffset(long offset) {
-        buffer.putLong(Records.OFFSET_OFFSET, offset);
+        buffer.putLong(OFFSET_OFFSET, offset);
     }
 
     public void setCreateTime(long timestamp) {
-        long currentTimestamp = timestamp();
+        long currentTimestamp = maxTimestamp();
         // We don't need to recompute crc if the timestamp is not updated.
         if (timestampType() == TimestampType.CREATE_TIME && currentTimestamp == timestamp)
             return;
 
         byte attributes = attributes();
-        buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, TimestampType.CREATE_TIME.updateAttributes(attributes));
-        buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
+        buffer.put(ATTRIBUTES_OFFSET, TimestampType.CREATE_TIME.updateAttributes(attributes));
+        buffer.putLong(TIMESTAMP_OFFSET, timestamp);
         long crc = computeChecksum();
-        ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
+        ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
     }
 
     public void setLogAppendTime(long timestamp) {
         byte attributes = attributes();
-        buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, TimestampType.LOG_APPEND_TIME.updateAttributes(attributes));
-        buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
+        buffer.put(ATTRIBUTES_OFFSET, TimestampType.LOG_APPEND_TIME.updateAttributes(attributes));
+        buffer.putLong(TIMESTAMP_OFFSET, timestamp);
         long crc = computeChecksum();
-        ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
+        ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
     }
 
     @Override
@@ -352,7 +352,43 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
     @Override
     public String toString() {
-        return "LogEntry(magic: " + magic() + ", range: [" + baseOffset() + ", " + lastOffset() + "])";
+        return "LogEntry(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
+    }
+
+    public static int sizeInBytes(long baseOffset, Iterable<LogRecord> records) {
+        Iterator<LogRecord> iterator = records.iterator();
+        if (!iterator.hasNext())
+            return 0;
+
+        int size = LOG_ENTRY_OVERHEAD;
+        while (iterator.hasNext()) {
+            LogRecord record = iterator.next();
+            int offsetDelta = (int) (record.offset() - baseOffset);
+            size += EosLogRecord.sizeInBytes(offsetDelta, record.timestamp(), record.key(), record.value());
+        }
+        return size;
+    }
+
+    public static int sizeInBytes(Iterable<KafkaRecord> records) {
+        Iterator<KafkaRecord> iterator = records.iterator();
+        if (!iterator.hasNext())
+            return 0;
+
+        int size = LOG_ENTRY_OVERHEAD;
+        int offsetDelta = 0;
+        while (iterator.hasNext()) {
+            KafkaRecord record = iterator.next();
+            size += EosLogRecord.sizeInBytes(offsetDelta++, record.timestamp(), record.key(), record.value());
+        }
+        return size;
+    }
+
+    /**
+     * Get an upper bound on the size of a log entry with only a single record using a given
+     * key and value.
+     */
+    public static int entrySizeUpperBound(byte[] key, byte[] value) {
+        return LOG_ENTRY_OVERHEAD + EosLogRecord.recordSizeUpperBound(key, value);
     }
 
 }

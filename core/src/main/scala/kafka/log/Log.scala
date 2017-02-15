@@ -28,7 +28,7 @@ import java.util.concurrent.atomic._
 import java.text.NumberFormat
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{LogEntry, _}
 import org.apache.kafka.common.requests.ListOffsetRequest
 
 import scala.collection.Seq
@@ -39,7 +39,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import org.apache.kafka.common.TopicPartition
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, LogEntry.NO_TIMESTAMP, -1L, LogEntry.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
@@ -467,12 +467,12 @@ class Log(@volatile var dir: File,
     var lastOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
-    var maxTimestamp = Record.NO_TIMESTAMP
+    var maxTimestamp = LogEntry.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     for (entry <- records.entries.asScala) {
       // update the first offset if on the first message
       if (firstOffset < 0)
-        firstOffset = if (entry.magic >= Record.MAGIC_VALUE_V2) entry.baseOffset else entry.lastOffset
+        firstOffset = if (entry.magic >= LogEntry.MAGIC_VALUE_V2) entry.baseOffset else entry.lastOffset
 
       // check that offsets are monotonically increasing
       if (lastOffset >= entry.lastOffset)
@@ -492,8 +492,8 @@ class Log(@volatile var dir: File,
       // check the validity of the message by checking CRC
       entry.ensureValid()
 
-      if (entry.timestamp > maxTimestamp) {
-        maxTimestamp = entry.timestamp
+      if (entry.maxTimestamp > maxTimestamp) {
+        maxTimestamp = entry.maxTimestamp
         offsetOfMaxTimestamp = lastOffset
       }
       shallowMessageCount += 1
@@ -507,7 +507,7 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec,
+    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, LogEntry.NO_TIMESTAMP, sourceCodec,
       targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
@@ -623,9 +623,9 @@ class Log(@volatile var dir: File,
     val segmentsCopy = logSegments.toBuffer
     // For the earliest and latest, we do not need to return the timestamp.
     if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(Record.NO_TIMESTAMP, segmentsCopy.head.baseOffset))
+        return Some(TimestampOffset(LogEntry.NO_TIMESTAMP, segmentsCopy.head.baseOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-        return Some(TimestampOffset(Record.NO_TIMESTAMP, logEndOffset))
+        return Some(TimestampOffset(LogEntry.NO_TIMESTAMP, logEndOffset))
 
     val targetSeg = {
       // Get all the segments whose largest timestamp is smaller than target timestamp

@@ -67,7 +67,7 @@ public interface Records {
      * @param magic The magic value to check
      * @return true if all shallow entries have a matching magic value, false otherwise
      */
-    boolean hasMatchingShallowMagic(byte magic);
+    boolean hasMatchingMagic(byte magic);
 
     /**
      * Check whether this log buffer has a magic value compatible with a particular value
@@ -81,10 +81,9 @@ public interface Records {
      * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
-     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0
      * @return A Records (which may or may not be the same instance)
      */
-    Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType);
+    Records downConvert(byte toMagic);
 
     /**
      * Get an iterator over the records in this log (i.e. the "deep" entries)

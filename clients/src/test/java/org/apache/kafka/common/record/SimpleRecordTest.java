@@ -36,7 +36,7 @@ public class SimpleRecordTest {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
         OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1);
-        Record.write(out, Record.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
+        Record.write(out, LogEntry.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
@@ -50,14 +50,14 @@ public class SimpleRecordTest {
     public void testCompressedIterationWithEmptyRecords() throws Exception {
         ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
         OutputStream gzipOutput = CompressionType.GZIP.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
-                Record.MAGIC_VALUE_V1, 64);
+                LogEntry.MAGIC_VALUE_V1, 64);
         gzipOutput.close();
         emptyCompressedValue.flip();
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
         OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
-        Record.write(out, Record.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
+        Record.write(out, LogEntry.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
@@ -100,8 +100,8 @@ public class SimpleRecordTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void cannotUpconvertWithNoTimestampType() {
-        Record record = Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
-        record.convert(Record.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE);
+        Record record = Record.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
+        record.convert(LogEntry.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE);
     }
 
     @Test
@@ -110,16 +110,16 @@ public class SimpleRecordTest {
         byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
 
         for (int i = 0; i < keys.length; i++) {
-            Record record = Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, keys[i], values[i]);
-            Record converted = record.convert(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
+            Record record = Record.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, keys[i], values[i]);
+            Record converted = record.convert(LogEntry.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
 
-            assertEquals(Record.MAGIC_VALUE_V1, converted.magic());
-            assertEquals(Record.NO_TIMESTAMP, converted.timestamp());
+            assertEquals(LogEntry.MAGIC_VALUE_V1, converted.magic());
+            assertEquals(LogEntry.NO_TIMESTAMP, converted.timestamp());
             assertEquals(TimestampType.CREATE_TIME, converted.timestampType());
             assertEquals(record.key(), converted.key());
             assertEquals(record.value(), converted.value());
             assertTrue(record.isValid());
-            assertEquals(record.convertedSize(Record.MAGIC_VALUE_V1), converted.sizeInBytes());
+            assertEquals(record.convertedSize(LogEntry.MAGIC_VALUE_V1), converted.sizeInBytes());
         }
     }
 
@@ -129,16 +129,16 @@ public class SimpleRecordTest {
         byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
 
         for (int i = 0; i < keys.length; i++) {
-            Record record = Record.create(Record.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
-            Record converted = record.convert(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
+            Record record = Record.create(LogEntry.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
+            Record converted = record.convert(LogEntry.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
 
-            assertEquals(Record.MAGIC_VALUE_V0, converted.magic());
-            assertEquals(Record.NO_TIMESTAMP, converted.timestamp());
+            assertEquals(LogEntry.MAGIC_VALUE_V0, converted.magic());
+            assertEquals(LogEntry.NO_TIMESTAMP, converted.timestamp());
             assertEquals(TimestampType.NO_TIMESTAMP_TYPE, converted.timestampType());
             assertEquals(record.key(), converted.key());
             assertEquals(record.value(), converted.value());
             assertTrue(record.isValid());
-            assertEquals(record.convertedSize(Record.MAGIC_VALUE_V0), converted.sizeInBytes());
+            assertEquals(record.convertedSize(LogEntry.MAGIC_VALUE_V0), converted.sizeInBytes());
         }
     }
 
@@ -146,7 +146,7 @@ public class SimpleRecordTest {
     public void buildEosRecord() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.CREATE_TIME, 1234567L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.CREATE_TIME, 1234567L);
         builder.appendWithOffset(1234567, System.currentTimeMillis(), "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, System.currentTimeMillis(), "b".getBytes(), "v".getBytes());
 

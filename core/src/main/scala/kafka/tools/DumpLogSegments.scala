@@ -179,13 +179,13 @@ object DumpLogSegments {
       return
     }
 
-    var prevTimestamp = Record.NO_TIMESTAMP
+    var prevTimestamp = LogEntry.NO_TIMESTAMP
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
       val partialFileRecords = fileRecords.read(position, Int.MaxValue)
       val shallowEntries = partialFileRecords.entries.asScala
-      var maxTimestamp = Record.NO_TIMESTAMP
+      var maxTimestamp = LogEntry.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
       val maybeLogEntry = shallowEntries.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
       maybeLogEntry match {
@@ -338,7 +338,7 @@ object DumpLogSegments {
         }
       } else {
         println("offset: " + entry.lastOffset + " position: " + validBytes +
-          " " + entry.timestampType + ": " + entry.timestamp + " isvalid: " + entry.isValid +
+          " " + entry.timestampType + ": " + entry.maxTimestamp + " isvalid: " + entry.isValid +
           " size: " + entry.sizeInBytes + " magic: " + entry.magic +
           " compresscodec: " + entry.compressionType + " crc: " + entry.checksum)
       }

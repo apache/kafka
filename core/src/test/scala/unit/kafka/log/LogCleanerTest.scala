@@ -31,8 +31,8 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
 
+import scala.collection.JavaConverters._
 import scala.collection._
-import JavaConverters._
 
 /**
  * Unit tests for the log cleaning logic
@@ -751,13 +751,13 @@ class LogCleanerTest extends JUnitSuite {
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
     val records = keysAndValues.map(kv =>
-      Record.create(Record.MAGIC_VALUE_V0,
-        Record.NO_TIMESTAMP,
+      Record.create(LogEntry.MAGIC_VALUE_V0,
+        LogEntry.NO_TIMESTAMP,
         kv._1.toString.getBytes,
         kv._2.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
+    val builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
 
     var offset = initialOffset
     records.foreach { record =>

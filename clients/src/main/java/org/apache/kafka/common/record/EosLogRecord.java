@@ -16,225 +16,184 @@
  **/
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32;
-import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.record.Record.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.LogEntry.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
+/**
+ * This class implements the inner record format for magic 2 and above. The schema is as follows:
+ *
+ * Record =>
+ *   Length => varint
+ *   Attributes => int8
+ *   TimestampDelta => varlong
+ *   OffsetDelta => varint
+ *   KeyLen => varint [OPTIONAL]
+ *   Key => data [OPTIONAL]
+ *   Value => data [OPTIONAL]
+ *
+ * The record attributes indicate whether the key and value fields are present. The first bit
+ * is used to indicate a null key; if set, the key length and key data will be left out of the
+ * message. Similarly, if the second bit is set, the value field will be left out.
+ *
+ * The offset and timestamp deltas compute the difference relative to the base offset and
+ * base timestamp of the log entry that this record is contained in.
+ */
 public class EosLogRecord implements LogRecord {
-
-    static final int SIZE_OFFSET = 0;
-    static final int SIZE_LENGTH = 4;
-    static final int OFFSET_OFFSET = SIZE_OFFSET + SIZE_LENGTH;
-    static final int OFFSET_LENGTH = 8;
-    static final int ATTRIBUTES_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
-    static final int ATTRIBUTES_LENGTH = 1;
-    static final int TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTES_LENGTH;
-    static final int TIMESTAMP_LENGTH = 8;
-    static final int KEY_SIZE_OFFSET = TIMESTAMP_OFFSET + TIMESTAMP_LENGTH;
-    static final int KEY_SIZE_LENGTH = 4;
-    static final int CRC_LENGTH = 4;
-
-    public static final int RECORD_OVERHEAD = SIZE_LENGTH + OFFSET_LENGTH + ATTRIBUTES_LENGTH + TIMESTAMP_LENGTH + CRC_LENGTH;
-
+    private static final int MAX_RECORD_OVERHEAD = 21;
     private static final int NULL_KEY_MASK = 0x01;
     private static final int NULL_VALUE_MASK = 0x02;
 
-    private final long baseOffset;
-    private final long baseSequence;
-    private final Long logAppendTime;
-    private final ByteBuffer buffer;
+    private final int sizeInBytes;
+    private final byte attributes;
+    private final long offset;
+    private final long timestamp;
+    private final int sequence;
+    private final ByteBuffer key;
+    private final ByteBuffer value;
+    private Long checksum = null;
 
-    public EosLogRecord(ByteBuffer buffer,
-                        long baseOffset,
-                        long baseSequence,
-                        Long logAppendTime) {
-        this.buffer = buffer;
-        this.baseOffset = baseOffset;
-        this.baseSequence = baseSequence;
-        this.logAppendTime = logAppendTime;
+    private EosLogRecord(int sizeInBytes,
+                         byte attributes,
+                         long offset,
+                         long timestamp,
+                         int sequence,
+                         ByteBuffer key,
+                         ByteBuffer value) {
+        this.sizeInBytes = sizeInBytes;
+        this.attributes = attributes;
+        this.offset = offset;
+        this.timestamp = timestamp;
+        this.sequence = sequence;
+        this.key = key;
+        this.value = value;
     }
 
     @Override
     public long offset() {
-        return baseOffset + buffer.getLong(OFFSET_OFFSET);
+        return offset;
     }
 
     @Override
     public long sequence() {
-        return baseSequence + buffer.getLong(OFFSET_OFFSET);
+        return sequence;
     }
 
     @Override
     public int sizeInBytes() {
-        return buffer.getInt(SIZE_OFFSET);
-    }
-
-    private byte attributes() {
-        return buffer.get(ATTRIBUTES_OFFSET);
+        return sizeInBytes;
     }
 
     @Override
     public long timestamp() {
-        return logAppendTime == null ? buffer.getLong(TIMESTAMP_OFFSET) : logAppendTime;
+        return timestamp;
     }
 
-    /**
-     * Compute the checksum of the record from the record contents
-     */
-    public long computeChecksum() {
-        return Utils.computeChecksum(buffer, SIZE_OFFSET, checksumOffset());
+    public byte attributes() {
+        return attributes;
     }
 
-    /**
-     * Retrieve the previously computed CRC for this record
-     */
     @Override
     public long checksum() {
-        return ByteUtils.readUnsignedInt(buffer, checksumOffset());
-    }
-
-    private int checksumOffset() {
-        return sizeInBytes() - CRC_LENGTH;
+        if (checksum == null)
+            checksum = computeChecksum(timestamp, key, value);
+        return checksum;
     }
 
     @Override
     public boolean isValid() {
-        return checksum() == computeChecksum();
+        // new versions of the message format (2 and above) do not contain an individual record checksum;
+        // instead they are validated with the checksum at the log entry level
+        return true;
     }
 
     @Override
-    public void ensureValid() {
-        if (!isValid())
-            throw new CorruptRecordException();
-    }
+    public void ensureValid() {}
 
     @Override
     public int keySize() {
-        if (!hasKey())
-            return 0;
-        return buffer.getInt(KEY_SIZE_OFFSET);
-    }
-
-    private int valueOffset() {
-        return hasKey() ? KEY_SIZE_OFFSET + KEY_SIZE_LENGTH + keySize() : KEY_SIZE_OFFSET;
+        return key == null ? 0 : key.remaining();
     }
 
     @Override
     public int valueSize() {
-        return sizeInBytes() - CRC_LENGTH - valueOffset();
+        return value == null ? 0 : value.remaining();
     }
 
     @Override
     public boolean hasKey() {
-        return (attributes() & NULL_KEY_MASK) == 0;
+        return key != null;
     }
 
     @Override
     public ByteBuffer key() {
-        if (!hasKey())
-            return null;
-        return sizeDelimited(KEY_SIZE_OFFSET);
+        return key == null ? null : key.duplicate();
     }
 
     @Override
     public boolean hasNullValue() {
-        return (attributes() & NULL_VALUE_MASK) != 0;
+        return value == null;
     }
 
     @Override
     public ByteBuffer value() {
-        if (hasNullValue())
-            return null;
-
-        int size = valueSize();
-        if (size == 0)
-            return ByteBuffer.allocate(0);
-
-        ByteBuffer b = buffer.duplicate();
-        b.position(valueOffset());
-        b = b.slice();
-        b.limit(size);
-        b.rewind();
-        return b;
+        return value == null ? null : value.duplicate();
     }
 
-    /**
-     * Read a size-delimited byte buffer starting at the given offset
-     */
-    private ByteBuffer sizeDelimited(int start) {
-        int size = buffer.getInt(start);
-        if (size < 0) {
-            throw new InvalidRecordException("Size must be greater than 0");
-        } else {
-            ByteBuffer b = buffer.duplicate();
-            b.position(start + 4);
-            b = b.slice();
-            b.limit(size);
-            b.rewind();
-            return b;
-        }
-    }
+    public static long writeTo(DataOutputStream out,
+                               int offsetDelta,
+                               long timestamp,
+                               ByteBuffer key,
+                               ByteBuffer value) throws IOException {
+        int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestamp, key, value);
+        ByteUtils.writeVarint(sizeInBytes, out);
 
-    public static long write(DataOutputStream out,
-                             long offset,
-                             byte attributes,
-                             long timestamp,
-                             ByteBuffer key,
-                             ByteBuffer value) throws IOException {
-        int recordSize = sizeOf(key, value);
+        byte attributes = computeAttributes(key, value);
+        out.write(attributes);
 
-        if (key == null)
-            attributes |= NULL_KEY_MASK;
-        else
-            attributes &= ~NULL_KEY_MASK;
-
-        if (value == null)
-            attributes |= NULL_VALUE_MASK;
-        else
-            attributes &= ~NULL_VALUE_MASK;
-
-        out.writeInt(recordSize);
-        out.writeLong(offset);
-        out.writeByte(attributes);
-        out.writeLong(timestamp);
+        ByteUtils.writeVarlong(timestamp, out);
+        ByteUtils.writeVarint(offsetDelta, out);
 
         if (key != null) {
-            attributes &= ~NULL_KEY_MASK;
-            int size = key.remaining();
-            out.writeInt(size);
-            out.write(key.array(), key.arrayOffset(), size);
+            int keySize = key.remaining();
+            ByteUtils.writeVarint(keySize, out);
+            out.write(key.array(), key.arrayOffset(), keySize);
         }
 
         if (value != null)
             out.write(value.array(), value.arrayOffset(), value.remaining());
 
-        long crc = computeChecksum(recordSize, offset, attributes, timestamp, key, value);
-        out.writeInt((int) (crc & 0xffffffffL));
-        return crc;
+        return computeChecksum(timestamp, key, value);
+    }
+
+    public static long writeTo(ByteBuffer out,
+                               int offsetDelta,
+                               long timestamp,
+                               ByteBuffer key,
+                               ByteBuffer value) {
+        try {
+            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestamp, key, value);
+        } catch (IOException e) {
+            // cannot actually be raised by ByteBufferOutputStream
+            throw new RuntimeException(e);
+        }
     }
 
     /**
      * Compute the checksum of the record from the attributes, key and value payloads
      */
-    public static long computeChecksum(int recordSize,
-                                       long offset,
-                                       byte attributes,
-                                       long timestamp,
-                                       ByteBuffer key,
-                                       ByteBuffer value) {
+    private static long computeChecksum(long timestamp,
+                                        ByteBuffer key,
+                                        ByteBuffer value) {
         Crc32 crc = new Crc32();
-        crc.updateInt(recordSize);
-        crc.updateLong(offset);
-        crc.update(attributes);
         crc.updateLong(timestamp);
 
         if (key != null) {
@@ -247,19 +206,6 @@ public class EosLogRecord implements LogRecord {
             crc.update(value.array(), value.arrayOffset(), value.remaining());
 
         return crc.getValue();
-    }
-
-    public static int sizeOf(byte[] key, byte[] value) {
-        return sizeOf(wrapNullable(key), wrapNullable(value));
-    }
-
-    public static int sizeOf(ByteBuffer key, ByteBuffer value) {
-        int size = RECORD_OVERHEAD;
-        if (key != null)
-            size += KEY_SIZE_LENGTH + key.limit();
-        if (value != null)
-            size += value.limit();
-        return size;
     }
 
     @Override
@@ -279,28 +225,116 @@ public class EosLogRecord implements LogRecord {
 
     public static EosLogRecord readFrom(DataInputStream input,
                                         long baseOffset,
-                                        long baseSequence,
+                                        int baseSequence,
                                         Long logAppendTime) throws IOException {
-        int size = input.readInt();
-        ByteBuffer recordBuffer = ByteBuffer.allocate(size);
-        input.readFully(recordBuffer.array(), recordBuffer.arrayOffset() + 4, size - 4);
-        recordBuffer.putInt(EosLogRecord.SIZE_OFFSET, size);
-        return new EosLogRecord(recordBuffer, baseOffset, baseSequence, logAppendTime);
+        int sizeOfBodyInBytes = ByteUtils.readVarint(input);
+        ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
+        input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
+        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+        return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseSequence, logAppendTime);
     }
 
     public static EosLogRecord readFrom(ByteBuffer buffer,
                                         long baseOffset,
-                                        long baseSequence,
+                                        int baseSequence,
                                         Long logAppendTime) {
-        if (buffer.remaining() < RECORD_OVERHEAD)
+        ByteBuffer dup = buffer.duplicate();
+        int sizeOfBodyInBytes = ByteUtils.readVarint(dup);
+        if (buffer.remaining() < sizeOfBodyInBytes)
             return null;
 
-        int size = buffer.getInt(buffer.position() + SIZE_OFFSET);
-        if (buffer.remaining() < size)
-            return null;
-
-        ByteBuffer recordBuffer = buffer.slice();
-        recordBuffer.limit(size);
-        return new EosLogRecord(recordBuffer, baseOffset, baseSequence, logAppendTime);
+        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+        dup.limit(dup.position() + sizeOfBodyInBytes);
+        return readFrom(dup, totalSizeInBytes, baseOffset, baseSequence, logAppendTime);
     }
+
+    private static EosLogRecord readFrom(ByteBuffer buffer,
+                                         int sizeInBytes,
+                                         long baseOffset,
+                                         int baseSequence,
+                                         Long logAppendTime) {
+        byte attributes = buffer.get();
+        long timestamp = ByteUtils.readVarlong(buffer);
+        if (logAppendTime != null)
+            timestamp = logAppendTime;
+
+        int delta = ByteUtils.readVarint(buffer);
+        long offset = baseOffset + delta;
+        int sequence = baseSequence >= 0 ? baseSequence + delta : LogEntry.NO_SEQUENCE;
+
+        ByteBuffer key = null;
+        if (hasKey(attributes)) {
+            int keySizeInBytes = ByteUtils.readVarint(buffer);
+            key = buffer.slice();
+            key.limit(keySizeInBytes);
+            buffer.position(buffer.position() + keySizeInBytes);
+        }
+
+        ByteBuffer value = null;
+        if (hasValue(attributes))
+            value = buffer.slice();
+        return new EosLogRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
+    }
+
+    private static byte computeAttributes(ByteBuffer key, ByteBuffer value) {
+        byte attributes = 0;
+        if (key == null)
+            attributes |= NULL_KEY_MASK;
+        if (value == null)
+            attributes |= NULL_VALUE_MASK;
+        return attributes;
+    }
+
+    private static boolean hasKey(byte attributes) {
+        return (attributes & NULL_KEY_MASK) == 0;
+    }
+
+    private static boolean hasValue(byte attributes) {
+        return (attributes & NULL_VALUE_MASK) == 0;
+    }
+
+    public static int sizeInBytes(int offsetDelta,
+                                  long timestamp,
+                                  byte[] key,
+                                  byte[] value) {
+        return sizeInBytes(offsetDelta, timestamp, wrapNullable(key), wrapNullable(value));
+    }
+
+    public static int sizeInBytes(int offsetDelta,
+                                  long timestamp,
+                                  ByteBuffer key,
+                                  ByteBuffer value) {
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestamp, key, value);
+        return bodySize + ByteUtils.sizeOfVarint(bodySize);
+    }
+
+    private static int sizeOfBodyInBytes(int offsetDelta,
+                                         long timestamp,
+                                         ByteBuffer key,
+                                         ByteBuffer value) {
+        int size = 1; // always one byte for attributes
+        size += ByteUtils.sizeOfVarint(offsetDelta);
+        size += ByteUtils.sizeOfVarlong(timestamp);
+
+        if (key != null) {
+            int keySize = key.remaining();
+            size += ByteUtils.sizeOfVarint(keySize);
+            size += keySize;
+        }
+
+        if (value != null)
+            size += value.remaining();
+
+        return size;
+    }
+
+    static int recordSizeUpperBound(byte[] key, byte[] value) {
+        int size = MAX_RECORD_OVERHEAD;
+        if (key != null)
+            size += key.length + ByteUtils.sizeOfVarint(key.length);
+        if (value != null)
+            size += value.length;
+        return size;
+    }
+
 }

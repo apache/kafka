@@ -28,7 +28,8 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.LogEntry.NO_TIMESTAMP
+import org.apache.kafka.common.record.{LogEntry, _}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -466,8 +467,8 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testCompactedTopicConstraints() {
-    val keyedMessage = new KafkaRecord(Record.NO_TIMESTAMP, "and here it is".getBytes, "this message has a key".getBytes)
-    val anotherKeyedMessage = new KafkaRecord(Record.NO_TIMESTAMP, "another key".getBytes, "this message also has a key".getBytes)
+    val keyedMessage = new KafkaRecord("and here it is".getBytes, "this message has a key".getBytes)
+    val anotherKeyedMessage = new KafkaRecord("another key".getBytes, "this message also has a key".getBytes)
     val unkeyedMessage = new KafkaRecord("this message does not have a key".getBytes)
 
     val messageSetWithUnkeyedMessage = MemoryRecords.withRecords(CompressionType.NONE, unkeyedMessage, keyedMessage)
@@ -786,12 +787,12 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testIndexResizingAtTruncation() {
-    val setSize = TestUtils.singletonRecords(value = "test".getBytes).sizeInBytes
+    val setSize = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds).sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, (setSize - 1): java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, setSize - 1: java.lang.Integer)
     val config = LogConfig(logProps)
     val log = new Log(logDir, config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)

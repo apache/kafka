@@ -312,15 +312,15 @@ object TestUtils extends Logging {
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
-                       timestamp: Long = Record.NO_TIMESTAMP,
-                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE): MemoryRecords = {
+                       timestamp: Long = LogEntry.NO_TIMESTAMP,
+                       magicValue: Byte = LogEntry.CURRENT_MAGIC_VALUE): MemoryRecords = {
     records(magicValue = magicValue, codec = codec, (key, value, timestamp))
   }
 
   def recordsWithValues(magicValue: Byte,
                         codec: CompressionType,
                         values: Array[Byte]*): MemoryRecords = {
-    records(magicValue, codec, values.map((null, _, Record.NO_TIMESTAMP)): _*)
+    records(magicValue, codec, values.map((null, _, LogEntry.NO_TIMESTAMP)): _*)
   }
 
   def records(magicValue: Byte,
@@ -330,12 +330,13 @@ object TestUtils extends Logging {
   }
 
   def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
-              magicValue: Byte = Record.CURRENT_MAGIC_VALUE,
+              magicValue: Byte = LogEntry.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
               pid: Long = 0,
               epoch: Short = 0,
               sequence: Int = 0): MemoryRecords = {
-    val buf = ByteBuffer.allocate(EosLogEntry.LOG_ENTRY_OVERHEAD + records.map(r => EosLogRecord.sizeOf(r._1, r._2)).sum)
+    val kafkaRecords = records.map(record => new KafkaRecord(record._3, record._1, record._2))
+    val buf = ByteBuffer.allocate(EosLogEntry.sizeInBytes(kafkaRecords.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
       System.currentTimeMillis, pid, epoch, sequence)
     records.foreach { case (key, value, timestamp) =>

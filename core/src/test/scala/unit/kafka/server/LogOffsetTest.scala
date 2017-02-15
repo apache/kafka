@@ -42,7 +42,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
-  var logSize: Int = 150
+  var logSize: Int = 100
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 

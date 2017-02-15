@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords, Record}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -100,7 +100,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while(log.numberOfSegments < 8)
-      log.append(TestUtils.records(Record.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      log.append(TestUtils.records(LogEntry.CURRENT_MAGIC_VALUE, CompressionType.NONE,
         (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, time.milliseconds)))
 
     val topicPartition = new TopicPartition("log", 0)
@@ -124,7 +124,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while(log.numberOfSegments < 4)
-      log.append(TestUtils.records(Record.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      log.append(TestUtils.records(LogEntry.CURRENT_MAGIC_VALUE, CompressionType.NONE,
         (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t0)))
 
     val activeSegAtT0 = log.activeSegment
@@ -133,7 +133,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val t1 = time.milliseconds
 
     while (log.numberOfSegments < 8)
-      log.append(TestUtils.records(Record.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      log.append(TestUtils.records(LogEntry.CURRENT_MAGIC_VALUE, CompressionType.NONE,
         (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t1)))
 
     val topicPartition = new TopicPartition("log", 0)
@@ -158,7 +158,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while (log.numberOfSegments < 8)
-      log.append(TestUtils.records(Record.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      log.append(TestUtils.records(LogEntry.CURRENT_MAGIC_VALUE, CompressionType.NONE,
         (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t0)))
 
     time.sleep(compactionLag + 1)

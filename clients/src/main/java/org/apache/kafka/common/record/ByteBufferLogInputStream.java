@@ -57,7 +57,7 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
         entrySlice.limit(entrySize);
         buffer.position(buffer.position() + entrySize);
 
-        if (magic > Record.MAGIC_VALUE_V1)
+        if (magic > LogEntry.MAGIC_VALUE_V1)
             return new EosLogEntry(entrySlice);
         else
             return new OldLogEntry.ByteBufferLogEntry(entrySlice);

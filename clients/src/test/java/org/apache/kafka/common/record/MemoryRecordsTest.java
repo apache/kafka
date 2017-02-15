@@ -70,7 +70,7 @@ public class MemoryRecordsTest {
                 assertEquals(compression, entry.compressionType());
                 assertEquals(firstOffset + total, entry.baseOffset());
 
-                if (magic >= Record.MAGIC_VALUE_V2) {
+                if (magic >= LogEntry.MAGIC_VALUE_V2) {
                     assertEquals(pid, entry.pid());
                     assertEquals(epoch, entry.epoch());
                     assertEquals(firstSequence + total, entry.firstSequence());
@@ -85,12 +85,12 @@ public class MemoryRecordsTest {
                     assertEquals(wrapNullable(keys[total]), record.key());
                     assertEquals(wrapNullable(values[total]), record.value());
 
-                    if (magic >= Record.MAGIC_VALUE_V2)
+                    if (magic >= LogEntry.MAGIC_VALUE_V2)
                         assertEquals(firstSequence + total, record.sequence());
 
-                    if (magic > Record.MAGIC_VALUE_V0) {
+                    if (magic > LogEntry.MAGIC_VALUE_V0) {
                         assertEquals(timestamps[total], record.timestamp());
-                        if (magic < Record.MAGIC_VALUE_V2)
+                        if (magic < LogEntry.MAGIC_VALUE_V2)
                             assertTrue(record.hasTimestampType(entry.timestampType()));
                     }
 
@@ -108,9 +108,9 @@ public class MemoryRecordsTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "a".getBytes(), "1".getBytes());
-        assertTrue(builder.hasRoomFor("b".getBytes(), "2".getBytes()));
+        assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
         builder.close();
-        assertFalse(builder.hasRoomFor("b".getBytes(), "2".getBytes()));
+        assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
     }
 
     @Test
@@ -160,10 +160,10 @@ public class MemoryRecordsTest {
         final List<Long> expectedEndOffsets;
         final List<Long> expectedStartOffsets;
 
-        if (magic < Record.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
+        if (magic < LogEntry.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
             expectedEndOffsets = asList(1L, 4L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 5L, 6L);
-        } else if (magic < Record.MAGIC_VALUE_V2) {
+        } else if (magic < LogEntry.MAGIC_VALUE_V2) {
             expectedEndOffsets = asList(1L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 6L);
         } else {
@@ -179,7 +179,7 @@ public class MemoryRecordsTest {
             assertEquals(expectedEndOffsets.get(i).longValue(), shallowEntry.lastOffset());
             assertEquals(magic, shallowEntry.magic());
             assertEquals(compression, shallowEntry.compressionType());
-            assertEquals(magic == Record.MAGIC_VALUE_V0 ? TimestampType.NO_TIMESTAMP_TYPE : TimestampType.CREATE_TIME,
+            assertEquals(magic == LogEntry.MAGIC_VALUE_V0 ? TimestampType.NO_TIMESTAMP_TYPE : TimestampType.CREATE_TIME,
                     shallowEntry.timestampType());
         }
 
@@ -188,28 +188,28 @@ public class MemoryRecordsTest {
 
         LogRecord first = records.get(0);
         assertEquals(1L, first.offset());
-        if (magic > Record.MAGIC_VALUE_V0)
+        if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(11L, first.timestamp());
         assertEquals(ByteBuffer.wrap("1".getBytes()), first.key());
         assertEquals(ByteBuffer.wrap("b".getBytes()), first.value());
 
         LogRecord second = records.get(1);
         assertEquals(4L, second.offset());
-        if (magic > Record.MAGIC_VALUE_V0)
+        if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(20L, second.timestamp());
         assertEquals(ByteBuffer.wrap("4".getBytes()), second.key());
         assertEquals(ByteBuffer.wrap("e".getBytes()), second.value());
 
         LogRecord third = records.get(2);
         assertEquals(5L, third.offset());
-        if (magic > Record.MAGIC_VALUE_V0)
+        if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(15L, third.timestamp());
         assertEquals(ByteBuffer.wrap("5".getBytes()), third.key());
         assertEquals(ByteBuffer.wrap("f".getBytes()), third.value());
 
         LogRecord fourth = records.get(3);
         assertEquals(6L, fourth.offset());
-        if (magic > Record.MAGIC_VALUE_V0)
+        if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(16L, fourth.timestamp());
         assertEquals(ByteBuffer.wrap("6".getBytes()), fourth.key());
         assertEquals(ByteBuffer.wrap("g".getBytes()), fourth.value());
@@ -247,13 +247,13 @@ public class MemoryRecordsTest {
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
         List<LogEntry.MutableLogEntry> shallowEntries = TestUtils.toList(filteredRecords.entries());
-        assertEquals(magic < Record.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, shallowEntries.size());
+        assertEquals(magic < LogEntry.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, shallowEntries.size());
 
         for (LogEntry shallowEntry : shallowEntries) {
             assertEquals(compression, shallowEntry.compressionType());
-            if (magic > Record.MAGIC_VALUE_V0) {
+            if (magic > LogEntry.MAGIC_VALUE_V0) {
                 assertEquals(TimestampType.LOG_APPEND_TIME, shallowEntry.timestampType());
-                assertEquals(logAppendTime, shallowEntry.timestamp());
+                assertEquals(logAppendTime, shallowEntry.maxTimestamp());
             }
         }
     }
@@ -262,7 +262,7 @@ public class MemoryRecordsTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (long firstOffset : asList(0L, 57L))
-            for (byte magic : asList(Record.MAGIC_VALUE_V0, Record.MAGIC_VALUE_V1, Record.MAGIC_VALUE_V2))
+            for (byte magic : asList(LogEntry.MAGIC_VALUE_V0, LogEntry.MAGIC_VALUE_V1, LogEntry.MAGIC_VALUE_V2))
                 for (CompressionType type: CompressionType.values())
                     values.add(new Object[] {magic, firstOffset, type});
         return values;
