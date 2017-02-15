@@ -250,7 +250,7 @@
         <p>
         Kafka Streams builds on fault-tolerance capabilities integrated natively within Kafka. Kafka partitions are highly available and replicated; so when stream data is persisted to Kafka it is available
         even if the application fails and needs to re-process it. Tasks in Kafka Streams leverage the fault-tolerance capability
-        offered by the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Client+Re-Design">Kafka consumer client</a> to handle failures.
+        offered by the <a href="https://www.confluent.io/blog/tutorial-getting-started-with-the-new-apache-kafka-0.9-consumer-client/">Kafka consumer client</a> to handle failures.
         If a task runs on a machine that fails, Kafka Streams automatically restarts the task in one of the remaining running instances of the application.
         </p>
 
@@ -470,7 +470,7 @@
 
         <p>
         Before we discuss concepts such as aggregations in Kafka Streams we must first introduce tables, and most importantly the relationship between tables and streams:
-        the so-called <strong>stream-table duality</strong>.
+        the so-called <a href="https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying/">stream-table duality</a>.
         Essentially, this duality means that a stream can be viewed as a table, and vice versa. Kafka's log compaction feature, for example, exploits this duality.
         </p>
 
