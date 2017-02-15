@@ -523,7 +523,7 @@ public class SimpleBenchmark {
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     processedRecords++;
-                    processedBytes += record.value().length;
+                    processedBytes += record.value().length + KEY_SIZE;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
                         key = recKey;
@@ -564,7 +564,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
-                        processedBytes += value.length;
+                        processedBytes += value.length + KEY_SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -603,7 +603,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
-                        processedBytes += value.length;
+                        processedBytes += value.length + KEY_SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -632,9 +632,9 @@ public class SimpleBenchmark {
         public void apply(Integer key, V value) {
             processedRecords++;
             if (value instanceof byte[]) {
-                processedBytes += ((byte[]) value).length;
+                processedBytes += ((byte[]) value).length + KEY_SIZE;
             } else if (value instanceof Long) {
-                processedBytes += Long.SIZE;
+                processedBytes += Long.SIZE + KEY_SIZE;
             } else {
                 System.err.println("Unknown value type in CountDownAction");
             }
@@ -711,7 +711,7 @@ public class SimpleBenchmark {
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
                         processedRecords++;
-                        processedBytes += value.length;
+                        processedBytes += value.length + KEY_SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
