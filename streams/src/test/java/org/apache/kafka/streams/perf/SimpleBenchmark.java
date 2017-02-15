@@ -103,9 +103,9 @@ public class SimpleBenchmark {
 
     private static int numRecords;
     private static int processedRecords = 0;
+    private static long processedBytes = 0;
     private static final int KEY_SIZE = 8;
     private static final int VALUE_SIZE = 100;
-    private static final int RECORD_SIZE = KEY_SIZE + VALUE_SIZE;
 
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
@@ -229,6 +229,7 @@ public class SimpleBenchmark {
     private boolean maybeSetupPhase(final String topic, final String clientId,
                                     final boolean skipIfAllTests) throws Exception {
         processedRecords = 0;
+        processedBytes = 0;
         // initialize topics
         if (loadPhase) {
             if (skipIfAllTests) {
@@ -339,7 +340,7 @@ public class SimpleBenchmark {
             processedRecords + "/" +
             latency + "/" +
             recordsPerSec(latency, processedRecords) + "/" +
-            megabytesPerSec(latency, processedRecords, RECORD_SIZE));
+            megabytesPerSec(latency, processedBytes));
     }
 
     private void runGenericBenchmark(final KafkaStreams streams, final String nameOfBenchmark, final CountDownLatch latch) {
@@ -493,12 +494,11 @@ public class SimpleBenchmark {
                 numRecords + "/" +
                 (endTime - startTime) + "/" +
                 recordsPerSec(endTime - startTime, numRecords) + "/" +
-                megabytesPerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
+                megabytesPerSec(endTime - startTime, numRecords * valueSizeBytes));
         }
     }
 
     public void consume(String topic) throws Exception {
-        int consumedRecords = 0;
         if (maybeSetupPhase(topic, "simple-benchmark-consumer-load", true)) {
             return;
         }
@@ -518,19 +518,20 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(500);
             if (records.isEmpty()) {
-                if (consumedRecords == numRecords)
+                if (processedRecords == numRecords)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
-                    consumedRecords++;
+                    processedRecords++;
+                    processedBytes += record.value().length;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
                         key = recKey;
-                    if (consumedRecords == numRecords)
+                    if (processedRecords == numRecords)
                         break;
                 }
             }
-            if (consumedRecords == numRecords)
+            if (processedRecords == numRecords)
                 break;
         }
 
@@ -538,10 +539,10 @@ public class SimpleBenchmark {
 
         consumer.close();
         System.out.println("Consumer Performance [records/latency/rec-sec/MB-sec read]: " +
-            consumedRecords + "/" +
+            processedRecords + "/" +
             (endTime - startTime) + "/" +
-            recordsPerSec(endTime - startTime, consumedRecords) + "/" +
-            megabytesPerSec(endTime - startTime, consumedRecords, RECORD_SIZE));
+            recordsPerSec(endTime - startTime, processedRecords) + "/" +
+            megabytesPerSec(endTime - startTime, processedBytes));
     }
 
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
@@ -563,6 +564,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
+                        processedBytes += value.length;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -601,6 +603,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
+                        processedBytes += value.length;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -628,6 +631,13 @@ public class SimpleBenchmark {
         @Override
         public void apply(Integer key, V value) {
             processedRecords++;
+            if (value instanceof byte[]) {
+                processedBytes += ((byte[])value).length;
+            } else if (value instanceof Long) {
+                processedBytes += Long.SIZE;
+            } else {
+                System.err.println("Unknown value type in CountDownAction");
+            }
             if (processedRecords == numRecords) {
                 this.latch.countDown();
             }
@@ -701,6 +711,7 @@ public class SimpleBenchmark {
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
                         processedRecords++;
+                        processedBytes += value.length;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -720,9 +731,8 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
-
-    private double megabytesPerSec(long time, int numRecords, int recordSizeBytes) {
-        return  ((double) recordSizeBytes * numRecords / 1024 / 1024) / (time / 1000.0);
+    private double megabytesPerSec(long time, long processedBytes) {
+        return  ((double) processedBytes / 1024 / 1024) / (time / 1000.0);
     }
 
     private double recordsPerSec(long time, int numRecords) {
