@@ -241,7 +241,7 @@ public class StructTest {
     public ExpectedException thrown = ExpectedException.none();
 
     @Test
-    public void structValidateWithNullValue() {
+    public void testValidateStructWithNullValue() {
         Schema schema = SchemaBuilder.struct()
                 .field("one", Schema.STRING_SCHEMA)
                 .field("two", Schema.STRING_SCHEMA)
@@ -250,7 +250,21 @@ public class StructTest {
 
         Struct struct = new Struct(schema);
         thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid value null used for required field: \"one\", schema type: STRING");
+        thrown.expectMessage("Invalid value: null used for required field: \"one\", schema type: STRING");
         struct.validate();
+    }
+
+    @Test
+    public void testValidateFieldWithInvalidValueType() {
+        String fieldName = "field";
+        FakeSchema fakeSchema = new FakeSchema();
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for required field: \"field\"");
+        ConnectSchema.validateValue(fieldName, fakeSchema, new Object());
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for required field: \"field\"");
+        ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
     }
 }
