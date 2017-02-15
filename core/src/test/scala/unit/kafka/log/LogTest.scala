@@ -988,6 +988,16 @@ class LogTest extends JUnitSuite {
     val invalidMessage = MemoryRecords.withRecords(Record.create(1.toString.getBytes))
     log.append(invalidMessage, assignOffsets = false)
   }
+  
+  @Test
+  def testAppendWithNullTimestamp(): Unit = {
+    val log = new Log(logDir,
+      LogConfig(),
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    log.append(MemoryRecords.withRecords(Record.create(-1L, "key".getBytes, "value".getBytes)))
+  }
 
   @Test
   def testCorruptLog() {
