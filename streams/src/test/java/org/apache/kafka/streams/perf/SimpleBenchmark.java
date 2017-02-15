@@ -632,7 +632,7 @@ public class SimpleBenchmark {
         public void apply(Integer key, V value) {
             processedRecords++;
             if (value instanceof byte[]) {
-                processedBytes += ((byte[])value).length;
+                processedBytes += ((byte[]) value).length;
             } else if (value instanceof Long) {
                 processedBytes += Long.SIZE;
             } else {
