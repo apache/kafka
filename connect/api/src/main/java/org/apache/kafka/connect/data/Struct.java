@@ -229,11 +229,7 @@ public class Struct {
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
                 continue;
-            try {
-                ConnectSchema.validateValue(fieldSchema, value);
-            } catch(DataException e) {
-                throw new DataException("Validate failed for required field: \""  + field.name() + "\".");
-            }
+            ConnectSchema.validateValue(field.name(), fieldSchema, value);
         }
     }
 

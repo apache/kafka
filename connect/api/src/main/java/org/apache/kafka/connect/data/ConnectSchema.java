@@ -207,9 +207,14 @@ public class ConnectSchema implements Schema {
      * @param value value to test
      */
     public static void validateValue(Schema schema, Object value) {
+        validateValue(null, schema, value);
+    }
+
+    public static void validateValue(String name, Schema schema, Object value) {
         if (value == null) {
             if (!schema.isOptional())
-                throw new DataException("Null value for schema type " + schema.type());
+                throw new DataException("Invalid value null used for required field: \"" + name
+                        + "\", schema type: " + schema.type());
             else
                 return;
         }
