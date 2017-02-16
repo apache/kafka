@@ -287,7 +287,7 @@ public class ClientCompatibilityTest {
         consumer.assign(topicPartitions);
         consumer.seekToBeginning(topicPartitions);
         final Iterator<byte[]> iter = new Iterator<byte[]>() {
-            private final int timeoutMs = 10000;
+            private static final int timeoutMs = 10000;
             private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
             private byte[] next = null;
 
