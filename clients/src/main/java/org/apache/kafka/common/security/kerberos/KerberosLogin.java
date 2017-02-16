@@ -82,9 +82,25 @@ public class KerberosLogin extends AbstractLogin {
 
     public void configure(Map<String, ?> configs, JaasContext jaasContext) {
         super.configure(configs, jaasContext);
-        this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
-        this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
-        this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
+
+        if (configs.containsKey(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR)) {
+            this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
+        } else {
+            throw new IllegalArgumentException("Configuration value for " + SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR + " is missing");
+        }
+
+        if (configs.containsKey(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER)) {
+            this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
+        } else {
+            throw new IllegalArgumentException("Configuration value for " + SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER + " is missing");
+        }
+
+        if (configs.containsKey(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN)) {
+            this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
+        } else {
+            throw new IllegalArgumentException("Configuration value for " + SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN + " is missing");
+        }
+
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
         this.serviceName = getServiceName(configs, jaasContext);
     }
