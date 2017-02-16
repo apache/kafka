@@ -91,7 +91,8 @@ public class MemoryRecordsBuilder {
 
         // create the stream
         bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = compressionType.wrapForOutput(bufferStream, magic, COMPRESSION_DEFAULT_BUFFER_SIZE);
+        appendStream = new DataOutputStream(compressionType.wrapForOutput(bufferStream, magic,
+                COMPRESSION_DEFAULT_BUFFER_SIZE));
     }
 
     public ByteBuffer buffer() {

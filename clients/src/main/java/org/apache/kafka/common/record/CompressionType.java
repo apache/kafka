@@ -18,8 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
@@ -32,30 +30,30 @@ import java.util.zip.GZIPOutputStream;
 public enum CompressionType {
     NONE(0, "none", 1.0f) {
         @Override
-        public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             return buffer;
         }
 
         @Override
-        public DataInputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             return buffer;
         }
     },
 
     GZIP(1, "gzip", 0.5f) {
         @Override
-        public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
+                return new GZIPOutputStream(buffer, bufferSize);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
         }
 
         @Override
-        public DataInputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
-                return new DataInputStream(new GZIPInputStream(buffer));
+                return new GZIPInputStream(buffer);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -64,20 +62,18 @@ public enum CompressionType {
 
     SNAPPY(2, "snappy", 0.5f) {
         @Override
-        public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                OutputStream stream = (OutputStream) SNAPPY_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer, bufferSize);
-                return new DataOutputStream(stream);
+                return (OutputStream) SNAPPY_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer, bufferSize);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
         }
 
         @Override
-        public DataInputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
-                InputStream stream = (InputStream) SNAPPY_INPUT_STREAM_SUPPLIER.get().newInstance(buffer);
-                return new DataInputStream(stream);
+                return (InputStream) SNAPPY_INPUT_STREAM_SUPPLIER.get().newInstance(buffer);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -86,22 +82,20 @@ public enum CompressionType {
 
     LZ4(3, "lz4", 0.5f) {
         @Override
-        public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                OutputStream stream = (OutputStream) LZ4_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer,
+                return (OutputStream) LZ4_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer,
                         messageVersion == Record.MAGIC_VALUE_V0);
-                return new DataOutputStream(stream);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
         }
 
         @Override
-        public DataInputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
-                InputStream stream = (InputStream) LZ4_INPUT_STREAM_SUPPLIER.get().newInstance(buffer,
+                return (InputStream) LZ4_INPUT_STREAM_SUPPLIER.get().newInstance(buffer,
                         messageVersion == Record.MAGIC_VALUE_V0);
-                return new DataInputStream(stream);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -118,9 +112,9 @@ public enum CompressionType {
         this.rate = rate;
     }
 
-    public abstract DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize);
+    public abstract OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize);
 
-    public abstract DataInputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion);
+    public abstract InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion);
 
     public static CompressionType forId(int id) {
         switch (id) {
