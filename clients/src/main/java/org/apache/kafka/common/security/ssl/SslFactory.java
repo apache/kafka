@@ -196,7 +196,7 @@ public class SslFactory implements Configurable {
         }
     }
 
-    private class SecurityStore {
+    private static class SecurityStore {
         private final String type;
         private final String path;
         private final Password password;

@@ -285,14 +285,14 @@ public class ConnectorsResource {
         T translate(RestServer.HttpResponse<U> response);
     }
 
-    private class IdentityTranslator<T> implements Translator<T, T> {
+    private static class IdentityTranslator<T> implements Translator<T, T> {
         @Override
         public T translate(RestServer.HttpResponse<T> response) {
             return response.body();
         }
     }
 
-    private class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
+    private static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
         @Override
         public Herder.Created<ConnectorInfo> translate(RestServer.HttpResponse<ConnectorInfo> response) {
             boolean created = response.status() == 201;
