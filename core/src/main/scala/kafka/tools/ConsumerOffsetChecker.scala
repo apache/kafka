@@ -126,7 +126,7 @@ object ConsumerOffsetChecker extends Logging {
 
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt, zkConnectOpt)

@@ -102,7 +102,7 @@ class StreamsSimpleBenchmarkTest(Test):
         final = {}
         for num in range(0, scale):
             for key in data[num]:
-                final[key] = final.get(key, 0) + data[num][key]
+                final[key + str(num)] = data[num][key]
         final[test + str(" latency")] = end_time - start_time
         
         return final
@@ -150,5 +150,8 @@ class StreamsSimpleBenchmarkTest(Test):
         end_time = time.time()
         
         final = {}
+        for num in range(0, scale):
+            for key in data[num]:
+                final[key + str(num)] = data[num][key]
         final[test + str(" latency")] = end_time - start_time
         return final

@@ -18,6 +18,8 @@
 package kafka.log
 
 import java.nio._
+
+import kafka.utils.Exit
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -73,7 +75,7 @@ object OffsetMapTest {
   def main(args: Array[String]) {
     if(args.length != 2) {
       System.err.println("USAGE: java OffsetMapTest size load")
-      System.exit(1)
+      Exit.exit(1)
     }
     val test = new OffsetMapTest()
     val size = args(0).toInt

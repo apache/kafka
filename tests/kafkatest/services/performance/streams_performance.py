@@ -36,5 +36,5 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
         data = {}
         for line in output:
             parts = line.split(':')
-            data[tag + parts[0]] = float(parts[1])
+            data[tag + parts[0]] = parts[1]
         return data

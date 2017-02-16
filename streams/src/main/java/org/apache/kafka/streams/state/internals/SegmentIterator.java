@@ -30,12 +30,13 @@ import java.util.NoSuchElementException;
  */
 class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
     private final Bytes from;
     private final Bytes to;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    private final Iterator<Segment> segments;
+    private final HasNextCondition hasNextCondition;
+
     private KeyValueStore<Bytes, byte[]> currentSegment;
+    private KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
@@ -62,7 +63,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         return currentIterator.peekNextKey();
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public boolean hasNext() {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
@@ -86,7 +87,6 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     }
 
     public void remove() {
-        throw new UnsupportedOperationException("remove not supported");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
-
 }

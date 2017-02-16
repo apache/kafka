@@ -151,11 +151,13 @@ class OffsetValidationTest(VerifiableConsumerTest):
             # if the total records consumed matches the current position, we haven't seen any duplicates
             # this can only be guaranteed with a clean shutdown
             assert consumer.current_position(partition) == consumer.total_consumed(), \
-                "Total consumed records did not match consumed position"
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
         else:
             # we may have duplicates in a hard failure
             assert consumer.current_position(partition) <= consumer.total_consumed(), \
-                "Current position greater than the total number of consumed records"
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
 
     @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
