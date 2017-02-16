@@ -160,10 +160,8 @@ public class GlobalStreamThread extends Thread {
                                                                           stateMgr,
                                                                           streamsMetrics,
                                                                           cache),
-                                                                  stateMgr,
-                                                                  new Checkpointer(time,
-                                                                                   stateMgr,
-                                                                                   10L)),
+                                                                  stateMgr
+                                        ),
                                         time,
                                         config.getLong(StreamsConfig.POLL_MS_CONFIG),
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));

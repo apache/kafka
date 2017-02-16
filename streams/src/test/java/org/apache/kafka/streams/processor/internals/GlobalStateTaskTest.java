@@ -88,8 +88,7 @@ public class GlobalStateTaskTest {
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        final Checkpointer checkpointer = new Checkpointer(time, stateMgr, checkpointInterval);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, checkpointer);
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr);
     }
 
     @Test

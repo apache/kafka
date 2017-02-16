@@ -63,7 +63,7 @@ public class StandbyTask extends AbstractTask {
                        final StreamsMetrics metrics,
                        final StateDirectory stateDirectory,
                        final Time time) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null, time, config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -96,7 +96,7 @@ public class StandbyTask extends AbstractTask {
     public void commit() {
         log.debug("standby-task [{}] Committing its state", id());
         stateMgr.flush(processorContext);
-        checkpointer.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         // reinitialize offset limits
         initializeOffsetLimits();
     }

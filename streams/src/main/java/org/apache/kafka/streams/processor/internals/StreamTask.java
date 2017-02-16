@@ -77,7 +77,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             // 2) flush produced records in the downstream and change logs of local states
             recordCollector.flush();
             // 3) write checkpoints for any local state
-            checkpointer.checkpoint(recordCollectorOffsets());
+            stateMgr.checkpoint(recordCollectorOffsets());
             // 4) commit consumed offsets if it is dirty already
             commitOffsets();
         }
@@ -108,7 +108,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       ThreadCache cache,
                       Time time,
                       final RecordCollector recordCollector) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache, time, config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);
