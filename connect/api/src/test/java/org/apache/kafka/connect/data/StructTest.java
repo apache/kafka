@@ -260,11 +260,11 @@ public class StructTest {
         FakeSchema fakeSchema = new FakeSchema();
 
         thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for required field: \"field\"");
+        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
         ConnectSchema.validateValue(fieldName, fakeSchema, new Object());
 
         thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for required field: \"field\"");
+        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
         ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
     }
 }

@@ -227,7 +227,7 @@ public class ConnectSchema implements Schema {
         if (expectedClasses == null)
             throw new DataException("Invalid Java object for schema type " + schema.type()
                     + ": " + value.getClass()
-                    + " for required field: \"" + name + "\"");
+                    + " for field: \"" + name + "\"");
 
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
@@ -239,7 +239,7 @@ public class ConnectSchema implements Schema {
         if (!foundMatch)
             throw new DataException("Invalid Java object for schema type " + schema.type()
                     + ": " + value.getClass()
-                    + " for required field: \"" + name + "\"");
+                    + " for field: \"" + name + "\"");
 
         switch (schema.type()) {
             case STRUCT:
