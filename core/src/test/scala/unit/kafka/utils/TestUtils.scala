@@ -693,7 +693,7 @@ object TestUtils extends Logging {
           val currentLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topic, partition)
           var newLeaderAndIsr: LeaderAndIsr = null
           if(currentLeaderAndIsrOpt.isEmpty)
-            newLeaderAndIsr = new LeaderAndIsr(leader, List(leader))
+            newLeaderAndIsr = LeaderAndIsr(leader, List(leader))
           else{
             newLeaderAndIsr = currentLeaderAndIsrOpt.get
             newLeaderAndIsr.leader = leader
