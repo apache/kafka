@@ -15,13 +15,14 @@
 
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import parametrize, matrix, ignore
 from kafkatest.tests.kafka_test import KafkaTest
 
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.version import DEV_BRANCH
+import time
 
 class StreamsSimpleBenchmarkTest(Test):
     """
@@ -33,17 +34,7 @@ class StreamsSimpleBenchmarkTest(Test):
         self.num_records = 2000000L
         self.replication = 1
 
-
-    @cluster(num_nodes=9)
-    @matrix(test=["all"], scale=[1,2])
-    def test_simple_benchmark(self, test, scale):
-        """
-        Run simple Kafka Streams benchmark
-        """
-        self.driver = [None] * (scale + 1)
-        node = [None] * (scale)
-        data = [None] * (scale)
-
+    def setup_system(self, scale):
         #############
         # SETUP PHASE
         #############
@@ -61,7 +52,8 @@ class StreamsSimpleBenchmarkTest(Test):
             'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication }
         })
         self.kafka.start()
- 
+
+    def load_system(self, scale, test):
         ################
         # LOAD PHASE
         ################
@@ -71,9 +63,25 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait()
         self.load_driver.stop()
 
+        
+    @ignore
+    @cluster(num_nodes=9)
+    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"], scale=[1])
+    def test_simple_benchmark(self, test, scale):
+        """
+        Run simple Kafka Streams benchmark
+        """
+        self.driver = [None] * (scale + 1)
+        node = [None] * (scale)
+        data = [None] * (scale)
+
+        self.setup_system(scale)
+        self.load_system(scale, test)
+        
         ################
         # RUN PHASE
         ################
+        start_time = time.time()
         for num in range(0, scale):
             self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
                                                              self.num_records/(scale), "false", test)
@@ -89,10 +97,58 @@ class StreamsSimpleBenchmarkTest(Test):
             node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
             data[num] = self.driver[num].collect_data(node[num], "" )
                 
-
+        end_time = time.time()
+        
         final = {}
         for num in range(0, scale):
             for key in data[num]:
                 final[key] = final.get(key, 0) + data[num][key]
+        final[test + str(" latency")] = end_time - start_time
         
+        return final
+
+
+    @cluster(num_nodes=9)
+    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
+    def test_benchmark_with_failures(self, test):
+        """
+        Run simple Kafka Streams benchmark
+        """
+        scale = 1
+        self.driver = [None] * (scale + 1)
+        
+        self.setup_system(scale)
+        self.load_system(scale, test)
+        
+
+        ################
+        # RUN PHASE
+        ################
+        start_time = time.time()
+        for num in range(0, scale):
+            self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                             self.num_records/(scale), "false", test)
+            self.driver[num].start()
+
+        ################
+        # FAILURE PHASE
+        ################
+        time.sleep(5)
+        self.driver[0].stop()
+        self.driver[1] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                       self.num_records/(scale), "false", test)
+        self.driver[1].start()
+            
+        #######################
+        # STOP + COLLECT PHASE
+        #######################
+        for num in range(1, scale + 1):    
+            self.driver[num].wait()    
+            self.driver[num].stop()
+
+                
+        end_time = time.time()
+        
+        final = {}
+        final[test + str(" latency")] = end_time - start_time
         return final

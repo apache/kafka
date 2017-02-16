@@ -47,6 +47,8 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -57,7 +59,7 @@ import java.util.Properties;
 import java.util.Random;
 
 public class SimpleBenchmark {
-
+    private static final Logger log = LoggerFactory.getLogger(SimpleBenchmark.class);
     private final String kafka;
     private final File stateDir;
     private final Boolean loadPhase;
@@ -197,6 +199,7 @@ public class SimpleBenchmark {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000");
         return props;
     }
 
@@ -580,7 +583,9 @@ public class SimpleBenchmark {
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
+
                     Integer recKey = record.key();
+                    log.info("consume: key = " + recKey);
                     if (key == null || key < recKey)
                         key = recKey;
                     if (key.compareTo(endKey) >= 0)
@@ -604,6 +609,7 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -620,6 +626,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
+                        log.info("createKafkaStreams: key = " + key);
                         if (key.compareTo(endKey) >= 0) {
                             latch.countDown();
                         }
@@ -646,6 +653,7 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -662,6 +670,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
+                        log.info("createKafkaStreamsWithSink: key = " + key);
                         if (key.compareTo(endKey) >= 0) {
                             latch.countDown();
                         }
@@ -688,6 +697,7 @@ public class SimpleBenchmark {
         }
         @Override
         public void apply(Integer key, V value) {
+            log.info("ForeachAction: key = " + key);
             if (key.compareTo(endKey) >= 0) {
                 this.latch.countDown();
             }
@@ -740,6 +750,7 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -764,6 +775,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
+                        log.info("createKafkaStreamsWithStateStore: key = " + key);
                         store.put(key, value);
 
                         if (key.compareTo(endKey) >= 0) {
