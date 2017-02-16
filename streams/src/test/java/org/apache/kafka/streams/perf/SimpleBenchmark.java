@@ -476,6 +476,10 @@ public class SimpleBenchmark {
         KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(props);
 
         byte[] value = new byte[valueSizeBytes];
+        // put some random values to increase entropy. Some devices
+        // like SSDs do compression and if the array is all zeros
+        // the performance will be too good.
+        new Random().nextBytes(value);
         long startTime = System.currentTimeMillis();
 
         if (sequential) key = 0;
