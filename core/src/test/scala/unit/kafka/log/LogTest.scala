@@ -68,6 +68,7 @@ class LogTest extends JUnitSuite {
 
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentMsProp, (1 * 60 * 60L): java.lang.Long)
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
 
     // create a log
     val log = new Log(logDir,
@@ -122,7 +123,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testTimeBasedLogRollJitter() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val maxJitter = 20 * 60L
 
     val logProps = new Properties()
@@ -138,9 +139,11 @@ class LogTest extends JUnitSuite {
     log.append(set)
 
     time.sleep(log.config.segmentMs - maxJitter)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     log.append(set)
     assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments)
     time.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     log.append(set)
     assertEquals("Log should roll after segmentMs adjusted by random jitter", 2, log.numberOfSegments)
   }
@@ -150,7 +153,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testSizeBasedLogRoll() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val setSize = set.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
@@ -177,7 +180,7 @@ class LogTest extends JUnitSuite {
   def testLoadEmptyLog() {
     createEmptyLogs(logDir, 0)
     val log = new Log(logDir, logConfig, recoveryPoint = 0L, time.scheduler, time = time)
-    log.append(TestUtils.singletonRecords("test".getBytes))
+    log.append(TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds))
   }
 
   /**
@@ -190,7 +193,7 @@ class LogTest extends JUnitSuite {
     // We use need to use magic value 1 here because the test is message size sensitive.
     logProps.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
-    val records = (0 until 100 by 2).map(id => Record.create(id.toString.getBytes)).toArray
+    val records = (0 until 100 by 2).map(id => Record.create(time.milliseconds, null, id.toString.getBytes)).toArray
 
     for(i <- records.indices)
       log.append(MemoryRecords.withRecords(records(i)))
@@ -213,7 +216,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => Record.create(id.toString.getBytes))
+    val records = messageIds.map(id => Record.create(time.milliseconds, null, id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for(i <- records.indices)
@@ -240,7 +243,7 @@ class LogTest extends JUnitSuite {
 
     // keep appending until we have two segments with only a single message in the second segment
     while(log.numberOfSegments == 1)
-      log.append(MemoryRecords.withRecords(Record.create("42".getBytes)))
+      log.append(MemoryRecords.withRecords(Record.create(time.milliseconds, null, "42".getBytes)))
 
     // now manually truncate off all but one message from the first segment to create a gap in the messages
     log.logSegments.head.truncateTo(1)
@@ -255,7 +258,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => Record.create(id.toString.getBytes))
+    val records = messageIds.map(id => Record.create(time.milliseconds, null, id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for (i <- records.indices)
@@ -284,7 +287,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => Record.create(id.toString.getBytes))
+    val records = messageIds.map(id => Record.create(time.milliseconds, null, id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for (i <- records.indices)
@@ -319,7 +322,7 @@ class LogTest extends JUnitSuite {
     // set up replica log starting with offset 1024 and with one message (at offset 1024)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
-    log.append(MemoryRecords.withRecords(Record.create("42".getBytes)))
+    log.append(MemoryRecords.withRecords(Record.create(time.milliseconds, null, "42".getBytes)))
 
     assertEquals("Reading at the log end offset should produce 0 byte read.", 0, log.read(1025, 1000).records.sizeInBytes)
 
@@ -351,7 +354,8 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val numMessages = 100
-    val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(i.toString.getBytes))
+    val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes, 
+                                                                                timestamp = time.milliseconds))
     messageSets.foreach(log.append(_))
     log.flush()
 
@@ -385,8 +389,12 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
 
     /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, Record.create("hello".getBytes), Record.create("there".getBytes)))
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, Record.create("alpha".getBytes), Record.create("beta".getBytes)))
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP, 
+                                         Record.create(time.milliseconds, null, "hello".getBytes), 
+                                         Record.create(time.milliseconds, null, "there".getBytes)))
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP, 
+                                         Record.create(time.milliseconds, null, "alpha".getBytes), 
+                                         Record.create(time.milliseconds, null, "beta".getBytes)))
 
     def read(offset: Int) = log.read(offset, 4096).records.deepEntries.iterator
 
@@ -424,7 +432,7 @@ class LogTest extends JUnitSuite {
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
-                   log.append(TestUtils.singletonRecords("hello".getBytes)).firstOffset)
+                   log.append(TestUtils.singletonRecords(value = "hello".getBytes, timestamp = time.milliseconds)).firstOffset)
 
       // cleanup the log
       log.delete()
@@ -437,7 +445,8 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSetSizeCheck() {
-    val messageSet = MemoryRecords.withRecords(Record.create("You".getBytes), Record.create("bethe".getBytes))
+    val messageSet = MemoryRecords.withRecords(Record.create(time.milliseconds, null, "You".getBytes), 
+                                               Record.create(time.milliseconds, null, "bethe".getBytes))
     // append messages to log
     val configSegmentSize = messageSet.sizeInBytes - 1
     val logProps = new Properties()
@@ -456,8 +465,8 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testCompactedTopicConstraints() {
-    val keyedMessage = Record.create(Record.CURRENT_MAGIC_VALUE, Record.NO_TIMESTAMP, "and here it is".getBytes, "this message has a key".getBytes)
-    val anotherKeyedMessage = Record.create(Record.CURRENT_MAGIC_VALUE, Record.NO_TIMESTAMP, "another key".getBytes, "this message also has a key".getBytes)
+    val keyedMessage = Record.create(Record.CURRENT_MAGIC_VALUE, time.milliseconds, "and here it is".getBytes, "this message has a key".getBytes)
+    val anotherKeyedMessage = Record.create(Record.CURRENT_MAGIC_VALUE, time.milliseconds, "another key".getBytes, "this message also has a key".getBytes)
     val unkeyedMessage = Record.create("this message does not have a key".getBytes)
 
     val messageSetWithUnkeyedMessage = MemoryRecords.withRecords(CompressionType.NONE, unkeyedMessage, keyedMessage)
@@ -504,8 +513,11 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSizeCheck() {
-    val first = MemoryRecords.withRecords(CompressionType.NONE, Record.create("You".getBytes), Record.create("bethe".getBytes))
-    val second = MemoryRecords.withRecords(CompressionType.NONE, Record.create("change (I need more bytes)".getBytes))
+    val first = MemoryRecords.withRecords(CompressionType.NONE, 
+                                          Record.create(time.milliseconds, null, "You".getBytes), 
+                                          Record.create(time.milliseconds, null, "bethe".getBytes))
+    val second = MemoryRecords.withRecords(CompressionType.NONE, 
+                                           Record.create(time.milliseconds, null, "change (I need more bytes)".getBytes))
 
     // append messages to log
     val maxMessageSize = second.sizeInBytes - 1
@@ -717,7 +729,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testTruncateTo() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val setSize = set.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
@@ -818,7 +830,7 @@ class LogTest extends JUnitSuite {
     val bogusIndex2 = Log.indexFilename(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFilename(logDir, 5)
 
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
@@ -846,7 +858,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testReopenThenTruncate() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
@@ -879,14 +891,14 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testAsyncDelete() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds - 1000L)
     val asyncDeleteMs = 1000
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.IndexIntervalBytesProp, 10000: java.lang.Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, asyncDeleteMs: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
 
     val log = new Log(logDir,
@@ -902,8 +914,6 @@ class LogTest extends JUnitSuite {
     // files should be renamed
     val segments = log.logSegments.toArray
     val oldFiles = segments.map(_.log.file) ++ segments.map(_.index.file)
-    // expire all segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000L)
 
     log.deleteOldSegments()
 
@@ -925,11 +935,11 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testOpenDeletesObsoleteFiles() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds - 1000)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
     var log = new Log(logDir,
                       config,
@@ -942,7 +952,6 @@ class LogTest extends JUnitSuite {
       log.append(set)
 
     // expire all segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
     log.deleteOldSegments()
     log.close()
 
@@ -961,7 +970,7 @@ class LogTest extends JUnitSuite {
                       recoveryPoint = 0L,
                       time.scheduler,
                       time)
-    log.append(MemoryRecords.withRecords(Record.create(null)))
+    log.append(MemoryRecords.withRecords(Record.create(time.milliseconds, null, null)))
     val head = log.read(0, 4096, None).records.shallowEntries().iterator.next()
     assertEquals(0, head.offset)
     assertTrue("Message payload should be null.", head.record.hasNullValue)
@@ -974,7 +983,7 @@ class LogTest extends JUnitSuite {
       recoveryPoint = 0L,
       time.scheduler,
       time)
-    val messages = (0 until 2).map(id => Record.create(id.toString.getBytes)).toArray
+    val messages = (0 until 2).map(id => Record.create(time.milliseconds, null, id.toString.getBytes)).toArray
     messages.foreach(record => log.append(MemoryRecords.withRecords(record)))
     val invalidMessage = MemoryRecords.withRecords(Record.create(1.toString.getBytes))
     log.append(invalidMessage, assignOffsets = false)
@@ -988,7 +997,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, 64*1024: java.lang.Integer)
     val config = LogConfig(logProps)
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val recoveryPoint = 50L
     for (_ <- 0 until 50) {
       // create a log and write some messages to it
@@ -1065,7 +1074,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.MaxMessageBytesProp, 64*1024: java.lang.Integer)
     logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
     val config = LogConfig(logProps)
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val parentLogDir = logDir.getParentFile
     assertTrue("Data directory %s must exist", parentLogDir.isDirectory)
     val cleanShutdownFile = new File(parentLogDir, Log.CleanShutdownFile)
@@ -1166,11 +1175,11 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testDeleteOldSegmentsMethod() {
-    val set = TestUtils.singletonRecords("test".getBytes)
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds - 1000)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
     val log = new Log(logDir,
       config,
@@ -1183,7 +1192,6 @@ class LogTest extends JUnitSuite {
       log.append(set)
 
     // expire all segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
     log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
 
@@ -1290,6 +1298,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     val config = LogConfig(logProps)
     val log = new Log(logDir,
       config,

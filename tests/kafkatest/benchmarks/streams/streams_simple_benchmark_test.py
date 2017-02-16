@@ -24,6 +24,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.version import DEV_BRANCH
 import time
 
+
 class StreamsSimpleBenchmarkTest(Test):
     """
     Simple benchmark of Kafka Streams.
@@ -33,6 +34,7 @@ class StreamsSimpleBenchmarkTest(Test):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
         self.num_records = 2000000L
         self.replication = 1
+
 
     def setup_system(self, scale):
         #############
@@ -125,10 +127,12 @@ class StreamsSimpleBenchmarkTest(Test):
         # RUN PHASE
         ################
         start_time = time.time()
+
         for num in range(0, scale):
             self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
                                                              self.num_records/(scale), "false", test)
             self.driver[num].start()
+
 
         ################
         # FAILURE PHASE
@@ -138,20 +142,26 @@ class StreamsSimpleBenchmarkTest(Test):
         self.driver[1] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
                                                        self.num_records/(scale), "false", test)
         self.driver[1].start()
-            
+                
+
         #######################
         # STOP + COLLECT PHASE
         #######################
         for num in range(1, scale + 1):    
             self.driver[num].wait()    
             self.driver[num].stop()
+            node[num] = self.driver[num].node
+            node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
+            data[num] = self.driver[num].collect_data(node[num], "" )
 
-                
         end_time = time.time()
-        
+
+
         final = {}
         for num in range(0, scale):
             for key in data[num]:
                 final[key + str(num)] = data[num][key]
+
         final[test + str(" latency")] = end_time - start_time
+
         return final

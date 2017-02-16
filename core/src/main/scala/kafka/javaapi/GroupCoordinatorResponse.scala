@@ -22,7 +22,9 @@ import kafka.cluster.BrokerEndPoint
 
 class GroupCoordinatorResponse(private val underlying: kafka.api.GroupCoordinatorResponse) {
 
-  def errorCode = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def coordinator: BrokerEndPoint = {
     import kafka.javaapi.Implicits._

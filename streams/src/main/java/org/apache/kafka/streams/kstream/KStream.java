@@ -406,6 +406,20 @@ public interface KStream<K, V> {
     void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
+     * Perform an action on each record of {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * <p>
+     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
+     * and returns an unchanged stream.
+     * <p>
+     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     *
+     * @param action an action to perform on each record
+     * @see #process(ProcessorSupplier, String...)
+     */
+    KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
+
+    /**
      * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
      * the supplied predicates.
      * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.

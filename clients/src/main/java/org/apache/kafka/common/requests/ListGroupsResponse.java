@@ -39,12 +39,12 @@ public class ListGroupsResponse extends AbstractResponse {
      * AUTHORIZATION_FAILED (29)
      */
 
-    private final short errorCode;
+    private final Errors error;
     private final List<Group> groups;
 
-    public ListGroupsResponse(short errorCode, List<Group> groups) {
+    public ListGroupsResponse(Errors error, List<Group> groups) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
         List<Struct> groupList = new ArrayList<>();
         for (Group group : groups) {
             Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
@@ -53,13 +53,13 @@ public class ListGroupsResponse extends AbstractResponse {
             groupList.add(groupStruct);
         }
         struct.set(GROUPS_KEY_NAME, groupList.toArray());
-        this.errorCode = errorCode;
+        this.error = error;
         this.groups = groups;
     }
 
     public ListGroupsResponse(Struct struct) {
         super(struct);
-        this.errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.groups = new ArrayList<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
             Struct groupStruct = (Struct) groupObj;
@@ -73,8 +73,8 @@ public class ListGroupsResponse extends AbstractResponse {
         return groups;
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public static class Group {
@@ -101,7 +101,7 @@ public class ListGroupsResponse extends AbstractResponse {
     }
 
     public static ListGroupsResponse fromError(Errors error) {
-        return new ListGroupsResponse(error.code(), Collections.<Group>emptyList());
+        return new ListGroupsResponse(error, Collections.<Group>emptyList());
     }
 
 }

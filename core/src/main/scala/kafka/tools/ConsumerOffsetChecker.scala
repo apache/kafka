@@ -179,10 +179,10 @@ object ConsumerOffsetChecker extends Logging {
                 throw z
           }
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
+        else if (offsetAndMetadata.error == Errors.NONE)
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
         else {
-          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, Errors.forCode(offsetAndMetadata.error).exception))
+          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, offsetAndMetadata.error.exception))
         }
       }
       channel.disconnect()

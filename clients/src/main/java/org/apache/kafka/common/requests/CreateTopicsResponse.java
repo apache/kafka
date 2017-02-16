@@ -113,11 +113,11 @@ public class CreateTopicsResponse extends AbstractResponse {
         for (Object topicErrorStructObj : topicErrorStructs) {
             Struct topicErrorCodeStruct = (Struct) topicErrorStructObj;
             String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
-            short errorCode = topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME);
+            Errors error = Errors.forCode(topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME));
             String errorMessage = null;
             if (topicErrorCodeStruct.hasField(ERROR_MESSAGE_KEY_NAME))
                 errorMessage = topicErrorCodeStruct.getString(ERROR_MESSAGE_KEY_NAME);
-            errors.put(topic, new Error(Errors.forCode(errorCode), errorMessage));
+            errors.put(topic, new Error(error, errorMessage));
         }
 
         this.errors = errors;

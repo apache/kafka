@@ -318,10 +318,10 @@ object ConsumerGroupCommand extends Logging {
               case z: ZkNoNodeException =>
                 printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
             }
-          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE.code =>
+          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
             offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
           case _ =>
-            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
+            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
       }
       channel.disconnect()

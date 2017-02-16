@@ -15,6 +15,9 @@
  limitations under the License.
 -->
 
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<script id="quickstart-template" type="text/x-handlebars-template">
 <p>
 This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data.
 Since Kafka console scripts are different for Unix-based and Windows platforms, on Windows platforms use <code>bin\windows\</code> instead of <code>bin/</code>, and change the script extension to <code>.bat</code>.
@@ -356,7 +359,7 @@ stream data will likely be flowing continuously into Kafka where the application
 
 
 <pre>
-&gt; <b>cat file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
+&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt</b>
 </pre>
 
 <p>
@@ -394,12 +397,9 @@ with the following output data being printed to the console:
 
 <pre>
 all     1
-streams 1
 lead    1
 to      1
-kafka   1
 hello   1
-kafka   2
 streams 2
 join    1
 kafka   3
@@ -418,15 +418,16 @@ The first column shows the evolution of the current state of the <code>KTable&lt
 The second column shows the change records that result from state updates to the KTable and that are being sent to the output Kafka topic <b>streams-wordcount-output</b>.
 </p>
 
+<img src="/{{version}}/images/streams-table-updates-02.png" style="float: right; width: 25%;">
+<img src="/{{version}}/images/streams-table-updates-01.png" style="float: right; width: 25%;">
+
 <p>
 First the text line “all streams lead to kafka” is being processed.
 The <code>KTable</code> is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream <code>KStream</code>.
 </p>
-<img class="centered" src="/{{version}}/images/streams-table-updates-01.png">
 <p>
 When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words “kafka” and for “streams”). And again, change records are being sent to the output topic.
 </p>
-<img class="centered" src="/{{version}}/images/streams-table-updates-01.png">
 <p>
 And so on (we skip the illustration of how the third line is being processed). This explains why the output topic has the contents we showed above, because it contains the full record of changes.
 </p>
@@ -442,3 +443,7 @@ console consumer, as described above).
 </p>
 
 <p>You can stop the console consumer via <b>Ctrl-C</b>.</p>
+
+</script>
+
+<div class="p-quickstart"></div>
