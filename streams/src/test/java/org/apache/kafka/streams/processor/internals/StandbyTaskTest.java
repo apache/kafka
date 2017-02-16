@@ -30,7 +30,6 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -119,7 +118,6 @@ public class StandbyTaskTest {
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
                 setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
-                setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1");
             }
         });
     }
@@ -156,7 +154,7 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, Time.SYSTEM);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
 
         assertEquals(Utils.mkSet(partition2), new HashSet<>(task.changeLogPartitions()));
 
@@ -166,7 +164,7 @@ public class StandbyTaskTest {
     @Test(expected = Exception.class)
     public void testUpdateNonPersistentStore() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, Time.SYSTEM);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -180,7 +178,7 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory, Time.SYSTEM);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -238,7 +236,7 @@ public class StandbyTaskTest {
         ));
 
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, restoreStateConsumer, config, null, stateDirectory, Time.SYSTEM);
+        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, restoreStateConsumer, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -332,7 +330,7 @@ public class StandbyTaskTest {
         final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
         StreamsConfig config = createConfig(baseDir);
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config,
-                        new MockStreamsMetrics(new Metrics()), stateDirectory, Time.SYSTEM);
+                        new MockStreamsMetrics(new Metrics()), stateDirectory);
 
     }
 
@@ -357,8 +355,8 @@ public class StandbyTaskTest {
                                                  restoreStateConsumer,
                                                  config,
                                                  null,
-                                                 stateDirectory,
-                                                 time);
+                                                 stateDirectory
+        );
 
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));

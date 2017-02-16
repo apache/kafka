@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
@@ -46,8 +45,6 @@ import static org.junit.Assert.assertTrue;
 
 public class GlobalStateTaskTest {
 
-    private final MockTime time = new MockTime(0);
-    private final int checkpointInterval = 10;
     private Map<TopicPartition, Long> offsets;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManagerStub stateMgr;
@@ -142,7 +139,7 @@ public class GlobalStateTaskTest {
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>("t1", 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.close();
-        assertEquals(expectedOffsets, stateMgr.checkpointedOffsets());
+        assertEquals(expectedOffsets, stateMgr.checkpointed());
         assertTrue(stateMgr.closed);
     }
 
@@ -153,9 +150,8 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>("t1", 1, 101, "foo".getBytes(), "foo".getBytes()));
-        time.sleep(checkpointInterval);
         globalStateTask.flushState();
-        assertThat(stateMgr.checkpointedOffsets(), equalTo(expectedOffsets));
+        assertThat(stateMgr.checkpointed(), equalTo(expectedOffsets));
     }
 
 }

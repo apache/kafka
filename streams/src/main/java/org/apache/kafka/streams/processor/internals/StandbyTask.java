@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -51,7 +50,6 @@ public class StandbyTask extends AbstractTask {
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
-     * @param time
      */
     public StandbyTask(final TaskId id,
                        final String applicationId,
@@ -61,8 +59,7 @@ public class StandbyTask extends AbstractTask {
                        final Consumer<byte[], byte[]> restoreConsumer,
                        final StreamsConfig config,
                        final StreamsMetrics metrics,
-                       final StateDirectory stateDirectory,
-                       final Time time) {
+                       final StateDirectory stateDirectory) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
         // initialize the topology with its own context
@@ -73,7 +70,7 @@ public class StandbyTask extends AbstractTask {
 
         this.processorContext.initialized();
 
-        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointedOffsets());
+        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {

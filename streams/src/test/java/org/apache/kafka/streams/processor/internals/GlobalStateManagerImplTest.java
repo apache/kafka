@@ -127,7 +127,7 @@ public class GlobalStateManagerImplTest {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
 
         stateManager.initialize(context);
-        final Map<TopicPartition, Long> offsets = stateManager.checkpointedOffsets();
+        final Map<TopicPartition, Long> offsets = stateManager.checkpointed();
         assertEquals(expected, offsets);
     }
 
@@ -385,7 +385,7 @@ public class GlobalStateManagerImplTest {
 
         final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
         assertThat(result, equalTo(offsets));
-        assertThat(stateManager.checkpointedOffsets(), equalTo(offsets));
+        assertThat(stateManager.checkpointed(), equalTo(offsets));
     }
 
     @Test
@@ -397,10 +397,10 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(20, 1, t2);
         stateManager.register(store2, false, stateRestoreCallback);
 
-        final Map<TopicPartition, Long> initialCheckpoint = stateManager.checkpointedOffsets();
+        final Map<TopicPartition, Long> initialCheckpoint = stateManager.checkpointed();
         stateManager.checkpoint(Collections.singletonMap(t1, 101L));
 
-        final Map<TopicPartition, Long> updatedCheckpoint = stateManager.checkpointedOffsets();
+        final Map<TopicPartition, Long> updatedCheckpoint = stateManager.checkpointed();
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
         assertThat(updatedCheckpoint.get(t1), equalTo(101L));
     }

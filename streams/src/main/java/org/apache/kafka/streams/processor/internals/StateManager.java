@@ -36,6 +36,4 @@ interface StateManager extends Checkpointable {
     StateStore getGlobalStore(final String name);
 
     StateStore getStore(final String name);
-
-    Map<TopicPartition, Long> checkpointedOffsets();
 }
