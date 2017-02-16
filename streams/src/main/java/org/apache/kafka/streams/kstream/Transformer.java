@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
- * The {@code Transformer} interface for stateful mapping of an input record to zero, one, or multiple new output
+ * The {@code Transformer} interface is for stateful mapping of an input record to zero, one, or multiple new output
  * records (both key and value type can be altered arbitrarily).
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object, Object)} is invoked individually for
  * each record of a stream and can access and modify a state that is available beyond a single call of
