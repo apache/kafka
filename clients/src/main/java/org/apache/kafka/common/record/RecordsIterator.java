@@ -147,7 +147,8 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
 
             CompressionType compressionType = wrapperRecord.compressionType();
             ByteBuffer buffer = wrapperRecord.value();
-            DataInputStream stream = MemoryRecordsBuilder.wrapForInput(new ByteBufferInputStream(buffer), compressionType, wrapperRecord.magic());
+            DataInputStream stream = new DataInputStream(compressionType.wrapForInput(new ByteBufferInputStream(buffer),
+                    wrapperRecord.magic()));
             LogInputStream logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long wrapperRecordOffset = wrapperEntry.offset();
