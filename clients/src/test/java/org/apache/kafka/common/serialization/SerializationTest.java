@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -20,7 +21,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class SerializationTest {
 
@@ -115,6 +120,75 @@ public class SerializationTest {
                 null, deserializer.deserialize(topic, serializer.serialize(topic, null)));
 
         serializer.close();
+        deserializer.close();
+    }
+
+    @Test
+    public void shouldSerializeDeserializeFloat() {
+        final Float[] floats = new Float[]{
+            5678567.12312f,
+            -5678567.12341f
+        };
+        final Serializer<Float> serializer = Serdes.Float().serializer();
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+
+        for (final Float value : floats) {
+            assertThat("Should round-trip a float",
+                value, equalTo(deserializer.deserialize(topic, serializer.serialize(topic, value))));
+        }
+
+        serializer.close();
+        deserializer.close();
+    }
+
+    @Test
+    public void floatSerializerShouldReturnNullForNull() {
+        final Serializer<Float> serializer = Serdes.Float().serializer();
+        assertThat(serializer.serialize(topic, null), nullValue());
+        serializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldReturnNullForNull() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        assertThat(deserializer.deserialize(topic, null), nullValue());
+        deserializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[0]);
+            fail("Should have thrown a SerializationException because of zero input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
+        deserializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnTooFewBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[3]);
+            fail("Should have thrown a SerializationException because of too few input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
+        deserializer.close();
+    }
+
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnTooManyBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[5]);
+            fail("Should have thrown a SerializationException because of too many input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
         deserializer.close();
     }
 
