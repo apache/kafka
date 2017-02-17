@@ -102,6 +102,8 @@ public class KTableKTableOuterJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic1, null, "SomeVal");
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
         checkJoinedValues(getter, kv(0, "X0+null"), kv(1, "X1+null"), kv(2, null), kv(3, null));
@@ -111,6 +113,8 @@ public class KTableKTableOuterJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic2, null, "AnotherVal");
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
         checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, null), kv(3, null));

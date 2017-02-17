@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -45,20 +46,20 @@ public class SaslHandshakeResponse extends AbstractResponse {
      *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
      *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
      */
-    private final short errorCode;
+    private final Errors error;
     private final List<String> enabledMechanisms;
 
-    public SaslHandshakeResponse(short errorCode, Collection<String> enabledMechanisms) {
+    public SaslHandshakeResponse(Errors error, Collection<String> enabledMechanisms) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
         struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
-        this.errorCode = errorCode;
+        this.error = error;
         this.enabledMechanisms = new ArrayList<>(enabledMechanisms);
     }
 
     public SaslHandshakeResponse(Struct struct) {
         super(struct);
-        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         Object[] mechanisms = struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
         ArrayList<String> enabledMechanisms = new ArrayList<>();
         for (Object mechanism : mechanisms)
@@ -66,8 +67,8 @@ public class SaslHandshakeResponse extends AbstractResponse {
         this.enabledMechanisms = enabledMechanisms;
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public List<String> enabledMechanisms() {

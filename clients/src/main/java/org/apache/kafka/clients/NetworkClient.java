@@ -14,7 +14,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.ObsoleteBrokerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
@@ -289,20 +288,17 @@ public class NetworkClient implements KafkaClient {
             // the case when sending the initial ApiVersionRequest which fetches the version
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
-                if ((!discoverBrokerVersions) && (log.isTraceEnabled()))
-                    log.trace("No version information found when sending message of type {} to node {}",
-                            clientRequest.apiKey(), nodeId);
+                if (discoverBrokerVersions && log.isTraceEnabled())
+                    log.trace("No version information found when sending message of type {} to node {}. " +
+                            "Assuming version {}.", clientRequest.apiKey(), nodeId, builder.version());
             } else {
                 short version = versionInfo.usableVersion(clientRequest.apiKey());
-                if (log.isTraceEnabled())
-                    log.trace("When sending message of type {} to node {}, the best usable version is {}",
-                            clientRequest.apiKey(), nodeId, version);
                 builder.setVersion(version);
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             request = builder.build();
-        } catch (ObsoleteBrokerException | UnsupportedVersionException e) {
+        } catch (UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
             log.debug("Version mismatch when attempting to send {} to {}",
@@ -314,8 +310,15 @@ public class NetworkClient implements KafkaClient {
             return;
         }
         RequestHeader header = clientRequest.makeHeader();
-        if (log.isTraceEnabled())
-            log.trace("Sending {} to node {}", request,  nodeId);
+        if (log.isDebugEnabled()) {
+            int latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);
+            if (header.apiVersion() == latestClientVersion) {
+                log.trace("Sending {} to node {}.", request, nodeId);
+            } else {
+                log.debug("Using older server API v{} to send {} to node {}.",
+                    header.apiVersion(), request, nodeId);
+            }
+        }
         Send send = request.toSend(nodeId, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
                 header,
@@ -424,13 +427,22 @@ public class NetworkClient implements KafkaClient {
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
             if (currInflight == 0 && this.connectionStates.isReady(node.idString())) {
                 // if we find an established connection with no in-flight requests we can stop right away
+                log.trace("Found least loaded node {} connected with no in-flight requests", node);
                 return node;
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;
                 found = node;
+            } else if (log.isTraceEnabled()) {
+                log.trace("Removing node {} from least loaded node selection: is-blacked-out: {}, in-flight-requests: {}",
+                        node, this.connectionStates.isBlackedOut(node.idString(), now), currInflight);
             }
         }
+
+        if (found != null)
+            log.trace("Found least loaded node {}", found);
+        else
+            log.trace("Least loaded node selection failed to find an available node");
 
         return found;
     }
@@ -532,9 +544,9 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
+        if (apiVersionsResponse.error() != Errors.NONE) {
             log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
-                    node, Errors.forCode(apiVersionsResponse.errorCode()));
+                    node, apiVersionsResponse.error());
             this.selector.close(node);
             processDisconnection(responses, node, now);
             return;

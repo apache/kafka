@@ -55,7 +55,7 @@ docker network inspect knw
 
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
   echo knode${i}
-  docker exec knode${i} bash -c "(tar xfz /kafka_src/core/build/distributions/kafka_*SNAPSHOT.tgz -C /opt || echo missing kafka tgz did you build kafka tarball) && mv /opt/kafka*SNAPSHOT /opt/kafka-trunk && ls -l /opt"
+  docker exec knode${i} bash -c "(tar xfz /kafka_src/core/build/distributions/kafka_*SNAPSHOT.tgz -C /opt || echo missing kafka tgz did you build kafka tarball) && mv /opt/kafka*SNAPSHOT /opt/kafka-dev && ls -l /opt"
   docker exec knode01 bash -c "ssh knode$i hostname"
 done
 
@@ -64,7 +64,7 @@ done
 (cd ${KAFKA_SRC} && ./gradlew copyDependantTestLibs)
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
   echo knode${i}
-  docker exec knode${i} bash -c "cp /kafka_src/core/build/dependant-testlibs/* /opt/kafka-trunk/libs/"
+  docker exec knode${i} bash -c "cp /kafka_src/core/build/dependant-testlibs/* /opt/kafka-dev/libs/"
   docker exec knode01 bash -c "ssh knode$i hostname"
 done
 

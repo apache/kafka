@@ -44,7 +44,9 @@ class SecurityStore {
         try {
             KeyStore ks = KeyStore.getInstance(type);
             in = new FileInputStream(path);
-            ks.load(in, password.value().toCharArray());
+            // If a password is not set access to the truststore is still available, but integrity checking is disabled.
+            char[] passwordChars = password != null ? password.value().toCharArray() : null;
+            ks.load(in, passwordChars);
             return ks;
         } finally {
             if (in != null) in.close();

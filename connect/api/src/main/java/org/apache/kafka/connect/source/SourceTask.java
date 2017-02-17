@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.List;
@@ -26,7 +25,6 @@ import java.util.Map;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
-@InterfaceStability.Unstable
 public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;

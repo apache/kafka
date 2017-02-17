@@ -85,7 +85,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     public KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
+        return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
 
     public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {

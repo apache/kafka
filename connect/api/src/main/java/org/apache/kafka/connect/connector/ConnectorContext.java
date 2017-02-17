@@ -17,12 +17,9 @@
 
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * ConnectorContext allows Connectors to proactively interact with the Kafka Connect runtime.
  */
-@InterfaceStability.Unstable
 public interface ConnectorContext {
     /**
      * Requests that the runtime reconfigure the Tasks for this source. This should be used to

@@ -117,15 +117,15 @@ public class StopReplicaRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(Throwable e) {
-        Map<TopicPartition, Short> responses = new HashMap<>(partitions.size());
+        Map<TopicPartition, Errors> responses = new HashMap<>(partitions.size());
         for (TopicPartition partition : partitions) {
-            responses.put(partition, Errors.forException(e).code());
+            responses.put(partition, Errors.forException(e));
         }
 
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new StopReplicaResponse(Errors.NONE.code(), responses);
+                return new StopReplicaResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id)));

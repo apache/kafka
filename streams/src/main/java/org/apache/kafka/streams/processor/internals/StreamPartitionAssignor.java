@@ -33,8 +33,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,13 +105,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
-
             consumers.add(consumerMemberId);
-
-            state.prevActiveTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.standbyTasks);
-            state.capacity = state.capacity + 1d;
+            state.addPreviousActiveTasks(info.prevTasks);
+            state.addPreviousStandbyTasks(info.standbyTasks);
+            state.incrementCapacity();
         }
 
         @Override
@@ -124,7 +121,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    private static class InternalTopicMetadata {
+    static class InternalTopicMetadata {
         public final InternalTopicConfig config;
 
         public int numPartitions;
@@ -160,6 +157,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private Map<TaskId, Set<TopicPartition>> activeTasks;
 
     private InternalTopicManager internalTopicManager;
+    private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -211,6 +209,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                         (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
                         : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+
+        this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(streamThread.getName());
     }
 
     @Override
@@ -225,10 +225,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        Set<TaskId> prevTasks = streamThread.prevTasks();
+        final Set<TaskId> previousActiveTasks = streamThread.prevActiveTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
-        standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPoint);
+        standbyTasks.removeAll(previousActiveTasks);
+        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -458,7 +458,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         log.debug("stream-thread [{}] Assigning tasks {} to clients {} with number of replicas {}",
                 streamThread.getName(), partitionsForTask.keySet(), states, numStandbyReplicas);
 
-        TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
+        taskAssignor.assign(numStandbyReplicas);
 
         log.info("stream-thread [{}] Assigned tasks to clients as {}.", streamThread.getName(), states);
 
@@ -473,7 +474,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final ClientState<TaskId> state = entry.getValue().state;
 
-                for (TaskId id : state.activeTasks) {
+                for (final TaskId id : state.activeTasks()) {
                     topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
@@ -484,14 +485,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // within the client, distribute tasks to its owned consumers
         Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            Set<String> consumers = entry.getValue().consumers;
-            ClientState<TaskId> state = entry.getValue().state;
+            final Set<String> consumers = entry.getValue().consumers;
+            final ClientState<TaskId> state = entry.getValue().state;
 
-            ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
-            final int numActiveTasks = state.activeTasks.size();
+            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
+            final int numActiveTasks = state.activeTaskCount();
 
-            taskIds.addAll(state.activeTasks);
-            taskIds.addAll(state.standbyTasks);
+            taskIds.addAll(state.activeTasks());
+            taskIds.addAll(state.standbyTasks());
 
             final int numConsumers = consumers.size();
 
@@ -642,54 +643,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                       Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
                                       Cluster metadata) {
         for (Set<String> copartitionGroup : copartitionGroups) {
-            ensureCopartitioning(copartitionGroup, allRepartitionTopicsNumPartitions, metadata);
-        }
-    }
-
-    private void ensureCopartitioning(Set<String> copartitionGroup,
-                                      Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
-                                      Cluster metadata) {
-        int numPartitions = UNKNOWN;
-
-        for (String topic : copartitionGroup) {
-            if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
-                Integer partitions = metadata.partitionCountForTopic(topic);
-
-                if (partitions == null)
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topic not found: %s", streamThread.getName(), topic));
-
-                if (numPartitions == UNKNOWN) {
-                    numPartitions = partitions;
-                } else if (numPartitions != partitions) {
-                    String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
-                    Arrays.sort(topics);
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
-                }
-            } else {
-                if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
-                    numPartitions = NOT_AVAILABLE;
-                    break;
-                }
-            }
-        }
-
-        // if all topics for this co-partition group is repartition topics,
-        // then set the number of partitions to be the maximum of the number of partitions.
-        if (numPartitions == UNKNOWN) {
-            for (Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
-                if (copartitionGroup.contains(entry.getKey())) {
-                    int partitions = entry.getValue().numPartitions;
-                    if (partitions > numPartitions) {
-                        numPartitions = partitions;
-                    }
-                }
-            }
-        }
-        // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
-        for (Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
-            if (copartitionGroup.contains(entry.getKey())) {
-                entry.getValue().numPartitions = numPartitions;
-            }
+            copartitionedTopicsValidator.validate(copartitionGroup, allRepartitionTopicsNumPartitions, metadata);
         }
     }
 
@@ -756,5 +710,60 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     public void close() {
         internalTopicManager.close();
+    }
+
+    static class CopartitionedTopicsValidator {
+        private final String threadName;
+
+        CopartitionedTopicsValidator(final String threadName) {
+            this.threadName = threadName;
+        }
+
+        void validate(final Set<String> copartitionGroup,
+                      final Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
+                      final Cluster metadata) {
+            int numPartitions = UNKNOWN;
+
+            for (final String topic : copartitionGroup) {
+                if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
+                    final Integer partitions = metadata.partitionCountForTopic(topic);
+
+                    if (partitions == null) {
+                        throw new TopologyBuilderException(String.format("stream-thread [%s] Topic not found: %s", threadName, topic));
+                    }
+
+                    if (numPartitions == UNKNOWN) {
+                        numPartitions = partitions;
+                    } else if (numPartitions != partitions) {
+                        final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                        Arrays.sort(topics);
+                        throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", threadName, Utils.mkString(Arrays.asList(topics), ",")));
+                    }
+                } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
+                    numPartitions = NOT_AVAILABLE;
+                    break;
+                }
+            }
+
+            // if all topics for this co-partition group is repartition topics,
+            // then set the number of partitions to be the maximum of the number of partitions.
+            if (numPartitions == UNKNOWN) {
+                for (Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
+                    if (copartitionGroup.contains(entry.getKey())) {
+                        final int partitions = entry.getValue().numPartitions;
+                        if (partitions > numPartitions) {
+                            numPartitions = partitions;
+                        }
+                    }
+                }
+            }
+            // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
+            for (Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
+                if (copartitionGroup.contains(entry.getKey())) {
+                    entry.getValue().numPartitions = numPartitions;
+                }
+            }
+
+        }
     }
 }

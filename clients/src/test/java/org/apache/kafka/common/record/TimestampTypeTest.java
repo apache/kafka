@@ -34,4 +34,9 @@ public class TimestampTypeTest {
         assertEquals(TimestampType.LOG_APPEND_TIME, TimestampType.forAttributes(attributes));
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void updateAttributesNotAllowedForNoTimestampType() {
+        TimestampType.NO_TIMESTAMP_TYPE.updateAttributes((byte) 0);
+    }
+
 }

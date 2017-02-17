@@ -28,11 +28,12 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<K, V> {
+class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
     private final ChangeLoggingKeyValueBytesStore innerBytes;
     private final Serde keySerde;
     private final Serde valueSerde;
     private StateSerdes<K, V> serdes;
+
 
     ChangeLoggingKeyValueStore(final KeyValueStore<Bytes, byte[]> bytesStore,
                                final Serde keySerde,
@@ -57,6 +58,11 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrapped
         this.serdes = new StateSerdes<>(innerBytes.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return innerBytes.approximateNumEntries();
     }
 
     @Override
@@ -106,17 +112,11 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrapped
     public KeyValueIterator<K, V> range(final K from, final K to) {
         return new SerializedKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
                                                                  Bytes.wrap(serdes.rawKey(to))),
-                                                serdes);
+                                                                 serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         return new SerializedKeyValueIterator<>(innerBytes.all(), serdes);
     }
-
-    @Override
-    public long approximateNumEntries() {
-        return innerBytes.approximateNumEntries();
-    }
-
 }

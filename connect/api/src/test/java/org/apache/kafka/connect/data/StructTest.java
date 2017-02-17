@@ -18,7 +18,9 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -233,5 +235,36 @@ public class StructTest {
 
         assertEquals(struct1, struct2);
         assertNotEquals(struct1, struct3);
+    }
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
+
+    @Test
+    public void testValidateStructWithNullValue() {
+        Schema schema = SchemaBuilder.struct()
+                .field("one", Schema.STRING_SCHEMA)
+                .field("two", Schema.STRING_SCHEMA)
+                .field("three", Schema.STRING_SCHEMA)
+                .build();
+
+        Struct struct = new Struct(schema);
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid value: null used for required field: \"one\", schema type: STRING");
+        struct.validate();
+    }
+
+    @Test
+    public void testValidateFieldWithInvalidValueType() {
+        String fieldName = "field";
+        FakeSchema fakeSchema = new FakeSchema();
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
+        ConnectSchema.validateValue(fieldName, fakeSchema, new Object());
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
+        ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
     }
 }

@@ -166,7 +166,7 @@ object TestUtils extends Logging {
   def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
     servers.map { s =>
       val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener with name $listenerName"))
+        sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
   }
@@ -217,6 +217,8 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
+    props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
+    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
@@ -246,7 +248,7 @@ object TestUtils extends Logging {
     // create topic
     AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
-    (0 until numPartitions).map { case i =>
+    (0 until numPartitions).map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, i)
     }.toMap
@@ -287,6 +289,11 @@ object TestUtils extends Logging {
 
     props
   }
+
+  /**
+   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
+   */
+  def fail(msg: String): Nothing = throw new AssertionError(msg)
 
   /**
    * Wrap a single record log buffer.
@@ -870,7 +877,7 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
     TestUtils.waitUntilTrue(() => {
         val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
-        leaderBroker.replicaManager.underReplicatedPartitionCount() == 0
+        leaderBroker.replicaManager.underReplicatedPartitionCount == 0
       },
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }

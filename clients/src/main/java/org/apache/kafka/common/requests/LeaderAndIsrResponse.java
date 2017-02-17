@@ -41,34 +41,32 @@ public class LeaderAndIsrResponse extends AbstractResponse {
      *
      * STALE_CONTROLLER_EPOCH (11)
      */
-    private final short errorCode;
+    private final Errors error;
 
-    private final Map<TopicPartition, Short> responses;
+    private final Map<TopicPartition, Errors> responses;
 
-    public LeaderAndIsrResponse(Map<TopicPartition, Short> responses) {
-        this(Errors.NONE.code(), responses);
+    public LeaderAndIsrResponse(Map<TopicPartition, Errors> responses) {
+        this(Errors.NONE, responses);
     }
 
-    public LeaderAndIsrResponse(short errorCode, Map<TopicPartition, Short> responses) {
+    public LeaderAndIsrResponse(Errors error, Map<TopicPartition, Errors> responses) {
         super(new Struct(CURRENT_SCHEMA));
 
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
-
         List<Struct> responseDatas = new ArrayList<>(responses.size());
-        for (Map.Entry<TopicPartition, Short> response : responses.entrySet()) {
+        for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {
             Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
             TopicPartition partition = response.getKey();
             partitionData.set(PARTITIONS_TOPIC_KEY_NAME, partition.topic());
             partitionData.set(PARTITIONS_PARTITION_KEY_NAME, partition.partition());
-            partitionData.set(PARTITIONS_ERROR_CODE_KEY_NAME, response.getValue());
+            partitionData.set(PARTITIONS_ERROR_CODE_KEY_NAME, response.getValue().code());
             responseDatas.add(partitionData);
         }
 
         struct.set(PARTITIONS_KEY_NAME, responseDatas.toArray());
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
 
         this.responses = responses;
-        this.errorCode = errorCode;
+        this.error = error;
     }
 
     public LeaderAndIsrResponse(Struct struct) {
@@ -79,19 +77,19 @@ public class LeaderAndIsrResponse extends AbstractResponse {
             Struct responseData = (Struct) responseDataObj;
             String topic = responseData.getString(PARTITIONS_TOPIC_KEY_NAME);
             int partition = responseData.getInt(PARTITIONS_PARTITION_KEY_NAME);
-            short errorCode = responseData.getShort(PARTITIONS_ERROR_CODE_KEY_NAME);
-            responses.put(new TopicPartition(topic, partition), errorCode);
+            Errors error = Errors.forCode(responseData.getShort(PARTITIONS_ERROR_CODE_KEY_NAME));
+            responses.put(new TopicPartition(topic, partition), error);
         }
 
-        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
     }
 
-    public Map<TopicPartition, Short> responses() {
+    public Map<TopicPartition, Errors> responses() {
         return responses;
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, int version) {

@@ -103,16 +103,14 @@ public class ThroughputThrottler {
         // If enough sleep deficit has accumulated, sleep a little
         if (sleepDeficitNs >= MIN_SLEEP_NS) {
             long sleepStartNs = System.nanoTime();
-            long currentTimeNs = sleepStartNs;
             try {
                 synchronized (this) {
-                    long elapsed = currentTimeNs - sleepStartNs;
-                    long remaining = sleepDeficitNs - elapsed;
+                    long remaining = sleepDeficitNs;
                     while (!wakeup && remaining > 0) {
                         long sleepMs = remaining / 1000000;
                         long sleepNs = remaining - sleepMs * 1000000;
                         this.wait(sleepMs, (int) sleepNs);
-                        elapsed = System.nanoTime() - sleepStartNs;
+                        long elapsed = System.nanoTime() - sleepStartNs;
                         remaining = sleepDeficitNs - elapsed;
                     }
                     wakeup = false;

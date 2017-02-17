@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.ObsoleteBrokerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -115,7 +115,8 @@ public class CreateTopicsRequest extends AbstractRequest {
         @Override
         public CreateTopicsRequest build() {
             if (validateOnly && version() == 0)
-                throw new ObsoleteBrokerException("validateOnly is not supported in version 0 of CreateTopicsRequest");
+                throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
+                        "CreateTopicsRequest");
             return new CreateTopicsRequest(topics, timeout, validateOnly, version());
         }
 

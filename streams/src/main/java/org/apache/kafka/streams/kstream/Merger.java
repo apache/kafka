@@ -29,7 +29,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public interface Merger<K, V> {
 
     /**
-     * Compute a new aggregate from the key and two aggregates
+     * Compute a new aggregate from the key and two aggregates.
      *
      * @param aggKey    the key of the record
      * @param aggOne    the first aggregate

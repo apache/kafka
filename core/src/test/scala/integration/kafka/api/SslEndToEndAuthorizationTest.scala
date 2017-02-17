@@ -29,7 +29,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   @Before
   override def setUp {
-    startSasl(ZkSasl, List.empty, None)
+    startSasl(List.empty, None, ZkSasl)
     super.setUp
   }
 }

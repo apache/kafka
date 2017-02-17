@@ -25,21 +25,11 @@ import java.util.Properties
  */
 object CommandLineUtils extends Logging {
 
-   trait ExitPolicy {
-     def exit(msg: String): Nothing
-   }
-
-   val DEFAULT_EXIT_POLICY = new ExitPolicy {
-     override def exit(msg: String): Nothing = sys.exit(1)
-   }
-
-   private var exitPolicy = DEFAULT_EXIT_POLICY
-
   /**
    * Check that all the listed options are present
    */
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
-    for(arg <- required) {
+    for (arg <- required) {
       if(!options.has(arg))
         printUsageAndDie(parser, "Missing required argument \"" + arg + "\"")
     }
@@ -63,10 +53,8 @@ object CommandLineUtils extends Logging {
   def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
     System.err.println(message)
     parser.printHelpOn(System.err)
-    exitPolicy.exit(message)
+    Exit.exit(1, Some(message))
   }
-
-  def exitPolicy(policy: ExitPolicy): Unit = this.exitPolicy = policy
 
   /**
    * Parse key-value pairs in the form key=value
@@ -75,7 +63,7 @@ object CommandLineUtils extends Logging {
     val splits = args.map(_ split "=").filterNot(_.length == 0)
 
     val props = new Properties
-    for(a <- splits) {
+    for (a <- splits) {
       if (a.length == 1) {
         if (acceptMissingValue) props.put(a(0), "")
         else throw new IllegalArgumentException(s"Missing value for key ${a(0)}")
@@ -83,7 +71,7 @@ object CommandLineUtils extends Logging {
       else if (a.length == 2) props.put(a(0), a(1))
       else {
         System.err.println("Invalid command line properties: " + args.mkString(" "))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     props

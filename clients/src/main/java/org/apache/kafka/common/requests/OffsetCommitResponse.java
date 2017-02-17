@@ -14,6 +14,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -26,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 public class OffsetCommitResponse extends AbstractResponse {
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.OFFSET_COMMIT.id);
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -54,22 +55,22 @@ public class OffsetCommitResponse extends AbstractResponse {
      * GROUP_AUTHORIZATION_FAILED (30)
      */
 
-    private final Map<TopicPartition, Short> responseData;
+    private final Map<TopicPartition, Errors> responseData;
 
-    public OffsetCommitResponse(Map<TopicPartition, Short> responseData) {
+    public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
         super(new Struct(CURRENT_SCHEMA));
 
-        Map<String, Map<Integer, Short>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupDataByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Map<Integer, Short>> entries: topicsData.entrySet()) {
+        for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, entries.getKey());
             List<Struct> partitionArray = new ArrayList<Struct>();
-            for (Map.Entry<Integer, Short> partitionEntry : entries.getValue().entrySet()) {
+            for (Map.Entry<Integer, Errors> partitionEntry : entries.getValue().entrySet()) {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(ERROR_CODE_KEY_NAME, partitionEntry.getValue());
+                partitionData.set(ERROR_CODE_KEY_NAME, partitionEntry.getValue().code());
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
@@ -81,20 +82,20 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     public OffsetCommitResponse(Struct struct) {
         super(struct);
-        responseData = new HashMap<TopicPartition, Short>();
+        responseData = new HashMap<TopicPartition, Errors>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
             for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
-                responseData.put(new TopicPartition(topic, partition), errorCode);
+                Errors error = Errors.forCode(partitionResponse.getShort(ERROR_CODE_KEY_NAME));
+                responseData.put(new TopicPartition(topic, partition), error);
             }
         }
     }
 
-    public Map<TopicPartition, Short> responseData() {
+    public Map<TopicPartition, Errors> responseData() {
         return responseData;
     }
 

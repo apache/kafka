@@ -32,7 +32,6 @@ import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.network.LoginType;
 
 /**
  * JAAS configuration parser that constructs a JAAS configuration object with a single
@@ -51,7 +50,7 @@ class JaasConfig extends Configuration {
     private final String loginContextName;
     private final List<AppConfigurationEntry> configEntries;
 
-    public JaasConfig(LoginType loginType, String jaasConfigParams) {
+    public JaasConfig(String loginContextName, String jaasConfigParams) {
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
         tokenizer.slashSlashComments(true);
         tokenizer.slashStarComments(true);
@@ -67,7 +66,7 @@ class JaasConfig extends Configuration {
             if (configEntries.isEmpty())
                 throw new IllegalArgumentException("Login module not specified in JAAS config");
 
-            this.loginContextName = loginType.contextName();
+            this.loginContextName = loginContextName;
 
         } catch (IOException e) {
             throw new KafkaException("Unexpected exception while parsing JAAS config");

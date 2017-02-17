@@ -67,7 +67,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
             Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
             GroupMetadata group = groupEntry.getValue();
             groupStruct.set(GROUP_ID_KEY_NAME, groupEntry.getKey());
-            groupStruct.set(ERROR_CODE_KEY_NAME, group.errorCode);
+            groupStruct.set(ERROR_CODE_KEY_NAME, group.error.code());
             groupStruct.set(GROUP_STATE_KEY_NAME, group.state);
             groupStruct.set(PROTOCOL_TYPE_KEY_NAME, group.protocolType);
             groupStruct.set(PROTOCOL_KEY_NAME, group.protocol);
@@ -95,7 +95,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
             Struct groupStruct = (Struct) groupObj;
 
             String groupId = groupStruct.getString(GROUP_ID_KEY_NAME);
-            short errorCode = groupStruct.getShort(ERROR_CODE_KEY_NAME);
+            Errors error = Errors.forCode(groupStruct.getShort(ERROR_CODE_KEY_NAME));
             String state = groupStruct.getString(GROUP_STATE_KEY_NAME);
             String protocolType = groupStruct.getString(PROTOCOL_TYPE_KEY_NAME);
             String protocol = groupStruct.getString(PROTOCOL_KEY_NAME);
@@ -111,7 +111,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
                 members.add(new GroupMember(memberId, clientId, clientHost,
                         memberMetadata, memberAssignment));
             }
-            this.groups.put(groupId, new GroupMetadata(errorCode, state, protocolType, protocol, members));
+            this.groups.put(groupId, new GroupMetadata(error, state, protocolType, protocol, members));
         }
     }
 
@@ -121,26 +121,26 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
 
     public static class GroupMetadata {
-        private final short errorCode;
+        private final Errors error;
         private final String state;
         private final String protocolType;
         private final String protocol;
         private final List<GroupMember> members;
 
-        public GroupMetadata(short errorCode,
+        public GroupMetadata(Errors error,
                              String state,
                              String protocolType,
                              String protocol,
                              List<GroupMember> members) {
-            this.errorCode = errorCode;
+            this.error = error;
             this.state = state;
             this.protocolType = protocolType;
             this.protocol = protocol;
             this.members = members;
         }
 
-        public short errorCode() {
-            return errorCode;
+        public Errors error() {
+            return error;
         }
 
         public String state() {
@@ -161,7 +161,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
         public static GroupMetadata forError(Errors error) {
             return new DescribeGroupsResponse.GroupMetadata(
-                    error.code(),
+                    error,
                     DescribeGroupsResponse.UNKNOWN_STATE,
                     DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
                     DescribeGroupsResponse.UNKNOWN_PROTOCOL,

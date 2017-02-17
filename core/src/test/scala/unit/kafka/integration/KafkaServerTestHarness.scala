@@ -89,7 +89,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     configureSecurityBeforeServersStart()
 
     servers = configs.map(TestUtils.createServer(_)).toBuffer
-    brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
+    brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
   }

@@ -35,6 +35,7 @@ import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
+import org.rocksdb.InfoLogLevel;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -69,8 +70,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     // TODO: these values should be configurable
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
-    private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
-    private static final long BLOCK_CACHE_SIZE = 100 * 1024 * 1024L;
+    private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
+    private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int TTL_SECONDS = TTL_NOT_USED;
     private static final int MAX_WRITE_BUFFERS = 3;
@@ -120,6 +121,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
         options.setCreateIfMissing(true);
         options.setErrorIfExists(false);
+        options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
@@ -150,12 +152,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, false, new StateRestoreCallback() {
-
             @Override
             public void restore(byte[] key, byte[] value) {
                 putInternal(key, value);
             }
         });
+
         open = true;
     }
 
@@ -281,7 +283,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
         // query rocksdb
-        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(db.newIterator(), serdes, from, to);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
         return rocksDBRangeIterator;
     }
@@ -292,7 +294,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        final RocksDbIterator rocksDbIterator = new RocksDbIterator(innerIter, serdes);
+        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter, serdes);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -310,6 +312,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
      */
     @Override
     public long approximateNumEntries() {
+        validateStoreOpen();
         long value;
         try {
             value = this.db.getLongProperty("rocksdb.estimate-num-keys");
@@ -373,15 +376,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openIterators.clear();
     }
 
-
-    class RocksDbIterator implements KeyValueIterator<K, V> {
+    private class RocksDbIterator implements KeyValueIterator<K, V> {
+        private final String storeName;
         private final RocksIterator iter;
         private final StateSerdes<K, V> serdes;
-        private boolean open = true;
 
-        RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
+        private volatile boolean open = true;
+
+        RocksDbIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
+            this.storeName = storeName;
         }
 
         byte[] peekRawKey() {
@@ -395,8 +400,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException("store %s has closed");
+                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
             }
+
             return iter.isValid();
         }
 
@@ -413,19 +419,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return entry;
         }
 
-        /**
-         * @throws UnsupportedOperationException
-         */
         @Override
         public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove");
+            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
         }
 
         @Override
         public synchronized void close() {
-            open = false;
             openIterators.remove(this);
             iter.close();
+            open = false;
         }
 
         @Override
@@ -434,9 +437,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 throw new NoSuchElementException();
             }
             return serdes.keyFrom(iter.key());
-
         }
-
     }
 
     private class RocksDBRangeIterator extends RocksDbIterator {
@@ -446,8 +447,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private byte[] rawToKey;
 
-        RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
-            super(iter, serdes);
+        RocksDBRangeIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
+            super(storeName, iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
         }

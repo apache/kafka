@@ -16,11 +16,11 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.network.ChannelBuilders;
-import org.apache.kafka.common.network.LoginType;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.config.ConfigException;
@@ -73,14 +73,15 @@ public class ClientUtils {
     }
 
     /**
-     * @param configs client/server configs
+     * @param config client configs
      * @return configured ChannelBuilder based on the configs.
      */
-    public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
-        SecurityProtocol securityProtocol = SecurityProtocol.forName((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    public static ChannelBuilder createChannelBuilder(AbstractConfig config) {
+        SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
             throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
-        String clientSaslMechanism = (String) configs.get(SaslConfigs.SASL_MECHANISM);
-        return ChannelBuilders.clientChannelBuilder(securityProtocol, LoginType.CLIENT, configs, clientSaslMechanism, true);
+        String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
+        return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
+                clientSaslMechanism, true);
     }
 }

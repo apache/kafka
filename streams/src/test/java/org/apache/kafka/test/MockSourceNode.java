@@ -35,6 +35,7 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public final ArrayList<K> keys = new ArrayList<>();
     public final ArrayList<V> values = new ArrayList<>();
     public boolean initialized;
+    public boolean closed;
 
     public MockSourceNode(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(NAME + INDEX.getAndIncrement(), Arrays.asList(topics), keyDeserializer, valDeserializer);
@@ -51,5 +52,11 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public void init(final ProcessorContext context) {
         super.init(context);
         initialized = true;
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        this.closed = true;
     }
 }

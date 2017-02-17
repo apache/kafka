@@ -18,13 +18,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
 
 /**
  * The window specifications used for joins.
  * <p>
- * A {@link JoinWindows} instance defines a maximum time difference for a {@link KStream#join(KStream, ValueJoiner,
+ * A {@code JoinWindows} instance defines a maximum time difference for a {@link KStream#join(KStream, ValueJoiner,
  * JoinWindows) join over two streams} on the same key.
  * In SQL-style you would express this join as
  * <pre>{@code
@@ -46,11 +47,11 @@ import java.util.Map;
  * Both values (before and after) must not result in an "inverse" window, i.e., upper-interval bound cannot be smaller
  * than lower-interval bound.
  * <p>
- * {@link JoinWindows} are sliding windows, thus, they are aligned to the actual record timestamps.
+ * {@code JoinWindows} are sliding windows, thus, they are aligned to the actual record timestamps.
  * This implies, that each input record defines its own window with start and end time being relative to the record's
  * timestamp.
  * <p>
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
+ * For time semantics, see {@link TimestampExtractor}.
  *
  * @see TimeWindows
  * @see UnlimitedWindows
@@ -61,10 +62,10 @@ import java.util.Map;
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @see TimestampExtractor
  */
 @InterfaceStability.Unstable
-public class JoinWindows extends Windows<Window> {
+public final class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
     public final long beforeMs;
@@ -120,7 +121,7 @@ public class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Not supported by {@link JoinWindows}.
+     * Not supported by {@code JoinWindows}.
      * Throws {@link UnsupportedOperationException}.
      *
      * @throws UnsupportedOperationException at every invocation
@@ -136,8 +137,6 @@ public class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * {@inheritDoc}
-     *
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size

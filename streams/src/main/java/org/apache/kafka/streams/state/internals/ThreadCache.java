@@ -38,18 +38,17 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
+
     private final String name;
     private final long maxCacheSizeBytes;
-    private final Map<String, NamedCache> caches = new HashMap<>();
     private final StreamsMetrics metrics;
+    private final Map<String, NamedCache> caches = new HashMap<>();
 
     // internal stats
     private long numPuts = 0;
     private long numGets = 0;
     private long numEvicts = 0;
     private long numFlushes = 0;
-
-
 
     public interface DirtyEntryFlushListener {
         void apply(final List<DirtyEntry> dirty);
@@ -101,7 +100,7 @@ public class ThreadCache {
                   name, puts(), gets(), evicts(), flushes());
     }
 
-    public LRUCacheEntry get(final String namespace, byte[] key) {
+    public LRUCacheEntry get(final String namespace, Bytes key) {
         numGets++;
 
         if (key == null) {
@@ -112,20 +111,21 @@ public class ThreadCache {
         if (cache == null) {
             return null;
         }
-        return cache.get(Bytes.wrap(key));
+        return cache.get(key);
     }
 
-    public void put(final String namespace, byte[] key, LRUCacheEntry value) {
+    public void put(final String namespace, Bytes key, LRUCacheEntry value) {
         numPuts++;
+
         final NamedCache cache = getOrCreateCache(namespace);
-        cache.put(Bytes.wrap(key), value);
+        cache.put(key, value);
         maybeEvict(namespace);
     }
 
-    public LRUCacheEntry putIfAbsent(final String namespace, byte[] key, LRUCacheEntry value) {
+    public LRUCacheEntry putIfAbsent(final String namespace, Bytes key, LRUCacheEntry value) {
         final NamedCache cache = getOrCreateCache(namespace);
 
-        final LRUCacheEntry result = cache.putIfAbsent(Bytes.wrap(key), value);
+        final LRUCacheEntry result = cache.putIfAbsent(key, value);
         maybeEvict(namespace);
 
         if (result == null) {
@@ -134,27 +134,27 @@ public class ThreadCache {
         return result;
     }
 
-    public void putAll(final String namespace, final List<KeyValue<byte[], LRUCacheEntry>> entries) {
-        for (KeyValue<byte[], LRUCacheEntry> entry : entries) {
+    public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {
+        for (KeyValue<Bytes, LRUCacheEntry> entry : entries) {
             put(namespace, entry.key, entry.value);
         }
     }
 
-    public LRUCacheEntry delete(final String namespace, final byte[] key) {
+    public LRUCacheEntry delete(final String namespace, final Bytes key) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return null;
         }
 
-        return cache.delete(Bytes.wrap(key));
+        return cache.delete(key);
     }
 
-    public MemoryLRUCacheBytesIterator range(final String namespace, final byte[] from, final byte[] to) {
+    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.keyRange(cacheKey(from), cacheKey(to)), cache);
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
@@ -229,11 +229,6 @@ public class ThreadCache {
         return cache;
     }
 
-    private Bytes cacheKey(final byte[] keyBytes) {
-        return Bytes.wrap(keyBytes);
-    }
-
-
     static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
         private final Iterator<Bytes> keys;
         private final NamedCache cache;
@@ -303,12 +298,12 @@ public class ThreadCache {
         }
     }
 
-    public static class DirtyEntry {
+    static class DirtyEntry {
         private final Bytes key;
         private final byte[] newValue;
         private final RecordContext recordContext;
 
-        public DirtyEntry(final Bytes key, final byte[] newValue, final RecordContext recordContext) {
+        DirtyEntry(final Bytes key, final byte[] newValue, final RecordContext recordContext) {
             this.key = key;
             this.newValue = newValue;
             this.recordContext = recordContext;
@@ -326,5 +321,4 @@ public class ThreadCache {
             return recordContext;
         }
     }
-
 }

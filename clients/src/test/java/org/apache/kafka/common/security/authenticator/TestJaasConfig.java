@@ -22,12 +22,14 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 
 public class TestJaasConfig extends Configuration {
+
+    static final String LOGIN_CONTEXT_CLIENT = "KafkaClient";
+    static final String LOGIN_CONTEXT_SERVER = "KafkaServer";
 
     static final String USERNAME = "myuser";
     static final String PASSWORD = "mypassword";
@@ -36,9 +38,9 @@ public class TestJaasConfig extends Configuration {
 
     public static TestJaasConfig createConfiguration(String clientMechanism, List<String> serverMechanisms) {
         TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, loginModule(clientMechanism), defaultClientOptions());
+        config.createOrUpdateEntry(LOGIN_CONTEXT_CLIENT, loginModule(clientMechanism), defaultClientOptions());
         for (String mechanism : serverMechanisms) {
-            config.addEntry(JaasUtils.LOGIN_CONTEXT_SERVER, loginModule(mechanism), defaultServerOptions(mechanism));
+            config.addEntry(LOGIN_CONTEXT_SERVER, loginModule(mechanism), defaultServerOptions(mechanism));
         }
         Configuration.setConfiguration(config);
         return config;
@@ -54,7 +56,7 @@ public class TestJaasConfig extends Configuration {
             options.put("username", clientUsername);
         if (clientPassword != null)
             options.put("password", clientPassword);
-        createOrUpdateEntry(JaasUtils.LOGIN_CONTEXT_CLIENT, PlainLoginModule.class.getName(), options);
+        createOrUpdateEntry(LOGIN_CONTEXT_CLIENT, PlainLoginModule.class.getName(), options);
     }
 
     public void createOrUpdateEntry(String name, String loginModule, Map<String, Object> options) {

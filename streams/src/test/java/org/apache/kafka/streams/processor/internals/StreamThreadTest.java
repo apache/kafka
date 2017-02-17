@@ -76,6 +76,7 @@ public class StreamThreadTest {
 
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
+    private final MockTime time = new MockTime();
     private UUID processId = UUID.randomUUID();
 
     @Before
@@ -407,8 +408,8 @@ public class StreamThreadTest {
 
         assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
         assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread1.prevTasks(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread2.prevTasks(), equalTo(originalTaskAssignmentThread2));
+        assertThat(thread1.prevActiveTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevActiveTasks(), equalTo(originalTaskAssignmentThread2));
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
@@ -913,7 +914,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void close() {
                 throw new RuntimeException("KABOOM!");
@@ -965,7 +966,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void flushState() {
                 throw new RuntimeException("KABOOM!");
@@ -1017,7 +1018,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void closeTopology() {
                 throw new RuntimeException("KABOOM!");
@@ -1068,7 +1069,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void flushState() {
                 throw new RuntimeException("KABOOM!");

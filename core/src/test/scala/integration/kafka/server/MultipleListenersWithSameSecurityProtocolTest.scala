@@ -28,6 +28,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert.assertEquals
@@ -60,6 +61,13 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
         "EXTERNAL:PLAINTEXT, SECURE_EXTERNAL:SSL")
       props.put(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
       props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
+
+      // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
+      Seq("SECURE_INTERNAL", "SECURE_EXTERNAL").foreach { listenerName =>
+        props.put(new ListenerName(listenerName).configPrefix + SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+          props.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+      }
+      props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
 
       servers += TestUtils.createServer(KafkaConfig.fromProps(props))
     }
@@ -109,7 +117,7 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
     producers.foreach { case (listenerName, producer) =>
       val producerRecords = (1 to 10).map(i => new ProducerRecord(listenerName.value, s"key$i".getBytes,
         s"value$i".getBytes))
-      producerRecords.map(producer.send(_)).map(_.get(10, TimeUnit.SECONDS))
+      producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
       val consumer = consumers(listenerName)
       consumer.subscribe(Collections.singleton(listenerName.value))

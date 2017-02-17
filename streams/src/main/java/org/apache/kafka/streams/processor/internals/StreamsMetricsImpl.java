@@ -166,7 +166,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (!metrics.metrics().containsKey(name)) {
             sensor.add(name, stat);
         } else {
-            log.debug("Trying to add metric twice " + name);
+            log.trace("Trying to add metric twice: {}", name);
         }
     }
 

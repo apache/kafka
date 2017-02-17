@@ -162,7 +162,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
   private def staleControllerEpochCallback(response: AbstractResponse): Unit = {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
-    staleControllerEpochDetected = Errors.forCode(leaderAndIsrResponse.errorCode) match {
+    staleControllerEpochDetected = leaderAndIsrResponse.error match {
       case Errors.STALE_CONTROLLER_EPOCH => true
       case _ => false
     }

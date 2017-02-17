@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -76,14 +75,12 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             valueGetter.init(context);
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
         @Override
         public void process(final K key, final Change<V1> change) {
-            // the keys should never be null
-            if (key == null)
-                throw new StreamsException("Record key for KTable join operator should not be null.");
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            if (key == null) {
+                return;
+            }
 
             R newValue = null;
             R oldValue = null;

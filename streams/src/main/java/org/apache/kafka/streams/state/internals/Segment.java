@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-// use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
+// Use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
 class Segment extends RocksDBStore<Bytes, byte[]> {
     public final long id;
 
@@ -29,14 +29,16 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
         this.id = id;
     }
 
-    public void destroy() {
+    void destroy() {
         Utils.delete(dbDir);
     }
 
     @Override
     public void openDB(final ProcessorContext context) {
         super.openDB(context);
+
+        // skip the registering step
+
         open = true;
     }
-
 }
