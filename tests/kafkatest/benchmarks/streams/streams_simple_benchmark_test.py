@@ -32,7 +32,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
     def __init__(self, test_context):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
-        self.num_records = 2000000L
+        self.num_records = 1000000L
         self.replication = 1
 
 
@@ -65,6 +65,16 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait()
         self.load_driver.stop()
 
+    def stop_and_collect_data(self, scale):
+        #######################
+        # STOP + COLLECT PHASE
+        #######################
+        for num in range(0, scale):    
+            self.driver[num].wait()    
+            self.driver[num].stop()
+            self.node[num] = self.driver[num].node
+            self.node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
+            self.data[num] = self.driver[num].collect_data(self.node[num], "" )
         
     @ignore
     @cluster(num_nodes=9)
@@ -74,8 +84,8 @@ class StreamsSimpleBenchmarkTest(Test):
         Run simple Kafka Streams benchmark
         """
         self.driver = [None] * (scale + 1)
-        node = [None] * (scale)
-        data = [None] * (scale)
+        self.node = [None] * (scale)
+        self.data = [None] * (scale)
 
         self.setup_system(scale)
         self.load_system(scale, test)
@@ -89,35 +99,29 @@ class StreamsSimpleBenchmarkTest(Test):
                                                              self.num_records/(scale), "false", test)
             self.driver[num].start()
 
-        #######################
-        # STOP + COLLECT PHASE
-        #######################
-        for num in range(0, scale):    
-            self.driver[num].wait()    
-            self.driver[num].stop()
-            node[num] = self.driver[num].node
-            node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
-            data[num] = self.driver[num].collect_data(node[num], "" )
-                
+        self.stop_and_collect_data(scale)
         end_time = time.time()
         
         final = {}
         for num in range(0, scale):
-            for key in data[num]:
-                final[key + str(num)] = data[num][key]
+            for key in self.data[num]:
+                final[key + str(num)] = self.data[num][key]
         final[test + str(" latency")] = end_time - start_time
         
         return final
 
 
+    @ignore
     @cluster(num_nodes=9)
-    @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
-    def test_benchmark_with_failures(self, test):
+    #@matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
+    @matrix(test=["count"], scale=[1])
+    def test_benchmark_with_failure_and_restore(self, test, scale):
         """
         Run simple Kafka Streams benchmark
         """
-        scale = 1
         self.driver = [None] * (scale + 1)
+        self.node = [None] * (scale + 1)
+        self.data = [None] * (scale + 1)
         
         self.setup_system(scale)
         self.load_system(scale, test)
@@ -127,40 +131,77 @@ class StreamsSimpleBenchmarkTest(Test):
         # RUN PHASE
         ################
         start_time = time.time()
-
         for num in range(0, scale):
             self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
-                                                             self.num_records/(scale), "false", test)
+                                                             self.num_records/2, "false", test)
             self.driver[num].start()
 
-
+        self.stop_and_collect_data(scale)
+         
         ################
-        # FAILURE PHASE
+        # RESTART PHASE
         ################
-        time.sleep(5)
-        self.driver[0].stop()
-        self.driver[1] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
-                                                       self.num_records/(scale), "false", test)
-        self.driver[1].start()
-                
+        for num in range(0, scale):
+            self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                             self.num_records/3, "false", test)
+            self.driver[num].start()
 
-        #######################
-        # STOP + COLLECT PHASE
-        #######################
-        for num in range(1, scale + 1):    
-            self.driver[num].wait()    
-            self.driver[num].stop()
-            node[num] = self.driver[num].node
-            node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
-            data[num] = self.driver[num].collect_data(node[num], "" )
+        self.stop_and_collect_data(scale)
+        end_time = time.time()
+
+
+        final = {}
+        for num in range(0, scale):
+            for key in self.data[num]:
+                final[key + str(num)] = self.data[num][key]
+
+        final[test + str(" latency")] = end_time - start_time
+
+        return final
+
+    @cluster(num_nodes=9)
+    #@matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
+    @matrix(test=["count"])
+    def test_benchmark_with_standby_tasks(self, test):
+        """
+        Run simple Kafka Streams benchmark
+        """
+        scale = 1
+        # Note: replicas must match number of replicas in SimpleBenchmark.java
+        # Currently we are not passing this argument to that file, but should do.
+        replicas = 2
+        
+        self.driver = [None] * (scale * replicas)
+        self.node = [None] * (scale * replicas)
+        self.data = [None] * (scale * replicas)
+        
+        self.setup_system(scale)
+        self.load_system(scale, test)
+        
+        ################
+        # RUN PHASE
+        ################
+        start_time = time.time()
+        #
+        for num in range(0, scale):
+            self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                             self.num_records/2, "false", test)
+            self.driver[num].start()
+        #
+        for num in range(scale, scale*replicas):
+            self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
+                                                             self.num_records/3, "false", test)
+            self.driver[num].start()
+
+        self.stop_and_collect_data(scale * replicas)
 
         end_time = time.time()
 
 
         final = {}
         for num in range(0, scale):
-            for key in data[num]:
-                final[key + str(num)] = data[num][key]
+            for key in self.data[num]:
+                final[key + str(num)] = self.data[num][key]
 
         final[test + str(" latency")] = end_time - start_time
 

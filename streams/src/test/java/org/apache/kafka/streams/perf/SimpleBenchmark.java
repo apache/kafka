@@ -213,7 +213,8 @@ public class SimpleBenchmark {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000");
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "5000");
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         return props;
     }
 
@@ -359,9 +360,8 @@ public class SimpleBenchmark {
             }
         }
         long endTime = System.currentTimeMillis();
-        printResults(nameOfBenchmark, endTime - startTime);
-
         streams.close();
+        printResults(nameOfBenchmark, endTime - startTime);
     }
 
     private long startStreamsThread(final KafkaStreams streams, final CountDownLatch latch) throws Exception {
@@ -633,8 +633,10 @@ public class SimpleBenchmark {
         }
         @Override
         public void apply(Integer key, V value) {
+            //System.out.println("Processing key " + key);
             processedRecords++;
             if (processedRecords == numRecords) {
+                //System.out.println("Done processing. Triggering latch.");
                 this.latch.countDown();
             }
         }
