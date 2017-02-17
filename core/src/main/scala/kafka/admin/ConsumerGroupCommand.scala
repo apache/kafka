@@ -47,12 +47,12 @@ object ConsumerGroupCommand extends Logging {
     val opts = new ConsumerGroupCommandOptions(args)
 
     if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, or delete consumer group info.")
+      CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetOpt).count(opts.options.has _)
     if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offset")
 
     opts.checkArgs()
 
@@ -102,6 +102,10 @@ object ConsumerGroupCommand extends Logging {
           case service: ZkConsumerGroupService => service.deleteGroups()
           case _ => throw new IllegalStateException(s"delete is not supported for $consumerGroupService.")
         }
+      }
+      else if (opts.options.has(opts.resetOffsetOpt)) {
+        val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
+        //TODO
       }
     } catch {
       case e: Throwable =>
@@ -503,6 +507,7 @@ object ConsumerGroupCommand extends Logging {
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
+    val ResetOffsetDoc = "Reset offset of consumer group."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -528,6 +533,7 @@ object ConsumerGroupCommand extends Logging {
                                   .withRequiredArg
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
+    val resetOffsetOpt = parser.accepts("reset-offset", ResetOffsetDoc)
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
@@ -554,7 +560,8 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
-
+      if (options.has(resetOffsetOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt)
