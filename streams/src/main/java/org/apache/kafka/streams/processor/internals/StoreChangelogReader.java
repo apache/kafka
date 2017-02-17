@@ -82,9 +82,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                                      storeName, topicPartition.topic(), topicPartition.partition()));
         }
 
-        if (log.isDebugEnabled()) {
-            log.debug("Took {} ms to validate that partition {} exists", time.milliseconds() - start, topicPartition);
-        }
+        log.debug("Took {} ms to validate that partition {} exists", time.milliseconds() - start, topicPartition);
 
     }
 
@@ -106,7 +104,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             final Set<TopicPartition> partitions = new HashSet<>(stateRestorers.keySet());
             while (!partitions.isEmpty()) {
-                final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(1);
+                final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(10);
                 final Iterator<TopicPartition> partitionIterator = partitions.iterator();
                 while (partitionIterator.hasNext()) {
                     restorePartition(endOffsets, allRecords, partitionIterator);
@@ -114,9 +112,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         } finally {
             consumer.assign(Collections.<TopicPartition>emptyList());
-            if (log.isDebugEnabled()) {
-                log.debug("Took {} ms to restore active state", time.milliseconds() - start);
-            }
+            log.debug("Took {} ms to restore active state", time.milliseconds() - start);
         }
     }
 
@@ -126,11 +122,14 @@ public class StoreChangelogReader implements ChangelogReader {
         final TopicPartition topicPartition = partitionIterator.next();
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
-        final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
+        final long pos = processNext(allRecords.records(topicPartition), restorer);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
-                throw new IllegalStateException(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
-                                                              topicPartition, endOffset, pos));
+                throw new IllegalStateException(
+                        String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
+                                      topicPartition,
+                                      endOffset,
+                                      pos));
             }
             restorer.setRestoredOffset(pos);
             partitionIterator.remove();
@@ -147,7 +146,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records, final StateRestorer restorer, final Long endOffset) {
+    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records, final StateRestorer restorer) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (offset >= restorer.offsetLimit()) {

@@ -18,8 +18,28 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+/**
+ * Performs bulk read operations from a set of partitions. Used to
+ * restore  {@link org.apache.kafka.streams.processor.StateStore}s from their
+ * change logs
+ */
 public interface ChangelogReader {
+    /**
+     * Validate that the partition exists on the cluster
+     * @param topicPartition    partition to validate
+     * @param storeName         name of the store the partition is for
+     * @throws org.apache.kafka.streams.errors.StreamsException if partition doesn't exist
+     */
     void validatePartitionExists(final TopicPartition topicPartition, final String storeName);
+
+    /**
+     * Register a state store and it's partition for later restoration
+     * @param restorationInfo
+     */
     void register(final StateRestorer restorationInfo);
+
+    /**
+     * Restore all registered state stores by reading from their changelogs
+     */
     void restore();
 }
