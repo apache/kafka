@@ -187,16 +187,19 @@ public class ProcessorStateManager implements StateManager {
                 restoreCallbacks.put(topic, stateRestoreCallback);
             }
         } else {
-            log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
+            log.debug("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
 
-            restoreActiveState(topic, stateRestoreCallback);
+            long records = restoreActiveState(topic, stateRestoreCallback);
+            log.debug("{} Finished restoring state store {} with {} records from changelog topic {}",
+                logPrefix, store.name(), records, topic);
         }
 
         this.stores.put(store.name(), store);
     }
 
-    private void restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {
+    private long restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {
         // ---- try to restore the state from change-log ---- //
+        long records = 0;
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
@@ -227,6 +230,7 @@ public class ProcessorStateManager implements StateManager {
                     offset = record.offset();
                     if (offset >= limit) break;
                     stateRestoreCallback.restore(record.key(), record.value());
+                    records++;
                 }
 
                 if (offset >= limit) {
@@ -248,6 +252,8 @@ public class ProcessorStateManager implements StateManager {
             // un-assign the change log partition
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         }
+
+        return records;
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
