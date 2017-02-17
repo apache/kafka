@@ -25,40 +25,39 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractRequest extends AbstractRequestResponse {
-    private final short version;
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
-        private short version;
+        private final Short desiredVersion;
 
         public Builder(ApiKeys apiKey) {
+            this(apiKey, null);
+        }
+
+        public Builder(ApiKeys apiKey, Short desiredVersion) {
             this.apiKey = apiKey;
-            this.version = ProtoUtils.latestVersion(apiKey.id);
+            this.desiredVersion = desiredVersion;
         }
 
         public ApiKeys apiKey() {
             return apiKey;
         }
 
-        public Builder<T> setVersion(short version) {
-            this.version = version;
-            return this;
+        public short desiredOrLatestVersion() {
+            return desiredVersion == null ? ProtoUtils.latestVersion(apiKey.id) : desiredVersion;
         }
 
-        public short version() {
-            return version;
+        public T build() {
+            return build(desiredOrLatestVersion());
         }
 
-        public abstract T build();
+        public abstract T build(short version);
     }
 
-    public AbstractRequest(Struct struct, short version) {
-        super(struct);
+    private final short version;
+
+    public AbstractRequest(short version) {
         this.version = version;
-    }
-
-    public Send toSend(String destination, RequestHeader header) {
-        return new NetworkSend(destination, serialize(header, this));
     }
 
     /**
@@ -68,6 +67,19 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         return version;
     }
 
+    public Send toSend(String destination, RequestHeader header) {
+        return new NetworkSend(destination, serialize(header));
+    }
+
+    /**
+     * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
+     */
+    public ByteBuffer serialize(RequestHeader header) {
+        return serialize(header.toStruct(), toStruct());
+    }
+
+    protected abstract Struct toStruct();
+
     /**
      * Get an error response for a request
      */
@@ -76,54 +88,78 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
-    public static AbstractRequest getRequest(int requestId, short versionId, ByteBuffer buffer) {
+    public static RequestAndSize getRequest(int requestId, short version, ByteBuffer buffer) {
         ApiKeys apiKey = ApiKeys.forId(requestId);
+        Struct struct = ProtoUtils.parseRequest(apiKey.id, version, buffer);
+        AbstractRequest request;
         switch (apiKey) {
             case PRODUCE:
-                return ProduceRequest.parse(buffer, versionId);
+                request = new ProduceRequest(struct, version);
+                break;
             case FETCH:
-                return FetchRequest.parse(buffer, versionId);
+                request = new FetchRequest(struct, version);
+                break;
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer, versionId);
+                request = new ListOffsetRequest(struct, version);
+                break;
             case METADATA:
-                return MetadataRequest.parse(buffer, versionId);
+                request = new MetadataRequest(struct, version);
+                break;
             case OFFSET_COMMIT:
-                return OffsetCommitRequest.parse(buffer, versionId);
+                request = new OffsetCommitRequest(struct, version);
+                break;
             case OFFSET_FETCH:
-                return OffsetFetchRequest.parse(buffer, versionId);
+                request = new OffsetFetchRequest(struct, version);
+                break;
             case GROUP_COORDINATOR:
-                return GroupCoordinatorRequest.parse(buffer, versionId);
+                request = new GroupCoordinatorRequest(struct, version);
+                break;
             case JOIN_GROUP:
-                return JoinGroupRequest.parse(buffer, versionId);
+                request = new JoinGroupRequest(struct, version);
+                break;
             case HEARTBEAT:
-                return HeartbeatRequest.parse(buffer, versionId);
+                request = new HeartbeatRequest(struct, version);
+                break;
             case LEAVE_GROUP:
-                return LeaveGroupRequest.parse(buffer, versionId);
+                request = new LeaveGroupRequest(struct, version);
+                break;
             case SYNC_GROUP:
-                return SyncGroupRequest.parse(buffer, versionId);
+                request = new SyncGroupRequest(struct, version);
+                break;
             case STOP_REPLICA:
-                return StopReplicaRequest.parse(buffer, versionId);
+                request = new StopReplicaRequest(struct, version);
+                break;
             case CONTROLLED_SHUTDOWN_KEY:
-                return ControlledShutdownRequest.parse(buffer, versionId);
+                request = new ControlledShutdownRequest(struct, version);
+                break;
             case UPDATE_METADATA_KEY:
-                return UpdateMetadataRequest.parse(buffer, versionId);
+                request = new UpdateMetadataRequest(struct, version);
+                break;
             case LEADER_AND_ISR:
-                return LeaderAndIsrRequest.parse(buffer, versionId);
+                request = new LeaderAndIsrRequest(struct, version);
+                break;
             case DESCRIBE_GROUPS:
-                return DescribeGroupsRequest.parse(buffer, versionId);
+                request = new DescribeGroupsRequest(struct, version);
+                break;
             case LIST_GROUPS:
-                return ListGroupsRequest.parse(buffer, versionId);
+                request = new ListGroupsRequest(struct, version);
+                break;
             case SASL_HANDSHAKE:
-                return SaslHandshakeRequest.parse(buffer, versionId);
+                request = new SaslHandshakeRequest(struct, version);
+                break;
             case API_VERSIONS:
-                return ApiVersionsRequest.parse(buffer, versionId);
+                request = new ApiVersionsRequest(struct, version);
+                break;
             case CREATE_TOPICS:
-                return CreateTopicsRequest.parse(buffer, versionId);
+                request = new CreateTopicsRequest(struct, version);
+                break;
             case DELETE_TOPICS:
-                return DeleteTopicsRequest.parse(buffer, versionId);
+                request = new DeleteTopicsRequest(struct, version);
+                break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));
         }
+        return new RequestAndSize(request, struct.sizeOf());
     }
 }

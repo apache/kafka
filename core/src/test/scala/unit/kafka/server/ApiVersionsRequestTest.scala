@@ -17,8 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Assert._
@@ -51,14 +50,13 @@ class ApiVersionsRequestTest extends BaseRequestTest {
 
   @Test
   def testApiVersionsRequestWithUnsupportedVersion() {
-    val apiVersionsRequest = new ApiVersionsRequest(
-      new Struct(ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id)), Short.MaxValue)
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
+    val apiVersionsRequest = new ApiVersionsRequest(0)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(Short.MaxValue))
     assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)
   }
 
-  private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS)
-    ApiVersionsResponse.parse(response)
+  private def sendApiVersionsRequest(request: ApiVersionsRequest, apiVersion: Option[Short] = None): ApiVersionsResponse = {
+    val response = connectAndSend(request, ApiKeys.API_VERSIONS, apiVersion = apiVersion)
+    ApiVersionsResponse.parse(response, 0)
   }
 }

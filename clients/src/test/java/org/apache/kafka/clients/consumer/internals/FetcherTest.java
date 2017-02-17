@@ -886,7 +886,7 @@ public class FetcherTest {
         ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
-        return new ListOffsetResponse(allPartitionData, 1);
+        return new ListOffsetResponse(allPartitionData);
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {

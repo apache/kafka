@@ -34,8 +34,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
         }
 
         @Override
-        public DescribeGroupsRequest build() {
-            short version = version();
+        public DescribeGroupsRequest build(short version) {
             return new DescribeGroupsRequest(this.groupIds, version);
         }
 
@@ -48,14 +47,12 @@ public class DescribeGroupsRequest extends AbstractRequest {
     private final List<String> groupIds;
 
     private DescribeGroupsRequest(List<String> groupIds, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.DESCRIBE_GROUPS.id, version)),
-                version);
-        struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
+        super(version);
         this.groupIds = groupIds;
     }
 
     public DescribeGroupsRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         this.groupIds = new ArrayList<>();
         for (Object groupId : struct.getArray(GROUP_IDS_KEY_NAME))
             this.groupIds.add((String) groupId);
@@ -63,6 +60,13 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     public List<String> groupIds() {
         return groupIds;
+    }
+
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.DESCRIBE_GROUPS.id, version()));
+        struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
+        return struct;
     }
 
     @Override
@@ -78,12 +82,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
         }
     }
 
-    public static DescribeGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer),
-                (short) versionId);
-    }
-
-    public static DescribeGroupsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.DESCRIBE_GROUPS.id));
+    public static DescribeGroupsRequest parse(ByteBuffer buffer, short versionId) {
+        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer), versionId);
     }
 }

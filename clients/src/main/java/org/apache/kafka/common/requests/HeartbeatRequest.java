@@ -37,8 +37,8 @@ public class HeartbeatRequest extends AbstractRequest {
         }
 
         @Override
-        public HeartbeatRequest build() {
-            return new HeartbeatRequest(groupId, groupGenerationId, memberId, version());
+        public HeartbeatRequest build(short version) {
+            return new HeartbeatRequest(groupId, groupGenerationId, memberId, version);
         }
 
         @Override
@@ -58,18 +58,14 @@ public class HeartbeatRequest extends AbstractRequest {
     private final String memberId;
 
     private HeartbeatRequest(String groupId, int groupGenerationId, String memberId, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.HEARTBEAT.id, version)),
-                version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        super(version);
         this.groupId = groupId;
         this.groupGenerationId = groupGenerationId;
         this.memberId = memberId;
     }
 
-    public HeartbeatRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public HeartbeatRequest(Struct struct, short version) {
+        super(version);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         groupGenerationId = struct.getInt(GROUP_GENERATION_ID_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
@@ -99,11 +95,16 @@ public class HeartbeatRequest extends AbstractRequest {
         return memberId;
     }
 
-    public static HeartbeatRequest parse(ByteBuffer buffer, int versionId) {
-        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer), (short) versionId);
+    public static HeartbeatRequest parse(ByteBuffer buffer, short versionId) {
+        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer), versionId);
     }
 
-    public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.HEARTBEAT.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.HEARTBEAT.id, version()));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        return struct;
     }
 }

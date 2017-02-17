@@ -697,11 +697,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (generation == null)
             return RequestFuture.failure(new CommitFailedException());
 
-        OffsetCommitRequest.Builder builder =
-                new OffsetCommitRequest.Builder(this.groupId, offsetData).
-                        setGenerationId(generation.generationId).
-                        setMemberId(generation.memberId).
-                        setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
+                setGenerationId(generation.generationId).
+                setMemberId(generation.memberId).
+                setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
 
         log.trace("Sending OffsetCommit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 

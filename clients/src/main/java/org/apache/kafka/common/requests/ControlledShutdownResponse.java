@@ -16,7 +16,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,8 +25,6 @@ import java.util.List;
 import java.util.Set;
 
 public class ControlledShutdownResponse extends AbstractResponse {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
 
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String PARTITIONS_REMAINING_KEY_NAME = "partitions_remaining";
@@ -47,25 +44,11 @@ public class ControlledShutdownResponse extends AbstractResponse {
     private final Set<TopicPartition> partitionsRemaining;
 
     public ControlledShutdownResponse(Errors error, Set<TopicPartition> partitionsRemaining) {
-        super(new Struct(CURRENT_SCHEMA));
-
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-
-        List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());
-        for (TopicPartition topicPartition : partitionsRemaining) {
-            Struct topicPartitionStruct = struct.instance(PARTITIONS_REMAINING_KEY_NAME);
-            topicPartitionStruct.set(TOPIC_KEY_NAME, topicPartition.topic());
-            topicPartitionStruct.set(PARTITION_KEY_NAME, topicPartition.partition());
-            partitionsRemainingList.add(topicPartitionStruct);
-        }
-        struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
-
         this.error = error;
         this.partitionsRemaining = partitionsRemaining;
     }
 
     public ControlledShutdownResponse(Struct struct) {
-        super(struct);
         error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         Set<TopicPartition> partitions = new HashSet<>();
         for (Object topicPartitionObj : struct.getArray(PARTITIONS_REMAINING_KEY_NAME)) {
@@ -85,12 +68,25 @@ public class ControlledShutdownResponse extends AbstractResponse {
         return partitionsRemaining;
     }
 
-    public static ControlledShutdownResponse parse(ByteBuffer buffer) {
-        return new ControlledShutdownResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static ControlledShutdownResponse parse(ByteBuffer buffer, int version) {
+    public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
         return new ControlledShutdownResponse(ProtoUtils.parseResponse(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, version, buffer));
     }
 
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, version));
+
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+
+        List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());
+        for (TopicPartition topicPartition : partitionsRemaining) {
+            Struct topicPartitionStruct = struct.instance(PARTITIONS_REMAINING_KEY_NAME);
+            topicPartitionStruct.set(TOPIC_KEY_NAME, topicPartition.topic());
+            topicPartitionStruct.set(PARTITION_KEY_NAME, topicPartition.partition());
+            partitionsRemainingList.add(topicPartitionStruct);
+        }
+        struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
+
+        return struct;
+    }
 }

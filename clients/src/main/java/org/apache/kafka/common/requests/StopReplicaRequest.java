@@ -52,9 +52,9 @@ public class StopReplicaRequest extends AbstractRequest {
         }
 
         @Override
-        public StopReplicaRequest build() {
+        public StopReplicaRequest build(short version) {
             return new StopReplicaRequest(controllerId, controllerEpoch,
-                    deletePartitions, partitions, version());
+                    deletePartitions, partitions, version);
         }
 
         @Override
@@ -77,30 +77,15 @@ public class StopReplicaRequest extends AbstractRequest {
 
     private StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions,
                                Set<TopicPartition> partitions, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version)), version);
-
-        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
-        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
-
-        List<Struct> partitionDatas = new ArrayList<>(partitions.size());
-        for (TopicPartition partition : partitions) {
-            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
-            partitionData.set(TOPIC_KEY_NAME, partition.topic());
-            partitionData.set(PARTITION_KEY_NAME, partition.partition());
-            partitionDatas.add(partitionData);
-        }
-
-        struct.set(PARTITIONS_KEY_NAME, partitionDatas.toArray());
-
+        super(version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.deletePartitions = deletePartitions;
         this.partitions = partitions;
     }
 
-    public StopReplicaRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public StopReplicaRequest(Struct struct, short version) {
+        super(version);
 
         partitions = new HashSet<>();
         for (Object partitionDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {
@@ -148,12 +133,27 @@ public class StopReplicaRequest extends AbstractRequest {
         return partitions;
     }
 
-    public static StopReplicaRequest parse(ByteBuffer buffer, int versionId) {
-        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer),
-                (short) versionId);
+    public static StopReplicaRequest parse(ByteBuffer buffer, short versionId) {
+        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer), versionId);
     }
 
-    public static StopReplicaRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version()));
+
+        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
+        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
+        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
+
+        List<Struct> partitionDatas = new ArrayList<>(partitions.size());
+        for (TopicPartition partition : partitions) {
+            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
+            partitionData.set(TOPIC_KEY_NAME, partition.topic());
+            partitionData.set(PARTITION_KEY_NAME, partition.partition());
+            partitionDatas.add(partitionData);
+        }
+
+        struct.set(PARTITIONS_KEY_NAME, partitionDatas.toArray());
+        return struct;
     }
 }
