@@ -40,16 +40,7 @@ object BrokerApiVersionsCommand {
   def execute(args: Array[String], out: PrintStream): Unit = {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
-
-    // Wait until AdminClient#findAllBrokers returns a non-empty list of brokers
-    // before continuing.
-    var nodes = List[Node]()
-    while (nodes.isEmpty) {
-      nodes = adminClient.findAllBrokers()
-      if (nodes.isEmpty)
-        Thread.sleep(1)
-    }
-
+    adminClient.awaitBrokers()
     var brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfoOrError) =>
       versionInfoOrError match {

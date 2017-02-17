@@ -85,6 +85,18 @@ class AdminClient(val time: Time,
     response.apiVersions.asScala.toList
   }
 
+  /**
+   * Wait until there is a non-empty list of brokers in the cluster.
+   */
+  def awaitBrokers() {
+    var nodes = List[Node]()
+    do {
+      nodes = findAllBrokers()
+      if (nodes.isEmpty)
+        Thread.sleep(50)
+    } while (nodes.isEmpty)
+  }
+
   def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
