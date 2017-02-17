@@ -17,23 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
-interface StateManager extends Checkpointable {
-    File baseDir();
-
-    void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback);
-
-    void flush(InternalProcessorContext context);
-
-    void close(Map<TopicPartition, Long> offsets) throws IOException;
-
-    StateStore getGlobalStore(final String name);
-
-    StateStore getStore(final String name);
+// Interface to indicate that an object has associated partition offsets that can be checkpointed
+interface Checkpointable {
+    void checkpoint(final Map<TopicPartition, Long> offsets);
+    Map<TopicPartition, Long> checkpointed();
 }
