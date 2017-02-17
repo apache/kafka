@@ -104,8 +104,29 @@ object ConsumerGroupCommand extends Logging {
         }
       }
       else if (opts.options.has(opts.resetOffsetOpt)) {
+        val (state, assignments) = consumerGroupService.describeGroup()
         val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
-        //TODO
+        assignments match {
+          case None =>
+            // applies to both old and new consumer
+            printError(s"The consumer group '$groupId' does not exist.")
+          case Some(assignments) =>
+              state match {
+                case Some("Dead") =>
+                  printError(s"Consumer group '$groupId' does not exist.")
+                case Some("Empty") =>
+                  //TODO execute planning
+                  printAssignment(assignments, true)
+                case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                  System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.") //TODO warn in this status offsets cannot be reset
+                  printAssignment(assignments, true)
+                case Some("Stable") =>
+                  //TODO warn in this status offsets cannot be reset
+                case other =>
+                  // the control should never reach here
+                  throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
+              }
+        }
       }
     } catch {
       case e: Throwable =>
