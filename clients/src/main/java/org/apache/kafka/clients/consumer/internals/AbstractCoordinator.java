@@ -893,8 +893,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // coordinator may still be unknown, instead of an immediate retry, let's wait for a bit.
                                 if (coordinatorUnknown())
                                     AbstractCoordinator.this.wait(retryBackoffMs);
-                            }
-                            else
+                            } else
                                 AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
@@ -945,7 +944,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.error("Unexpected interrupt received in heartbeat thread for group {}", groupId, e);
                 this.failed.set(new RuntimeException(e));
             } catch (RuntimeException e) {
-                log.error("Heartbeat thread for group {} failed due to unexpected error" , groupId, e);
+                log.error("Heartbeat thread for group {} failed due to unexpected error", groupId, e);
                 this.failed.set(e);
             } finally {
                 log.debug("Heartbeat thread for group {} has closed", groupId);
