@@ -603,8 +603,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequest(final Node node,
-                                                                                         final Map<TopicPartition, Long> timestampsToSearch,
-                                                                                         boolean requireTimestamp) {
+                                                                                 final Map<TopicPartition, Long> timestampsToSearch,
+                                                                                 boolean requireTimestamp) {
         // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
         short minVersion = requireTimestamp ? (short) 1 : (short) 0;
         ListOffsetRequest.Builder builder = ListOffsetRequest.Builder.forConsumer(minVersion)

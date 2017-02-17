@@ -31,7 +31,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     /**
      * This should only be used if we need to return a response with a different version than the request, which
-     * should be very rare. Typically {@link #toSend(String, RequestHeader)} should be used.
+     * should be very rare (an example is @link {@link ApiVersionsResponse#unsupportedVersionSend(String, RequestHeader)}).
+     * Typically {@link #toSend(String, RequestHeader)} should be used.
      */
     public Send toSend(String destination, short version, ResponseHeader responseHeader) {
         return new NetworkSend(destination, serialize(version, responseHeader));
