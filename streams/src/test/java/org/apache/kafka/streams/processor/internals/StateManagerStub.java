@@ -57,7 +57,12 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointed() {
         return null;
+    }
+
+    @Override
+    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+
     }
 }

@@ -52,14 +52,14 @@ public abstract class AbstractTask {
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
-    protected AbstractTask(TaskId id,
-                           String applicationId,
-                           Collection<TopicPartition> partitions,
-                           ProcessorTopology topology,
-                           Consumer<byte[], byte[]> consumer,
-                           Consumer<byte[], byte[]> restoreConsumer,
-                           boolean isStandby,
-                           StateDirectory stateDirectory,
+    protected AbstractTask(final TaskId id,
+                           final String applicationId,
+                           final Collection<TopicPartition> partitions,
+                           final ProcessorTopology topology,
+                           final Consumer<byte[], byte[]> consumer,
+                           final Consumer<byte[], byte[]> restoreConsumer,
+                           final boolean isStandby,
+                           final StateDirectory stateDirectory,
                            final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
@@ -70,7 +70,7 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(id, partitions, restoreConsumer, isStandby, stateDirectory, topology.storeToChangelogTopic());
+            stateMgr = new ProcessorStateManager(id, partitions, restoreConsumer, isStandby, stateDirectory, topology.storeToChangelogTopic());
         } catch (IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }

@@ -58,11 +58,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final File baseDir;
     private final OffsetCheckpoint checkpoint;
     private final Set<String> globalStoreNames = new HashSet<>();
-    private HashMap<TopicPartition, Long> checkpointableOffsets;
+    private final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
 
     public GlobalStateManagerImpl(final ProcessorTopology topology,
-                           final Consumer<byte[], byte[]> consumer,
-                           final StateDirectory stateDirectory) {
+                                  final Consumer<byte[], byte[]> consumer,
+                                  final StateDirectory stateDirectory) {
         this.topology = topology;
         this.consumer = consumer;
         this.stateDirectory = stateDirectory;
@@ -81,8 +81,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         try {
-            this.checkpointableOffsets = new HashMap<>(checkpoint.read());
-            checkpoint.delete();
+            this.checkpointableOffsets.putAll(checkpoint.read());
         } catch (IOException e) {
             try {
                 stateDirectory.unlockGlobalState();
@@ -220,13 +219,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state stores\n" + closeFailed);
             }
-            writeCheckpoints(offsets);
+            checkpoint(offsets);
         } finally {
             stateDirectory.unlockGlobalState();
         }
     }
 
-    private void writeCheckpoints(final Map<TopicPartition, Long> offsets) {
+    @Override
+    public void checkpoint(final Map<TopicPartition, Long> offsets) {
         if (!offsets.isEmpty()) {
             checkpointableOffsets.putAll(offsets);
             try {
@@ -238,7 +238,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointed() {
         return Collections.unmodifiableMap(checkpointableOffsets);
     }
 

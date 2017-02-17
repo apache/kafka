@@ -39,7 +39,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     private StateSerdes<K, V> serdes;
 
-    InMemoryKeyValueStore(final String name, final Serde<K> keySerde, final Serde<V> valueSerde) {
+    public InMemoryKeyValueStore(final String name, final Serde<K> keySerde, final Serde<V> valueSerde) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;

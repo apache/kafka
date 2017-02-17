@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
@@ -39,6 +41,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
@@ -413,6 +417,62 @@ public class StreamTaskTest {
                                                      stateDirectory, testCache, time, recordCollector);
         streamTask.flushState();
         assertTrue(flushed.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldCheckpointOffsetsOnCommit() throws Exception {
+        final String storeName = "test";
+        final String changelogTopic = ProcessorStateManager.storeChangelogTopic("appId", storeName);
+        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
+            @Override
+            public void init(final ProcessorContext context, final StateStore root) {
+                context.register(root, true, null);
+            }
+
+            @Override
+            public boolean persistent() {
+                return true;
+            }
+        };
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>singletonList(inMemoryStore),
+                                                                 Collections.singletonMap(storeName, changelogTopic),
+                                                                 Collections.<StateStore>emptyList());
+
+        final TopicPartition partition = new TopicPartition(changelogTopic, 0);
+        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
+            @Override
+            public Map<TopicPartition, Long> offsets() {
+
+                return Collections.singletonMap(partition, 543L);
+            }
+        };
+
+        restoreStateConsumer.updatePartitions(changelogTopic,
+                                              Collections.singletonList(
+                                                      new PartitionInfo(changelogTopic, 0, null, new Node[0], new Node[0])));
+        restoreStateConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
+        restoreStateConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final TaskId taskId = new TaskId(0, 0);
+        final MockTime time = new MockTime();
+        final StreamsConfig config = createConfig(baseDir);
+        final StreamTask streamTask = new StreamTask(taskId, "appId", partitions, topology, consumer,
+                                                     restoreStateConsumer, config, streamsMetrics,
+                                                     stateDirectory, new ThreadCache("testCache", 0, streamsMetrics),
+                                                     time, recordCollector);
+
+        time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+
+        streamTask.commit();
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
+                                                                          ProcessorStateManager.CHECKPOINT_FILE_NAME));
+
+        assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, 544L)));
     }
 
     @Test

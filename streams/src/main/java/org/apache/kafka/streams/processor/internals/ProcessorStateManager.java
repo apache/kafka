@@ -68,6 +68,7 @@ public class ProcessorStateManager implements StateManager {
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
     private final Map<String, TopicPartition> partitionForTopic;
+    private final OffsetCheckpoint checkpoint;
 
     /**
      * @throws LockException if the state directory cannot be locked because another thread holds the lock
@@ -103,11 +104,8 @@ public class ProcessorStateManager implements StateManager {
         }
 
         // load the checkpoint information
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
+        checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets = new HashMap<>(checkpoint.read());
-
-        // delete the checkpoint file after finish loading its stored offsets
-        checkpoint.delete();
     }
 
 
@@ -250,7 +248,7 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointed() {
         Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
 
         for (Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
@@ -347,35 +345,38 @@ public class ProcessorStateManager implements StateManager {
                 }
 
                 if (ackedOffsets != null) {
-                    Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
-                    for (String storeName : stores.keySet()) {
-                        // only checkpoint the offset to the offsets file if
-                        // it is persistent AND changelog enabled
-                        if (stores.get(storeName).persistent() && storeToChangelogTopic.containsKey(storeName)) {
-                            String changelogTopic = storeToChangelogTopic.get(storeName);
-                            TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                            Long offset = ackedOffsets.get(topicPartition);
-
-                            if (offset != null) {
-                                // store the last offset + 1 (the log position after restoration)
-                                checkpointOffsets.put(topicPartition, offset + 1);
-                            } else {
-                                // if no record was produced. we need to check the restored offset.
-                                offset = restoredOffsets.get(topicPartition);
-                                if (offset != null)
-                                    checkpointOffsets.put(topicPartition, offset);
-                            }
-                        }
-                    }
-                    // write the checkpoint file before closing, to indicate clean shutdown
-                    OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
-                    checkpoint.write(checkpointOffsets);
+                    checkpoint(ackedOffsets);
                 }
 
             }
         } finally {
             // release the state directory directoryLock
             stateDirectory.unlock(taskId);
+        }
+    }
+
+    // write the checkpoint
+    @Override
+    public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
+        for (String storeName : stores.keySet()) {
+            // only checkpoint the offset to the offsets file if
+            // it is persistent AND changelog enabled
+            if (stores.get(storeName).persistent() && storeToChangelogTopic.containsKey(storeName)) {
+                final String changelogTopic = storeToChangelogTopic.get(storeName);
+                final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
+                if (ackedOffsets.containsKey(topicPartition)) {
+                    // store the last offset + 1 (the log position after restoration)
+                    checkpointedOffsets.put(topicPartition, ackedOffsets.get(topicPartition) + 1);
+                } else if (restoredOffsets.containsKey(topicPartition)) {
+                    checkpointedOffsets.put(topicPartition, restoredOffsets.get(topicPartition));
+                }
+            }
+        }
+        // write the checkpoint file before closing, to indicate clean shutdown
+        try {
+            checkpoint.write(checkpointedOffsets);
+        } catch (IOException e) {
+            log.warn("Failed to write checkpoint file to {}", new File(baseDir, CHECKPOINT_FILE_NAME), e);
         }
     }
 
