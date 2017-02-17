@@ -31,7 +31,6 @@ import java.util.Set;
 
 public class MetadataResponse extends AbstractResponse {
 
-    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.METADATA.id);
     private static final String BROKERS_KEY_NAME = "brokers";
     private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
 
@@ -83,78 +82,16 @@ public class MetadataResponse extends AbstractResponse {
     private final String clusterId;
 
     /**
-     * Constructor for the latest version
+     * Constructor for all versions.
      */
     public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata) {
-        this(brokers, clusterId, controllerId, topicMetadata, CURRENT_VERSION);
-    }
-
-    /**
-     * Constructor for a specific version
-     */
-    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata, int version) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version)));
         this.brokers = brokers;
         this.controller = getControllerNode(controllerId, brokers);
         this.topicMetadata = topicMetadata;
         this.clusterId = clusterId;
-
-        List<Struct> brokerArray = new ArrayList<>();
-        for (Node node : brokers) {
-            Struct broker = struct.instance(BROKERS_KEY_NAME);
-            broker.set(NODE_ID_KEY_NAME, node.id());
-            broker.set(HOST_KEY_NAME, node.host());
-            broker.set(PORT_KEY_NAME, node.port());
-            // This field only exists in v1+
-            if (broker.hasField(RACK_KEY_NAME))
-                broker.set(RACK_KEY_NAME, node.rack());
-            brokerArray.add(broker);
-        }
-        struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
-
-        // This field only exists in v1+
-        if (struct.hasField(CONTROLLER_ID_KEY_NAME))
-            struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
-
-        // This field only exists in v2+
-        if (struct.hasField(CLUSTER_ID_KEY_NAME))
-            struct.set(CLUSTER_ID_KEY_NAME, clusterId);
-
-        List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
-        for (TopicMetadata metadata : topicMetadata) {
-            Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, metadata.topic);
-            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
-            // This field only exists in v1+
-            if (topicData.hasField(IS_INTERNAL_KEY_NAME))
-                topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
-
-            List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
-            for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
-                partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, partitionMetadata.error.code());
-                partitionData.set(PARTITION_KEY_NAME, partitionMetadata.partition);
-                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leader.id());
-                ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
-                for (Node node : partitionMetadata.replicas)
-                    replicas.add(node.id());
-                partitionData.set(REPLICAS_KEY_NAME, replicas.toArray());
-                ArrayList<Integer> isr = new ArrayList<>(partitionMetadata.isr.size());
-                for (Node node : partitionMetadata.isr)
-                    isr.add(node.id());
-                partitionData.set(ISR_KEY_NAME, isr.toArray());
-                partitionMetadataArray.add(partitionData);
-
-            }
-            topicData.set(PARTITION_METADATA_KEY_NAME, partitionMetadataArray.toArray());
-            topicMetadataArray.add(topicData);
-        }
-        struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
     }
 
     public MetadataResponse(Struct struct) {
-        super(struct);
-
         Map<Integer, Node> brokers = new HashMap<>();
         Object[] brokerStructs = (Object[]) struct.get(BROKERS_KEY_NAME);
         for (int i = 0; i < brokerStructs.length; i++) {
@@ -317,12 +254,8 @@ public class MetadataResponse extends AbstractResponse {
         return this.clusterId;
     }
 
-    public static MetadataResponse parse(ByteBuffer buffer) {
-        return parse(buffer, CURRENT_VERSION);
-    }
-
-    public static MetadataResponse parse(ByteBuffer buffer, int version) {
-        return new MetadataResponse(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version).read(buffer));
+    public static MetadataResponse parse(ByteBuffer buffer, short version) {
+        return new MetadataResponse(ProtoUtils.parseResponse(ApiKeys.METADATA.id, version, buffer));
     }
 
     public static class TopicMetadata {
@@ -400,4 +333,60 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version));
+        List<Struct> brokerArray = new ArrayList<>();
+        for (Node node : brokers) {
+            Struct broker = struct.instance(BROKERS_KEY_NAME);
+            broker.set(NODE_ID_KEY_NAME, node.id());
+            broker.set(HOST_KEY_NAME, node.host());
+            broker.set(PORT_KEY_NAME, node.port());
+            // This field only exists in v1+
+            if (broker.hasField(RACK_KEY_NAME))
+                broker.set(RACK_KEY_NAME, node.rack());
+            brokerArray.add(broker);
+        }
+        struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
+
+        // This field only exists in v1+
+        if (struct.hasField(CONTROLLER_ID_KEY_NAME))
+            struct.set(CONTROLLER_ID_KEY_NAME, controller == null ? NO_CONTROLLER_ID : controller.id());
+
+        // This field only exists in v2+
+        if (struct.hasField(CLUSTER_ID_KEY_NAME))
+            struct.set(CLUSTER_ID_KEY_NAME, clusterId);
+
+        List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
+        for (TopicMetadata metadata : topicMetadata) {
+            Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, metadata.topic);
+            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, metadata.error.code());
+            // This field only exists in v1+
+            if (topicData.hasField(IS_INTERNAL_KEY_NAME))
+                topicData.set(IS_INTERNAL_KEY_NAME, metadata.isInternal());
+
+            List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
+            for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
+                partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, partitionMetadata.error.code());
+                partitionData.set(PARTITION_KEY_NAME, partitionMetadata.partition);
+                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leader.id());
+                ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
+                for (Node node : partitionMetadata.replicas)
+                    replicas.add(node.id());
+                partitionData.set(REPLICAS_KEY_NAME, replicas.toArray());
+                ArrayList<Integer> isr = new ArrayList<>(partitionMetadata.isr.size());
+                for (Node node : partitionMetadata.isr)
+                    isr.add(node.id());
+                partitionData.set(ISR_KEY_NAME, isr.toArray());
+                partitionMetadataArray.add(partitionData);
+
+            }
+            topicData.set(PARTITION_METADATA_KEY_NAME, partitionMetadataArray.toArray());
+            topicMetadataArray.add(topicData);
+        }
+        struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
+        return struct;
+    }
 }

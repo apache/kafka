@@ -33,7 +33,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, NetworkSend}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
@@ -89,13 +89,11 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
-    val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
-    request.header.writeTo(byteBuffer)
-    request.body.writeTo(byteBuffer)
+    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+    channel.sendResponse(new RequestChannel.Response(request, send))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
@@ -119,14 +117,11 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = 10000
     val ack = 0: Short
 
-    val emptyRequest = new ProduceRequest.Builder(
-        ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyRequest = new ProduceRequest.Builder(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
     val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
-
-    val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
-    emptyHeader.writeTo(byteBuffer)
-    emptyRequest.writeTo(byteBuffer)
+    val byteBuffer = emptyRequest.serialize(emptyHeader)
     byteBuffer.rewind()
+
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
     serializedBytes
@@ -289,13 +284,10 @@ class SocketServerTest extends JUnitSuite {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = new ProduceRequest.Builder(
-          ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyRequest = new ProduceRequest.Builder(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]()).build()
       val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
-      val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
-      emptyHeader.writeTo(byteBuffer)
-      emptyRequest.writeTo(byteBuffer)
+      val byteBuffer = emptyRequest.serialize(emptyHeader)
       byteBuffer.rewind()
       val serializedBytes = new Array[Byte](byteBuffer.remaining)
       byteBuffer.get(serializedBytes)
@@ -355,7 +347,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+      channel.sendResponse(new RequestChannel.Response(request, send))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 

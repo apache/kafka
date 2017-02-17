@@ -261,17 +261,13 @@ class ReplicaFetcherThread(name: String,
 
   }
 
-  private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
+  private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, replicaId: Int): Long = {
     val requestBuilder = if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
         val partitions = Map(topicPartition -> (earliestOrLatest: java.lang.Long))
-        new ListOffsetRequest.Builder(consumerId).
-            setTargetTimes(partitions.asJava).
-            setVersion(1)
+        ListOffsetRequest.Builder.forReplica(1, replicaId).setTargetTimes(partitions.asJava)
       } else {
         val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        new ListOffsetRequest.Builder(consumerId).
-            setOffsetData(partitions.asJava).
-            setVersion(0)
+        ListOffsetRequest.Builder.forReplica(0, replicaId).setOffsetData(partitions.asJava)
       }
     val clientResponse = sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
@@ -295,9 +291,8 @@ class ReplicaFetcherThread(name: String,
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 
-    val requestBuilder = new JFetchRequest.Builder(maxWait, minBytes, requestMap).
-        setReplicaId(replicaId).setMaxBytes(maxBytes)
-    requestBuilder.setVersion(fetchRequestVersion)
+    val requestBuilder = JFetchRequest.Builder.forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, requestMap)
+      .setMaxBytes(maxBytes)
     new FetchRequest(requestBuilder)
   }
 

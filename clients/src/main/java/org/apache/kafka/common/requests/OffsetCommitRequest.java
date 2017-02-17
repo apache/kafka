@@ -124,17 +124,15 @@ public class OffsetCommitRequest extends AbstractRequest {
         }
 
         @Override
-        public OffsetCommitRequest build() {
-            short version = version();
+        public OffsetCommitRequest build(short version) {
             switch (version) {
                 case 0:
-                    return new OffsetCommitRequest(groupId, offsetData);
+                    return new OffsetCommitRequest(groupId, DEFAULT_GENERATION_ID, DEFAULT_MEMBER_ID,
+                            DEFAULT_RETENTION_TIME, offsetData, version);
                 case 1:
-                    return new OffsetCommitRequest(groupId, generationId, memberId,
-                            offsetData);
                 case 2:
-                    return new OffsetCommitRequest(groupId, generationId, memberId,
-                            retentionTime, offsetData, version);
+                    long retentionTime = version == 1 ? DEFAULT_RETENTION_TIME : this.retentionTime;
+                    return new OffsetCommitRequest(groupId, generationId, memberId, retentionTime, offsetData, version);
                 default:
                     throw new UnsupportedVersionException("Unsupported version " + version);
             }
@@ -154,57 +152,9 @@ public class OffsetCommitRequest extends AbstractRequest {
         }
     }
 
-    /**
-     * Constructor for version 0.
-     * @param groupId
-     * @param offsetData
-     */
-    private OffsetCommitRequest(String groupId, Map<TopicPartition, PartitionData> offsetData) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, 0)), (short) 0);
-
-        initCommonFields(groupId, offsetData);
-        this.groupId = groupId;
-        this.generationId = DEFAULT_GENERATION_ID;
-        this.memberId = DEFAULT_MEMBER_ID;
-        this.retentionTime = DEFAULT_RETENTION_TIME;
-        this.offsetData = offsetData;
-    }
-
-    /**
-     * Constructor for version 1.
-     * @param groupId
-     * @param generationId
-     * @param memberId
-     * @param offsetData
-     */
-    private OffsetCommitRequest(String groupId, int generationId, String memberId, Map<TopicPartition, PartitionData> offsetData) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, 1)), (short) 1);
-
-        initCommonFields(groupId, offsetData);
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        this.groupId = groupId;
-        this.generationId = generationId;
-        this.memberId = memberId;
-        this.retentionTime = DEFAULT_RETENTION_TIME;
-        this.offsetData = offsetData;
-    }
-
-    /**
-     * Constructor for version 2 and above.
-     * @param groupId
-     * @param generationId
-     * @param memberId
-     * @param retentionTime
-     * @param offsetData
-     */
     private OffsetCommitRequest(String groupId, int generationId, String memberId, long retentionTime,
                                 Map<TopicPartition, PartitionData> offsetData, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, version)), version);
-        initCommonFields(groupId, offsetData);
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        struct.set(RETENTION_TIME_KEY_NAME, retentionTime);
+        super(version);
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;
@@ -212,35 +162,8 @@ public class OffsetCommitRequest extends AbstractRequest {
         this.offsetData = offsetData;
     }
 
-    private void initCommonFields(String groupId, Map<TopicPartition, PartitionData> offsetData) {
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
-
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        List<Struct> topicArray = new ArrayList<Struct>();
-
-        for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
-            Struct topicData = struct.instance(TOPICS_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
-                PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                // Only for v1
-                if (partitionData.hasField(TIMESTAMP_KEY_NAME))
-                    partitionData.set(TIMESTAMP_KEY_NAME, fetchPartitionData.timestamp);
-                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
-                partitionArray.add(partitionData);
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
-        }
-        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
-    }
-
     public OffsetCommitRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+        super(versionId);
 
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         // This field only exists in v1.
@@ -284,6 +207,42 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
+    public Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, version));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
+        List<Struct> topicArray = new ArrayList<>();
+        for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
+            Struct topicData = struct.instance(TOPICS_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
+                PartitionData fetchPartitionData = partitionEntry.getValue();
+                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
+                // Only for v1
+                if (partitionData.hasField(TIMESTAMP_KEY_NAME))
+                    partitionData.set(TIMESTAMP_KEY_NAME, fetchPartitionData.timestamp);
+                partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
+                partitionArray.add(partitionData);
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        if (struct.hasField(GENERATION_ID_KEY_NAME))
+            struct.set(GENERATION_ID_KEY_NAME, generationId);
+        if (struct.hasField(MEMBER_ID_KEY_NAME))
+            struct.set(MEMBER_ID_KEY_NAME, memberId);
+        if (struct.hasField(RETENTION_TIME_KEY_NAME))
+            struct.set(RETENTION_TIME_KEY_NAME, retentionTime);
+        return struct;
+    }
+
+    @Override
     public AbstractResponse getErrorResponse(Throwable e) {
         Map<TopicPartition, Errors> responseData = new HashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
@@ -322,12 +281,8 @@ public class OffsetCommitRequest extends AbstractRequest {
         return offsetData;
     }
 
-    public static OffsetCommitRequest parse(ByteBuffer buffer, int versionId) {
+    public static OffsetCommitRequest parse(ByteBuffer buffer, short versionId) {
         Schema schema = ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, versionId);
-        return new OffsetCommitRequest(schema.read(buffer), (short) versionId);
-    }
-
-    public static OffsetCommitRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.OFFSET_COMMIT.id));
+        return new OffsetCommitRequest(schema.read(buffer), versionId);
     }
 }

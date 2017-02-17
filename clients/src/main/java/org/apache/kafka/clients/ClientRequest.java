@@ -74,9 +74,8 @@ public final class ClientRequest {
         return requestBuilder.apiKey();
     }
 
-    public RequestHeader makeHeader() {
-        return new RequestHeader(requestBuilder.apiKey().id,
-                requestBuilder.version(), clientId, correlationId);
+    public RequestHeader makeHeader(short version) {
+        return new RequestHeader(requestBuilder.apiKey().id, version, clientId, correlationId);
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {

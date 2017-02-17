@@ -36,14 +36,14 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testClusterIdWithRequestVersion1() {
-    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(s"v1 clusterId should be null", v1ClusterId)
   }
 
   @Test
   def testClusterIdIsValid() {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(2.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
@@ -51,7 +51,7 @@ class MetadataRequestTest extends BaseRequestTest {
   def testControllerId() {
     val controllerServer = servers.find(_.kafkaController.isActive).get
     val controllerId = controllerServer.config.brokerId
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
 
     assertEquals("Controller id should match the active controller",
       controllerId, metadataResponse.controller.id)
@@ -64,14 +64,14 @@ class MetadataRequestTest extends BaseRequestTest {
     val controllerId2 = controllerServer2.config.brokerId
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {
-      val metadataResponse2 = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+      val metadataResponse2 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
       metadataResponse2.controller != null && controllerServer2.apis.brokerId == metadataResponse2.controller.id
     }, "Controller id should match the active controller after failover", 5000)
   }
 
   @Test
   def testRack() {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.asScala.foreach { broker =>
       assertEquals("Rack information should match config", s"rack/${broker.id}", broker.rack)
@@ -86,7 +86,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)
     TestUtils.createTopic(zkUtils, notInternalTopic, 3, 2, servers)
 
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     assertTrue("Response should have no errors", metadataResponse.errors.isEmpty)
 
     val topicMetadata = metadataResponse.topicMetadata.asScala
@@ -124,7 +124,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals("V0 Response should have 2 (all) topics", 2, metadataResponseV0.topicMetadata.size())
 
     // v1, Null represents all topics
-    val metadataResponseV1 = sendMetadataRequest(MetadataRequest.allTopics(1.toShort))
+    val metadataResponseV1 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     assertTrue("V1 Response should have no errors", metadataResponseV1.errors.isEmpty)
     assertEquals("V1 Response should have 2 (all) topics", 2, metadataResponseV1.topicMetadata.size())
   }
@@ -177,7 +177,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = send(request, ApiKeys.METADATA)
+    val response = connectAndSend(request, ApiKeys.METADATA)
     MetadataResponse.parse(response, request.version)
   }
 }

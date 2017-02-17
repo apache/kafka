@@ -27,8 +27,8 @@ public class ListGroupsRequest extends AbstractRequest {
         }
 
         @Override
-        public ListGroupsRequest build() {
-            return new ListGroupsRequest(version());
+        public ListGroupsRequest build(short version) {
+            return new ListGroupsRequest(version);
         }
 
         @Override
@@ -38,12 +38,11 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public ListGroupsRequest(short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_GROUPS.id, version)),
-                version);
+        super(version);
     }
 
     public ListGroupsRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+        super(versionId);
     }
 
     @Override
@@ -58,12 +57,12 @@ public class ListGroupsRequest extends AbstractRequest {
         }
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer),
-                (short) versionId);
+    public static ListGroupsRequest parse(ByteBuffer buffer, short versionId) {
+        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer), versionId);
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.LIST_GROUPS.id));
+    @Override
+    protected Struct toStruct() {
+        return new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_GROUPS.id, version()));
     }
 }

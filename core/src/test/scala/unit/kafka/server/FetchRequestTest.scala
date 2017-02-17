@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
 import org.apache.kafka.common.record.LogEntry
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
@@ -56,7 +56,7 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): FetchRequest =
-    new FetchRequest.Builder(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+    FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
@@ -69,8 +69,8 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    val response = send(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
+    FetchResponse.parse(response, ProtoUtils.latestVersion(ApiKeys.FETCH.id))
   }
 
   @Test
@@ -156,10 +156,9 @@ class FetchRequestTest extends BaseRequestTest {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    val fetchRequestBuilder = new FetchRequest.Builder(
-      Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, Seq(topicPartition))).
-      setVersion(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequestBuilder.build())
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+      createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(2)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)
