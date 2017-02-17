@@ -51,8 +51,14 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
     ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Generating test coverage reports ###
+Generate coverage reports for the whole project:
+
     ./gradlew reportCoverage
 
+Generate coverage for a single module, i.e.: 
+
+    ./gradlew clients:reportCoverage
+    
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean
     ./gradlew releaseTarGz
