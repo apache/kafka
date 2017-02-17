@@ -905,22 +905,22 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (header.apiVersion == 0) {
           val (authorizedPartitions, unauthorizedPartitions) = offsetFetchRequest.partitions.asScala
             .partition(authorizeTopicDescribe)
+          // authorizedAndExistingPartitions: authorized partitions that actually exist in the cluster, and need their offset retrieved
+          // nonExistingPartitions: partitions that do not exist in the cluster, and should get an unknown partition error
+          val (authorizedAndExistingPartitions, nonExistingPartitions) =
+            authorizedPartitions.partition { p => metadataCache.getPartitionInfo(p.topic, p.partition).nonEmpty }
 
           // version 0 reads offsets from ZK
-          val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
+          val authorizedAndExistingPartitionData = authorizedAndExistingPartitions.map { topicPartition =>
             try {
-              if (!metadataCache.contains(topicPartition.topic))
-                (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
-              else {
-                val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
-                val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
-                payloadOpt match {
-                  case Some(payload) =>
-                    (topicPartition, new OffsetFetchResponse.PartitionData(
-                        payload.toLong, OffsetFetchResponse.NO_METADATA, Errors.NONE))
-                  case None =>
-                    (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
-                }
+              val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
+              val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
+              payloadOpt match {
+                case Some(payload) =>
+                  (topicPartition, new OffsetFetchResponse.PartitionData(
+                      payload.toLong, OffsetFetchResponse.NO_METADATA, Errors.NONE))
+                case None =>
+                  (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
               }
             } catch {
               case e: Throwable =>
@@ -929,8 +929,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           }.toMap
 
-          val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
-          new OffsetFetchResponse(Errors.NONE, (authorizedPartitionData ++ unauthorizedPartitionData).asJava)
+          val unknownPartitionData =
+            (unauthorizedPartitions ++ nonExistingPartitions).map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
+          new OffsetFetchResponse(Errors.NONE,
+                                  (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava,
+                                  header.apiVersion)
         } else {
           // versions 1 and above read offsets from Kafka
           if (offsetFetchRequest.isAllPartitions) {
@@ -945,20 +948,20 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             val (authorizedPartitions, unauthorizedPartitions) =
               offsetFetchRequest.partitions.asScala.partition(authorizeTopicDescribe)
-            val (error, authorizedPartitionData) =
-              coordinator.handleFetchOffsets(offsetFetchRequest.groupId, Some(authorizedPartitions))
+            // authorizedAndExistingPartitions: authorized partitions that actually exist in the cluster, and need their offset retrieved
+            // nonExistingPartitions: partitions that do not exist in the cluster, and should get an unknown partition error
+            val (authorizedAndExistingPartitions, nonExistingPartitions) =
+              authorizedPartitions.partition { p => metadataCache.getPartitionInfo(p.topic, p.partition).nonEmpty }
+            val (error, authorizedAndExistingPartitionData) =
+              coordinator.handleFetchOffsets(offsetFetchRequest.groupId, Some(authorizedAndExistingPartitions))
             if (error != Errors.NONE)
               offsetFetchRequest.getErrorResponse(error)
             else {
-              val authorizedAndValidatedPartitionData = authorizedPartitionData.map {
-                case (topicPartition, offsetInfo) =>
-                  if (metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition).isEmpty)
-                    (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
-                  else
-                    (topicPartition, offsetInfo)
-              }
-              val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
-              new OffsetFetchResponse(Errors.NONE, (authorizedPartitionData ++ unauthorizedPartitionData).asJava)
+              val unknownPartitionData =
+                (unauthorizedPartitions ++ nonExistingPartitions).map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
+              new OffsetFetchResponse(Errors.NONE,
+                                      (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava,
+                                      header.apiVersion)
             }
           }
         }
