@@ -235,7 +235,7 @@ public class VerifiableProducer {
     /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' **/
     public String getValue(long val) {
         if (this.valuePrefix != null) {
-            return String.format("%d.%d", this.valuePrefix.intValue(), val);
+            return String.format("%d.%d", this.valuePrefix, val);
         }
         return String.format("%d", val);
     }
