@@ -243,9 +243,7 @@ public class StreamThread extends Thread {
                 rebalanceException = t;
                 throw t;
             } finally {
-                if (log.isDebugEnabled()) {
-                    log.debug("{} partition assignment took {} ms", logPrefix, System.currentTimeMillis() - start);
-                }
+                log.debug("{} partition assignment took {} ms", logPrefix, System.currentTimeMillis() - start);
             }
         }
 
@@ -839,9 +837,7 @@ public class StreamThread extends Thread {
         try {
             return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
         } finally {
-            if (log.isDebugEnabled()) {
-                log.debug("{} creation of active task {} took {} ms", logPrefix, id, System.currentTimeMillis() - start);
-            }
+            log.debug("{} creation of active task {} took {} ms", logPrefix, id, System.currentTimeMillis() - start);
         }
     }
 
