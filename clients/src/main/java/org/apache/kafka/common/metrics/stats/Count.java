@@ -33,8 +33,8 @@ public class Count extends SampledStat {
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         double total = 0.0;
-        for (int i = 0; i < samples.size(); i++)
-            total += samples.get(i).value;
+        for (Sample sample : samples)
+            total += sample.value;
         return total;
     }
 
