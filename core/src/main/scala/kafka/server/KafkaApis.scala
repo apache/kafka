@@ -932,8 +932,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val unknownPartitionData =
             (unauthorizedPartitions ++ nonExistingPartitions).map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
           new OffsetFetchResponse(Errors.NONE,
-                                  (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava,
-                                  header.apiVersion)
+                                  (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava)
         } else {
           // versions 1 and above read offsets from Kafka
           if (offsetFetchRequest.isAllPartitions) {
@@ -960,8 +959,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               val unknownPartitionData =
                 (unauthorizedPartitions ++ nonExistingPartitions).map(_ -> OffsetFetchResponse.UNKNOWN_PARTITION).toMap
               new OffsetFetchResponse(Errors.NONE,
-                                      (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava,
-                                      header.apiVersion)
+                                      (authorizedAndExistingPartitionData ++ unknownPartitionData).asJava)
             }
           }
         }
