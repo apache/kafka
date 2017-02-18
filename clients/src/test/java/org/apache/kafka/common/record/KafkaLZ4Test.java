@@ -54,7 +54,7 @@ public class KafkaLZ4Test {
     public static Collection<Object[]> data() {
         byte[] payload = new byte[1000];
         Arrays.fill(payload, (byte) 1);
-        List<Object[]> values = new ArrayList<Object[]>();
+        List<Object[]> values = new ArrayList<>();
         for (boolean broken : Arrays.asList(false, true))
             for (boolean ignore : Arrays.asList(false, true))
                 for (boolean close : Arrays.asList(false, true))
