@@ -17,38 +17,37 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
-import java.util.{Collections, Properties}
+import java.nio.ByteBuffer
 import java.util
+import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
+import kafka.network._
 import kafka.security.auth
-import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
+import kafka.security.auth.{Topic => _, _}
+import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException => _, NotLeaderForPartitionException => _, UnknownTopicOrPartitionException => _, _}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
 import org.apache.kafka.common.record.{MemoryRecords, Record, TimestampType}
-import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.{SaslHandshakeResponse, _}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.requests.SaslHandshakeResponse
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 
 /**
  * Logic to handle the various Kafka requests
@@ -117,7 +116,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             requestChannel.sendResponse(new Response(request, response))
 
-          error("Error when handling request %s".format(request.body), e)
+          error("Error when handling request %s".format(request.body[AbstractRequest]), e)
         }
     } finally
       request.apiLocalCompleteTimeMs = time.milliseconds
