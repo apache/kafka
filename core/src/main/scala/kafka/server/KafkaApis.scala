@@ -117,7 +117,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             requestChannel.sendResponse(new Response(request, response))
 
-          error("Error when handling request %s".format(request.body), e)
+          error("Error when handling request %s".format(request.body[AbstractRequest]), e)
         }
     } finally
       request.apiLocalCompleteTimeMs = time.milliseconds
