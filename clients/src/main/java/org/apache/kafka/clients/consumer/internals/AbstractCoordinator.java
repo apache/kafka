@@ -889,9 +889,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture == null)
-                                lookupCoordinator();
-                            // coordinator may still be unknown, instead of an immediate retry, let's wait for a bit.
-                            AbstractCoordinator.this.wait(retryBackoffMs);
+                                if (lookupCoordinator().failed())
+                                    AbstractCoordinator.this.wait(retryBackoffMs);
+                            else
+                                AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
