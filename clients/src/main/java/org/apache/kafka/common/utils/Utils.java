@@ -228,9 +228,9 @@ public class Utils {
      */
     public static long min(long first, long ... rest) {
         long min = first;
-        for (int i = 0; i < rest.length; i++) {
-            if (rest[i] < min)
-                min = rest[i];
+        for (long aRest : rest) {
+            if (aRest < min)
+                min = aRest;
         }
         return min;
     }
