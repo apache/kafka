@@ -62,6 +62,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -217,7 +218,7 @@ public class FetcherTest {
     @Test
     public void testParseInvalidRecord() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
         byte magic = Record.CURRENT_MAGIC_VALUE;
         byte[] key = "foo".getBytes();
@@ -885,7 +886,7 @@ public class FetcherTest {
         ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
-        return new ListOffsetResponse(allPartitionData, 1);
+        return new ListOffsetResponse(allPartitionData);
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {

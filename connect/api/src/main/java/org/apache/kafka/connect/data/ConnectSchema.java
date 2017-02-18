@@ -207,9 +207,14 @@ public class ConnectSchema implements Schema {
      * @param value value to test
      */
     public static void validateValue(Schema schema, Object value) {
+        validateValue(null, schema, value);
+    }
+
+    public static void validateValue(String name, Schema schema, Object value) {
         if (value == null) {
             if (!schema.isOptional())
-                throw new DataException("Invalid value: null used for required field");
+                throw new DataException("Invalid value: null used for required field: \"" + name
+                        + "\", schema type: " + schema.type());
             else
                 return;
         }
@@ -220,7 +225,9 @@ public class ConnectSchema implements Schema {
                 expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
 
         if (expectedClasses == null)
-            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
+            throw new DataException("Invalid Java object for schema type " + schema.type()
+                    + ": " + value.getClass()
+                    + " for field: \"" + name + "\"");
 
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
@@ -230,7 +237,9 @@ public class ConnectSchema implements Schema {
             }
         }
         if (!foundMatch)
-            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
+            throw new DataException("Invalid Java object for schema type " + schema.type()
+                    + ": " + value.getClass()
+                    + " for field: \"" + name + "\"");
 
         switch (schema.type()) {
             case STRUCT:

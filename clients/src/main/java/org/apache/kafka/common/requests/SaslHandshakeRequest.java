@@ -25,7 +25,6 @@ import java.util.List;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 
@@ -40,19 +39,17 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class SaslHandshakeRequest extends AbstractRequest {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.SASL_HANDSHAKE.id);
     public static final String MECHANISM_KEY_NAME = "mechanism";
 
     private final String mechanism;
 
     public SaslHandshakeRequest(String mechanism) {
-        super(new Struct(CURRENT_SCHEMA), ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
-        struct.set(MECHANISM_KEY_NAME, mechanism);
+        super(ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
         this.mechanism = mechanism;
     }
 
-    public SaslHandshakeRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public SaslHandshakeRequest(Struct struct, short version) {
+        super(version);
         mechanism = struct.getString(MECHANISM_KEY_NAME);
     }
 
@@ -73,13 +70,15 @@ public class SaslHandshakeRequest extends AbstractRequest {
         }
     }
 
-    public static SaslHandshakeRequest parse(ByteBuffer buffer, int versionId) {
-        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer),
-                (short) versionId);
+    public static SaslHandshakeRequest parse(ByteBuffer buffer, short versionId) {
+        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer), versionId);
     }
 
-    public static SaslHandshakeRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.SASL_HANDSHAKE.id, version()));
+        struct.set(MECHANISM_KEY_NAME, mechanism);
+        return struct;
     }
 }
 

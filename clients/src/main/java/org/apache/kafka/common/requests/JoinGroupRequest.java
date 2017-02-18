@@ -85,8 +85,7 @@ public class JoinGroupRequest extends AbstractRequest {
         }
 
         @Override
-        public JoinGroupRequest build() {
-            short version = version();
+        public JoinGroupRequest build(short version) {
             if (version < 1) {
                 rebalanceTimeout = -1;
             }
@@ -112,23 +111,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private JoinGroupRequest(short version, String groupId, int sessionTimeout,
             int rebalanceTimeout, String memberId, String protocolType,
             List<ProtocolMetadata> groupProtocols) {
-        super(new Struct(ProtoUtils.
-                requestSchema(ApiKeys.JOIN_GROUP.id, version)), version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
-        if (version >= 1) {
-            struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
-        }
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
-        List<Struct> groupProtocolsList = new ArrayList<>(groupProtocols.size());
-        for (ProtocolMetadata protocol : groupProtocols) {
-            Struct protocolStruct = struct.instance(GROUP_PROTOCOLS_KEY_NAME);
-            protocolStruct.set(PROTOCOL_NAME_KEY_NAME, protocol.name);
-            protocolStruct.set(PROTOCOL_METADATA_KEY_NAME, protocol.metadata);
-            groupProtocolsList.add(protocolStruct);
-        }
-        struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
+        super(version);
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
         this.rebalanceTimeout = rebalanceTimeout;
@@ -138,7 +121,7 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public JoinGroupRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+        super(versionId);
 
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
@@ -169,7 +152,6 @@ public class JoinGroupRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new JoinGroupResponse(
-                        versionId,
                         Errors.forException(e),
                         JoinGroupResponse.UNKNOWN_GENERATION_ID,
                         JoinGroupResponse.UNKNOWN_PROTOCOL,
@@ -207,12 +189,29 @@ public class JoinGroupRequest extends AbstractRequest {
         return protocolType;
     }
 
-    public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer),
-                (short) versionId);
+    public static JoinGroupRequest parse(ByteBuffer buffer, short version) {
+        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, version, buffer), version);
     }
 
-    public static JoinGroupRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id));
+    @Override
+    protected Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.JOIN_GROUP.id, version));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
+        if (version >= 1) {
+            struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
+        }
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
+        List<Struct> groupProtocolsList = new ArrayList<>(groupProtocols.size());
+        for (ProtocolMetadata protocol : groupProtocols) {
+            Struct protocolStruct = struct.instance(GROUP_PROTOCOLS_KEY_NAME);
+            protocolStruct.set(PROTOCOL_NAME_KEY_NAME, protocol.name);
+            protocolStruct.set(PROTOCOL_METADATA_KEY_NAME, protocol.metadata);
+            groupProtocolsList.add(protocolStruct);
+        }
+        struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
+        return struct;
     }
 }

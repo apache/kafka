@@ -14,35 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+package org.apache.kafka.streams.kstream.internals;
 
-/**
- * A byte buffer backed input inputStream
- */
-public final class ByteBufferInputStream extends InputStream {
-    private final ByteBuffer buffer;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
+class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
+
+    private final ForeachAction<K, V> action;
+
+    public KStreamPeek(final ForeachAction<K, V> action) {
+        this.action = action;
     }
 
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
+    @Override
+    public Processor<K, V> get() {
+        return new KStreamPeekProcessor();
     }
 
-    public int read(byte[] bytes, int off, int len) {
-        if (!buffer.hasRemaining()) {
-            return -1;
+    private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
+        @Override
+        public void process(final K key, final V value) {
+            action.apply(key, value);
+            context().forward(key, value);
         }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
     }
 }

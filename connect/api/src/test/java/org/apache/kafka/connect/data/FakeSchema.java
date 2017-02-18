@@ -5,64 +5,79 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-package org.apache.kafka.streams.processor.internals;
+ **/
 
+package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
-
-import java.io.File;
-import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
-public class StateManagerStub implements StateManager {
+public class FakeSchema implements Schema {
     @Override
-    public File baseDir() {
+    public Type type() {
         return null;
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
-
+    public boolean isOptional() {
+        return false;
     }
 
     @Override
-    public void flush(final InternalProcessorContext context) {
-
-    }
-
-    @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
-
-    }
-
-    @Override
-    public StateStore getGlobalStore(final String name) {
+    public Object defaultValue() {
         return null;
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public String name() {
+        return "fake";
+    }
+
+    @Override
+    public Integer version() {
         return null;
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public String doc() {
         return null;
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public Map<String, String> parameters() {
+        return null;
+    }
 
+    @Override
+    public Schema keySchema() {
+        return null;
+    }
+
+    @Override
+    public Schema valueSchema() {
+        return null;
+    }
+
+    @Override
+    public List<Field> fields() {
+        return null;
+    }
+
+    @Override
+    public Field field(String fieldName) {
+        return null;
+    }
+
+    @Override
+    public Schema schema() {
+        return null;
     }
 }

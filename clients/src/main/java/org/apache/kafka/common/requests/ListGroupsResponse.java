@@ -15,7 +15,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -24,8 +23,6 @@ import java.util.Collections;
 import java.util.List;
 
 public class ListGroupsResponse extends AbstractResponse {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LIST_GROUPS.id);
 
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String GROUPS_KEY_NAME = "groups";
@@ -43,22 +40,11 @@ public class ListGroupsResponse extends AbstractResponse {
     private final List<Group> groups;
 
     public ListGroupsResponse(Errors error, List<Group> groups) {
-        super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        List<Struct> groupList = new ArrayList<>();
-        for (Group group : groups) {
-            Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
-            groupStruct.set(GROUP_ID_KEY_NAME, group.groupId);
-            groupStruct.set(PROTOCOL_TYPE_KEY_NAME, group.protocolType);
-            groupList.add(groupStruct);
-        }
-        struct.set(GROUPS_KEY_NAME, groupList.toArray());
         this.error = error;
         this.groups = groups;
     }
 
     public ListGroupsResponse(Struct struct) {
-        super(struct);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.groups = new ArrayList<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
@@ -96,12 +82,27 @@ public class ListGroupsResponse extends AbstractResponse {
 
     }
 
-    public static ListGroupsResponse parse(ByteBuffer buffer) {
-        return new ListGroupsResponse(CURRENT_SCHEMA.read(buffer));
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.LIST_GROUPS.id, version));
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        List<Struct> groupList = new ArrayList<>();
+        for (Group group : groups) {
+            Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
+            groupStruct.set(GROUP_ID_KEY_NAME, group.groupId);
+            groupStruct.set(PROTOCOL_TYPE_KEY_NAME, group.protocolType);
+            groupList.add(groupStruct);
+        }
+        struct.set(GROUPS_KEY_NAME, groupList.toArray());
+        return struct;
     }
 
     public static ListGroupsResponse fromError(Errors error) {
         return new ListGroupsResponse(error, Collections.<Group>emptyList());
+    }
+
+    public static ListGroupsResponse parse(ByteBuffer buffer, short versionId) {
+        return new ListGroupsResponse(ProtoUtils.parseResponse(ApiKeys.LIST_GROUPS.id, versionId, buffer));
     }
 
 }

@@ -14,35 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.requests;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+public class RequestAndSize {
+    public final AbstractRequest request;
+    public final int size;
 
-/**
- * A byte buffer backed input inputStream
- */
-public final class ByteBufferInputStream extends InputStream {
-    private final ByteBuffer buffer;
-
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
-    }
-
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
-    }
-
-    public int read(byte[] bytes, int off, int len) {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
+    public RequestAndSize(AbstractRequest request, int size) {
+        this.request = request;
+        this.size = size;
     }
 }

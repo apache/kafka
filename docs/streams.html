@@ -39,7 +39,7 @@
                 </ul>
             </li>
             <li>
-                <a href="#streams_upgrade">Upgrade Guide and API Changes</a>
+                <a href="#streams_upgrade_and_api">Upgrade Guide and API Changes</a>
             </li>
         </ol>
 
@@ -230,7 +230,7 @@
 
         <p>
         Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data,
-        which is an important capability when implementing stateful operations. The <a href="streams_dsl">Kafka Streams DSL</a>, for example, automatically creates
+        which is an important capability when implementing stateful operations. The <a href="#streams_dsl">Kafka Streams DSL</a>, for example, automatically creates
         and manages such state stores when you are calling stateful operators such as <code>join()</code> or <code>aggregate()</code>, or when you are windowing a stream.
         </p>
 
@@ -257,7 +257,7 @@
         <p>
         In addition, Kafka Streams makes sure that the local state stores are robust to failures, too. For each state store, it maintains a replicated changelog Kafka topic in which it tracks any state updates.
         These changelog topics are partitioned as well so that each local state store instance, and hence the task accessing the store, has its own dedicated changelog topic partition.
-        <a href="/documentation/#compaction">Log compaction</a> is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely.
+        <a href="/{{version}}/documentation/#compaction">Log compaction</a> is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely.
         If tasks run on a machine that fails and are restarted on another machine, Kafka Streams guarantees to restore their associated state stores to the content before the failure by
         replaying the corresponding changelog topics prior to resuming the processing on the newly started tasks. As a result, failure handling is completely transparent to the end user.
         </p>
@@ -266,14 +266,14 @@
         Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics.
         To minimize this restoration time, users can configure their applications to have <b>standby replicas</b> of local states (i.e. fully replicated copies of the state).
         When a task migration happens, Kafka Streams then attempts to assign a task to an application instance where such a standby replica already exists in order to minimize
-        the task (re)initialization cost. See <code>num.standby.replicas</code> at the <a href="/documentation/#streamsconfigs">Kafka Streams Configs</a> Section.
+        the task (re)initialization cost. See <code>num.standby.replicas</code> at the <a href="/{{version}}/documentation/#streamsconfigs">Kafka Streams Configs</a> Section.
         </p>
         <br>
 
         <h2><a id="streams_developer" href="#streams_developer">Developer Guide</a></h2>
 
         <p>
-        There is a <a href="/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
+        There is a <a href="/{{version}}/documentation/#quickstart_kafkastreams">quickstart</a> example that provides how to run a stream processing program coded in the Kafka Streams library.
         This section focuses on how to write, configure, and execute a Kafka Streams application.
         </p>
 
@@ -306,60 +306,60 @@
         The following example <code>Processor</code> implementation defines a simple word-count algorithm:
         </p>
 
-        <pre>
-            public class MyProcessor extends Processor&lt;String, String&gt; {
-                private ProcessorContext context;
-                private KeyValueStore&lt;String, Long&gt; kvStore;
+<pre>
+public class MyProcessor extends Processor&lt;String, String&gt; {
+    private ProcessorContext context;
+    private KeyValueStore&lt;String, Long&gt; kvStore;
 
-                @Override
-                @SuppressWarnings("unchecked")
-                public void init(ProcessorContext context) {
-                    // keep the processor context locally because we need it in punctuate() and commit()
-                    this.context = context;
+    @Override
+    @SuppressWarnings("unchecked")
+    public void init(ProcessorContext context) {
+        // keep the processor context locally because we need it in punctuate() and commit()
+        this.context = context;
 
-                    // call this processor's punctuate() method every 1000 milliseconds.
-                    this.context.schedule(1000);
+        // call this processor's punctuate() method every 1000 milliseconds.
+        this.context.schedule(1000);
 
-                    // retrieve the key-value store named "Counts"
-                    this.kvStore = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("Counts");
-                }
+        // retrieve the key-value store named "Counts"
+        this.kvStore = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("Counts");
+    }
 
-                @Override
-                public void process(String dummy, String line) {
-                    String[] words = line.toLowerCase().split(" ");
+    @Override
+    public void process(String dummy, String line) {
+        String[] words = line.toLowerCase().split(" ");
 
-                    for (String word : words) {
-                        Long oldValue = this.kvStore.get(word);
+        for (String word : words) {
+            Long oldValue = this.kvStore.get(word);
 
-                        if (oldValue == null) {
-                            this.kvStore.put(word, 1L);
-                        } else {
-                            this.kvStore.put(word, oldValue + 1L);
-                        }
-                    }
-                }
+            if (oldValue == null) {
+                this.kvStore.put(word, 1L);
+            } else {
+                this.kvStore.put(word, oldValue + 1L);
+            }
+        }
+    }
 
-                @Override
-                public void punctuate(long timestamp) {
-                    KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+    @Override
+    public void punctuate(long timestamp) {
+        KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
 
-                    while (iter.hasNext()) {
-                        KeyValue&lt;String, Long&gt; entry = iter.next();
-                        context.forward(entry.key, entry.value.toString());
-                    }
+        while (iter.hasNext()) {
+            KeyValue&lt;String, Long&gt; entry = iter.next();
+            context.forward(entry.key, entry.value.toString());
+        }
 
-                    iter.close();
-                    // commit the current processing progress
-                    context.commit();
-                }
+        iter.close();
+        // commit the current processing progress
+        context.commit();
+    }
 
-                @Override
-                public void close() {
-                    // close the key-value store
-                    this.kvStore.close();
-                }
-            };
-        </pre>
+    @Override
+    public void close() {
+        // close the key-value store
+        this.kvStore.close();
+    }
+};
+</pre>
 
         <p>
         In the above implementation, the following actions are performed:
@@ -379,31 +379,31 @@
         by connecting these processors together:
         </p>
 
-        <pre>
-            TopologyBuilder builder = new TopologyBuilder();
+<pre>
+TopologyBuilder builder = new TopologyBuilder();
 
-            builder.addSource("SOURCE", "src-topic")
-                // add "PROCESS1" node which takes the source processor "SOURCE" as its upstream processor
-                .addProcessor("PROCESS1", () -> new MyProcessor1(), "SOURCE")
+builder.addSource("SOURCE", "src-topic")
+    // add "PROCESS1" node which takes the source processor "SOURCE" as its upstream processor
+    .addProcessor("PROCESS1", () -> new MyProcessor1(), "SOURCE")
 
-                // add "PROCESS2" node which takes "PROCESS1" as its upstream processor
-                .addProcessor("PROCESS2", () -> new MyProcessor2(), "PROCESS1")
+    // add "PROCESS2" node which takes "PROCESS1" as its upstream processor
+    .addProcessor("PROCESS2", () -> new MyProcessor2(), "PROCESS1")
 
-                // add "PROCESS3" node which takes "PROCESS1" as its upstream processor
-                .addProcessor("PROCESS3", () -> new MyProcessor3(), "PROCESS1")
+    // add "PROCESS3" node which takes "PROCESS1" as its upstream processor
+    .addProcessor("PROCESS3", () -> new MyProcessor3(), "PROCESS1")
 
-                // add the sink processor node "SINK1" that takes Kafka topic "sink-topic1"
-                // as output and the "PROCESS1" node as its upstream processor
-                .addSink("SINK1", "sink-topic1", "PROCESS1")
+    // add the sink processor node "SINK1" that takes Kafka topic "sink-topic1"
+    // as output and the "PROCESS1" node as its upstream processor
+    .addSink("SINK1", "sink-topic1", "PROCESS1")
 
-                // add the sink processor node "SINK2" that takes Kafka topic "sink-topic2"
-                // as output and the "PROCESS2" node as its upstream processor
-                .addSink("SINK2", "sink-topic2", "PROCESS2")
+    // add the sink processor node "SINK2" that takes Kafka topic "sink-topic2"
+    // as output and the "PROCESS2" node as its upstream processor
+    .addSink("SINK2", "sink-topic2", "PROCESS2")
 
-                // add the sink processor node "SINK3" that takes Kafka topic "sink-topic3"
-                // as output and the "PROCESS3" node as its upstream processor
-                .addSink("SINK3", "sink-topic3", "PROCESS3");
-        </pre>
+    // add the sink processor node "SINK3" that takes Kafka topic "sink-topic3"
+    // as output and the "PROCESS3" node as its upstream processor
+    .addSink("SINK3", "sink-topic3", "PROCESS3");
+</pre>
 
         There are several steps in the above code to build the topology, and here is a quick walk through:
 
@@ -423,13 +423,13 @@
         In the following example, a persistent key-value store named “Counts” with key type <code>String</code> and value type <code>Long</code> is created.
         </p>
 
-        <pre>
-            StateStoreSupplier countStore = Stores.create("Counts")
-              .withKeys(Serdes.String())
-              .withValues(Serdes.Long())
-              .persistent()
-              .build();
-        </pre>
+<pre>
+StateStoreSupplier countStore = Stores.create("Counts")
+    .withKeys(Serdes.String())
+    .withValues(Serdes.Long())
+    .persistent()
+    .build();
+</pre>
 
         <p>
         To take advantage of these state stores, developers can use the <code>TopologyBuilder.addStateStore</code> method when building the
@@ -437,24 +437,24 @@
         state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
         </p>
 
-        <pre>
-            TopologyBuilder builder = new TopologyBuilder();
+<pre>
+TopologyBuilder builder = new TopologyBuilder();
 
-            builder.addSource("SOURCE", "src-topic")
+builder.addSource("SOURCE", "src-topic")
 
-                .addProcessor("PROCESS1", MyProcessor1::new, "SOURCE")
-                // add the created state store "COUNTS" associated with processor "PROCESS1"
-                .addStateStore(countStore, "PROCESS1")
-                .addProcessor("PROCESS2", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
-                .addProcessor("PROCESS3", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
+    .addProcessor("PROCESS1", MyProcessor1::new, "SOURCE")
+    // add the created state store "COUNTS" associated with processor "PROCESS1"
+    .addStateStore(countStore, "PROCESS1")
+    .addProcessor("PROCESS2", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
+    .addProcessor("PROCESS3", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
 
-                // connect the state store "COUNTS" with processor "PROCESS2"
-                .connectProcessorAndStateStores("PROCESS2", "COUNTS");
+    // connect the state store "COUNTS" with processor "PROCESS2"
+    .connectProcessorAndStateStores("PROCESS2", "COUNTS");
 
-                .addSink("SINK1", "sink-topic1", "PROCESS1")
-                .addSink("SINK2", "sink-topic2", "PROCESS2")
-                .addSink("SINK3", "sink-topic3", "PROCESS3");
-        </pre>
+    .addSink("SINK1", "sink-topic1", "PROCESS1")
+    .addSink("SINK2", "sink-topic2", "PROCESS2")
+    .addSink("SINK3", "sink-topic3", "PROCESS3");
+</pre>
 
         In the next section we present another way to build the processor topology: the Kafka Streams DSL.
         <br>
@@ -470,7 +470,7 @@
 
         <p>
         Before we discuss concepts such as aggregations in Kafka Streams we must first introduce tables, and most importantly the relationship between tables and streams:
-        the so-called <a href="https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying">stream-table duality</a>.
+        the so-called <a href="https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying/">stream-table duality</a>.
         Essentially, this duality means that a stream can be viewed as a table, and vice versa. Kafka's log compaction feature, for example, exploits this duality.
         </p>
 
@@ -511,9 +511,9 @@
 
         To illustrate the difference between KStreams and KTables/GlobalKTables, let’s imagine the following two data records are being sent to the stream:
 
-        <pre>
-            ("alice", 1) --> ("alice", 3)
-        </pre>
+<pre>
+("alice", 1) --> ("alice", 3)
+</pre>
 
         If these records a KStream and the stream processing application were to sum the values it would return <code>4</code>. If these records were a KTable or GlobalKTable, the return would be <code>3</code>, since the last record would be considered as an update.
 
@@ -525,13 +525,13 @@
         from a single topic).
         </p>
 
-        <pre>
-            KStreamBuilder builder = new KStreamBuilder();
+<pre>
+KStreamBuilder builder = new KStreamBuilder();
 
-            KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
-            KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
-            GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4", "globalStoreName");
-        </pre>
+KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
+KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
+GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4", "globalStoreName");
+</pre>
 
         <h4><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h4>
         A stream processor may need to divide data records into time buckets, i.e. to <b>window</b> the stream by time. This is usually needed for join and aggregation operations, etc. Kafka Streams currently defines the following types of windows:
@@ -539,6 +539,13 @@
         <li><b>Hopping time windows</b> are windows based on time intervals. They model fixed-sized, (possibly) overlapping windows. A hopping window is defined by two properties: the window's size and its advance interval (aka "hop"). The advance interval specifies by how much a window moves forward relative to the previous one. For example, you can configure a hopping window with a size 5 minutes and an advance interval of 1 minute. Since hopping windows can overlap a data record may belong to more than one such windows.</li>
         <li><b>Tumbling time windows</b> are a special case of hopping time windows and, like the latter, are windows based on time intervals. They model fixed-size, non-overlapping, gap-less windows. A tumbling window is defined by a single property: the window's size. A tumbling window is a hopping window whose window size is equal to its advance interval. Since tumbling windows never overlap, a data record will belong to one and only one window.</li>
         <li><b>Sliding windows</b> model a fixed-size window that slides continuously over the time axis; here, two data records are said to be included in the same window if the difference of their timestamps is within the window size. Thus, sliding windows are not aligned to the epoch, but on the data record timestamps. In Kafka Streams, sliding windows are used only for join operations, and can be specified through the <code>JoinWindows</code> class.</li>
+        <li><b>Session windows</b> are used to aggregate key-based events into sessions.
+            Sessions represent a period of activity separated by a defined gap of inactivity.
+            Any events processed that fall within the inactivity gap of any existing sessions are merged into the existing sessions.
+            If the event falls outside of the session gap, then a new session will be created.
+            Session windows are tracked independently across keys (e.g. windows of different keys typically have different start and end times) and their sizes vary (even windows for the same key typically have different sizes);
+            as such session windows can't be pre-computed and are instead derived from analyzing the timestamps of the data records.
+        </li>
         </ul>
 
         <p>
@@ -567,7 +574,8 @@
             A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
         </ul>
 
-        Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>. Their semantics are similar to the corresponding operators in relational databases.
+        Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>.
+        Their <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">semantics</a> are similar to the corresponding operators in relational databases.
 
         <h5><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h5>
         An <b>aggregation</b> operation takes one input stream, and yields a new stream by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum. An aggregation over record streams usually needs to be performed on a windowing basis because otherwise the number of records that must be maintained for performing the aggregation may grow indefinitely.
@@ -597,10 +605,10 @@
 
         </p>
 
-        <pre>
-            // written in Java 8+, using lambda expressions
-            KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.get("category"));
-        </pre>
+<pre>
+// written in Java 8+, using lambda expressions
+KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.get("category"));
+</pre>
 
         <p>
         Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise
@@ -611,19 +619,19 @@
         based on them.
         </p>
 
-        <pre>
-            // written in Java 8+, using lambda expressions
-            KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = source1.groupByKey().aggregate(
-                () -> 0L,  // initial value
-                (aggKey, value, aggregate) -> aggregate + 1L,   // aggregating value
-                TimeWindows.of("counts", 5000L).advanceBy(1000L), // intervals in milliseconds
-                Serdes.Long() // serde for aggregated value
-            );
+<pre>
+// written in Java 8+, using lambda expressions
+KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = source1.groupByKey().aggregate(
+    () -> 0L,  // initial value
+    (aggKey, value, aggregate) -> aggregate + 1L,   // aggregating value
+    TimeWindows.of("counts", 5000L).advanceBy(1000L), // intervals in milliseconds
+    Serdes.Long() // serde for aggregated value
+);
 
-            KStream&lt;String, String&gt; joined = source1.leftJoin(source2,
-                (record1, record2) -> record1.get("user") + "-" + record2.get("region");
-            );
-        </pre>
+KStream&lt;String, String&gt; joined = source1.leftJoin(source2,
+    (record1, record2) -> record1.get("user") + "-" + record2.get("region");
+);
+</pre>
 
         <h4><a id="streams_dsl_sink" href="#streams_dsl_sink">Write streams back to Kafka</a></h4>
 
@@ -632,21 +640,21 @@
         <code>KStream.to</code> and <code>KTable.to</code>.
         </p>
 
-        <pre>
-            joined.to("topic4");
-        </pre>
+<pre>
+joined.to("topic4");
+</pre>
 
         If your application needs to continue reading and processing the records after they have been materialized
         to a topic via <code>to</code> above, one option is to construct a new stream that reads from the output topic;
         Kafka Streams provides a convenience method called <code>through</code>:
 
-        <pre>
-            // equivalent to
-            //
-            // joined.to("topic4");
-            // materialized = builder.stream("topic4");
-            KStream&lt;String, String&gt; materialized = joined.through("topic4");
-        </pre>
+<pre>
+// equivalent to
+//
+// joined.to("topic4");
+// materialized = builder.stream("topic4");
+KStream&lt;String, String&gt; materialized = joined.through("topic4");
+</pre>
         <br>
 
         <h3><a id="streams_execute" href="#streams_execute">Application Configuration and Execution</a></h3>
@@ -654,7 +662,7 @@
         <p>
         Besides defining the topology, developers will also need to configure their applications
         in <code>StreamsConfig</code> before running it. A complete list of
-        Kafka Streams configs can be found <a href="/documentation/#streamsconfigs"><b>here</b></a>.
+        Kafka Streams configs can be found <a href="/{{version}}/documentation/#streamsconfigs"><b>here</b></a>.
         </p>
 
         <p>
@@ -662,21 +670,21 @@
         set the necessary parameters, and construct a <code>StreamsConfig</code> instance from the <code>Properties</code> instance.
         </p>
 
-        <pre>
-            import java.util.Properties;
-            import org.apache.kafka.streams.StreamsConfig;
+<pre>
+import java.util.Properties;
+import org.apache.kafka.streams.StreamsConfig;
 
-            Properties settings = new Properties();
-            // Set a few key parameters
-            settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-first-streams-application");
-            settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-            settings.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "zookeeper1:2181");
-            // Any further settings
-            settings.put(... , ...);
+Properties settings = new Properties();
+// Set a few key parameters
+settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-first-streams-application");
+settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+settings.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "zookeeper1:2181");
+// Any further settings
+settings.put(... , ...);
 
-            // Create an instance of StreamsConfig from the Properties instance
-            StreamsConfig config = new StreamsConfig(settings);
-        </pre>
+// Create an instance of StreamsConfig from the Properties instance
+StreamsConfig config = new StreamsConfig(settings);
+</pre>
 
         <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
@@ -686,24 +694,24 @@
         If you want to set different values for consumer and producer for such a parameter, you can prefix the parameter name with <code>consumer.</code> or <code>producer.</code>:
         </p>
 
-        <pre>
-            Properties settings = new Properties();
-            // Example of a "normal" setting for Kafka Streams
-            settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
+<pre>
+Properties settings = new Properties();
+// Example of a "normal" setting for Kafka Streams
+settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
 
-            // Customize the Kafka consumer settings
-            streamsSettings.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 60000);
+// Customize the Kafka consumer settings
+streamsSettings.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 60000);
 
-            // Customize a common client setting for both consumer and producer
-            settings.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, 100L);
+// Customize a common client setting for both consumer and producer
+settings.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, 100L);
 
-            // Customize different values for consumer and producer
-            settings.put("consumer." + ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1024 * 1024);
-            settings.put("producer." + ProducerConfig.RECEIVE_BUFFER_CONFIG, 64 * 1024);
-            // Alternatively, you can use
-            settings.put(StreamsConfig.consumerPrefix(ConsumerConfig.RECEIVE_BUFFER_CONFIG), 1024 * 1024);
-            settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
-        </pre>
+// Customize different values for consumer and producer
+settings.put("consumer." + ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1024 * 1024);
+settings.put("producer." + ProducerConfig.RECEIVE_BUFFER_CONFIG, 64 * 1024);
+// Alternatively, you can use
+settings.put(StreamsConfig.consumerPrefix(ConsumerConfig.RECEIVE_BUFFER_CONFIG), 1024 * 1024);
+settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
+</pre>
 
         <p>
         You can call Kafka Streams from anywhere in your application code.
@@ -716,68 +724,68 @@
         that is used to define a topology; The second argument is an instance of <code>StreamsConfig</code> mentioned above.
         </p>
 
-        <pre>
-            import org.apache.kafka.streams.KafkaStreams;
-            import org.apache.kafka.streams.StreamsConfig;
-            import org.apache.kafka.streams.kstream.KStreamBuilder;
-            import org.apache.kafka.streams.processor.TopologyBuilder;
+<pre>
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.TopologyBuilder;
 
-            // Use the builders to define the actual processing topology, e.g. to specify
-            // from which input topics to read, which stream operations (filter, map, etc.)
-            // should be called, and so on.
+// Use the builders to define the actual processing topology, e.g. to specify
+// from which input topics to read, which stream operations (filter, map, etc.)
+// should be called, and so on.
 
-            KStreamBuilder builder = ...;  // when using the Kafka Streams DSL
-            //
-            // OR
-            //
-            TopologyBuilder builder = ...; // when using the Processor API
+KStreamBuilder builder = ...;  // when using the Kafka Streams DSL
+//
+// OR
+//
+TopologyBuilder builder = ...; // when using the Processor API
 
-            // Use the configuration to tell your application where the Kafka cluster is,
-            // which serializers/deserializers to use by default, to specify security settings,
-            // and so on.
-            StreamsConfig config = ...;
+// Use the configuration to tell your application where the Kafka cluster is,
+// which serializers/deserializers to use by default, to specify security settings,
+// and so on.
+StreamsConfig config = ...;
 
-            KafkaStreams streams = new KafkaStreams(builder, config);
-        </pre>
+KafkaStreams streams = new KafkaStreams(builder, config);
+</pre>
 
         <p>
         At this point, internal structures have been initialized, but the processing is not started yet. You have to explicitly start the Kafka Streams thread by calling the <code>start()</code> method:
         </p>
 
-        <pre>
-            // Start the Kafka Streams instance
-            streams.start();
-        </pre>
+<pre>
+// Start the Kafka Streams instance
+streams.start();
+</pre>
 
         <p>
         To catch any unexpected exceptions, you may set an <code>java.lang.Thread.UncaughtExceptionHandler</code> before you start the application. This handler is called whenever a stream thread is terminated by an unexpected exception:
         </p>
 
-        <pre>
-            streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-                public uncaughtException(Thread t, throwable e) {
-                    // here you should examine the exception and perform an appropriate action!
-                }
-            );
-        </pre>
+<pre>
+streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+    public uncaughtException(Thread t, throwable e) {
+        // here you should examine the exception and perform an appropriate action!
+    }
+);
+</pre>
 
         <p>
         To stop the application instance call the <code>close()</code> method:
         </p>
 
-        <pre>
-            // Stop the Kafka Streams instance
-            streams.close();
-        </pre>
+<pre>
+// Stop the Kafka Streams instance
+streams.close();
+</pre>
 
         Now it's time to execute your application that uses the Kafka Streams library, which can be run just like any other Java application – there is no special magic or requirement on the side of Kafka Streams.
         For example, you can package your Java application as a fat jar file and then start the application via:
 
-        <pre>
-            # Start the application in class `com.example.MyStreamsApp`
-            # from the fat jar named `path-to-app-fatjar.jar`.
-            $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
-        </pre>
+<pre>
+# Start the application in class `com.example.MyStreamsApp`
+# from the fat jar named `path-to-app-fatjar.jar`.
+$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
+</pre>
 
         <p>
         When the application instance starts running, the defined processor topology will be initialized as one or more stream tasks that can be executed in parallel by the stream threads within the instance.
@@ -790,13 +798,21 @@
         </p>
         <br>
 
-        <h2><a id="streams_upgrade" href="#streams_upgrade">Upgrade Guide and API Changes</a></h2>
+        <h2><a id="streams_upgrade_and_api" href="#streams_upgrade_and_api">Upgrade Guide and API Changes</a></h2>
 
         <p>
-        See the <a href="/documentation/#upgrade_1020_streams">Upgrade Section</a> for upgrading a Kafka Streams Application from 0.10.1.x to 0.10.2.0.
+        If you want to upgrade from 0.10.1.x to 0.10.2, see the <a href="/{{version}}/documentation/#upgrade_1020_streams">Upgrade Section for 0.10.2</a>.
+        It highlights incompatible changes you need to consider to upgrade your code and application.
+        See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-        <h3><a id="streams_api_changes" href="#streams_api_changes">Streams API changes in 0.10.2.0</a></h3>
+        <p>
+        If you want to upgrade from 0.10.0.x to 0.10.1, see the <a href="/{{version}}/documentation/#upgrade_1010_streams">Upgrade Section for 0.10.1</a>.
+        It highlights incompatible changes you need to consider to upgrade your code and application.
+        See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        </p>
+
+        <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
         <p>
             New methods in <code>KafkaStreams</code>:
@@ -824,46 +840,84 @@
             <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
             <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
         </ul>
+
         <p> New methods in <code>TopologyBuilder</code>: </p>
-            <ul>
-                <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
-                <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
+            <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
+        </ul>
 
         <p> New methods in <code>KStreamBuilder</code>: </p>
-            <ul>
-                <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
-                <li> <code>#table()</code> always requires store name </li>
-                <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
+            <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
+        </ul>
 
         <p> New joins for <code>KStream</code>: </p>
-            <ul>
-                <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
-                <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
-            </ul>
+        <ul>
+            <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
+            <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+            <li> note, join semantics in 0.10.2 were improved and thus you might see different result compared to 0.10.0.x and 0.10.1.x
+                 (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">Kafka Streams Join Semantics</a> in the Apache Kafka wiki)
+        </ul>
 
         <p> Aligned <code>null</code>-key handling for <code>KTable</code> joins: </p>
-            <ul>
-                <li> like all other KTable operations, <code>KTable-KTable</code> joins do not throw an exception on <code>null</code> key records anymore, but drop those records silently </li>
-            </ul>
+        <ul>
+            <li> like all other KTable operations, <code>KTable-KTable</code> joins do not throw an exception on <code>null</code> key records anymore, but drop those records silently </li>
+        </ul>
 
         <p> New window type <em>Session Windows</em>: </p>
-            <ul>
-                <li> added class <code>SessionWindows</code> to specify session windows </li>
-                <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
-                     to allow session window aggregations </li>
-            </ul>
+        <ul>
+            <li> added class <code>SessionWindows</code> to specify session windows </li>
+            <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+                 to allow session window aggregations </li>
+        </ul>
 
         <p> Changes to <code>TimestampExtractor</code>: </p>
-            <ul>
-                <li> method <code>#extract()</code> has a second parameter now </li>
-                <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
-                     (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
-                <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
-            </ul>
+        <ul>
+            <li> method <code>#extract()</code> has a second parameter now </li>
+            <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
+                 (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
+            <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
+        </ul>
 
         <p> Relaxed type constraints of many DSL interfaces, classes, and methods (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-100+-+Relax+Type+constraints+in+Kafka+Streams+API">KIP-100</a>). </p>
+
+        <h3><a id="streams_api_changes_0101" href="#streams_api_changes_0101">Streams API changes in 0.10.1.0</a></h3>
+
+        <p> Stream grouping and aggregation split into two methods: </p>
+        <ul>
+            <li> old: KStream #aggregateByKey(), #reduceByKey(), and #countByKey() </li>
+            <li> new: KStream#groupByKey() plus KGroupedStream #aggregate(), #reduce(), and #count() </li>
+            <li> Example: stream.countByKey() changes to stream.groupByKey().count() </li>
+        </ul>
+
+        <p> Auto Repartitioning: </p>
+        <ul>
+            <li> a call to through() after a key-changing operator and before an aggregation/join is no longer required </li>
+            <li> Example: stream.selectKey(...).through(...).countByKey() changes to stream.selectKey().groupByKey().count() </li>
+        </ul>
+
+        <p> TopologyBuilder: </p>
+        <ul>
+            <li> methods #sourceTopics(String applicationId) and #topicGroups(String applicationId) got simplified to #sourceTopics() and #topicGroups() </li>
+        </ul>
+
+        <p> DSL: new parameter to specify state store names: </p>
+        <ul>
+            <li> The new Interactive Queries feature requires to specify a store name for all source KTables and window aggregation result KTables (previous parameter "operator/window name" is now the storeName) </li>
+            <li> KStreamBuilder#table(String topic) changes to #topic(String topic, String storeName) </li>
+            <li> KTable#through(String topic) changes to #through(String topic, String storeName) </li>
+            <li> KGroupedStream #aggregate(), #reduce(), and #count() require additional parameter "String storeName"</li>
+            <li> Example: stream.countByKey(TimeWindows.of("windowName", 1000)) changes to stream.groupByKey().count(TimeWindows.of(1000), "countStoreName") </li>
+        </ul>
+
+        <p> Windowing: </p>
+        <ul>
+            <li> Windows are not named anymore: TimeWindows.of("name", 1000) changes to TimeWindows.of(1000) (cf. DSL: new parameter to specify state store names) </li>
+            <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
+        </ul>
+
 </script>
 
 <!--#include virtual="../includes/_header.htm" -->

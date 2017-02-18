@@ -46,19 +46,19 @@ public class StandbyTask extends AbstractTask {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
-     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
      */
-    public StandbyTask(TaskId id,
-                       String applicationId,
-                       Collection<TopicPartition> partitions,
-                       ProcessorTopology topology,
-                       Consumer<byte[], byte[]> consumer,
+    public StandbyTask(final TaskId id,
+                       final String applicationId,
+                       final Collection<TopicPartition> partitions,
+                       final ProcessorTopology topology,
+                       final Consumer<byte[], byte[]> consumer,
                        final ChangelogReader changelogReader,
-                       StreamsConfig config,
-                       StreamsMetrics metrics, final StateDirectory stateDirectory) {
+                       final StreamsConfig config,
+                       final StreamsMetrics metrics,
+                       final StateDirectory stateDirectory) {
         super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
 
         // initialize the topology with its own context
@@ -67,9 +67,9 @@ public class StandbyTask extends AbstractTask {
         log.info("standby-task [{}] Initializing state stores", id());
         initializeStateStores();
 
-        ((StandbyContextImpl) this.processorContext).initialized();
+        this.processorContext.initialized();
 
-        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointedOffsets());
+        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
@@ -92,7 +92,7 @@ public class StandbyTask extends AbstractTask {
     public void commit() {
         log.debug("standby-task [{}] Committing its state", id());
         stateMgr.flush(processorContext);
-
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         // reinitialize offset limits
         initializeOffsetLimits();
     }

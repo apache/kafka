@@ -26,7 +26,6 @@ import java.util.List;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 
@@ -35,8 +34,6 @@ import org.apache.kafka.common.protocol.types.Struct;
  * For error responses, the list of enabled mechanisms is included in the response.
  */
 public class SaslHandshakeResponse extends AbstractResponse {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.SASL_HANDSHAKE.id);
 
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String ENABLED_MECHANISMS_KEY_NAME = "enabled_mechanisms";
@@ -50,15 +47,11 @@ public class SaslHandshakeResponse extends AbstractResponse {
     private final List<String> enabledMechanisms;
 
     public SaslHandshakeResponse(Errors error, Collection<String> enabledMechanisms) {
-        super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
         this.error = error;
         this.enabledMechanisms = new ArrayList<>(enabledMechanisms);
     }
 
     public SaslHandshakeResponse(Struct struct) {
-        super(struct);
         error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         Object[] mechanisms = struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
         ArrayList<String> enabledMechanisms = new ArrayList<>();
@@ -71,15 +64,19 @@ public class SaslHandshakeResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.SASL_HANDSHAKE.id, version));
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
+        return struct;
+    }
+
     public List<String> enabledMechanisms() {
         return enabledMechanisms;
     }
 
-    public static SaslHandshakeResponse parse(ByteBuffer buffer) {
-        return new SaslHandshakeResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static SaslHandshakeResponse parse(ByteBuffer buffer, int version) {
+    public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
         return new SaslHandshakeResponse(ProtoUtils.parseResponse(ApiKeys.SASL_HANDSHAKE.id, version, buffer));
     }
 }

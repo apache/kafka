@@ -131,7 +131,8 @@ public class MockClient implements KafkaClient {
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                short version = request.requestBuilder().desiredOrLatestVersion();
+                responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), now, true, null, null));
                 iter.remove();
             }
@@ -146,13 +147,11 @@ public class MockClient implements KafkaClient {
             FutureResponse futureResp = iterator.next();
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
-            request.requestBuilder().setVersion(nodeApiVersions.usableVersion(
-                    request.requestBuilder().apiKey()));
-            AbstractRequest abstractRequest = request.requestBuilder().build();
+            short usableVersion = nodeApiVersions.usableVersion(request.requestBuilder().apiKey());
+            AbstractRequest abstractRequest = request.requestBuilder().build(usableVersion);
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Next in line response did not match expected request");
-
-            ClientResponse resp = new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+            ClientResponse resp = new ClientResponse(request.makeHeader(usableVersion), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
@@ -192,7 +191,8 @@ public class MockClient implements KafkaClient {
 
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+        short version = request.requestBuilder().desiredOrLatestVersion();
+        responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
 
@@ -206,7 +206,8 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                short version = request.requestBuilder().desiredOrLatestVersion();
+                responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;
             }

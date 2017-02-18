@@ -354,7 +354,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val numMessages = 100
-    val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes, 
+    val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
                                                                                 timestamp = time.milliseconds))
     messageSets.foreach(log.append(_))
     log.flush()
@@ -389,11 +389,11 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
 
     /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, 
-                                         Record.create(time.milliseconds, null, "hello".getBytes), 
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP,
+                                         Record.create(time.milliseconds, null, "hello".getBytes),
                                          Record.create(time.milliseconds, null, "there".getBytes)))
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, 
-                                         Record.create(time.milliseconds, null, "alpha".getBytes), 
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP,
+                                         Record.create(time.milliseconds, null, "alpha".getBytes),
                                          Record.create(time.milliseconds, null, "beta".getBytes)))
 
     def read(offset: Int) = log.read(offset, 4096).records.deepEntries.iterator
@@ -445,7 +445,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSetSizeCheck() {
-    val messageSet = MemoryRecords.withRecords(Record.create(time.milliseconds, null, "You".getBytes), 
+    val messageSet = MemoryRecords.withRecords(Record.create(time.milliseconds, null, "You".getBytes),
                                                Record.create(time.milliseconds, null, "bethe".getBytes))
     // append messages to log
     val configSegmentSize = messageSet.sizeInBytes - 1
@@ -513,10 +513,10 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSizeCheck() {
-    val first = MemoryRecords.withRecords(CompressionType.NONE, 
-                                          Record.create(time.milliseconds, null, "You".getBytes), 
+    val first = MemoryRecords.withRecords(CompressionType.NONE,
+                                          Record.create(time.milliseconds, null, "You".getBytes),
                                           Record.create(time.milliseconds, null, "bethe".getBytes))
-    val second = MemoryRecords.withRecords(CompressionType.NONE, 
+    val second = MemoryRecords.withRecords(CompressionType.NONE,
                                            Record.create(time.milliseconds, null, "change (I need more bytes)".getBytes))
 
     // append messages to log
@@ -987,6 +987,16 @@ class LogTest extends JUnitSuite {
     messages.foreach(record => log.append(MemoryRecords.withRecords(record)))
     val invalidMessage = MemoryRecords.withRecords(Record.create(1.toString.getBytes))
     log.append(invalidMessage, assignOffsets = false)
+  }
+
+  @Test
+  def testAppendWithNoTimestamp(): Unit = {
+    val log = new Log(logDir,
+      LogConfig(),
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    log.append(MemoryRecords.withRecords(Record.create(Record.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
   }
 
   @Test

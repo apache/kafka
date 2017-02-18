@@ -33,8 +33,8 @@ public class LeaveGroupRequest extends AbstractRequest {
         }
 
         @Override
-        public LeaveGroupRequest build() {
-            return new LeaveGroupRequest(groupId, memberId, version());
+        public LeaveGroupRequest build(short version) {
+            return new LeaveGroupRequest(groupId, memberId, version);
         }
 
         @Override
@@ -52,16 +52,13 @@ public class LeaveGroupRequest extends AbstractRequest {
     private final String memberId;
 
     private LeaveGroupRequest(String groupId, String memberId, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.LEAVE_GROUP.id, version)),
-                version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        super(version);
         this.groupId = groupId;
         this.memberId = memberId;
     }
 
     public LeaveGroupRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
     }
@@ -86,12 +83,15 @@ public class LeaveGroupRequest extends AbstractRequest {
         return memberId;
     }
 
-    public static LeaveGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new LeaveGroupRequest(ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer),
-                (short) versionId);
+    public static LeaveGroupRequest parse(ByteBuffer buffer, short versionId) {
+        return new LeaveGroupRequest(ProtoUtils.parseRequest(ApiKeys.LEAVE_GROUP.id, versionId, buffer), versionId);
     }
 
-    public static LeaveGroupRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.LEAVE_GROUP.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.LEAVE_GROUP.id, version()));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        return struct;
     }
 }

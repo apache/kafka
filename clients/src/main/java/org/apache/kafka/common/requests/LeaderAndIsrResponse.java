@@ -17,7 +17,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -27,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 
 public class LeaderAndIsrResponse extends AbstractResponse {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LEADER_AND_ISR.id);
 
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -45,33 +43,12 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
     private final Map<TopicPartition, Errors> responses;
 
-    public LeaderAndIsrResponse(Map<TopicPartition, Errors> responses) {
-        this(Errors.NONE, responses);
-    }
-
     public LeaderAndIsrResponse(Errors error, Map<TopicPartition, Errors> responses) {
-        super(new Struct(CURRENT_SCHEMA));
-
-        List<Struct> responseDatas = new ArrayList<>(responses.size());
-        for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {
-            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
-            TopicPartition partition = response.getKey();
-            partitionData.set(PARTITIONS_TOPIC_KEY_NAME, partition.topic());
-            partitionData.set(PARTITIONS_PARTITION_KEY_NAME, partition.partition());
-            partitionData.set(PARTITIONS_ERROR_CODE_KEY_NAME, response.getValue().code());
-            responseDatas.add(partitionData);
-        }
-
-        struct.set(PARTITIONS_KEY_NAME, responseDatas.toArray());
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-
         this.responses = responses;
         this.error = error;
     }
 
     public LeaderAndIsrResponse(Struct struct) {
-        super(struct);
-
         responses = new HashMap<>();
         for (Object responseDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {
             Struct responseData = (Struct) responseDataObj;
@@ -92,12 +69,27 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return error;
     }
 
-    public static LeaderAndIsrResponse parse(ByteBuffer buffer, int version) {
+    public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
         return new LeaderAndIsrResponse(ProtoUtils.parseResponse(ApiKeys.LEADER_AND_ISR.id, version, buffer));
     }
 
-    public static LeaderAndIsrResponse parse(ByteBuffer buffer) {
-        return new LeaderAndIsrResponse(CURRENT_SCHEMA.read(buffer));
-    }
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.LEADER_AND_ISR.id, version));
 
+        List<Struct> responseDatas = new ArrayList<>(responses.size());
+        for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {
+            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
+            TopicPartition partition = response.getKey();
+            partitionData.set(PARTITIONS_TOPIC_KEY_NAME, partition.topic());
+            partitionData.set(PARTITIONS_PARTITION_KEY_NAME, partition.partition());
+            partitionData.set(PARTITIONS_ERROR_CODE_KEY_NAME, response.getValue().code());
+            responseDatas.add(partitionData);
+        }
+
+        struct.set(PARTITIONS_KEY_NAME, responseDatas.toArray());
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+
+        return struct;
+    }
 }

@@ -61,6 +61,7 @@ public class AbstractTaskTest {
     }
 
     private AbstractTask createTask(final Consumer consumer) {
+        final MockTime time = new MockTime();
         return new AbstractTask(new TaskId(0, 0),
                                 "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
@@ -73,7 +74,7 @@ public class AbstractTaskTest {
                                 consumer,
                                 new StoreChangelogReader(consumer, Time.SYSTEM, 5000),
                                 false,
-                                new StateDirectory("app", TestUtils.tempDirectory().getPath(), new MockTime()),
+                                new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
                                 new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
             public void commit() {

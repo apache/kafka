@@ -16,7 +16,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -28,7 +27,6 @@ import java.util.Map;
 
 public class OffsetCommitResponse extends AbstractResponse {
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.OFFSET_COMMIT.id);
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level fields
@@ -58,31 +56,11 @@ public class OffsetCommitResponse extends AbstractResponse {
     private final Map<TopicPartition, Errors> responseData;
 
     public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        super(new Struct(CURRENT_SCHEMA));
-
-        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupDataByTopic(responseData);
-
-        List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
-            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entries.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
-            for (Map.Entry<Integer, Errors> partitionEntry : entries.getValue().entrySet()) {
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(ERROR_CODE_KEY_NAME, partitionEntry.getValue().code());
-                partitionArray.add(partitionData);
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
-        }
-        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
         this.responseData = responseData;
     }
 
     public OffsetCommitResponse(Struct struct) {
-        super(struct);
-        responseData = new HashMap<TopicPartition, Errors>();
+        responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
@@ -95,16 +73,36 @@ public class OffsetCommitResponse extends AbstractResponse {
         }
     }
 
+    @Override
+    public Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.OFFSET_COMMIT.id, version));
+
+        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        List<Struct> topicArray = new ArrayList<>();
+        for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
+            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, entries.getKey());
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, Errors> partitionEntry : entries.getValue().entrySet()) {
+                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(ERROR_CODE_KEY_NAME, partitionEntry.getValue().code());
+                partitionArray.add(partitionData);
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+
+        return struct;
+    }
+
     public Map<TopicPartition, Errors> responseData() {
         return responseData;
     }
 
-    public static OffsetCommitResponse parse(ByteBuffer buffer, int version) {
-        Schema schema = ProtoUtils.responseSchema(ApiKeys.OFFSET_COMMIT.id, version);
-        return new OffsetCommitResponse(schema.read(buffer));
+    public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
+        return new OffsetCommitResponse(ProtoUtils.parseResponse(ApiKeys.OFFSET_COMMIT.id, version, buffer));
     }
 
-    public static OffsetCommitResponse parse(ByteBuffer buffer) {
-        return new OffsetCommitResponse(CURRENT_SCHEMA.read(buffer));
-    }
 }

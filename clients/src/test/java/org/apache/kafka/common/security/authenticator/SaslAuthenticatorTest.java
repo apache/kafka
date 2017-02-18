@@ -392,7 +392,7 @@ public class SaslAuthenticatorTest {
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer);
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION, response.error());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
