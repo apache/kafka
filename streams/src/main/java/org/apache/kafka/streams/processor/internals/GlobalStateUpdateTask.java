@@ -29,7 +29,7 @@ import java.util.Set;
  */
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
-    private class SourceNodeAndDeserializer {
+    private static class SourceNodeAndDeserializer {
         private final SourceNode sourceNode;
         private final RecordDeserializer deserializer;
 
