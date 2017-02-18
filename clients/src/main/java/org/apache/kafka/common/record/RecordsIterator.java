@@ -146,8 +146,11 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
             this.wrapperMagic = wrapperRecord.magic();
 
             CompressionType compressionType = wrapperRecord.compressionType();
-            ByteBuffer buffer = wrapperRecord.value();
-            DataInputStream stream = new DataInputStream(compressionType.wrapForInput(new ByteBufferInputStream(buffer),
+            ByteBuffer wrapperValue = wrapperRecord.value();
+            if (wrapperValue == null)
+                throw new InvalidRecordException("Found invalid compressed record set with null value");
+
+            DataInputStream stream = new DataInputStream(compressionType.wrapForInput(new ByteBufferInputStream(wrapperValue),
                     wrapperRecord.magic()));
             LogInputStream logStream = new DataLogInputStream(stream, maxMessageSize);
 
@@ -180,6 +183,10 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
                     }
                     logEntries.addLast(logEntry);
                 }
+
+                if (logEntries.isEmpty())
+                    throw new InvalidRecordException("Found invalid compressed record set with no inner records");
+
                 if (wrapperMagic > Record.MAGIC_VALUE_V0)
                     this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
                 else
