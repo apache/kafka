@@ -94,14 +94,14 @@ public class MetadataResponse extends AbstractResponse {
     public MetadataResponse(Struct struct) {
         Map<Integer, Node> brokers = new HashMap<>();
         Object[] brokerStructs = (Object[]) struct.get(BROKERS_KEY_NAME);
-        for (int i = 0; i < brokerStructs.length; i++) {
-            Struct broker = (Struct) brokerStructs[i];
+        for (Object brokerStruct : brokerStructs) {
+            Struct broker = (Struct) brokerStruct;
             int nodeId = broker.getInt(NODE_ID_KEY_NAME);
             String host = broker.getString(HOST_KEY_NAME);
             int port = broker.getInt(PORT_KEY_NAME);
             // This field only exists in v1+
             // When we can't know if a rack exists in a v0 response we default to null
-            String rack =  broker.hasField(RACK_KEY_NAME) ? broker.getString(RACK_KEY_NAME) : null;
+            String rack = broker.hasField(RACK_KEY_NAME) ? broker.getString(RACK_KEY_NAME) : null;
             brokers.put(nodeId, new Node(nodeId, host, port, rack));
         }
 
@@ -120,8 +120,8 @@ public class MetadataResponse extends AbstractResponse {
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
-        for (int i = 0; i < topicInfos.length; i++) {
-            Struct topicInfo = (Struct) topicInfos[i];
+        for (Object topicInfoObj : topicInfos) {
+            Struct topicInfo = (Struct) topicInfoObj;
             Errors topicError = Errors.forCode(topicInfo.getShort(TOPIC_ERROR_CODE_KEY_NAME));
             String topic = topicInfo.getString(TOPIC_KEY_NAME);
             // This field only exists in v1+
@@ -131,8 +131,8 @@ public class MetadataResponse extends AbstractResponse {
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
 
             Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
-            for (int j = 0; j < partitionInfos.length; j++) {
-                Struct partitionInfo = (Struct) partitionInfos[j];
+            for (Object partitionInfoObj : partitionInfos) {
+                Struct partitionInfo = (Struct) partitionInfoObj;
                 Errors partitionError = Errors.forCode(partitionInfo.getShort(PARTITION_ERROR_CODE_KEY_NAME));
                 int partition = partitionInfo.getInt(PARTITION_KEY_NAME);
                 int leader = partitionInfo.getInt(LEADER_KEY_NAME);
@@ -140,19 +140,21 @@ public class MetadataResponse extends AbstractResponse {
                 Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
 
                 List<Node> replicaNodes = new ArrayList<>(replicas.length);
-                for (Object replicaNodeId : replicas)
+                for (Object replicaNodeId : replicas) {
                     if (brokers.containsKey(replicaNodeId))
                         replicaNodes.add(brokers.get(replicaNodeId));
                     else
                         replicaNodes.add(new Node((int) replicaNodeId, "", -1));
+                }
 
                 Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
                 List<Node> isrNodes = new ArrayList<>(isr.length);
-                for (Object isrNode : isr)
+                for (Object isrNode : isr) {
                     if (brokers.containsKey(isrNode))
                         isrNodes.add(brokers.get(isrNode));
                     else
                         isrNodes.add(new Node((int) isrNode, "", -1));
+                }
 
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
             }

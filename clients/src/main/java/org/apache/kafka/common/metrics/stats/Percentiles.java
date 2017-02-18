@@ -78,8 +78,8 @@ public class Percentiles extends SampledStat implements CompoundStat {
         float sum = 0.0f;
         float quant = (float) quantile;
         for (int b = 0; b < buckets; b++) {
-            for (int s = 0; s < this.samples.size(); s++) {
-                HistogramSample sample = (HistogramSample) this.samples.get(s);
+            for (Sample s : this.samples) {
+                HistogramSample sample = (HistogramSample) s;
                 float[] hist = sample.histogram.counts();
                 sum += hist[b];
                 if (sum / count > quant)

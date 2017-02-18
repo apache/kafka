@@ -33,8 +33,8 @@ public class Min extends SampledStat {
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         double min = Double.MAX_VALUE;
-        for (int i = 0; i < samples.size(); i++)
-            min = Math.min(min, samples.get(i).value);
+        for (Sample sample : samples)
+            min = Math.min(min, sample.value);
         return min;
     }
 
