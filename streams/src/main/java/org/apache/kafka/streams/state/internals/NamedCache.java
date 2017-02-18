@@ -320,7 +320,7 @@ class NamedCache {
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    class LRUNode {
+    static class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;
