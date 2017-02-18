@@ -1495,7 +1495,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
-     * 
+     *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      * before or while this function is called
      */
