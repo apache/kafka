@@ -25,10 +25,10 @@ class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<K, V>();
+        return new KStreamPassThroughProcessor<>();
     }
 
-    public class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
+    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
             context().forward(key, value);
