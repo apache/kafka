@@ -142,7 +142,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
                 byte[] offsetDelta = new byte[4];
                 ByteBuffer buf = ByteBuffer.wrap(offsetDelta);
-                channel.read(buf, position + EosLogEntry.OFFSET_DELTA_OFFSET);
+                channel.read(buf, position + EosLogEntry.LAST_OFFSET_DELTA_OFFSET);
                 if (buf.hasRemaining())
                     throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
                 return offset + buf.getInt(0);
@@ -183,9 +183,9 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public int firstSequence() {
+        public int baseSequence() {
             loadUnderlyingEntry();
-            return underlying.firstSequence();
+            return underlying.baseSequence();
         }
 
         @Override

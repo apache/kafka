@@ -73,7 +73,7 @@ public class MemoryRecordsTest {
                 if (magic >= LogEntry.MAGIC_VALUE_V2) {
                     assertEquals(pid, entry.pid());
                     assertEquals(epoch, entry.epoch());
-                    assertEquals(firstSequence + total, entry.firstSequence());
+                    assertEquals(firstSequence + total, entry.baseSequence());
                 }
 
                 int records = 0;

@@ -67,6 +67,7 @@ public class MemoryRecordsBuilder {
     private long maxTimestamp = LogEntry.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
     private long lastOffset = -1;
+    private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
 
@@ -177,7 +178,7 @@ public class MemoryRecordsBuilder {
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > 1)
-                writeEosEntryHeader();
+                writeEosLogEntryHeader();
             else if (compressionType != CompressionType.NONE)
                 writeOldEntryCompressedWrapperHeader();
 
@@ -188,17 +189,25 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    private void writeEosEntryHeader() {
+    private void writeEosLogEntryHeader() {
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
-
-        long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
         int size = pos - initPos;
-
         int offsetDelta = (int) (lastOffset - baseOffset);
-        EosLogEntry.writeInPlaceHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                timestamp, pid, epoch, baseSequence);
+
+        final long baseTimestamp;
+        final long maxTimestamp;
+        if (timestampType == TimestampType.LOG_APPEND_TIME) {
+            baseTimestamp = logAppendTime;
+            maxTimestamp = logAppendTime;
+        } else {
+            baseTimestamp = this.baseTimestamp;
+            maxTimestamp = this.maxTimestamp;
+        }
+
+        EosLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
+                baseTimestamp, maxTimestamp, pid, epoch, baseSequence);
 
         buffer.position(pos);
     }
@@ -236,10 +245,16 @@ public class MemoryRecordsBuilder {
             if (lastOffset >= 0 && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
+            if (timestamp < 0 && timestamp != LogEntry.NO_TIMESTAMP)
+                throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
+
+            if (baseTimestamp == null)
+                baseTimestamp = timestamp;
+
             if (magic > LogEntry.MAGIC_VALUE_V1)
-                return appendEosRecord(offset, timestamp, key, value);
+                return appendEosLogRecord(offset, timestamp, key, value);
             else
-                return appendOldRecord(offset, timestamp, key, value);
+                return appendOldLogRecord(offset, timestamp, key, value);
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
@@ -249,14 +264,15 @@ public class MemoryRecordsBuilder {
         return appendWithOffset(offset, timestamp, wrapNullable(key), wrapNullable(value));
     }
 
-    private long appendEosRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+    private long appendEosLogRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
         int offsetDelta = (int) (offset - baseOffset);
-        long crc = EosLogRecord.writeTo(appendStream, offsetDelta, timestamp, key, value);
+        long timestampDelta = timestamp - baseTimestamp;
+        long crc = EosLogRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value);
         recordWritten(offset, timestamp, EosLogRecord.sizeInBytes(offsetDelta, timestamp, key, value));
         return crc;
     }
 
-    private long appendOldRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+    private long appendOldLogRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
 

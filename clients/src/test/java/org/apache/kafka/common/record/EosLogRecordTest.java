@@ -27,94 +27,48 @@ public class EosLogRecordTest {
 
     @Test
     public void testBasicSerde() {
-        ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
-        ByteBuffer value = ByteBuffer.wrap("there".getBytes());
-        int delta = 57;
-        long timestamp = System.currentTimeMillis();
+        KafkaRecord[] records = new KafkaRecord[] {
+            new KafkaRecord("hi".getBytes(), "there".getBytes()),
+            new KafkaRecord(null, "there".getBytes()),
+            new KafkaRecord("hi".getBytes(), null),
+            new KafkaRecord(null, null)
+        };
 
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, delta, timestamp, key, value);
-        buffer.flip();
+        for (KafkaRecord record : records) {
+            int baseSequence = 723;
+            long baseOffset = 37;
+            int offsetDelta = 10;
+            long baseTimestamp = System.currentTimeMillis();
+            long timestampDelta = 323;
 
-        EosLogRecord record = EosLogRecord.readFrom(buffer, 1L, 0, null);
-        assertNotNull(record);
-        assertEquals(0, record.attributes());
-        assertEquals(58L, record.offset());
-        assertEquals(57, record.sequence());
-        assertEquals(timestamp, record.timestamp());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-    }
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            EosLogRecord.writeTo(buffer, offsetDelta, timestampDelta, record.key(), record.value());
+            buffer.flip();
 
-    @Test
-    public void testSerdeNullKey() {
-        ByteBuffer key = null;
-        ByteBuffer value = ByteBuffer.wrap("there".getBytes());
-        int delta = 57;
-        long timestamp = System.currentTimeMillis();
-
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, delta, timestamp, key, value);
-        buffer.flip();
-
-        EosLogRecord record = EosLogRecord.readFrom(buffer, 1L, 0, null);
-        assertNotNull(record);
-        assertEquals(58L, record.offset());
-        assertEquals(timestamp, record.timestamp());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-    }
-
-    @Test
-    public void testSerdeNullValue() {
-        ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
-        ByteBuffer value = null;
-        int delta = 57;
-        long timestamp = System.currentTimeMillis();
-
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, delta, timestamp, key, value);
-        buffer.flip();
-
-        EosLogRecord record = EosLogRecord.readFrom(buffer, 1L, 0, null);
-        assertNotNull(record);
-        assertEquals(58L, record.offset());
-        assertEquals(timestamp, record.timestamp());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-    }
-
-    @Test
-    public void testSerdeNullKeyAndValue() {
-        ByteBuffer key = null;
-        ByteBuffer value = null;
-        int delta = 57;
-        long timestamp = System.currentTimeMillis();
-
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, delta, timestamp, key, value);
-        buffer.flip();
-
-        EosLogRecord record = EosLogRecord.readFrom(buffer, 1L, 0, null);
-        assertNotNull(record);
-        assertEquals(58L, record.offset());
-        assertEquals(timestamp, record.timestamp());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
+            EosLogRecord logRecord = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+            assertNotNull(logRecord);
+            assertEquals(baseOffset + offsetDelta, logRecord.offset());
+            assertEquals(baseSequence + offsetDelta, logRecord.sequence());
+            assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
+            assertEquals(record.key(), logRecord.key());
+            assertEquals(record.value(), logRecord.value());
+        }
     }
 
     @Test
     public void testSerdeNoSequence() {
         ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
         ByteBuffer value = ByteBuffer.wrap("there".getBytes());
-        int delta = 57;
-        long timestamp = System.currentTimeMillis();
+        long baseOffset = 37;
+        int offsetDelta = 10;
+        long baseTimestamp = System.currentTimeMillis();
+        long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, delta, timestamp, key, value);
+        EosLogRecord.writeTo(buffer, offsetDelta, timestampDelta, key, value);
         buffer.flip();
 
-        EosLogRecord record = EosLogRecord.readFrom(buffer, 1L, LogEntry.NO_SEQUENCE, null);
+        EosLogRecord record = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, LogEntry.NO_SEQUENCE, null);
         assertNotNull(record);
         assertEquals(LogEntry.NO_SEQUENCE, record.sequence());
     }

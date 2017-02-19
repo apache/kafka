@@ -161,7 +161,7 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
     }
 
     @Override
-    public int firstSequence() {
+    public int baseSequence() {
         return LogEntry.NO_SEQUENCE;
     }
 
@@ -374,25 +374,22 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
             return record;
         }
 
+        @Override
         public void setOffset(long offset) {
             buffer.putLong(OFFSET_OFFSET, offset);
         }
 
-        public void setCreateTime(long timestamp) {
+        @Override
+        public void setMaxTimestamp(TimestampType timestampType, long timestamp) {
             if (record.magic() == LogEntry.MAGIC_VALUE_V0)
                 throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
 
             long currentTimestamp = record.timestamp();
             // We don't need to recompute crc if the timestamp is not updated.
-            if (record.timestampType() == TimestampType.CREATE_TIME && currentTimestamp == timestamp)
+            if (record.timestampType() == timestampType && currentTimestamp == timestamp)
                 return;
-            setTimestampAndUpdateCrc(TimestampType.CREATE_TIME, timestamp);
-        }
 
-        public void setLogAppendTime(long timestamp) {
-            if (record.magic() == LogEntry.MAGIC_VALUE_V0)
-                throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
-            setTimestampAndUpdateCrc(TimestampType.LOG_APPEND_TIME, timestamp);
+            setTimestampAndUpdateCrc(timestampType, timestamp);
         }
 
         private void setTimestampAndUpdateCrc(TimestampType timestampType, long timestamp) {

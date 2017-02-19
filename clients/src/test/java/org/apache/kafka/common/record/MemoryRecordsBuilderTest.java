@@ -299,7 +299,7 @@ public class MemoryRecordsBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V0,
                 compressionType, TimestampType.NO_TIMESTAMP_TYPE, 0L);
-        builder.append(Record.NO_TIMESTAMP, "1".getBytes(), "a".getBytes());
+        builder.append(LogEntry.NO_TIMESTAMP, "1".getBytes(), "a".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, compressionType,

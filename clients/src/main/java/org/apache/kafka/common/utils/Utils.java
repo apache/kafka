@@ -156,7 +156,7 @@ public class Utils {
      * Read the given byte buffer into a byte array
      */
     public static byte[] toArray(ByteBuffer buffer) {
-        return toArray(buffer, 0, buffer.limit());
+        return toArray(buffer, 0, buffer.remaining());
     }
 
     /**

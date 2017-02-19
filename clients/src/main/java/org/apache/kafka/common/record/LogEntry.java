@@ -150,7 +150,7 @@ public interface LogEntry extends Iterable<LogRecord> {
      * Get the first sequence number of this message set.
      * @return The first sequence number
      */
-    int firstSequence();
+    int baseSequence();
 
     /**
      * Get the last sequence number of this message set.
@@ -190,9 +190,7 @@ public interface LogEntry extends Iterable<LogRecord> {
     interface MutableLogEntry extends LogEntry {
         void setOffset(long offset);
 
-        void setCreateTime(long timestamp);
-
-        void setLogAppendTime(long timestamp);
+        void setMaxTimestamp(TimestampType timestampType, long maxTimestamp);
     }
 
 }

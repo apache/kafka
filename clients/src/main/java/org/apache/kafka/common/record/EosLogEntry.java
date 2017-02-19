@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -34,36 +33,36 @@ import java.util.Iterator;
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
 public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
-    static final int OFFSET_OFFSET = 0;
-    static final int OFFSET_LENGTH = 8;
-    static final int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
+    static final int BASE_OFFSET_OFFSET = 0;
+    static final int BASE_OFFSET_LENGTH = 8;
+    static final int SIZE_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
     static final int SIZE_LENGTH = 4;
     static final int CRC_OFFSET = SIZE_OFFSET + SIZE_LENGTH;
     static final int CRC_LENGTH = 4;
     static final int MAGIC_OFFSET = CRC_OFFSET + CRC_LENGTH;
     static final int MAGIC_LENGTH = 1;
     static final int ATTRIBUTES_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
-    static final int ATTRIBUTE_LENGTH = 1;
-    static final int TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
-    static final int TIMESTAMP_LENGTH = 8;
-    static final int OFFSET_DELTA_OFFSET = TIMESTAMP_OFFSET + TIMESTAMP_LENGTH;
-    static final int OFFSET_DELTA_LENGTH = 4;
-    static final int PID_OFFSET = OFFSET_DELTA_OFFSET + OFFSET_DELTA_LENGTH;
+    static final int ATTRIBUTE_LENGTH = 2;
+    static final int BASE_TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    static final int BASE_TIMESTAMP_LENGTH = 8;
+    static final int MAX_TIMESTAMP_OFFSET = BASE_TIMESTAMP_OFFSET + BASE_TIMESTAMP_LENGTH;
+    static final int MAX_TIMESTAMP_LENGTH = 8;
+    static final int LAST_OFFSET_DELTA_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
+    static final int LAST_OFFSET_DELTA_LENGTH = 4;
+    static final int PID_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
     static final int PID_LENGTH = 8;
     static final int EPOCH_OFFSET = PID_OFFSET + PID_LENGTH;
     static final int EPOCH_LENGTH = 2;
-    static final int SEQUENCE_OFFSET = EPOCH_OFFSET + EPOCH_LENGTH;
-    static final int SEQUENCE_LENGTH = 4;
-
-    public static final int RECORDS_OFFSET = SEQUENCE_OFFSET + SEQUENCE_LENGTH;
-
+    static final int BASE_SEQUENCE_OFFSET = EPOCH_OFFSET + EPOCH_LENGTH;
+    static final int BASE_SEQUENCE_LENGTH = 4;
+    static final int RECORDS_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
 
     private static final int COMPRESSION_CODEC_MASK = 0x07;
 
     private final ByteBuffer buffer;
 
-    public EosLogEntry(ByteBuffer buffer) {
+    EosLogEntry(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 
@@ -79,9 +78,13 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                     + ", computed crc = " + computeChecksum() + ")");
     }
 
+    private long baseTimestamp() {
+        return buffer.getLong(BASE_TIMESTAMP_OFFSET);
+    }
+
     @Override
     public long maxTimestamp() {
-        return buffer.getLong(TIMESTAMP_OFFSET);
+        return buffer.getLong(MAX_TIMESTAMP_OFFSET);
     }
 
     @Override
@@ -94,12 +97,12 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
     @Override
     public long baseOffset() {
-        return buffer.getLong(OFFSET_OFFSET);
+        return buffer.getLong(BASE_OFFSET_OFFSET);
     }
 
     @Override
     public long lastOffset() {
-        return baseOffset() + ByteUtils.readUnsignedInt(buffer, OFFSET_DELTA_OFFSET);
+        return baseOffset() + ByteUtils.readUnsignedInt(buffer, LAST_OFFSET_DELTA_OFFSET);
     }
 
     @Override
@@ -113,14 +116,14 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     @Override
-    public int firstSequence() {
-        return buffer.getInt(SEQUENCE_OFFSET);
+    public int baseSequence() {
+        return buffer.getInt(BASE_SEQUENCE_OFFSET);
     }
 
     @Override
     public int lastSequence() {
         // FIXME: cast to int
-        return firstSequence() + (int) ByteUtils.readUnsignedInt(buffer, OFFSET_DELTA_OFFSET);
+        return baseSequence() + (int) ByteUtils.readUnsignedInt(buffer, LAST_OFFSET_DELTA_OFFSET);
     }
 
     @Override
@@ -150,9 +153,13 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         Deque<LogRecord> records = new ArrayDeque<>();
         try {
             Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
+            long baseOffset = baseOffset();
+            long baseTimestamp = baseTimestamp();
+            int baseSequence = baseSequence();
+
             while (true) {
                 try {
-                    records.add(EosLogRecord.readFrom(stream, baseOffset(), firstSequence(), logAppendTime));
+                    records.add(EosLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime));
                 } catch (EOFException e) {
                     break;
                 }
@@ -180,7 +187,11 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                 buf.position(position);
 
                 Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
-                EosLogRecord record = EosLogRecord.readFrom(buf, baseOffset(), firstSequence(), logAppendTime);
+                long baseOffset = baseOffset();
+                long baseTimestamp = baseTimestamp();
+                int baseSequence = baseSequence();
+
+                EosLogRecord record = EosLogRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 if (record == null)
                     return allDone();
 
@@ -199,26 +210,19 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     public void setOffset(long offset) {
-        buffer.putLong(OFFSET_OFFSET, offset);
+        buffer.putLong(BASE_OFFSET_OFFSET, offset);
     }
 
-    public void setCreateTime(long timestamp) {
-        long currentTimestamp = maxTimestamp();
+    @Override
+    public void setMaxTimestamp(TimestampType timestampType, long maxTimestamp) {
+        long currentMaxTimestamp = maxTimestamp();
         // We don't need to recompute crc if the timestamp is not updated.
-        if (timestampType() == TimestampType.CREATE_TIME && currentTimestamp == timestamp)
+        if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
         byte attributes = attributes();
-        buffer.put(ATTRIBUTES_OFFSET, TimestampType.CREATE_TIME.updateAttributes(attributes));
-        buffer.putLong(TIMESTAMP_OFFSET, timestamp);
-        long crc = computeChecksum();
-        ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
-    }
-
-    public void setLogAppendTime(long timestamp) {
-        byte attributes = attributes();
-        buffer.put(ATTRIBUTES_OFFSET, TimestampType.LOG_APPEND_TIME.updateAttributes(attributes));
-        buffer.putLong(TIMESTAMP_OFFSET, timestamp);
+        buffer.putShort(ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
+        buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
         ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
     }
@@ -237,7 +241,8 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     private byte attributes() {
-        return buffer.get(ATTRIBUTES_OFFSET);
+        // note we're not using the second byte of attributes
+        return (byte) buffer.getShort(ATTRIBUTES_OFFSET);
     }
 
     @Override
@@ -254,100 +259,45 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return buffer != null ? buffer.hashCode() : 0;
     }
 
-    public static void write(DataOutputStream out,
-                             long offset,
-                             int offsetDelta,
-                             int size,
-                             byte magic,
-                             long crc,
-                             byte attributes,
-                             long timestamp,
-                             ByteBuffer records) throws IOException {
-        // write the header
-        writeHeader(out, offset, offsetDelta, size, magic, crc, attributes, timestamp, 0L, (short) 0, 0);
-
-        // write the records
-        out.write(records.array(), records.arrayOffset(), records.remaining());
-    }
-
-    public static byte computeAttributes(CompressionType type, TimestampType timestampType) {
+    private static byte computeAttributes(CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
             attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
         return timestampType.updateAttributes(attributes);
     }
 
-    public static void writeInPlaceHeader(ByteBuffer buffer,
-                                          long offset,
-                                          int offsetDelta,
-                                          int size,
-                                          byte magic,
-                                          CompressionType compressionType,
-                                          TimestampType timestampType,
-                                          long timestamp,
-                                          long pid,
-                                          short epoch,
-                                          int sequence) {
-        byte attributes = computeAttributes(compressionType, timestampType);
-        writeInPlaceHeader(buffer, offset, offsetDelta, size, magic, attributes, timestamp, pid, epoch, sequence);
-    }
-
-    private static void writeInPlaceHeader(ByteBuffer buffer,
-                                           long offset,
-                                           int offsetDelta,
-                                           int size,
-                                           byte magic,
-                                           byte attributes,
-                                           long timestamp,
-                                           long pid,
-                                           short epoch,
-                                           int sequence) {
-        int position = buffer.position();
-        buffer.putLong(position + OFFSET_OFFSET, offset);
-        buffer.putInt(position + SIZE_OFFSET, size - LOG_OVERHEAD);
-        buffer.put(position + MAGIC_OFFSET, magic);
-        buffer.put(position + ATTRIBUTES_OFFSET, attributes);
-        buffer.putLong(position + TIMESTAMP_OFFSET, timestamp);
-        buffer.putInt(position + OFFSET_DELTA_OFFSET, offsetDelta);
-        buffer.putLong(position + PID_OFFSET, pid);
-        buffer.putShort(position + EPOCH_OFFSET, epoch);
-        buffer.putInt(position + SEQUENCE_OFFSET, sequence);
-        long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
-        buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
-    }
-
-    public static void writeHeader(DataOutputStream out,
-                                   long offset,
-                                   int offsetDelta,
-                                   int size,
-                                   byte magic,
-                                   long crc,
-                                   byte attributes,
-                                   long timestamp,
-                                   long pid,
-                                   short epoch,
-                                   int sequence) throws IOException {
+    static void writeHeader(ByteBuffer buffer,
+                            long baseOffset,
+                            int lastOffsetDelta,
+                            int size,
+                            byte magic,
+                            CompressionType compressionType,
+                            TimestampType timestampType,
+                            long baseTimestamp,
+                            long maxTimestamp,
+                            long pid,
+                            short epoch,
+                            int sequence) {
         if (magic < 2)
             throw new IllegalArgumentException("Invalid magic value " + magic);
-        if (timestamp < 0 && timestamp != NO_TIMESTAMP)
-            throw new IllegalArgumentException("Invalid message timestamp " + timestamp);
+        if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
+            throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
 
-        out.writeLong(offset);
-        out.writeLong(size);
-        // write crc
-        out.writeInt((int) (crc & 0xffffffffL));
-        // write magic value
-        out.writeByte(magic);
-        // write attributes
-        out.writeByte(attributes);
-        // maybe write timestamp
-        out.writeLong(timestamp);
-        out.writeInt(offsetDelta);
+        short attributes = computeAttributes(compressionType, timestampType);
 
-        // write (PID, epoch, sequence)
-        out.writeLong(pid);
-        out.writeShort(epoch);
-        out.writeInt(sequence);
+        int position = buffer.position();
+        buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
+        buffer.putInt(position + SIZE_OFFSET, size - LOG_OVERHEAD);
+        buffer.put(position + MAGIC_OFFSET, magic);
+        buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
+        buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
+        buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
+        buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
+        buffer.putLong(position + PID_OFFSET, pid);
+        buffer.putShort(position + EPOCH_OFFSET, epoch);
+        buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
+        long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
+        buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
     }
 
     @Override

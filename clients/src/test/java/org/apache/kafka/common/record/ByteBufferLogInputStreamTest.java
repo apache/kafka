@@ -56,7 +56,7 @@ public class ByteBufferLogInputStreamTest {
         LogEntry.MutableLogEntry entry = iterator.next();
 
         long createTimeMs = 20L;
-        entry.setCreateTime(createTimeMs);
+        entry.setMaxTimestamp(TimestampType.CREATE_TIME, createTimeMs);
 
         assertEquals(TimestampType.CREATE_TIME, entry.timestampType());
         assertEquals(createTimeMs, entry.maxTimestamp());
@@ -73,7 +73,7 @@ public class ByteBufferLogInputStreamTest {
         LogEntry.MutableLogEntry entry = iterator.next();
 
         long createTimeMs = 20L;
-        entry.setCreateTime(createTimeMs);
+        entry.setMaxTimestamp(TimestampType.CREATE_TIME, createTimeMs);
     }
 
     @Test
@@ -87,7 +87,7 @@ public class ByteBufferLogInputStreamTest {
         LogEntry.MutableLogEntry entry = iterator.next();
 
         long logAppendTime = 20L;
-        entry.setLogAppendTime(logAppendTime);
+        entry.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, logAppendTime);
 
         assertEquals(TimestampType.LOG_APPEND_TIME, entry.timestampType());
         assertEquals(logAppendTime, entry.maxTimestamp());
@@ -104,7 +104,7 @@ public class ByteBufferLogInputStreamTest {
         LogEntry.MutableLogEntry entry = iterator.next();
 
         long logAppendTime = 20L;
-        entry.setLogAppendTime(logAppendTime);
+        entry.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, logAppendTime);
     }
 
 }
