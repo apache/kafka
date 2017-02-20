@@ -190,6 +190,8 @@ object ConsumerGroupCommand extends Logging {
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogEndOffsetResult
 
+    protected def getLogStartOffset(topicPartition: TopicPartition): LogStartOffsetResult
+
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]])
 
     protected def collectConsumerAssignment(group: String,
@@ -418,6 +420,22 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
+    override protected def getLogStartOffset(topicPartition: TopicPartition): LogStartOffsetResult = {
+      zkUtils.getLeaderForPartition(topicPartition.topic, topicPartition.partition) match {
+        case Some(-1) => LogStartOffsetResult.Unknown
+        case Some(brokerId) =>
+          getZkConsumer(brokerId).map { consumer =>
+            val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
+            val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+            val logStartOffset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.reverse.head
+            consumer.close()
+            LogStartOffsetResult.LogStartOffset(logStartOffset)
+          }.getOrElse(LogStartOffsetResult.Ignore)
+        case None =>
+          printError(s"No broker for partition '$topicPartition'")
+          LogStartOffsetResult.Ignore
+      }
+    }
   }
 
   class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
@@ -479,6 +497,14 @@ object ConsumerGroupCommand extends Logging {
       LogEndOffsetResult.LogEndOffset(logEndOffset)
     }
 
+    protected def getLogStartOffset(topicPartition: TopicPartition): LogStartOffsetResult = {
+      val consumer = getConsumer()
+      consumer.assign(List(topicPartition).asJava)
+      consumer.seekToBeginning(List(topicPartition).asJava)
+      val logStartOffset = consumer.position(topicPartition)
+      LogStartOffsetResult.LogStartOffset(logStartOffset)
+    }
+
     def close() {
       adminClient.close()
       if (consumer != null) consumer.close()
@@ -516,7 +542,8 @@ object ConsumerGroupCommand extends Logging {
         val topic = opts.options.valueOf(opts.topicOpt)
         if (opts.options.has(opts.partitionsOpt)){
           val partitions  = opts.options.valuesOf(opts.PartitionsDoc)
-          assignments.filter(assignment => assignment.topic.equals(topic))
+          assignments
+            .filter(assignment => assignment.topic.equals(topic))
             .filter(assignment => partitions.contains(assignment.partition))
         } else {
           assignments.filter(assignment => assignment.topic.equals(topic))
@@ -535,8 +562,65 @@ object ConsumerGroupCommand extends Logging {
         assignmentsToReset.map(
           assignment => new TopicPartition(assignment.topic.get, assignment.partition.get) -> offset
         ).toMap
+      } else if(opts.options.has(opts.resetToEarliestOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val offset = getLogStartOffset(topicPartition)
+            offset match {
+              case LogStartOffsetResult.LogStartOffset(offset) =>
+                topicPartition -> offset
+            }
+          }
+        ).toMap
+      } else if(opts.options.has(opts.resetToLatestOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val offset = getLogEndOffset(topicPartition)
+            offset match {
+              case LogEndOffsetResult.LogEndOffset(offset) =>
+                topicPartition -> offset
+            }
+          }
+        ).toMap
+      } else if(opts.options.has(opts.resetPlusOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val plus = opts.options.valueOf(opts.resetPlusOpt).asInstanceOf[Long]
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val offset = getLogEndOffset(topicPartition)
+            offset match {
+              case LogEndOffsetResult.LogEndOffset(offset) =>
+                val newOffset = assignment.offset.get + plus
+                if(newOffset > offset)
+                  topicPartition -> offset
+                else
+                  topicPartition -> newOffset
+            }
+          }
+        ).toMap
+      } else if(opts.options.has(opts.resetMinusOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val minus = opts.options.valueOf(opts.resetMinusOpt).asInstanceOf[Long]
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val offset = getLogStartOffset(topicPartition)
+            offset match {
+              case LogStartOffsetResult.LogStartOffset(offset) =>
+                val newOffset = assignment.offset.get - minus
+                if(newOffset > offset)
+                  topicPartition -> newOffset
+                else
+                  topicPartition -> offset
+            }
+          }
+        ).toMap
+        //TODO add datetime and period cases
       } else {
-        Nil.toMap
+        assignmentsToReset.map(
+          assignment => new TopicPartition(assignment.topic.get, assignment.partition.get) -> assignment.offset
+        ).toMap
       }
     }
 
@@ -550,7 +634,12 @@ object ConsumerGroupCommand extends Logging {
             def partition = topicPartition.partition()
             println(s"Preparing reset of Group $groupId Topic $topic Partition $partition to $offset")
             consumer.assign(List(topicPartition).asJava)
-            consumer.seek(topicPartition, offset)
+            if(offset == -1)
+              consumer.seekToBeginning(List(topicPartition).asJava)
+            else if (offset == -2)
+              consumer.seekToEnd(List(topicPartition).asJava)
+            else
+              consumer.seek(topicPartition, offset)
             consumer.commitSync()
             val newOffset = consumer.position(topicPartition)
             //consumer.poll(1)
@@ -573,6 +662,14 @@ object ConsumerGroupCommand extends Logging {
     case class LogEndOffset(value: Long) extends LogEndOffsetResult
     case object Unknown extends LogEndOffsetResult
     case object Ignore extends LogEndOffsetResult
+  }
+
+  sealed trait LogStartOffsetResult
+
+  object LogStartOffsetResult {
+    case class LogStartOffset(value: Long) extends LogStartOffsetResult
+    case object Unknown extends LogStartOffsetResult
+    case object Ignore extends LogStartOffsetResult
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) {
@@ -599,6 +696,12 @@ object ConsumerGroupCommand extends Logging {
     val ExecuteDoc = "Execute operation. Supported operations: reset-offset"
     val ExportDoc = "Export operation execution to a JSON file. Supported operations: reset-offset"
     val ResetToDoc = "The offset to reset to."
+    val ResetToDatetimeDoc = "Datetime to reset offset to."
+    val ResetToPeriodDoc = "Period to reset offset to."
+    val ResetToEarliestDoc = "Reset offset to earliest."
+    val ResetToLatestDoc = "Reset offset to latest."
+    val ResetMinusDoc = "Reset offset to current offset minus 'n'."
+    val ResetPlusDoc = "Reset offset to current offset plus 'n'."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -644,6 +747,18 @@ object ConsumerGroupCommand extends Logging {
                            .withRequiredArg()
                            .describedAs("offset to reset to")
                            .ofType(classOf[Long])
+    val resetToDatetimeOpt = parser.accepts("reset-to-datetime", ResetToDatetimeDoc)
+                                   .withRequiredArg()
+                                   .describedAs("datetime to reset offset to")
+                                   .ofType(classOf[String])
+    val resetToPeriodOpt = parser.accepts("reset-to-period", ResetToPeriodDoc)
+                                 .withRequiredArg()
+                                 .describedAs("datetime to reset offset to")
+                                 .ofType(classOf[String])
+    val resetToEarliestOpt = parser.accepts("reset-to-earliest", ResetToEarliestDoc)
+    val resetToLatestOpt = parser.accepts("reset-to-latest", ResetToLatestDoc)
+    val resetPlusOpt = parser.accepts("reset-plus", ResetPlusDoc)
+    val resetMinusOpt = parser.accepts("reset-minus", ResetMinusDoc)
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
