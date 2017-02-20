@@ -76,7 +76,6 @@ class StreamsSimpleBenchmarkTest(Test):
             self.node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
             self.data[num] = self.driver[num].collect_data(self.node[num], "" )
         
-    @ignore
     @cluster(num_nodes=9)
     @matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"], scale=[1])
     def test_simple_benchmark(self, test, scale):
@@ -111,9 +110,9 @@ class StreamsSimpleBenchmarkTest(Test):
         return final
 
 
+    # This test should not run nightly. It is currently designed for manual runs.
     @ignore
     @cluster(num_nodes=9)
-    #@matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
     @matrix(test=["count"], scale=[1])
     def test_benchmark_with_failure_and_restore(self, test, scale):
         """
@@ -159,8 +158,9 @@ class StreamsSimpleBenchmarkTest(Test):
 
         return final
 
+    # This test should not run nightly. It is currently designed for manual runs.
+    @ignore
     @cluster(num_nodes=9)
-    #@matrix(test=["consume", "processstream", "processstreamwithsink", "processstreamwithstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "count"])
     @matrix(test=["count"])
     def test_benchmark_with_standby_tasks(self, test):
         """
@@ -169,6 +169,7 @@ class StreamsSimpleBenchmarkTest(Test):
         scale = 1
         # Note: replicas must match number of replicas in SimpleBenchmark.java
         # Currently we are not passing this argument to that file, but should do.
+        # This is a manual step.
         replicas = 2
         
         self.driver = [None] * (scale * replicas)
