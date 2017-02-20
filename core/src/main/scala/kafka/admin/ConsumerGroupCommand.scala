@@ -17,8 +17,7 @@
 
 package kafka.admin
 
-import java.time.format.DateTimeFormatter
-import java.time.{Duration, Instant, Period, ZonedDateTime}
+import java.time._
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
@@ -39,7 +38,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
-import scala.collection.{Set, mutable}
+import scala.collection.{Seq, Set, mutable}
 
 object ConsumerGroupCommand extends Logging {
 
@@ -216,8 +215,6 @@ object ConsumerGroupCommand extends Logging {
     protected def opts: ConsumerGroupCommandOptions
 
     protected def getLogEndOffset(topicPartition: TopicPartition): LogEndOffsetResult
-
-    protected def getLogStartOffset(topicPartition: TopicPartition): LogStartOffsetResult
 
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]])
 
@@ -446,23 +443,6 @@ object ConsumerGroupCommand extends Logging {
           None
       }
     }
-
-    override protected def getLogStartOffset(topicPartition: TopicPartition): LogStartOffsetResult = {
-      zkUtils.getLeaderForPartition(topicPartition.topic, topicPartition.partition) match {
-        case Some(-1) => LogStartOffsetResult.Unknown
-        case Some(brokerId) =>
-          getZkConsumer(brokerId).map { consumer =>
-            val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
-            val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-            val logStartOffset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.reverse.head
-            consumer.close()
-            LogStartOffsetResult.LogStartOffset(logStartOffset)
-          }.getOrElse(LogStartOffsetResult.Ignore)
-        case None =>
-          printError(s"No broker for partition '$topicPartition'")
-          LogStartOffsetResult.Ignore
-      }
-    }
   }
 
   class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
@@ -600,6 +580,25 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
+    def parseResetPlanJson(resetPlanJson: String): Map[TopicPartition, Long] = {
+      Json.parseFull(resetPlanJson) match {
+        case Some(m) =>
+          m.asInstanceOf[Map[String, Any]].get("resets") match {
+            case Some(resetSeq) =>
+              resetSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
+                val topic = p.get("topic").get.asInstanceOf[String]
+                val partition = p.get("partition").get.asInstanceOf[Int]
+                val offset = p.get("offset").get.asInstanceOf[Int]
+                new TopicPartition(topic, partition) -> offset.asInstanceOf[Long]
+              }).toMap
+            case None =>
+              Map.empty
+          }
+        case None =>
+          Map.empty
+      }
+    }
+
     def prepareAssignmentsToReset(assignmentsToReset: Seq[PartitionAssignmentState]): Map[PartitionAssignmentState, Long] = {
       if(opts.options.has(opts.resetToOpt)) {
         val offset = opts.options.valueOf(opts.resetToOpt)
@@ -673,7 +672,9 @@ object ConsumerGroupCommand extends Logging {
         assignmentsToReset.map(
           assignment => {
             val datetime = opts.options.valueOf(opts.resetToDatetimeOpt)
-            val timestamp = ZonedDateTime.parse(datetime, DateTimeFormatter.ISO_LOCAL_DATE_TIME).toInstant.toEpochMilli
+            val zonedDateTime = LocalDateTime.parse(datetime).atZone(ZoneId.systemDefault())
+            println(zonedDateTime)
+            val timestamp = zonedDateTime.toInstant.toEpochMilli
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
             logTimestampOffset match {
@@ -697,6 +698,17 @@ object ConsumerGroupCommand extends Logging {
               case LogTimestampOffsetResult.Unknown => null
               case LogTimestampOffsetResult.Ignore => null
             }
+          }
+        ).toMap
+      } else if(opts.options.has(opts.resetFromFileOpt)){
+        val resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt)
+        val resetPlanJson = Utils.readFileAsString(resetPlanPath)
+        val resetPlan = parseResetPlanJson(resetPlanJson)
+        assignmentsToReset.map(
+          assignment => {
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            if(resetPlan.keySet.contains(topicPartition)) assignment -> resetPlan.get(topicPartition).get
+            else null
           }
         ).toMap
       } else {
@@ -723,7 +735,19 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def exportAssignments(assignmentsPreparedToReset: Map[PartitionAssignmentState, Long]) = {
-
+      val json = Json.encode(
+        Map(
+          "version" -> 1,
+          "resets" -> assignmentsPreparedToReset.map { case (assignment, newOffset) =>
+            Map(
+              "topic" -> assignment.topic.get,
+              "partition" -> assignment.partition.get,
+              "offset" -> newOffset
+            )
+          }
+        )
+      )
+      print(json)
     }
 
   }
@@ -776,6 +800,7 @@ object ConsumerGroupCommand extends Logging {
     val ExecuteDoc = "Execute operation. Supported operations: reset-offset"
     val ExportDoc = "Export operation execution to a JSON file. Supported operations: reset-offset"
     val ResetToDoc = "The offset to reset to."
+    val ResetFromFileDoc = "Path to Reset plan JSON file."
     val ResetToDatetimeDoc = "Datetime to reset offset to."
     val ResetToDurationDoc = "Duration to reset offset to."
     val ResetToEarliestDoc = "Reset offset to earliest."
@@ -820,13 +845,14 @@ object ConsumerGroupCommand extends Logging {
     val resetOffsetOpt = parser.accepts("reset-offset", ResetOffsetDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
-                          .withRequiredArg
-                          .describedAs("export")
-                          .ofType(classOf[String])
     val resetToOpt = parser.accepts("reset-to", ResetToDoc)
                            .withRequiredArg()
                            .describedAs("offset to reset to")
                            .ofType(classOf[Long])
+    val resetFromFileOpt = parser.accepts("reset-from-file", ResetFromFileDoc)
+                                 .withRequiredArg()
+                                 .describedAs("json file path")
+                                 .ofType(classOf[String])
     val resetToDatetimeOpt = parser.accepts("reset-to-datetime", ResetToDatetimeDoc)
                                    .withRequiredArg()
                                    .describedAs("datetime to reset offset to")
@@ -851,7 +877,7 @@ object ConsumerGroupCommand extends Logging {
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetOpt)
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOpt, resetPlusOpt, resetMinusOpt,
-      resetToDatetimeOpt, resetToDurationOpt, resetToEarliestOpt, resetToLatestOpt)
+      resetToDatetimeOpt, resetToDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetFromFileOpt)
 
     def checkArgs() {
       // check required args
@@ -882,6 +908,7 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetMinusOpt, allResetOffsetScenarioOpts - resetMinusOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetPlusOpt, allResetOffsetScenarioOpts - resetPlusOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, allResetOffsetScenarioOpts - resetFromFileOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, topicsOpt, Set(topicOpt, partitionsOpt))
 
       // check invalid args
