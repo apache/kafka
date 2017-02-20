@@ -76,8 +76,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
             // 2) flush produced records in the downstream and change logs of local states
             recordCollector.flush();
-
-            // 3) commit consumed offsets if it is dirty already
+            // 3) write checkpoints for any local state
+            stateMgr.checkpoint(recordCollectorOffsets());
+            // 4) commit consumed offsets if it is dirty already
             commitOffsets();
         }
     };

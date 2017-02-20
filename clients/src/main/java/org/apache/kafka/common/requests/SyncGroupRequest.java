@@ -51,8 +51,8 @@ public class SyncGroupRequest extends AbstractRequest {
         }
 
         @Override
-        public SyncGroupRequest build() {
-            return new SyncGroupRequest(groupId, generationId, memberId, groupAssignment, version());
+        public SyncGroupRequest build(short version) {
+            return new SyncGroupRequest(groupId, generationId, memberId, groupAssignment, version);
         }
 
         @Override
@@ -75,20 +75,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
     private SyncGroupRequest(String groupId, int generationId, String memberId,
                              Map<String, ByteBuffer> groupAssignment, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.SYNC_GROUP.id, version)), version);
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-
-        List<Struct> memberArray = new ArrayList<>();
-        for (Map.Entry<String, ByteBuffer> entries: groupAssignment.entrySet()) {
-            Struct memberData = struct.instance(GROUP_ASSIGNMENT_KEY_NAME);
-            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
-            memberData.set(MEMBER_ASSIGNMENT_KEY_NAME, entries.getValue());
-            memberArray.add(memberData);
-        }
-        struct.set(GROUP_ASSIGNMENT_KEY_NAME, memberArray.toArray());
-
+        super(version);
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;
@@ -96,7 +83,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public SyncGroupRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         this.groupId = struct.getString(GROUP_ID_KEY_NAME);
         this.generationId = struct.getInt(GENERATION_ID_KEY_NAME);
         this.memberId = struct.getString(MEMBER_ID_KEY_NAME);
@@ -141,12 +128,25 @@ public class SyncGroupRequest extends AbstractRequest {
         return memberId;
     }
 
-    public static SyncGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new SyncGroupRequest(ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer),
-                (short) versionId);
+    public static SyncGroupRequest parse(ByteBuffer buffer, short versionId) {
+        return new SyncGroupRequest(ProtoUtils.parseRequest(ApiKeys.SYNC_GROUP.id, versionId, buffer), versionId);
     }
 
-    public static SyncGroupRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.SYNC_GROUP.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.SYNC_GROUP.id, version()));
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(GENERATION_ID_KEY_NAME, generationId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+
+        List<Struct> memberArray = new ArrayList<>();
+        for (Map.Entry<String, ByteBuffer> entries: groupAssignment.entrySet()) {
+            Struct memberData = struct.instance(GROUP_ASSIGNMENT_KEY_NAME);
+            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
+            memberData.set(MEMBER_ASSIGNMENT_KEY_NAME, entries.getValue());
+            memberArray.add(memberData);
+        }
+        struct.set(GROUP_ASSIGNMENT_KEY_NAME, memberArray.toArray());
+        return struct;
     }
 }

@@ -287,15 +287,15 @@ public class ClientCompatibilityTest {
         consumer.assign(topicPartitions);
         consumer.seekToBeginning(topicPartitions);
         final Iterator<byte[]> iter = new Iterator<byte[]>() {
-            private final int timeoutMs = 10000;
+            private static final int TIMEOUT_MS = 10000;
             private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
             private byte[] next = null;
 
             private byte[] fetchNext() {
                 while (true) {
                     long curTime = Time.SYSTEM.milliseconds();
-                    if (curTime - prodTimeMs > timeoutMs)
-                        throw new RuntimeException("Timed out after " + timeoutMs + " ms.");
+                    if (curTime - prodTimeMs > TIMEOUT_MS)
+                        throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                     if (recordIter == null) {
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
                         recordIter = records.iterator();

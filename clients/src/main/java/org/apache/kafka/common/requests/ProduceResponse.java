@@ -16,7 +16,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -31,8 +30,7 @@ import java.util.Map;
  * This wrapper supports both v0 and v1 of ProduceResponse.
  */
 public class ProduceResponse extends AbstractResponse {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
+
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
@@ -73,10 +71,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param responses Produced data grouped by topic-partition
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0)));
-        initCommonFields(responses);
-        this.responses = responses;
-        this.throttleTime = DEFAULT_THROTTLE_TIME;
+        this(responses, DEFAULT_THROTTLE_TIME);
     }
 
     /**
@@ -85,30 +80,14 @@ public class ProduceResponse extends AbstractResponse {
      * @param throttleTime Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
-        this(responses, throttleTime, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id));
-    }
-
-    /**
-     * Constructor for a specific version
-     * @param responses Produced data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
-     * @param version the version of schema to use.
-     */
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime, int version) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, version)));
-        initCommonFields(responses);
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
         this.responses = responses;
         this.throttleTime = throttleTime;
     }
 
     /**
-     * Constructor from a {@link Struct}. It is the caller's responsibility to pass in a struct with the latest schema.
-     * @param struct
+     * Constructor from a {@link Struct}.
      */
     public ProduceResponse(Struct struct) {
-        super(struct);
         responses = new HashMap<>();
         for (Object topicResponse : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicRespStruct = (Struct) topicResponse;
@@ -126,7 +105,10 @@ public class ProduceResponse extends AbstractResponse {
         this.throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
     }
 
-    private void initCommonFields(Map<TopicPartition, PartitionResponse> responses) {
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, version));
+
         Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicDatas = new ArrayList<>(responseByTopic.size());
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
@@ -140,13 +122,17 @@ public class ProduceResponse extends AbstractResponse {
                         .set(ERROR_CODE_KEY_NAME, part.error.code())
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
                 if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
-                        partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
+                    partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partitionArray.add(partStruct);
             }
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
             topicDatas.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
+
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+        return struct;
     }
 
     public Map<TopicPartition, PartitionResponse> responses() {
@@ -187,7 +173,7 @@ public class ProduceResponse extends AbstractResponse {
         }
     }
 
-    public static ProduceResponse parse(ByteBuffer buffer) {
-        return new ProduceResponse(CURRENT_SCHEMA.read(buffer));
+    public static ProduceResponse parse(ByteBuffer buffer, short version) {
+        return new ProduceResponse(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, version).read(buffer));
     }
 }

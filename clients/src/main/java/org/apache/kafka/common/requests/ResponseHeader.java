@@ -34,15 +34,22 @@ public class ResponseHeader extends AbstractRequestResponse {
 
     private final int correlationId;
 
-    public ResponseHeader(Struct header) {
-        super(header);
+    public ResponseHeader(Struct struct) {
         correlationId = struct.getInt(CORRELATION_KEY_FIELD);
     }
 
     public ResponseHeader(int correlationId) {
-        super(new Struct(Protocol.RESPONSE_HEADER));
-        struct.set(CORRELATION_KEY_FIELD, correlationId);
         this.correlationId = correlationId;
+    }
+
+    public int sizeOf() {
+        return toStruct().sizeOf();
+    }
+
+    public Struct toStruct() {
+        Struct struct = new Struct(Protocol.RESPONSE_HEADER);
+        struct.set(CORRELATION_KEY_FIELD, correlationId);
+        return struct;
     }
 
     public int correlationId() {

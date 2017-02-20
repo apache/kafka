@@ -113,11 +113,11 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
 
         @Override
-        public CreateTopicsRequest build() {
-            if (validateOnly && version() == 0)
+        public CreateTopicsRequest build(short version) {
+            if (validateOnly && version == 0)
                 throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
                         "CreateTopicsRequest");
-            return new CreateTopicsRequest(topics, timeout, validateOnly, version());
+            return new CreateTopicsRequest(topics, timeout, validateOnly, version);
         }
 
         @Override
@@ -144,53 +144,15 @@ public class CreateTopicsRequest extends AbstractRequest {
     public static final short NO_REPLICATION_FACTOR = -1;
 
     private CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout, boolean validateOnly, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.CREATE_TOPICS.id, version)), version);
-
-        List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
-        for (Map.Entry<String, TopicDetails> entry : topics.entrySet()) {
-
-            Struct singleRequestStruct = struct.instance(REQUESTS_KEY_NAME);
-            String topic = entry.getKey();
-            TopicDetails args = entry.getValue();
-
-            singleRequestStruct.set(TOPIC_KEY_NAME, topic);
-            singleRequestStruct.set(NUM_PARTITIONS_KEY_NAME, args.numPartitions);
-            singleRequestStruct.set(REPLICATION_FACTOR_KEY_NAME, args.replicationFactor);
-
-            // replica assignment
-            List<Struct> replicaAssignmentsStructs = new ArrayList<>(args.replicasAssignments.size());
-            for (Map.Entry<Integer, List<Integer>> partitionReplicaAssignment : args.replicasAssignments.entrySet()) {
-                Struct replicaAssignmentStruct = singleRequestStruct.instance(REPLICA_ASSIGNMENT_KEY_NAME);
-                replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME, partitionReplicaAssignment.getKey());
-                replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, partitionReplicaAssignment.getValue().toArray());
-                replicaAssignmentsStructs.add(replicaAssignmentStruct);
-            }
-            singleRequestStruct.set(REPLICA_ASSIGNMENT_KEY_NAME, replicaAssignmentsStructs.toArray());
-
-            // configs
-            List<Struct> configsStructs = new ArrayList<>(args.configs.size());
-            for (Map.Entry<String, String> configEntry : args.configs.entrySet()) {
-                Struct configStruct = singleRequestStruct.instance(CONFIGS_KEY_NAME);
-                configStruct.set(CONFIG_KEY_KEY_NAME, configEntry.getKey());
-                configStruct.set(CONFIG_VALUE_KEY_NAME, configEntry.getValue());
-                configsStructs.add(configStruct);
-            }
-            singleRequestStruct.set(CONFIGS_KEY_NAME, configsStructs.toArray());
-            createTopicRequestStructs.add(singleRequestStruct);
-        }
-        struct.set(REQUESTS_KEY_NAME, createTopicRequestStructs.toArray());
-        struct.set(TIMEOUT_KEY_NAME, timeout);
-        if (version >= 1)
-            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
-
+        super(version);
         this.topics = topics;
         this.timeout = timeout;
         this.validateOnly = validateOnly;
         this.duplicateTopics = Collections.emptySet();
     }
 
-    public CreateTopicsRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public CreateTopicsRequest(Struct struct, short version) {
+        super(version);
 
         Object[] requestStructs = struct.getArray(REQUESTS_KEY_NAME);
         Map<String, TopicDetails> topics = new HashMap<>();
@@ -262,7 +224,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new CreateTopicsResponse(topicErrors, versionId);
+                return new CreateTopicsResponse(topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id)));
@@ -285,13 +247,55 @@ public class CreateTopicsRequest extends AbstractRequest {
         return this.duplicateTopics;
     }
 
-    public static CreateTopicsRequest parse(ByteBuffer buffer, int versionId) {
-        return new CreateTopicsRequest(
-                ProtoUtils.parseRequest(ApiKeys.CREATE_TOPICS.id, versionId, buffer),
-                (short) versionId);
+    public static CreateTopicsRequest parse(ByteBuffer buffer, short versionId) {
+        return new CreateTopicsRequest(ProtoUtils.parseRequest(ApiKeys.CREATE_TOPICS.id, versionId, buffer), versionId);
     }
 
-    public static CreateTopicsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id));
+    /**
+     * Visible for testing.
+     */
+    @Override
+    public Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.CREATE_TOPICS.id, version));
+
+        List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
+        for (Map.Entry<String, TopicDetails> entry : topics.entrySet()) {
+
+            Struct singleRequestStruct = struct.instance(REQUESTS_KEY_NAME);
+            String topic = entry.getKey();
+            TopicDetails args = entry.getValue();
+
+            singleRequestStruct.set(TOPIC_KEY_NAME, topic);
+            singleRequestStruct.set(NUM_PARTITIONS_KEY_NAME, args.numPartitions);
+            singleRequestStruct.set(REPLICATION_FACTOR_KEY_NAME, args.replicationFactor);
+
+            // replica assignment
+            List<Struct> replicaAssignmentsStructs = new ArrayList<>(args.replicasAssignments.size());
+            for (Map.Entry<Integer, List<Integer>> partitionReplicaAssignment : args.replicasAssignments.entrySet()) {
+                Struct replicaAssignmentStruct = singleRequestStruct.instance(REPLICA_ASSIGNMENT_KEY_NAME);
+                replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME, partitionReplicaAssignment.getKey());
+                replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, partitionReplicaAssignment.getValue().toArray());
+                replicaAssignmentsStructs.add(replicaAssignmentStruct);
+            }
+            singleRequestStruct.set(REPLICA_ASSIGNMENT_KEY_NAME, replicaAssignmentsStructs.toArray());
+
+            // configs
+            List<Struct> configsStructs = new ArrayList<>(args.configs.size());
+            for (Map.Entry<String, String> configEntry : args.configs.entrySet()) {
+                Struct configStruct = singleRequestStruct.instance(CONFIGS_KEY_NAME);
+                configStruct.set(CONFIG_KEY_KEY_NAME, configEntry.getKey());
+                configStruct.set(CONFIG_VALUE_KEY_NAME, configEntry.getValue());
+                configsStructs.add(configStruct);
+            }
+            singleRequestStruct.set(CONFIGS_KEY_NAME, configsStructs.toArray());
+            createTopicRequestStructs.add(singleRequestStruct);
+        }
+        struct.set(REQUESTS_KEY_NAME, createTopicRequestStructs.toArray());
+        struct.set(TIMEOUT_KEY_NAME, timeout);
+        if (version >= 1)
+            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        return struct;
+
     }
 }

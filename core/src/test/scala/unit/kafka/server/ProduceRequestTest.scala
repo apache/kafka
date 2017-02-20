@@ -88,8 +88,8 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
-    ProduceResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
+    ProduceResponse.parse(response, request.version)
   }
 
 }

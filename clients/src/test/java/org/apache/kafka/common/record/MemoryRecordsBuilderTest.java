@@ -43,6 +43,18 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testWriteEmptyRecordSet() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V0, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
+        MemoryRecords records = builder.build();
+        assertEquals(0, records.sizeInBytes());
+        assertEquals(bufferOffset, buffer.position());
+    }
+
+    @Test
     public void testCompressionRateV0() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);

@@ -46,8 +46,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         }
 
         @Override
-        public DeleteTopicsRequest build() {
-            return new DeleteTopicsRequest(topics, timeout, version());
+        public DeleteTopicsRequest build(short version) {
+            return new DeleteTopicsRequest(topics, timeout, version);
         }
 
         @Override
@@ -62,17 +62,13 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     private DeleteTopicsRequest(Set<String> topics, Integer timeout, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.DELETE_TOPICS.id, version)), version);
-
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
-        struct.set(TIMEOUT_KEY_NAME, timeout);
-
+        super(version);
         this.topics = topics;
         this.timeout = timeout;
     }
 
     public DeleteTopicsRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         Object[] topicsArray = struct.getArray(TOPICS_KEY_NAME);
         Set<String> topics = new HashSet<>(topicsArray.length);
         for (Object topic : topicsArray)
@@ -80,6 +76,14 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
+    }
+
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.DELETE_TOPICS.id, version()));
+        struct.set(TOPICS_KEY_NAME, topics.toArray());
+        struct.set(TIMEOUT_KEY_NAME, timeout);
+        return struct;
     }
 
     @Override
@@ -105,12 +109,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         return this.timeout;
     }
 
-    public static DeleteTopicsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DeleteTopicsRequest(ProtoUtils.parseRequest(ApiKeys.DELETE_TOPICS.id, versionId, buffer),
-                (short) versionId);
+    public static DeleteTopicsRequest parse(ByteBuffer buffer, short versionId) {
+        return new DeleteTopicsRequest(ProtoUtils.parseRequest(ApiKeys.DELETE_TOPICS.id, versionId, buffer), versionId);
     }
 
-    public static DeleteTopicsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id));
-    }
 }

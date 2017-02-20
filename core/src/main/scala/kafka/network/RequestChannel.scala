@@ -19,7 +19,7 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.HashMap
+import java.util.Collections
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
@@ -37,16 +37,18 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
+import scala.reflect.{classTag, ClassTag}
+
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = getShutdownReceive, startTimeMs = 0, listenerName = new ListenerName(""),
+    buffer = shutdownReceive, startTimeMs = 0, listenerName = new ListenerName(""),
     securityProtocol = SecurityProtocol.PLAINTEXT)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-  private def getShutdownReceive = {
-    val emptyProduceRequest = new ProduceRequest.Builder(0, 0, new HashMap[TopicPartition, MemoryRecords]()).build()
+  private def shutdownReceive: ByteBuffer = {
+    val emptyProduceRequest = new ProduceRequest.Builder(0, 0, Collections.emptyMap[TopicPartition, MemoryRecords]).build()
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version, "", 0)
-    AbstractRequestResponse.serialize(emptyRequestHeader, emptyProduceRequest)
+    emptyProduceRequest.serialize(emptyRequestHeader)
   }
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
@@ -84,12 +86,13 @@ object RequestChannel extends Logging {
         }
       } else
         null
-    val body: AbstractRequest =
+    val bodyAndSize: RequestAndSize =
       if (requestObj == null)
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
-          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion))
-            new ApiVersionsRequest.Builder().build()
+          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
+            new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
+          }
           else
             AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
         } catch {
@@ -105,7 +108,15 @@ object RequestChannel extends Logging {
       if (requestObj != null)
         requestObj.describe(details)
       else
-        s"$header -- $body"
+        s"$header -- ${body[AbstractRequest]}"
+    }
+
+    def body[T <: AbstractRequest : ClassTag] = {
+      bodyAndSize.request match {
+        case r: T => r
+        case r =>
+          throw new ClassCastException(s"Expected request with type ${classTag[T].runtimeClass}, but found ${r.getClass}")
+      }
     }
 
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
@@ -132,7 +143,7 @@ object RequestChannel extends Logging {
       val totalTime = endTimeMs - startTimeMs
       val fetchMetricNames =
         if (requestId == ApiKeys.FETCH.id) {
-          val isFromFollower = body.asInstanceOf[FetchRequest].isFromFollower
+          val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
@@ -163,11 +174,8 @@ object RequestChannel extends Logging {
   case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
     request.responseCompleteTimeMs = Time.SYSTEM.milliseconds
 
-    def this(processor: Int, request: Request, responseSend: Send) =
-      this(processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
-
-    def this(request: Request, send: Send) =
-      this(request.processor, request, send)
+    def this(request: Request, responseSend: Send) =
+      this(request.processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
 
     def this(request: Request, response: AbstractResponse) =
       this(request, response.toSend(request.connectionId, request.header))

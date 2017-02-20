@@ -308,11 +308,12 @@ public class SaslServerAuthenticator implements Authenticator {
 
             if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
                 if (apiKey == ApiKeys.API_VERSIONS)
-                    sendKafkaResponse(requestHeader, ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION));
+                    sendKafkaResponse(ApiVersionsResponse.unsupportedVersionSend(node, requestHeader));
                 else
                     throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
             } else {
-                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(),
+                        requestBuffer).request;
 
                 LOG.debug("Handle Kafka request {}", apiKey);
                 switch (apiKey) {
@@ -373,7 +374,11 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {
-        netOutBuffer = response.toSend(node, requestHeader);
+        sendKafkaResponse(response.toSend(node, requestHeader));
+    }
+
+    private void sendKafkaResponse(Send send) throws IOException {
+        netOutBuffer = send;
         flushNetOutBufferAndUpdateInterestOps();
     }
 }

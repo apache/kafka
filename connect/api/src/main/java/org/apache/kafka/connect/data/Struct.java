@@ -229,7 +229,7 @@ public class Struct {
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
                 continue;
-            ConnectSchema.validateValue(fieldSchema, value);
+            ConnectSchema.validateValue(field.name(), fieldSchema, value);
         }
     }
 

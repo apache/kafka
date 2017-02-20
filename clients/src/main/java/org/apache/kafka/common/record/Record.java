@@ -479,7 +479,7 @@ public final class Record {
                               CompressionType compressionType,
                               TimestampType timestampType) {
         try {
-            ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+            DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -521,7 +521,6 @@ public final class Record {
         write(out, magic, crc, attributes, timestamp, key, value);
         return crc;
     }
-
 
     /**
      * Write a record using raw fields (without validation). This should only be used in testing.

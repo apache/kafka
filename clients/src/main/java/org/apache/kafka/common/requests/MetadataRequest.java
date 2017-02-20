@@ -51,8 +51,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         @Override
-        public MetadataRequest build() {
-            short version = version();
+        public MetadataRequest build(short version) {
             if (version < 1) {
                 throw new UnsupportedVersionException("MetadataRequest " +
                         "versions older than 1 are not supported.");
@@ -79,27 +78,18 @@ public class MetadataRequest extends AbstractRequest {
 
     private final List<String> topics;
 
-    public static MetadataRequest allTopics(short version) {
-        return new MetadataRequest.Builder(null).setVersion(version).build();
-    }
-
     /**
      * In v0 null is not allowed and and empty list indicates requesting all topics.
      * Note: modern clients do not support sending v0 requests.
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
     public MetadataRequest(List<String> topics, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.METADATA.id, version)),
-                version);
-        if (topics == null)
-            struct.set(TOPICS_KEY_NAME, null);
-        else
-            struct.set(TOPICS_KEY_NAME, topics.toArray());
+        super(version);
         this.topics = topics;
     }
 
     public MetadataRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
             topics = new ArrayList<>();
@@ -127,7 +117,7 @@ public class MetadataRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
-                return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
+                return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
@@ -142,12 +132,17 @@ public class MetadataRequest extends AbstractRequest {
         return topics;
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer),
-                (short) versionId);
+    public static MetadataRequest parse(ByteBuffer buffer, short versionId) {
+        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer), versionId);
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.METADATA.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.METADATA.id, version()));
+        if (topics == null)
+            struct.set(TOPICS_KEY_NAME, null);
+        else
+            struct.set(TOPICS_KEY_NAME, topics.toArray());
+        return struct;
     }
 }

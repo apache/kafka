@@ -14,24 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.requests;
 
-package org.apache.kafka.streams.kstream.internals;
+public class RequestAndSize {
+    public final AbstractRequest request;
+    public final int size;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-
-class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
-
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<>();
-    }
-
-    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            context().forward(key, value);
-        }
+    public RequestAndSize(AbstractRequest request, int size) {
+        this.request = request;
+        this.size = size;
     }
 }

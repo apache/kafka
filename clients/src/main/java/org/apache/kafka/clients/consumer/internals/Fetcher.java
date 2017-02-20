@@ -200,11 +200,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                                 long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                        request.version()));
+                                        resp.requestHeader().apiVersion()));
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
-                            sensors.fetchThrottleTimeSensor.record(response.getThrottleTime());
+                            sensors.fetchThrottleTimeSensor.record(response.throttleTimeMs());
                         }
 
                         @Override
@@ -603,13 +603,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequest(final Node node,
-                                                                                         final Map<TopicPartition, Long> timestampsToSearch,
-                                                                                         boolean requireTimestamp) {
-        ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().setTargetTimes(timestampsToSearch);
-
-        // If we need a timestamp in the response, the minimum RPC version we can send is v1.
-        // Otherwise, v0 is OK.
-        builder.setMinVersion(requireTimestamp ? (short) 1 : (short) 0);
+                                                                                 final Map<TopicPartition, Long> timestampsToSearch,
+                                                                                 boolean requireTimestamp) {
+        // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
+        short minVersion = requireTimestamp ? (short) 1 : (short) 0;
+        ListOffsetRequest.Builder builder = ListOffsetRequest.Builder.forConsumer(minVersion)
+                .setTargetTimes(timestampsToSearch);
 
         log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
@@ -733,7 +732,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest.Builder fetch = new FetchRequest.Builder(this.maxWaitMs, this.minBytes, entry.getValue()).
+            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes, entry.getValue()).
                     setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }

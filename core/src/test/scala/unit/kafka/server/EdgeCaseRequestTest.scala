@@ -114,15 +114,15 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val correlationId = -1
     TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
 
+    val version = 2: Short
     val serializedBytes = {
-      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, 2, null, correlationId)
+      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null, correlationId)
       val messageBytes = "message".getBytes
       val records = MemoryRecords.readableRecords(ByteBuffer.wrap(messageBytes))
-      val request = new ProduceRequest.Builder(
-          1, 10000, Map(topicPartition -> records).asJava).build()
-      val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.sizeOf)
+      val request = new ProduceRequest.Builder(1, 10000, Map(topicPartition -> records).asJava).build()
+      val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.toStruct.sizeOf)
       byteBuffer.put(headerBytes)
-      request.writeTo(byteBuffer)
+      request.toStruct.writeTo(byteBuffer)
       byteBuffer.array()
     }
 
@@ -130,13 +130,13 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val responseBuffer = ByteBuffer.wrap(response)
     val responseHeader = ResponseHeader.parse(responseBuffer)
-    val produceResponse = ProduceResponse.parse(responseBuffer)
+    val produceResponse = ProduceResponse.parse(responseBuffer, version)
 
-    assertEquals("The response should parse completely", 0, responseBuffer.remaining())
-    assertEquals("The correlationId should match request", correlationId, responseHeader.correlationId())
-    assertEquals("One partition response should be returned", 1, produceResponse.responses().size())
+    assertEquals("The response should parse completely", 0, responseBuffer.remaining)
+    assertEquals("The correlationId should match request", correlationId, responseHeader.correlationId)
+    assertEquals("One partition response should be returned", 1, produceResponse.responses.size)
 
-    val partitionResponse = produceResponse.responses().get(topicPartition)
+    val partitionResponse = produceResponse.responses.get(topicPartition)
     assertNotNull(partitionResponse)
     assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
   }

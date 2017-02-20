@@ -253,7 +253,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             return new Pair(task2, task1);
         }
 
-        class Pair {
+        private static class Pair {
             private final TaskId task1;
             private final TaskId task2;
 

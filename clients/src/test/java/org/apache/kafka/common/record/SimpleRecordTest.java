@@ -16,15 +16,54 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.io.DataOutputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class SimpleRecordTest {
+
+    @Test(expected = InvalidRecordException.class)
+    public void testCompressedIterationWithNullValue() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        LogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1);
+        Record.write(out, Record.CURRENT_MAGIC_VALUE, 1L, null, null, CompressionType.GZIP, TimestampType.CREATE_TIME);
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        for (Record record : records.records())
+            fail("Iteration should have caused invalid record error");
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testCompressedIterationWithEmptyRecords() throws Exception {
+        ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
+        OutputStream gzipOutput = CompressionType.GZIP.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
+                Record.MAGIC_VALUE_V1, 64);
+        gzipOutput.close();
+        emptyCompressedValue.flip();
+
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        LogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
+        Record.write(out, Record.CURRENT_MAGIC_VALUE, 1L, null, Utils.toArray(emptyCompressedValue),
+                CompressionType.GZIP, TimestampType.CREATE_TIME);
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        for (Record record : records.records())
+            fail("Iteration should have caused invalid record error");
+    }
 
     /* This scenario can happen if the record size field is corrupt and we end up allocating a buffer that is too small */
     @Test(expected = InvalidRecordException.class)
