@@ -110,7 +110,7 @@ public class ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
+            nodeMetrics = new NodeMetrics(context.metrics(), name, "task." + context.taskId());
             nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
@@ -164,7 +164,7 @@ public class ProcessorNode<K, V> {
         return sb.toString();
     }
 
-    protected class NodeMetrics  {
+    protected static final class NodeMetrics  {
         final StreamsMetricsImpl metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
