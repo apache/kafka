@@ -126,7 +126,6 @@ object ConsumerGroupCommand extends Logging {
                       info("Reset offset execution completed.")
                     if(export)
                       service.exportAssignments(assignmentsPreparedToReset)
-                      //TODO print result
                   case Some("PreparingRebalance") | Some("AwaitingSync") =>
                     printError(s"Consumer group '$groupId' offsets cannot be reset if it is rebalancing.")
                   case Some("Stable") =>
@@ -719,16 +718,16 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def resetAssignments(assignmentsPreparedToReset: Map[PartitionAssignmentState, Long]) = {
+      val groupId = opts.options.valueOf(opts.groupOpt)
+      println(s"Resetting offsets from Consumer Group: $groupId")
       assignmentsPreparedToReset.foreach(assignment => {
         assignment match {
           case (assignment, offset) => {
-            val groupId = opts.options.valueOf(opts.groupOpt)
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
-            println(s"Preparing reset of Group $groupId Topic ${topicPartition.topic()} Partition ${topicPartition.partition()} to $offset")
             consumer.seek(topicPartition, offset)
             consumer.commitSync()
             val newOffset = consumer.position(topicPartition)
-            println(s"Group $groupId Topic ${topicPartition.topic()} Partition ${topicPartition.partition()} offset reset to $newOffset")
+            println(s"Topic: ${topicPartition.topic()} - Partition: ${topicPartition.partition()} - Offset: $newOffset")
           }
         }
       })
