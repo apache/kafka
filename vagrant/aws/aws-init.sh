@@ -18,16 +18,31 @@
 # or bring up your mini Kafka cluster.
 
 # Install dependencies
-sudo apt-get install -y maven openjdk-6-jdk build-essential \
-            ruby-dev zlib1g-dev realpath python-setuptools
+sudo apt-get install -y \
+  vagrant \
+  maven \
+  openjdk-8-jdk \
+  build-essential \
+  ruby-dev \
+  zlib1g-dev \
+  realpath \
+  python-setuptools
 
 base_dir=`dirname $0`/../..
 
-if [ -z `which vagrant` ]; then
-    echo "Installing vagrant..."
-    wget https://releases.hashicorp.com/vagrant/1.7.2/vagrant_1.7.2_x86_64.deb
-    sudo dpkg -i vagrant_1.7.2_x86_64.deb
-    rm -f vagrant_1.7.2_x86_64.deb
+# there is a bug with Vagrant 1.8 and Ruby 2.3
+# thus, we apply the following patch
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=818237#28
+
+vagrant_dir=/user/lib/ruby/vendor_ruby/vagrant
+patch_file=vagrant18-ruby23.patch
+current_dir=`pwd`
+if [ -f ${vagrant_dir}/bundler.rb ] 
+then
+  cp $patch_file $vagrant_dir
+  cd $vagrant_dir
+  patch -p1 <vagrant18-ruby23.patch
+  cd $current_dir
 fi
 
 # Install necessary vagrant plugins

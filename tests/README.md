@@ -423,7 +423,7 @@ the test driver machine.
 
 * Start by making sure you're up to date, and install git and ducktape:
 
-        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y git
+        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y pip git
         $ pip install ducktape
 
 * Get Kafka:
@@ -434,6 +434,13 @@ the test driver machine.
 
         $ cd kafka
         $ ./vagrant/aws/aws-init.sh
+
+* Add your AWS keys load them (https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/)
+
+        # Add these lines to your .bashrc
+        export AWS_ACCESS_KEY_ID=<YOUR_ACCESS_ID>
+        export AWS_SECRET_ACCESS_KEY=<YOUR_SECRET_ACCESS_KEY>
+
         $ . ~/.bashrc
 
 * An example Vagrantfile.local has been created by aws-init.sh which looks something like:

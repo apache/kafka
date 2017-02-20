@@ -1,0 +1,18 @@
+diff --git a/bundler.rb b/bundler.rb
+index 5a5c185..c4a3837 100644
+--- a/bundler.rb
++++ b/bundler.rb
+@@ -272,7 +272,6 @@ module Vagrant
+ 
+       # Reset the all specs override that Bundler does
+       old_all = Gem::Specification._all
+-      Gem::Specification.all = nil
+ 
+       # /etc/gemrc and so on.
+       old_config = nil
+@@ -286,6 +285,8 @@ module Vagrant
+       end
+       Gem.configuration = NilGemConfig.new
+ 
++      Gem::Specification.reset
++
