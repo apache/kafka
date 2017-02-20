@@ -435,7 +435,7 @@ the test driver machine.
         $ cd kafka
         $ ./vagrant/aws/aws-init.sh
 
-* Add your AWS keys load them (https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/)
+* Add your AWS keys and load them (https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/):
 
         # Add these lines to your .bashrc
         export AWS_ACCESS_KEY_ID=<YOUR_ACCESS_ID>
