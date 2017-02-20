@@ -17,16 +17,15 @@
 
 package kafka.admin
 
+import java.util
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
-
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{TopicAndPartition, _}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -104,29 +103,41 @@ object ConsumerGroupCommand extends Logging {
         }
       }
       else if (opts.options.has(opts.resetOffsetOpt)) {
-        val (state, assignments) = consumerGroupService.describeGroup()
-        val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
-        assignments match {
-          case None =>
-            // applies to both old and new consumer
-            printError(s"The consumer group '$groupId' does not exist.")
-          case Some(assignments) =>
-              state match {
-                case Some("Dead") =>
-                  printError(s"Consumer group '$groupId' does not exist.")
-                case Some("Empty") =>
-                  //TODO execute planning
-                  printAssignment(assignments, true)
-                case Some("PreparingRebalance") | Some("AwaitingSync") =>
-                  System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.") //TODO warn in this status offsets cannot be reset
-                  printAssignment(assignments, true)
-                case Some("Stable") =>
-                  //TODO warn in this status offsets cannot be reset
-                case other =>
-                  // the control should never reach here
-                  throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
-              }
+        consumerGroupService match {
+          case service: KafkaConsumerGroupService => {
+            val (state, assignments) = consumerGroupService.describeGroup()
+            val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
+            val execute = opts.options.has(opts.executeOpt)
+            val export = opts.options.has(opts.exportOpt)
+            assignments match {
+              case None =>
+                // applies to both old and new consumer
+                printError(s"The consumer group '$groupId' does not exist.")
+              case Some(assignments) =>
+                state match {
+                  case Some("Dead") =>
+                    printError(s"Consumer group '$groupId' does not exist.")
+                  case Some("Empty") =>
+                    val assignmentsToReset = service.getAssignmentsToReset(assignments)
+                    val assignmentsPreparedToReset = service.prepareAssignmentsToReset(assignmentsToReset)
+                    if(execute)
+                      service.resetAssignments(assignmentsPreparedToReset)
+                    if(export)
+                      service.exportAssignments(assignmentsPreparedToReset)
+                    printAssignment(assignmentsToReset, true)
+                  case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                    printError(s"Consumer group '$groupId' offsets cannot be reset if it is rebalancing.")
+                  case Some("Stable") =>
+                    printError(s"Consumer group '$groupId' offsets cannot be reset if it has members active.")
+                  case other =>
+                    // the control should never reach here
+                    throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
+                }
+            }
+          }
+          case _ => throw new IllegalStateException(s"delete is not supported for $consumerGroupService.")
         }
+
       }
     } catch {
       case e: Throwable =>
@@ -500,6 +511,60 @@ object ConsumerGroupCommand extends Logging {
       new KafkaConsumer(properties)
     }
 
+    def getAssignmentsToReset(assignments: Seq[PartitionAssignmentState]) = {
+      if(opts.options.has(opts.topicOpt)) {
+        val topic = opts.options.valueOf(opts.topicOpt)
+        if (opts.options.has(opts.partitionsOpt)){
+          val partitions  = opts.options.valuesOf(opts.PartitionsDoc)
+          assignments.filter(assignment => assignment.topic.equals(topic))
+            .filter(assignment => partitions.contains(assignment.partition))
+        } else {
+          assignments.filter(assignment => assignment.topic.equals(topic))
+        }
+      } else if (opts.options.has(opts.topicsOpt)) {
+        val topics = opts.options.valuesOf(opts.topicsOpt)
+        assignments.filter(assignment => topics.contains(assignment.topic))
+      } else {
+        assignments
+      }
+    }
+
+    def prepareAssignmentsToReset(assignmentsToReset: Seq[PartitionAssignmentState]): Map[TopicPartition, Long] = {
+      if(opts.options.has(opts.resetToOpt)) {
+        val offset = opts.options.valueOf(opts.resetToOpt)
+        assignmentsToReset.map(
+          assignment => new TopicPartition(assignment.topic.get, assignment.partition.get) -> offset
+        ).toMap
+      } else {
+        Nil.toMap
+      }
+    }
+
+    def resetAssignments(assignmentsPreparedToReset: Map[TopicPartition, Long]) = {
+      //val consumer = getConsumer()
+      assignmentsPreparedToReset.foreach(assignment => {
+        assignment match {
+          case (topicPartition, offset) => {
+            def groupId = opts.options.valueOf(opts.groupOpt)
+            def topic = topicPartition.topic()
+            def partition = topicPartition.partition()
+            println(s"Preparing reset of Group $groupId Topic $topic Partition $partition to $offset")
+            consumer.assign(List(topicPartition).asJava)
+            consumer.seek(topicPartition, offset)
+            consumer.commitSync()
+            val newOffset = consumer.position(topicPartition)
+            //consumer.poll(1)
+            //consumer.seek(topicPartition, offset)
+            println(s"Group $groupId Topic $topic Partition $partition offset reset to $newOffset")
+          }
+        }
+      })
+    }
+
+    def exportAssignments(assignmentsPreparedToReset: Map[TopicPartition, Long]) = {
+
+    }
+
   }
 
   sealed trait LogEndOffsetResult
@@ -516,6 +581,8 @@ object ConsumerGroupCommand extends Logging {
     val BootstrapServerDoc = "REQUIRED (unless old consumer is used): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
+    val TopicsDoc = "The topics that should be included in the reset offset process."
+    val PartitionsDoc = "The topic partitions that should be included in the reset offset process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
@@ -529,6 +596,9 @@ object ConsumerGroupCommand extends Logging {
     val NewConsumerDoc = "Use new consumer. This is the default."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
     val ResetOffsetDoc = "Reset offset of consumer group."
+    val ExecuteDoc = "Execute operation. Supported operations: reset-offset"
+    val ExportDoc = "Export operation execution to a JSON file. Supported operations: reset-offset"
+    val ResetToDoc = "The offset to reset to."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -546,6 +616,16 @@ object ConsumerGroupCommand extends Logging {
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
+    val topicsOpt = parser.accepts("topics", TopicsDoc)
+                          .withRequiredArg
+                          .describedAs("topics")
+                          .withValuesSeparatedBy(",")
+                          .ofType(classOf[String])
+    val partitionsOpt = parser.accepts("partitions", PartitionsDoc)
+                              .withRequiredArg
+                              .describedAs("partitions")
+                              .withValuesSeparatedBy(",")
+                              .ofType(classOf[Long])
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
@@ -555,11 +635,20 @@ object ConsumerGroupCommand extends Logging {
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
     val resetOffsetOpt = parser.accepts("reset-offset", ResetOffsetDoc)
+    val executeOpt = parser.accepts("execute", ExecuteDoc)
+    val exportOpt = parser.accepts("export", ExportDoc)
+                          .withRequiredArg
+                          .describedAs("export")
+                          .ofType(classOf[String])
+    val resetToOpt = parser.accepts("reset-to", ResetToDoc)
+                           .withRequiredArg()
+                           .describedAs("offset to reset to")
+                           .ofType(classOf[Long])
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
 
-    val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt)
+    val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetOpt)
 
     def checkArgs() {
       // check required args
@@ -583,9 +672,10 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
       if (options.has(resetOffsetOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
+        if(options.has(resetToOpt))
       // check invalid args
-      CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt)
-      CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt - resetOffsetOpt)
     }
   }
 }
