@@ -154,13 +154,18 @@ public class MemoryRecordsBuilder {
             throw new KafkaException(e);
         }
 
-        if (compressionType != CompressionType.NONE)
-            writerCompressedWrapperHeader();
+        if (numRecords == 0L) {
+            buffer().position(initPos);
+            builtRecords = MemoryRecords.EMPTY;
+        } else {
+            if (compressionType != CompressionType.NONE)
+                writerCompressedWrapperHeader();
 
-        ByteBuffer buffer = buffer().duplicate();
-        buffer.flip();
-        buffer.position(initPos);
-        builtRecords = MemoryRecords.readableRecords(buffer.slice());
+            ByteBuffer buffer = buffer().duplicate();
+            buffer.flip();
+            buffer.position(initPos);
+            builtRecords = MemoryRecords.readableRecords(buffer.slice());
+        }
     }
 
     private void writerCompressedWrapperHeader() {
