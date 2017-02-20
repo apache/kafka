@@ -214,7 +214,7 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "5000");
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         return props;
     }
 
@@ -549,7 +549,6 @@ public class SimpleBenchmark {
             megabytesPerSec(endTime - startTime, consumedRecords, RECORD_SIZE));
     }
 
-
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
         Properties props = setStreamProperties("simple-benchmark-streams");
 
@@ -633,10 +632,8 @@ public class SimpleBenchmark {
         }
         @Override
         public void apply(Integer key, V value) {
-            //System.out.println("Processing key " + key);
             processedRecords++;
             if (processedRecords == numRecords) {
-                //System.out.println("Done processing. Triggering latch.");
                 this.latch.countDown();
             }
         }
@@ -682,7 +679,6 @@ public class SimpleBenchmark {
     private KafkaStreams createKafkaStreamsWithStateStore(String topic,
                                                           final CountDownLatch latch,
                                                           boolean enableCaching) {
-
         Properties props = setStreamProperties("simple-benchmark-streams-with-store" + enableCaching);
 
         KStreamBuilder builder = new KStreamBuilder();
@@ -708,7 +704,6 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        log.info("createKafkaStreamsWithStateStore: key = " + key);
                         store.put(key, value);
                         processedRecords++;
                         if (processedRecords == numRecords) {
@@ -734,7 +729,6 @@ public class SimpleBenchmark {
     private double megabytesPerSec(long time, int numRecords, int recordSizeBytes) {
         return  ((double) recordSizeBytes * numRecords / 1024 / 1024) / (time / 1000.0);
     }
-
 
     private double recordsPerSec(long time, int numRecords) {
         return (double) numRecords / ((double) time / 1000);

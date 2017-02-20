@@ -187,10 +187,10 @@ public class ProcessorStateManager implements StateManager {
                 restoreCallbacks.put(topic, stateRestoreCallback);
             }
         } else {
-            log.debug("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
+            log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
 
             long records = restoreActiveState(topic, stateRestoreCallback);
-            log.debug("{} Finished restoring state store {} with {} records from changelog topic {}",
+            log.trace("{} Finished restoring state store {} with {} records from changelog topic {}",
                 logPrefix, store.name(), records, topic);
         }
 
