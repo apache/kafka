@@ -522,7 +522,6 @@ public final class Record {
         return crc;
     }
 
-
     /**
      * Write a record using raw fields (without validation). This should only be used in testing.
      */
