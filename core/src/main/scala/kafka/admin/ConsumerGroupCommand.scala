@@ -17,7 +17,8 @@
 
 package kafka.admin
 
-import java.util
+import java.time.format.DateTimeFormatter
+import java.time.{Duration, Instant, Period, ZonedDateTime}
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
@@ -120,11 +121,13 @@ object ConsumerGroupCommand extends Logging {
                   case Some("Empty") =>
                     val assignmentsToReset = service.getAssignmentsToReset(assignments)
                     val assignmentsPreparedToReset = service.prepareAssignmentsToReset(assignmentsToReset)
+                    printAssignmentResetted(assignmentsPreparedToReset, true)
                     if(execute)
                       service.resetAssignments(assignmentsPreparedToReset)
+                      info("Reset offset execution completed.")
                     if(export)
                       service.exportAssignments(assignmentsPreparedToReset)
-                    printAssignment(assignmentsToReset, true)
+                      //TODO print result
                   case Some("PreparingRebalance") | Some("AwaitingSync") =>
                     printError(s"Consumer group '$groupId' offsets cannot be reset if it is rebalancing.")
                   case Some("Stable") =>
@@ -168,6 +171,30 @@ object ConsumerGroupCommand extends Logging {
       if (useNewConsumer)
         print("%-30s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
       println()
+    }
+  }
+
+  def printAssignmentResetted(groupAssignmentsResetted: Map[PartitionAssignmentState, Long], useNewConsumer: Boolean): Unit = {
+    print("\n%-30s %-10s %-15s %-15s %-15s %-10s %-50s".format("TOPIC", "PARTITION", "CURRENT-OFFSET", "NEW-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID"))
+    if (useNewConsumer)
+      print("%-30s %s".format("HOST", "CLIENT-ID"))
+    println()
+
+    groupAssignmentsResetted.foreach { groupAssignmentResetted =>
+      groupAssignmentResetted match {
+        case (consumerAssignment, newOffset) =>
+          print("%-30s %-10s %-15s %-15s %-15s %-10s %-50s".format(
+            consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE),
+            consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
+            consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE),
+            newOffset,
+            consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+            consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE),
+            consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
+          if (useNewConsumer)
+            print("%-30s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
+          println()
+      }
     }
   }
 
@@ -505,6 +532,23 @@ object ConsumerGroupCommand extends Logging {
       LogStartOffsetResult.LogStartOffset(logStartOffset)
     }
 
+    protected def getLogTimestampOffset(topicPartition: TopicPartition, timestamp: Long): LogTimestampOffsetResult = {
+      val consumer = getConsumer()
+      consumer.assign(List(topicPartition).asJava)
+      val offsetForTimestamp = consumer.offsetsForTimes(Map(topicPartition -> timestamp.asInstanceOf[java.lang.Long]).asJava)
+      println(offsetForTimestamp)
+      if(!offsetForTimestamp.isEmpty)
+        LogTimestampOffsetResult.LogTimestampOffset(offsetForTimestamp.get(topicPartition).offset())
+      else {
+        val logEndOffset = getLogEndOffset(topicPartition)
+        logEndOffset match {
+          case LogEndOffsetResult.LogEndOffset(offset) => LogTimestampOffsetResult.LogTimestampOffset(offset)
+          case LogEndOffsetResult.Unknown => LogTimestampOffsetResult.Unknown
+          case LogEndOffsetResult.Ignore => LogTimestampOffsetResult.Ignore
+        }
+      }
+    }
+
     def close() {
       adminClient.close()
       if (consumer != null) consumer.close()
@@ -556,11 +600,11 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    def prepareAssignmentsToReset(assignmentsToReset: Seq[PartitionAssignmentState]): Map[TopicPartition, Long] = {
+    def prepareAssignmentsToReset(assignmentsToReset: Seq[PartitionAssignmentState]): Map[PartitionAssignmentState, Long] = {
       if(opts.options.has(opts.resetToOpt)) {
         val offset = opts.options.valueOf(opts.resetToOpt)
         assignmentsToReset.map(
-          assignment => new TopicPartition(assignment.topic.get, assignment.partition.get) -> offset
+          assignment => assignment -> offset
         ).toMap
       } else if(opts.options.has(opts.resetToEarliestOpt)){
         assignmentsToReset.map(
@@ -568,8 +612,9 @@ object ConsumerGroupCommand extends Logging {
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val offset = getLogStartOffset(topicPartition)
             offset match {
-              case LogStartOffsetResult.LogStartOffset(offset) =>
-                topicPartition -> offset
+              case LogStartOffsetResult.LogStartOffset(offset) => assignment -> offset
+              case LogStartOffsetResult.Unknown => null
+              case LogStartOffsetResult.Ignore => null
             }
           }
         ).toMap
@@ -579,78 +624,105 @@ object ConsumerGroupCommand extends Logging {
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val offset = getLogEndOffset(topicPartition)
             offset match {
-              case LogEndOffsetResult.LogEndOffset(offset) =>
-                topicPartition -> offset
+              case LogEndOffsetResult.LogEndOffset(offset) => assignment -> offset
+              case LogEndOffsetResult.Unknown => null
+              case LogEndOffsetResult.Ignore => null
             }
           }
         ).toMap
       } else if(opts.options.has(opts.resetPlusOpt)){
         assignmentsToReset.map(
           assignment => {
-            val plus = opts.options.valueOf(opts.resetPlusOpt).asInstanceOf[Long]
+            val plus = opts.options.valueOf(opts.resetPlusOpt)
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val offset = getLogEndOffset(topicPartition)
             offset match {
               case LogEndOffsetResult.LogEndOffset(offset) =>
                 val newOffset = assignment.offset.get + plus
-                if(newOffset > offset)
-                  topicPartition -> offset
-                else
-                  topicPartition -> newOffset
+                if(newOffset > offset) {
+                  warn(s"New offset ($newOffset) is greater than latest offset. Value will be set to $offset")
+                  assignment -> offset
+                } else
+                  assignment -> newOffset
+              case LogEndOffsetResult.Unknown => null
+              case LogEndOffsetResult.Ignore => null
             }
           }
         ).toMap
       } else if(opts.options.has(opts.resetMinusOpt)){
         assignmentsToReset.map(
           assignment => {
-            val minus = opts.options.valueOf(opts.resetMinusOpt).asInstanceOf[Long]
+            val minus = opts.options.valueOf(opts.resetMinusOpt)
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val offset = getLogStartOffset(topicPartition)
             offset match {
               case LogStartOffsetResult.LogStartOffset(offset) =>
                 val newOffset = assignment.offset.get - minus
                 if(newOffset > offset)
-                  topicPartition -> newOffset
-                else
-                  topicPartition -> offset
+                  assignment -> newOffset
+                else {
+                  warn(s"New offset ($newOffset) is lower than earliest offset. Value will be set to $offset")
+                  assignment -> offset
+                }
+              case LogStartOffsetResult.Unknown => null
+              case LogStartOffsetResult.Ignore => null
             }
           }
         ).toMap
-        //TODO add datetime and period cases
+      } else if(opts.options.has(opts.resetToDatetimeOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val datetime = opts.options.valueOf(opts.resetToDatetimeOpt)
+            val timestamp = ZonedDateTime.parse(datetime, DateTimeFormatter.ISO_LOCAL_DATE_TIME).toInstant.toEpochMilli
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
+            logTimestampOffset match {
+              case LogTimestampOffsetResult.LogTimestampOffset(offset) => assignment -> offset
+              case LogTimestampOffsetResult.Unknown => null
+              case LogTimestampOffsetResult.Ignore => null
+            }
+          }
+        ).toMap
+      } else if(opts.options.has(opts.resetToDurationOpt)){
+        assignmentsToReset.map(
+          assignment => {
+            val duration = opts.options.valueOf(opts.resetToDurationOpt)
+            val durationParsed = Duration.parse(duration)
+            println(durationParsed)
+            val timestamp = Instant.now().minus(durationParsed).toEpochMilli
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
+            logTimestampOffset match {
+              case LogTimestampOffsetResult.LogTimestampOffset(offset) => assignment -> offset
+              case LogTimestampOffsetResult.Unknown => null
+              case LogTimestampOffsetResult.Ignore => null
+            }
+          }
+        ).toMap
       } else {
         assignmentsToReset.map(
-          assignment => new TopicPartition(assignment.topic.get, assignment.partition.get) -> assignment.offset
+          assignment => assignment -> assignment.offset.get
         ).toMap
       }
     }
 
-    def resetAssignments(assignmentsPreparedToReset: Map[TopicPartition, Long]) = {
-      //val consumer = getConsumer()
+    def resetAssignments(assignmentsPreparedToReset: Map[PartitionAssignmentState, Long]) = {
       assignmentsPreparedToReset.foreach(assignment => {
         assignment match {
-          case (topicPartition, offset) => {
-            def groupId = opts.options.valueOf(opts.groupOpt)
-            def topic = topicPartition.topic()
-            def partition = topicPartition.partition()
-            println(s"Preparing reset of Group $groupId Topic $topic Partition $partition to $offset")
-            consumer.assign(List(topicPartition).asJava)
-            if(offset == -1)
-              consumer.seekToBeginning(List(topicPartition).asJava)
-            else if (offset == -2)
-              consumer.seekToEnd(List(topicPartition).asJava)
-            else
-              consumer.seek(topicPartition, offset)
+          case (assignment, offset) => {
+            val groupId = opts.options.valueOf(opts.groupOpt)
+            val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
+            println(s"Preparing reset of Group $groupId Topic ${topicPartition.topic()} Partition ${topicPartition.partition()} to $offset")
+            consumer.seek(topicPartition, offset)
             consumer.commitSync()
             val newOffset = consumer.position(topicPartition)
-            //consumer.poll(1)
-            //consumer.seek(topicPartition, offset)
-            println(s"Group $groupId Topic $topic Partition $partition offset reset to $newOffset")
+            println(s"Group $groupId Topic ${topicPartition.topic()} Partition ${topicPartition.partition()} offset reset to $newOffset")
           }
         }
       })
     }
 
-    def exportAssignments(assignmentsPreparedToReset: Map[TopicPartition, Long]) = {
+    def exportAssignments(assignmentsPreparedToReset: Map[PartitionAssignmentState, Long]) = {
 
     }
 
@@ -670,6 +742,14 @@ object ConsumerGroupCommand extends Logging {
     case class LogStartOffset(value: Long) extends LogStartOffsetResult
     case object Unknown extends LogStartOffsetResult
     case object Ignore extends LogStartOffsetResult
+  }
+
+  sealed trait LogTimestampOffsetResult
+
+  object LogTimestampOffsetResult {
+    case class LogTimestampOffset(value: Long) extends LogTimestampOffsetResult
+    case object Unknown extends LogTimestampOffsetResult
+    case object Ignore extends LogTimestampOffsetResult
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) {
@@ -697,7 +777,7 @@ object ConsumerGroupCommand extends Logging {
     val ExportDoc = "Export operation execution to a JSON file. Supported operations: reset-offset"
     val ResetToDoc = "The offset to reset to."
     val ResetToDatetimeDoc = "Datetime to reset offset to."
-    val ResetToPeriodDoc = "Period to reset offset to."
+    val ResetToDurationDoc = "Duration to reset offset to."
     val ResetToEarliestDoc = "Reset offset to earliest."
     val ResetToLatestDoc = "Reset offset to latest."
     val ResetMinusDoc = "Reset offset to current offset minus 'n'."
@@ -751,19 +831,27 @@ object ConsumerGroupCommand extends Logging {
                                    .withRequiredArg()
                                    .describedAs("datetime to reset offset to")
                                    .ofType(classOf[String])
-    val resetToPeriodOpt = parser.accepts("reset-to-period", ResetToPeriodDoc)
-                                 .withRequiredArg()
-                                 .describedAs("datetime to reset offset to")
-                                 .ofType(classOf[String])
+    val resetToDurationOpt = parser.accepts("reset-to-duration", ResetToDurationDoc)
+                                   .withRequiredArg()
+                                   .describedAs("duration to reset offset to")
+                                   .ofType(classOf[String])
     val resetToEarliestOpt = parser.accepts("reset-to-earliest", ResetToEarliestDoc)
     val resetToLatestOpt = parser.accepts("reset-to-latest", ResetToLatestDoc)
     val resetPlusOpt = parser.accepts("reset-plus", ResetPlusDoc)
+                             .withRequiredArg()
+                             .describedAs("add value to current offset to reset to")
+                             .ofType(classOf[Long])
     val resetMinusOpt = parser.accepts("reset-minus", ResetMinusDoc)
+                              .withRequiredArg()
+                              .describedAs("reduce value to current offset to reset to")
+                              .ofType(classOf[Long])
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetOpt)
+    val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOpt, resetPlusOpt, resetMinusOpt,
+      resetToDatetimeOpt, resetToDurationOpt, resetToEarliestOpt, resetToLatestOpt)
 
     def checkArgs() {
       // check required args
@@ -787,7 +875,15 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
       if (options.has(resetOffsetOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
-        if(options.has(resetToOpt))
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToOpt, allResetOffsetScenarioOpts - resetToOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, allResetOffsetScenarioOpts - resetToDatetimeOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToDurationOpt, allResetOffsetScenarioOpts - resetToDurationOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, allResetOffsetScenarioOpts - resetToEarliestOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetMinusOpt, allResetOffsetScenarioOpts - resetMinusOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetPlusOpt, allResetOffsetScenarioOpts - resetPlusOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, topicsOpt, Set(topicOpt, partitionsOpt))
+
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt - resetOffsetOpt)
