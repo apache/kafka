@@ -119,6 +119,14 @@ object RequestChannel extends Logging {
       }
     }
 
+    def body[T <: AbstractRequest : ClassTag] = {
+      bodyAndSize.request match {
+        case r: T => r
+        case r =>
+          throw new ClassCastException(s"Expected request with type ${classTag[T].runtimeClass}, but found ${r.getClass}")
+      }
+    }
+
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
     def updateRequestMetrics() {
