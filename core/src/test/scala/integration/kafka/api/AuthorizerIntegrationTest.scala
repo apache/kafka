@@ -196,7 +196,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createListOffsetsRequest = {
-    requests.ListOffsetRequest.Builder.forConsumer(0).setTargetTimes(
+    requests.ListOffsetRequest.Builder.forConsumer(false).setTargetTimes(
       Map(tp -> (0L: java.lang.Long)).asJava).
       build()
   }

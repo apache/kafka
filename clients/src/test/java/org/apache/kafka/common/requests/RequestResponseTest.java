@@ -402,11 +402,11 @@ public class RequestResponseTest {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
                     new ListOffsetRequest.PartitionData(1000000L, 10));
-            return ListOffsetRequest.Builder.forConsumer((short) 0).setOffsetData(offsetData).build((short) version);
+            return ListOffsetRequest.Builder.forConsumer(false).setOffsetData(offsetData).build((short) version);
         } else if (version == 1) {
             Map<TopicPartition, Long> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0), 1000000L);
-            return ListOffsetRequest.Builder.forConsumer((short) 1).setTargetTimes(offsetData).build((short) version);
+            return ListOffsetRequest.Builder.forConsumer(true).setTargetTimes(offsetData).build((short) version);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }

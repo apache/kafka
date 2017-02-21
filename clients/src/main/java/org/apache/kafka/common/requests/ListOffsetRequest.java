@@ -67,7 +67,9 @@ public class ListOffsetRequest extends AbstractRequest {
             return new Builder((short) 0, desiredVersion, replicaId);
         }
 
-        public static Builder forConsumer(short minVersion) {
+        public static Builder forConsumer(boolean requireTimestamp) {
+            // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
+            short minVersion = requireTimestamp ? (short) 1 : (short) 0;
             return new Builder(minVersion, null, CONSUMER_REPLICA_ID);
         }
 
