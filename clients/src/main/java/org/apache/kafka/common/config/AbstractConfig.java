@@ -66,11 +66,11 @@ public class AbstractConfig {
         this(definition, originals, true);
     }
 
-    protected Object get(String key) {
+    protected <T> T get(String key) {
         if (!values.containsKey(key))
             throw new ConfigException(String.format("Unknown configuration '%s'", key));
         used.add(key);
-        return values.get(key);
+        return (T) values.get(key);
     }
 
     public void ignore(String key) {
@@ -78,40 +78,39 @@ public class AbstractConfig {
     }
 
     public Short getShort(String key) {
-        return (Short) get(key);
+        return get(key);
     }
 
     public Integer getInt(String key) {
-        return (Integer) get(key);
+        return get(key);
     }
 
     public Long getLong(String key) {
-        return (Long) get(key);
+        return get(key);
     }
 
     public Double getDouble(String key) {
-        return (Double) get(key);
+        return get(key);
     }
 
-    @SuppressWarnings("unchecked")
     public List<String> getList(String key) {
-        return (List<String>) get(key);
+        return get(key);
     }
 
     public Boolean getBoolean(String key) {
-        return (Boolean) get(key);
+        return get(key);
     }
 
     public String getString(String key) {
-        return (String) get(key);
+        return get(key);
     }
 
     public Password getPassword(String key) {
-        return (Password) get(key);
+        return get(key);
     }
 
     public Class<?> getClass(String key) {
-        return (Class<?>) get(key);
+        return get(key);
     }
 
     public Set<String> unused() {
@@ -158,8 +157,7 @@ public class AbstractConfig {
     }
 
     /**
-     * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
-     * put all the remaining keys with the prefix stripped and their parsed values in the result map.
+     * Put all keys that start with {@code prefix} with the prefix stripped and their parsed values in the result map.
      *
      * This is useful if one wants to allow prefixed configs to override default ones.
      */
@@ -258,12 +256,12 @@ public class AbstractConfig {
                 try {
                     o = Utils.newInstance((String) klass, t);
                 } catch (ClassNotFoundException e) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
                 }
             } else if (klass instanceof Class<?>) {
                 o = Utils.newInstance((Class<?>) klass);
             } else
-                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)

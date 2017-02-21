@@ -334,14 +334,15 @@ public class Utils {
      * Instantiate the class
      */
     public static <T> T newInstance(Class<T> c) {
+        if (c == null)
+            throw new NullPointerException();
+        
         try {
             return c.newInstance();
         } catch (IllegalAccessException e) {
             throw new KafkaException("Could not instantiate class " + c.getName(), e);
         } catch (InstantiationException e) {
             throw new KafkaException("Could not instantiate class " + c.getName() + " Does it have a public no-argument constructor?", e);
-        } catch (NullPointerException e) {
-            throw new KafkaException("Requested class was null", e);
         }
     }
 
