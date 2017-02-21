@@ -104,7 +104,6 @@ public class SimpleBenchmark {
     private static int numRecords;
     private static int processedRecords = 0;
     private static long processedBytes = 0;
-    private static final int KEY_SIZE = 8;
     private static final int VALUE_SIZE = 100;
 
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
@@ -527,7 +526,7 @@ public class SimpleBenchmark {
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     processedRecords++;
-                    processedBytes += record.value().length + KEY_SIZE;
+                    processedBytes += record.value().length + Integer.SIZE;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
                         key = recKey;
@@ -568,7 +567,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
-                        processedBytes += value.length + KEY_SIZE;
+                        processedBytes += value.length + Integer.SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -607,7 +606,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
-                        processedBytes += value.length + KEY_SIZE;
+                        processedBytes += value.length + Integer.SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
@@ -636,9 +635,9 @@ public class SimpleBenchmark {
         public void apply(Integer key, V value) {
             processedRecords++;
             if (value instanceof byte[]) {
-                processedBytes += ((byte[]) value).length + KEY_SIZE;
+                processedBytes += ((byte[]) value).length + Integer.SIZE;
             } else if (value instanceof Long) {
-                processedBytes += Long.SIZE + KEY_SIZE;
+                processedBytes += Long.SIZE + Integer.SIZE;
             } else {
                 System.err.println("Unknown value type in CountDownAction");
             }
@@ -715,7 +714,7 @@ public class SimpleBenchmark {
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
                         processedRecords++;
-                        processedBytes += value.length + KEY_SIZE;
+                        processedBytes += value.length + Integer.SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
                         }
