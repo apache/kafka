@@ -168,7 +168,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                 }
             }
         }
-
+        this.records.clear();
         return new ConsumerRecords<>(results);
     }
 
