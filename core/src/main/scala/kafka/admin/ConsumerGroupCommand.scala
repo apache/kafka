@@ -120,12 +120,13 @@ object ConsumerGroupCommand extends Logging {
                   case Some("Empty") =>
                     val assignmentsToReset = service.getAssignmentsToReset(assignments)
                     val assignmentsPreparedToReset = service.prepareAssignmentsToReset(assignmentsToReset)
-                    printAssignmentResetted(assignmentsPreparedToReset, true)
+                    if(export)
+                      service.exportAssignments(assignmentsPreparedToReset)
+                    else
+                      printAssignmentResetted(assignmentsPreparedToReset, true)
                     if(execute)
                       service.resetAssignments(assignmentsPreparedToReset)
                       info("Reset offset execution completed.")
-                    if(export)
-                      service.exportAssignments(assignmentsPreparedToReset)
                   case Some("PreparingRebalance") | Some("AwaitingSync") =>
                     printError(s"Consumer group '$groupId' offsets cannot be reset if it is rebalancing.")
                   case Some("Stable") =>
@@ -512,7 +513,6 @@ object ConsumerGroupCommand extends Logging {
       val consumer = getConsumer()
       consumer.assign(List(topicPartition).asJava)
       val offsetForTimestamp = consumer.offsetsForTimes(Map(topicPartition -> timestamp.asInstanceOf[java.lang.Long]).asJava)
-      println(offsetForTimestamp)
       if(!offsetForTimestamp.isEmpty)
         LogTimestampOffsetResult.LogTimestampOffset(offsetForTimestamp.get(topicPartition).offset())
       else {
@@ -707,7 +707,7 @@ object ConsumerGroupCommand extends Logging {
 
     def exportAssignments(assignmentsPreparedToReset: Map[PartitionAssignmentState, Long]): Unit = {
       for (key <- assignmentsPreparedToReset.keySet) {
-        println(s"${key.topic}|${key.partition},${assignmentsPreparedToReset.get(key)}")
+        println(s"${key.topic.get},${key.partition.get},${assignmentsPreparedToReset.get(key).get}")
       }
       println
     }
