@@ -55,12 +55,12 @@ public class StoreChangelogReader implements ChangelogReader {
     @Override
     public void validatePartitionExists(final TopicPartition topicPartition, final String storeName) {
         final long start = time.milliseconds();
+        // fetch all info on all topics to avoid multiple remote calls
         if (partitionInfo.isEmpty()) {
             try {
                 partitionInfo.putAll(consumer.listTopics());
             } catch (final TimeoutException e) {
-                throw new StreamsException(String.format("Could not fetch partition info for topic: %s before expiration of the configured request timeout",
-                                                         topicPartition.topic()));
+                log.warn("Could not list topics so will fall back to partition by partition fetching");
             }
         }
 
@@ -81,9 +81,7 @@ public class StoreChangelogReader implements ChangelogReader {
             throw new StreamsException(String.format("Store %s's change log (%s) does not contain partition %s",
                                                      storeName, topicPartition.topic(), topicPartition.partition()));
         }
-
         log.debug("Took {} ms to validate that partition {} exists", time.milliseconds() - start, topicPartition);
-
     }
 
     @Override
@@ -100,7 +98,13 @@ public class StoreChangelogReader implements ChangelogReader {
             final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(stateRestorers.keySet());
             consumer.assign(stateRestorers.keySet());
 
-            seek();
+            for (final StateRestorer restorer : stateRestorers.values()) {
+                if (restorer.checkpoint() != null) {
+                    consumer.seek(restorer.partition(), restorer.checkpoint());
+                } else {
+                    consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
+                }
+            }
 
             final Set<TopicPartition> partitions = new HashSet<>(stateRestorers.keySet());
             while (!partitions.isEmpty()) {
@@ -133,16 +137,6 @@ public class StoreChangelogReader implements ChangelogReader {
             }
             restorer.setRestoredOffset(pos);
             partitionIterator.remove();
-        }
-    }
-
-    private void seek() {
-        for (final StateRestorer restorer : stateRestorers.values()) {
-            if (restorer.checkpoint() != null) {
-                consumer.seek(restorer.partition(), restorer.checkpoint());
-            } else {
-                consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
-            }
         }
     }
 
