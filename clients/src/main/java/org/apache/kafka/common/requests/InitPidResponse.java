@@ -29,27 +29,35 @@ public class InitPidResponse extends AbstractResponse {
      * OK
      *
      */
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private final int throttleTimeMs;
     private final Errors error;
     private final long producerId;
     private final short epoch;
 
-    public InitPidResponse(Errors error, long producerId, short epoch) {
+    public InitPidResponse(int throttleTimeMs, Errors error, long producerId, short epoch) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.producerId = producerId;
         this.epoch = epoch;
     }
 
     public InitPidResponse(Struct struct) {
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
         this.epoch = struct.getShort(EPOCH_KEY_NAME);
     }
 
-    public InitPidResponse(Errors errors) {
-        this(errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
+    public InitPidResponse(int throttleTimeMs, Errors errors) {
+        this(throttleTimeMs, errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public long producerId() {
@@ -67,6 +75,7 @@ public class InitPidResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.responseSchema(version));
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(EPOCH_KEY_NAME, epoch);
         struct.set(ERROR_CODE_KEY_NAME, error.code());

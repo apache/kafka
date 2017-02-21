@@ -192,7 +192,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     @Override
-    public WriteTxnMarkersResponse getErrorResponse(Throwable e) {
+    public WriteTxnMarkersResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
 
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>(markers.size());

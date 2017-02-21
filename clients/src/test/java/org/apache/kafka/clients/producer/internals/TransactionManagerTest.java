@@ -198,7 +198,7 @@ public class TransactionManagerTest {
                 assertEquals(epoch, addOffsetsToTxnRequest.producerEpoch());
                 return true;
             }
-        }, new AddOffsetsToTxnResponse(Errors.NONE));
+        }, new AddOffsetsToTxnResponse(0, Errors.NONE));
 
         sender.run(time.milliseconds());  // Send AddOffsetsRequest
         assertTrue(transactionManager.hasPendingOffsetCommits());  // We should now have created and queued the offset commit request.
@@ -218,7 +218,7 @@ public class TransactionManagerTest {
                 assertEquals(epoch, txnOffsetCommitRequest.producerEpoch());
                 return true;
             }
-        }, new TxnOffsetCommitResponse(txnOffsetCommitResponse));
+        }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
 
         assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
@@ -527,7 +527,7 @@ public class TransactionManagerTest {
                 assertEquals(initPidRequest.transactionTimeoutMs(), transactionTimeoutMs);
                 return true;
             }
-        }, new InitPidResponse(error, pid, epoch), shouldDisconnect);
+        }, new InitPidResponse(0, error, pid, epoch), shouldDisconnect);
     }
 
     private void prepareProduceResponse(Errors error, final long pid, final short epoch) {
@@ -562,7 +562,7 @@ public class TransactionManagerTest {
                 assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
                 return true;
             }
-        }, new AddPartitionsToTxnResponse(error));
+        }, new AddPartitionsToTxnResponse(0, error));
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
@@ -576,7 +576,7 @@ public class TransactionManagerTest {
                 assertEquals(result, endTxnRequest.command());
                 return true;
             }
-        }, new EndTxnResponse(error));
+        }, new EndTxnResponse(0, error));
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {

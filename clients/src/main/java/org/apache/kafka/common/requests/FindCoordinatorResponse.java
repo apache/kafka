@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 
 public class FindCoordinatorResponse extends AbstractResponse {
 
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
@@ -42,17 +43,24 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
 
+    private final int throttleTimeMs;
     private final String errorMessage;
     private final Errors error;
     private final Node node;
 
     public FindCoordinatorResponse(Errors error, Node node) {
+        this(DEFAULT_THROTTLE_TIME, error, node);
+    }
+
+    public FindCoordinatorResponse(int throttleTimeMs, Errors error, Node node) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.node = node;
         this.errorMessage = null;
     }
 
     public FindCoordinatorResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
             errorMessage = struct.getString(ERROR_MESSAGE_KEY_NAME);
@@ -66,6 +74,10 @@ public class FindCoordinatorResponse extends AbstractResponse {
         node = new Node(nodeId, host, port);
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     public Errors error() {
         return error;
     }
@@ -77,6 +89,8 @@ public class FindCoordinatorResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
             struct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);

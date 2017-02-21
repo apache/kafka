@@ -206,7 +206,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
       val hostStr = s"${node.host}:${node.port}"
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
       val brokerVersionInfo = tryBrokerVersionInfo.get
-      assertEquals(0, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
+      assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
     }
   }
 

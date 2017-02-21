@@ -101,6 +101,7 @@ public class Selector implements Selectable {
     private final ChannelBuilder channelBuilder;
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
+    private final boolean recordTimePerConnection;
     private final IdleExpiryManager idleExpiryManager;
 
     /**
@@ -122,6 +123,7 @@ public class Selector implements Selectable {
                     String metricGrpPrefix,
                     Map<String, String> metricTags,
                     boolean metricsPerConnection,
+                    boolean recordTimePerConnection,
                     ChannelBuilder channelBuilder) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
@@ -144,7 +146,19 @@ public class Selector implements Selectable {
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
         this.metricsPerConnection = metricsPerConnection;
+        this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
+    }
+
+    public Selector(int maxReceiveSize,
+            long connectionMaxIdleMs,
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            Map<String, String> metricTags,
+            boolean metricsPerConnection,
+            ChannelBuilder channelBuilder) {
+        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder);
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
@@ -326,6 +340,7 @@ public class Selector implements Selectable {
             SelectionKey key = iterator.next();
             iterator.remove();
             KafkaChannel channel = channel(key);
+            long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
@@ -380,8 +395,16 @@ public class Selector implements Selectable {
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 close(channel, true);
+            } finally {
+                maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
         }
+    }
+
+    // Record time spent in pollSelectionKeys for channel (moved into a method to keep checkstyle happy)
+    private void maybeRecordTimePerConnection(KafkaChannel channel, long startTimeNanos) {
+        if (recordTimePerConnection)
+            channel.addNetworkThreadTimeNanos(time.nanoseconds() - startTimeNanos);
     }
 
     @Override

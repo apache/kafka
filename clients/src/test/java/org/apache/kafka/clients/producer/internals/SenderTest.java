@@ -384,7 +384,7 @@ public class SenderTest {
             public boolean matches(AbstractRequest body) {
                 return body instanceof InitPidRequest;
             }
-        }, new InitPidResponse(Errors.NONE, producerId, (short) 0));
+        }, new InitPidResponse(0, Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
         assertTrue(transactionManager.hasPid());
         assertEquals(producerId, transactionManager.pidAndEpoch().producerId);

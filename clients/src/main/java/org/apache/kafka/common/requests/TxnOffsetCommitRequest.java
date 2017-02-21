@@ -155,12 +155,12 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    public TxnOffsetCommitResponse getErrorResponse(Throwable e) {
+    public TxnOffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         Map<TopicPartition, Errors> errors = new HashMap<>(offsets.size());
         for (TopicPartition partition : offsets.keySet())
             errors.put(partition, error);
-        return new TxnOffsetCommitResponse(errors);
+        return new TxnOffsetCommitResponse(throttleTimeMs, errors);
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {

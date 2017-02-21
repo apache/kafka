@@ -65,6 +65,9 @@ public class Protocol {
     /* The v2 metadata request is the same as v1. An additional field for cluster id has been added to the v2 metadata response */
     public static final Schema METADATA_REQUEST_V2 = METADATA_REQUEST_V1;
 
+    /* The v3 metadata request is the same as v1 and v2. An additional field for throttle time has been added to the v3 metadata response */
+    public static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
+
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port", INT32,
@@ -129,9 +132,19 @@ public class Protocol {
                                                                      "The broker id of the controller broker."),
                                                                  new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
+    public static final Schema METADATA_RESPONSE_V3 = new Schema(
+         newThrottleTimeField(),
+         new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
+            "Host and port information for all brokers."),
+         new Field("cluster_id", NULLABLE_STRING,
+             "The cluster id that this broker belongs to."),
+         new Field("controller_id", INT32,
+             "The broker id of the controller broker."),
+         new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2};
-    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2};
+
+    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3};
+    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3};
 
     /* Produce api */
 
@@ -190,11 +203,7 @@ public class Protocol {
                                                                                                                                             INT16),
                                                                                                                                   new Field("base_offset",
                                                                                                                                             INT64))))))),
-                                                                new Field("throttle_time_ms",
-                                                                          INT32,
-                                                                          "Duration in milliseconds for which the request was throttled" +
-                                                                              " due to quota violation. (Zero if the request did not violate any quota.)",
-                                                                          0));
+                                                                newThrottleTimeField());
     /**
      * PRODUCE_RESPONSE_V2 added a timestamp field in the per partition response status.
      * The timestamp is log append time if the topic is configured to use log append time. Or it is NoTimestamp when create
@@ -215,11 +224,7 @@ public class Protocol {
                                                                                                                             "If CreateTime is used for the topic, the timestamp will be -1. " +
                                                                                                                             "If LogAppendTime is used for the topic, the timestamp will be " +
                                                                                                                             "the broker local time when the messages are appended."))))))),
-                                                                new Field("throttle_time_ms",
-                                                                          INT32,
-                                                                          "Duration in milliseconds for which the request was throttled" +
-                                                                              " due to quota violation. (Zero if the request did not violate any quota.)",
-                                                                          0));
+                                                                newThrottleTimeField());
     public static final Schema PRODUCE_RESPONSE_V3 = PRODUCE_RESPONSE_V2;
 
     public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3};
@@ -316,6 +321,9 @@ public class Protocol {
                                                                                new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2),
                                                                                "Topics to commit offsets."));
 
+    /* v3 request is same as v2. Throttle time has been added to response */
+    public static final Schema OFFSET_COMMIT_REQUEST_V3 = OFFSET_COMMIT_REQUEST_V2;
+
     public static final Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                           INT32,
                                                                                           "Topic partition id."),
@@ -329,13 +337,18 @@ public class Protocol {
     public static final Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(new Field("responses",
                                                                                 new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2};
+    public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2, OFFSET_COMMIT_REQUEST_V3};
 
     /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
     public static final Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
     public static final Schema OFFSET_COMMIT_RESPONSE_V2 = OFFSET_COMMIT_RESPONSE_V0;
 
-    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2};
+    public static final Schema OFFSET_COMMIT_RESPONSE_V3 = new Schema(
+            newThrottleTimeField(),
+            new Field("responses",
+                       new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
+
+    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2, OFFSET_COMMIT_RESPONSE_V3};
 
     /* Offset fetch api */
 
@@ -401,8 +414,17 @@ public class Protocol {
                                                                      new Field("error_code",
                                                                                INT16));
 
-    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2};
-    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2};
+    /* v3 request is the same as v2. Throttle time has been added to v3 response */
+    public static final Schema OFFSET_FETCH_REQUEST_V3 = OFFSET_FETCH_REQUEST_V2;
+    public static final Schema OFFSET_FETCH_RESPONSE_V3 = new Schema(
+            newThrottleTimeField(),
+            new Field("responses",
+                    new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            new Field("error_code",
+                    INT16));
+
+    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2, OFFSET_FETCH_REQUEST_V3};
+    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2, OFFSET_FETCH_RESPONSE_V3};
 
     /* List offset api */
     public static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -445,6 +467,9 @@ public class Protocol {
                                                                              new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1),
                                                                              "Topics to list offsets."));
 
+    /* v2 request is the same as v1. Throttle time has been added to response */
+    public static final Schema LIST_OFFSET_REQUEST_V2 = LIST_OFFSET_REQUEST_V1;
+
     public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                         INT32,
                                                                                         "Topic partition id."),
@@ -477,9 +502,13 @@ public class Protocol {
 
     public static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(new Field("responses",
                                                                               new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+    public static final Schema LIST_OFFSET_RESPONSE_V2 = new Schema(
+            newThrottleTimeField(),
+            new Field("responses",
+                    new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
 
-    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1};
-    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1};
+    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2};
+    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2};
 
     /* Fetch api */
     public static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -630,11 +659,7 @@ public class Protocol {
     public static final Schema FETCH_RESPONSE_V0 = new Schema(new Field("responses",
                                                                         new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
 
-    public static final Schema FETCH_RESPONSE_V1 = new Schema(new Field("throttle_time_ms",
-                                                                        INT32,
-                                                                        "Duration in milliseconds for which the request was throttled" +
-                                                                            " due to quota violation. (Zero if the request did not violate any quota.)",
-                                                                        0),
+    public static final Schema FETCH_RESPONSE_V1 = new Schema(newThrottleTimeField(),
                                                               new Field("responses",
                                                                       new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
     // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
@@ -703,19 +728,11 @@ public class Protocol {
             new Field("partition_responses", new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
 
     public static final Schema FETCH_RESPONSE_V4 = new Schema(
-            new Field("throttle_time_ms",
-                    INT32,
-                    "Duration in milliseconds for which the request was throttled " +
-                    "due to quota violation (zero if the request did not violate any quota).",
-                    0),
+            newThrottleTimeField(),
             new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
 
     public static final Schema FETCH_RESPONSE_V5 = new Schema(
-            new Field("throttle_time_ms",
-                    INT32,
-                    "Duration in milliseconds for which the request was throttled " +
-                    "due to quota violation (zero if the request did not violate any quota).",
-                    0),
+            newThrottleTimeField(),
             new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
     public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5};
@@ -724,18 +741,28 @@ public class Protocol {
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
 
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema LIST_GROUPS_REQUEST_V1 = LIST_GROUPS_REQUEST_V0;
+
     public static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(new Field("group_id", STRING),
                                                                           new Field("protocol_type", STRING));
     public static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                     new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+    public static final Schema LIST_GROUPS_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("error_code", INT16),
+            new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
 
-    public static final Schema[] LIST_GROUPS_REQUEST = new Schema[] {LIST_GROUPS_REQUEST_V0};
-    public static final Schema[] LIST_GROUPS_RESPONSE = new Schema[] {LIST_GROUPS_RESPONSE_V0};
+    public static final Schema[] LIST_GROUPS_REQUEST = new Schema[] {LIST_GROUPS_REQUEST_V0, LIST_GROUPS_REQUEST_V1};
+    public static final Schema[] LIST_GROUPS_RESPONSE = new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};
 
     /* Describe group api */
     public static final Schema DESCRIBE_GROUPS_REQUEST_V0 = new Schema(new Field("group_ids",
                                                                                  new ArrayOf(STRING),
                                                                                  "List of groupIds to request metadata for (an empty groupId array will return empty group metadata)."));
+
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema DESCRIBE_GROUPS_REQUEST_V1 = DESCRIBE_GROUPS_REQUEST_V0;
 
     public static final Schema DESCRIBE_GROUPS_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id",
                                                                                          STRING,
@@ -770,9 +797,12 @@ public class Protocol {
                                                                                                  "Current group members (only provided if the group is not Dead)"));
 
     public static final Schema DESCRIBE_GROUPS_RESPONSE_V0 = new Schema(new Field("groups", new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
+    public static final Schema DESCRIBE_GROUPS_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("groups", new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
 
-    public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0};
-    public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0};
+    public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1};
+    public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1};
 
     /* Find coordinator api */
     public static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
@@ -802,6 +832,7 @@ public class Protocol {
                     "Host and port information for the coordinator for a consumer group."));
 
     public static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
             new Field("error_code", INT16),
             new Field("error_message", NULLABLE_STRING),
             new Field("coordinator",
@@ -870,6 +901,9 @@ public class Protocol {
                                                                             new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0),
                                                                             "List of protocols that the member supports"));
 
+    /* v2 request is the same as v1. Throttle time has been added to response */
+    public static final Schema JOIN_GROUP_REQUEST_V2 = JOIN_GROUP_REQUEST_V1;
+
     public static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id", STRING),
                                                                           new Field("member_metadata", BYTES));
 
@@ -890,9 +924,27 @@ public class Protocol {
                                                                              new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
     public static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
+    public static final Schema JOIN_GROUP_RESPONSE_V2 = new Schema(
+            newThrottleTimeField(),
+            new Field("error_code", INT16),
+            new Field("generation_id",
+                      INT32,
+                      "The generation of the consumer group."),
+            new Field("group_protocol",
+                      STRING,
+                      "The group protocol selected by the coordinator"),
+            new Field("leader_id",
+                      STRING,
+                      "The leader of the group"),
+            new Field("member_id",
+                      STRING,
+                      "The consumer id assigned by the group coordinator."),
+            new Field("members",
+                      new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
-    public static final Schema[] JOIN_GROUP_REQUEST = new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1};
-    public static final Schema[] JOIN_GROUP_RESPONSE = new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1};
+
+    public static final Schema[] JOIN_GROUP_REQUEST = new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2};
+    public static final Schema[] JOIN_GROUP_RESPONSE = new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2};
 
     /* SyncGroup api */
     public static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(new Field("member_id", STRING),
@@ -901,10 +953,18 @@ public class Protocol {
                                                                   new Field("generation_id", INT32),
                                                                   new Field("member_id", STRING),
                                                                   new Field("group_assignment", new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0)));
+
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema SYNC_GROUP_REQUEST_V1 = SYNC_GROUP_REQUEST_V0;
+
     public static final Schema SYNC_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                    new Field("member_assignment", BYTES));
-    public static final Schema[] SYNC_GROUP_REQUEST = new Schema[] {SYNC_GROUP_REQUEST_V0};
-    public static final Schema[] SYNC_GROUP_RESPONSE = new Schema[] {SYNC_GROUP_RESPONSE_V0};
+    public static final Schema SYNC_GROUP_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("error_code", INT16),
+            new Field("member_assignment", BYTES));
+    public static final Schema[] SYNC_GROUP_REQUEST = new Schema[] {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1};
+    public static final Schema[] SYNC_GROUP_RESPONSE = new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};
 
     /* Heartbeat api */
     public static final Schema HEARTBEAT_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
@@ -915,10 +975,16 @@ public class Protocol {
                                                                            STRING,
                                                                            "The member id assigned by the group coordinator."));
 
-    public static final Schema HEARTBEAT_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema HEARTBEAT_REQUEST_V1 = HEARTBEAT_REQUEST_V0;
 
-    public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0};
-    public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
+    public static final Schema HEARTBEAT_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
+    public static final Schema HEARTBEAT_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("error_code", INT16));
+
+    public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0, HEARTBEAT_REQUEST_V1};
+    public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1};
 
     /* Leave group api */
     public static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
@@ -926,10 +992,16 @@ public class Protocol {
                                                                              STRING,
                                                                              "The member id assigned by the group coordinator."));
 
-    public static final Schema LEAVE_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema LEAVE_GROUP_REQUEST_V1 = LEAVE_GROUP_REQUEST_V0;
 
-    public static final Schema[] LEAVE_GROUP_REQUEST = new Schema[] {LEAVE_GROUP_REQUEST_V0};
-    public static final Schema[] LEAVE_GROUP_RESPONSE = new Schema[] {LEAVE_GROUP_RESPONSE_V0};
+    public static final Schema LEAVE_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
+    public static final Schema LEAVE_GROUP_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("error_code", INT16));
+
+    public static final Schema[] LEAVE_GROUP_REQUEST = new Schema[] {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1};
+    public static final Schema[] LEAVE_GROUP_RESPONSE = new Schema[] {LEAVE_GROUP_RESPONSE_V0, LEAVE_GROUP_RESPONSE_V1};
 
     /* Leader and ISR api */
     public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 =
@@ -1082,15 +1154,22 @@ public class Protocol {
     /* ApiVersion api */
     public static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
 
+    /* v1 request is the same as v0. Throttle time has been added to response */
+    public static final Schema API_VERSIONS_REQUEST_V1 = API_VERSIONS_REQUEST_V0;
+
     public static final Schema API_VERSIONS_V0 = new Schema(new Field("api_key", INT16, "API key."),
                                                            new Field("min_version", INT16, "Minimum supported version."),
                                                            new Field("max_version", INT16, "Maximum supported version."));
 
     public static final Schema API_VERSIONS_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
                                                                     new Field("api_versions", new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."));
+    public static final Schema API_VERSIONS_RESPONSE_V1 = new Schema(
+            new Field("error_code", INT16, "Error code."),
+            new Field("api_versions", new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
+            newThrottleTimeField());
 
-    public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0};
-    public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0};
+    public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
+    public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
 
     /* Admin requests common */
     public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
@@ -1154,9 +1233,16 @@ public class Protocol {
             new Field("topic_errors",
                     new ArrayOf(TOPIC_ERROR),
                     "An array of per topic errors."));
+    /* v2 request is the same as v1. Throttle time has been added to the response */
+    public static final Schema CREATE_TOPICS_REQUEST_V2 = CREATE_TOPICS_REQUEST_V1;
+    public static final Schema CREATE_TOPICS_RESPONSE_V2 = new Schema(
+            newThrottleTimeField(),
+            new Field("topic_errors",
+                    new ArrayOf(TOPIC_ERROR),
+                    "An array of per topic errors."));
 
-    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1};
-    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1};
+    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2};
 
     /* DeleteTopic api */
     public static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
@@ -1171,9 +1257,16 @@ public class Protocol {
         new Field("topic_error_codes",
             new ArrayOf(TOPIC_ERROR_CODE),
             "An array of per topic error codes."));
+    /* v1 request is the same as v0. Throttle time has been added to the response */
+    public static final Schema DELETE_TOPICS_REQUEST_V1 = DELETE_TOPICS_REQUEST_V0;
+    public static final Schema DELETE_TOPICS_RESPONSE_V1 = new Schema(
+            newThrottleTimeField(),
+            new Field("topic_error_codes",
+                new ArrayOf(TOPIC_ERROR_CODE),
+                "An array of per topic error codes."));
 
-    public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0};
-    public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0};
+    public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1};
+    public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};
 
     public static final Schema DELETE_RECORDS_REQUEST_PARTITION_V0 = new Schema(new Field("partition", INT32, "Topic partition id."),
                                                                                 new Field("offset", INT64, "The offset before which the messages will be deleted."));
@@ -1191,7 +1284,9 @@ public class Protocol {
     public static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                              new Field("partitions", new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));
 
-    public static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
+    public static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
+            new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
     public static final Schema[] DELETE_RECORDS_REQUEST = new Schema[] {DELETE_RECORDS_REQUEST_V0};
     public static final Schema[] DELETE_RECORDS_RESPONSE = new Schema[] {DELETE_RECORDS_RESPONSE_V0};
@@ -1207,6 +1302,7 @@ public class Protocol {
     );
 
     public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
             new Field("error_code",
                     INT16,
                     "An integer error code."),
@@ -1289,6 +1385,7 @@ public class Protocol {
                     "The partitions to add to the transaction.")
     );
     public static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
             new Field("error_code",
                     INT16,
                     "An integer error code.")
@@ -1312,6 +1409,7 @@ public class Protocol {
                     "Consumer group id whose offsets should be included in the transaction.")
     );
     public static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
             new Field("error_code",
                     INT16,
                     "An integer error code.")
@@ -1336,6 +1434,7 @@ public class Protocol {
     );
 
     public static final Schema END_TXN_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
             new Field("error_code",
                     INT16,
                     "An integer error code.")
@@ -1425,6 +1524,7 @@ public class Protocol {
     );
 
     public static final Schema TXN_OFFSET_COMMIT_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
             new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
@@ -1533,6 +1633,12 @@ public class Protocol {
 
     public static boolean apiVersionSupported(short apiKey, short apiVersion) {
         return apiKey < CURR_VERSION.length && apiVersion >= MIN_VERSIONS[apiKey] && apiVersion <= CURR_VERSION[apiKey];
+    }
+
+    private static Field newThrottleTimeField() {
+        return new Field("throttle_time_ms", INT32,
+                "Duration in milliseconds for which the request was throttled due to quota violation. (Zero if the request did not violate any quota.)",
+                0);
     }
 
     private static String indentString(int size) {

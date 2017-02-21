@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time
 object QuotaType  {
   case object Fetch extends QuotaType
   case object Produce extends QuotaType
+  case object Request extends QuotaType
   case object LeaderReplication extends QuotaType
   case object FollowerReplication extends QuotaType
 }
@@ -36,10 +37,11 @@ object QuotaFactory {
     override def isQuotaExceeded(): Boolean = false
   }
 
-  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
+  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, request: ClientRequestQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
     def shutdown() {
       fetch.shutdown
       produce.shutdown
+      request.shutdown
     }
   }
 
@@ -47,6 +49,7 @@ object QuotaFactory {
     QuotaManagers(
       new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time),
       new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time)
     )
@@ -65,6 +68,13 @@ object QuotaFactory {
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
+
+  def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    ClientQuotaManagerConfig(
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+  }
 
   def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
     ReplicationQuotaManagerConfig(

@@ -269,6 +269,68 @@ class ClientQuotaManagerTest {
   }
 
   @Test
+  def testRequestPercentageQuotaViolation() {
+    val metrics = newMetrics
+    val quotaManager = new ClientRequestQuotaManager(config, metrics, time)
+    quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some(Quota.upperBound(1)))
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Request", ""))
+    def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientQuotaManagerConfig.NanosToPercentagePerSecond
+    try {
+      /* We have 10 second windows. Make sure that there is no quota violation
+       * if we are under the quota
+       */
+      for (_ <- 0 until 10) {
+        quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", millisToPercent(4), callback)
+        time.sleep(1000)
+      }
+      assertEquals(10, numCallbacks)
+      assertEquals(0, queueSizeMetric.value().toInt)
+
+      // Create a spike.
+      // quota = 1% (10ms per second)
+      // 4*10 + 67.1 = 107.1/10.5 = 10.2ms per second.
+      // (10.2 - quota)/quota*window-size = (10.2-10)/10*10.5 seconds = 210ms
+      // 10.5 seconds interval because the last window is half complete
+      time.sleep(500)
+      val throttleTime = quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", millisToPercent(67.1), callback)
+
+      assertEquals("Should be throttled", 210, throttleTime)
+      assertEquals(1, queueSizeMetric.value().toInt)
+      // After a request is delayed, the callback cannot be triggered immediately
+      quotaManager.throttledRequestReaper.doWork()
+      assertEquals(10, numCallbacks)
+      time.sleep(throttleTime)
+
+      // Callback can only be triggered after the delay time passes
+      quotaManager.throttledRequestReaper.doWork()
+      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(11, numCallbacks)
+
+      // Could continue to see delays until the bursty sample disappears
+      for (_ <- 0 until 11) {
+        quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", millisToPercent(4), callback)
+        time.sleep(1000)
+      }
+
+      assertEquals("Should be unthrottled since bursty sample has rolled over",
+                   0, quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", 0, callback))
+
+      // Create a very large spike which requires > one quota window to bring within quota
+      assertEquals(1000, quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", millisToPercent(500), callback))
+      for (_ <- 0 until 10) {
+        time.sleep(1000)
+        assertEquals(1000, quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", 0, callback))
+      }
+      time.sleep(1000)
+      assertEquals("Should be unthrottled since bursty sample has rolled over",
+                   0, quotaManager.recordAndMaybeThrottle("ANONYMOUS", "test-client", 0, callback))
+
+    } finally {
+      quotaManager.shutdown()
+    }
+  }
+
+  @Test
   def testExpireThrottleTimeSensor() {
     val metrics = newMetrics
     val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)

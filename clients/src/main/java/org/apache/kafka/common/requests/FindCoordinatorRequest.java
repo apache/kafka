@@ -84,12 +84,13 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
-            case 1:
                 return new FindCoordinatorResponse(Errors.forException(e), Node.noNode());
+            case 1:
+                return new FindCoordinatorResponse(throttleTimeMs, Errors.forException(e), Node.noNode());
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
