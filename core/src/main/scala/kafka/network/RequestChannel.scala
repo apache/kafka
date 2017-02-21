@@ -26,7 +26,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
-import kafka.utils.Logging
+import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.{ListenerName, Send}
@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
-import scala.reflect.{classTag, ClassTag}
+import scala.reflect.{ClassTag, classTag}
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
@@ -111,11 +111,11 @@ object RequestChannel extends Logging {
         s"$header -- ${body[AbstractRequest]}"
     }
 
-    def body[T <: AbstractRequest : ClassTag] = {
+    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
       bodyAndSize.request match {
         case r: T => r
         case r =>
-          throw new ClassCastException(s"Expected request with type ${classTag[T].runtimeClass}, but found ${r.getClass}")
+          throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
       }
     }
 
