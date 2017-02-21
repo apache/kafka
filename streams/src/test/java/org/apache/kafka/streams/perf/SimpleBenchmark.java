@@ -47,6 +47,8 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -69,10 +71,10 @@ import java.util.Random;
  * Note that "all" is a convenience option when running this test locally and will not work when running the test
  * at scale (through tests/kafkatest/benchmarks/streams/streams_simple_benchmark_test.py). That is due to exact syncronization
  * needs for each test (e.g., you wouldn't want one instance to run "count" while another
- * is still running "consume"
+ * is still running "consume".
  */
 public class SimpleBenchmark {
-
+    private static final Logger log = LoggerFactory.getLogger(SimpleBenchmark.class);
     private final String kafka;
     private final File stateDir;
     private final Boolean loadPhase;
@@ -211,6 +213,8 @@ public class SimpleBenchmark {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "5000");
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         return props;
     }
 
@@ -225,6 +229,7 @@ public class SimpleBenchmark {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         return props;
     }
+
 
     private boolean maybeSetupPhase(final String topic, final String clientId,
                                     final boolean skipIfAllTests) throws Exception {
@@ -355,9 +360,8 @@ public class SimpleBenchmark {
             }
         }
         long endTime = System.currentTimeMillis();
-        printResults(nameOfBenchmark, endTime - startTime);
-
         streams.close();
+        printResults(nameOfBenchmark, endTime - startTime);
     }
 
     private long startStreamsThread(final KafkaStreams streams, final CountDownLatch latch) throws Exception {
@@ -522,6 +526,7 @@ public class SimpleBenchmark {
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
+
                     consumedRecords++;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
