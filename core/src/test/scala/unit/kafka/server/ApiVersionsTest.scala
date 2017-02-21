@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.requests.ApiVersionsResponse
-import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, Protocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Protocol}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -32,8 +32,8 @@ class ApiVersionsTest {
     for (key <- ApiKeys.values) {
       val version = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersion(key.id)
       assertNotNull(s"Could not find ApiVersion for API ${key.name}", version)
-      assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, ProtoUtils.oldestVersion(key.id))
-      assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, ProtoUtils.latestVersion(key.id))
+      assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, key.oldestVersion)
+      assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, key.latestVersion)
 
       // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {

@@ -14,7 +14,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -64,25 +63,25 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.DESCRIBE_GROUPS.id, version()));
+        Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.requestSchema(version()));
         struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
         return struct;
     }
 
     @Override
     public AbstractResponse getErrorResponse(Throwable e) {
-        short versionId = version();
-        switch (versionId) {
+        short version = version();
+        switch (version) {
             case 0:
                 return DescribeGroupsResponse.fromError(Errors.forException(e), groupIds);
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DESCRIBE_GROUPS.id)));
+                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_GROUPS.latestVersion()));
         }
     }
 
-    public static DescribeGroupsRequest parse(ByteBuffer buffer, short versionId) {
-        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer), versionId);
+    public static DescribeGroupsRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeGroupsRequest(ApiKeys.DESCRIBE_GROUPS.parseRequest(version, buffer), version);
     }
 }

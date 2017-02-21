@@ -31,4 +31,9 @@ public class ApiKeysTest {
         ApiKeys.forId(10000);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void schemaVersionOutOfRange() {
+        ApiKeys.PRODUCE.requestSchema((short) Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
+    }
+
 }

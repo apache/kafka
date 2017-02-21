@@ -21,7 +21,6 @@ import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Utils;
@@ -219,14 +218,14 @@ public class FetchRequest extends AbstractRequest {
         return replicaId >= 0;
     }
 
-    public static FetchRequest parse(ByteBuffer buffer, short versionId) {
-        return new FetchRequest(ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer), versionId);
+    public static FetchRequest parse(ByteBuffer buffer, short version) {
+        return new FetchRequest(ApiKeys.FETCH.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version));
+        Struct struct = new Struct(ApiKeys.FETCH.requestSchema(version));
         List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);

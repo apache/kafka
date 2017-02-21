@@ -25,7 +25,6 @@ import java.util.List;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 
@@ -66,7 +65,7 @@ public class SaslHandshakeResponse extends AbstractResponse {
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.SASL_HANDSHAKE.id, version));
+        Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.responseSchema(version));
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
         return struct;
@@ -77,7 +76,7 @@ public class SaslHandshakeResponse extends AbstractResponse {
     }
 
     public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
-        return new SaslHandshakeResponse(ProtoUtils.parseResponse(ApiKeys.SASL_HANDSHAKE.id, version, buffer));
+        return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer));
     }
 }
 

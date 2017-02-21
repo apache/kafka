@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.LogEntry
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
@@ -70,7 +70,7 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, ProtoUtils.latestVersion(ApiKeys.FETCH.id))
+    FetchResponse.parse(response, ApiKeys.FETCH.latestVersion)
   }
 
   @Test

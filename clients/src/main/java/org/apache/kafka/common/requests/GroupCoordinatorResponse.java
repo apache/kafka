@@ -15,7 +15,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -66,7 +65,7 @@ public class GroupCoordinatorResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.GROUP_COORDINATOR.id, version));
+        Struct struct = new Struct(ApiKeys.GROUP_COORDINATOR.responseSchema(version));
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
         coordinator.set(NODE_ID_KEY_NAME, node.id());
@@ -77,6 +76,6 @@ public class GroupCoordinatorResponse extends AbstractResponse {
     }
 
     public static GroupCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new GroupCoordinatorResponse(ProtoUtils.parseResponse(ApiKeys.GROUP_COORDINATOR.id, version, buffer));
+        return new GroupCoordinatorResponse(ApiKeys.GROUP_COORDINATOR.parseResponse(version, buffer));
     }
 }

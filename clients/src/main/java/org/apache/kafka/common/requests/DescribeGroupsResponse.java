@@ -14,7 +14,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -190,7 +189,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.DESCRIBE_GROUPS.id, version));
+        Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.responseSchema(version));
 
         List<Struct> groupStructs = new ArrayList<>();
         for (Map.Entry<String, GroupMetadata> groupEntry : groups.entrySet()) {
@@ -219,7 +218,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return struct;
     }
 
-    public static DescribeGroupsResponse parse(ByteBuffer buffer, short versionId) {
-        return new DescribeGroupsResponse(ProtoUtils.parseResponse(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer));
+    public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeGroupsResponse(ApiKeys.DESCRIBE_GROUPS.parseResponse(version, buffer));
     }
 }

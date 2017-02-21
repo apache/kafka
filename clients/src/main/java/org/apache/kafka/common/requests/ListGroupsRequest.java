@@ -14,7 +14,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -53,16 +52,16 @@ public class ListGroupsRequest extends AbstractRequest {
                 return new ListGroupsResponse(Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_GROUPS.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_GROUPS.latestVersion()));
         }
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer, short versionId) {
-        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer), versionId);
+    public static ListGroupsRequest parse(ByteBuffer buffer, short version) {
+        return new ListGroupsRequest(ApiKeys.LIST_GROUPS.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        return new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_GROUPS.id, version()));
+        return new Struct(ApiKeys.LIST_GROUPS.requestSchema(version()));
     }
 }

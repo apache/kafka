@@ -17,7 +17,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -257,7 +256,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(ProtoUtils.parseResponse(ApiKeys.METADATA.id, version, buffer));
+        return new MetadataResponse(ApiKeys.METADATA.parseResponse(version, buffer));
     }
 
     public static class TopicMetadata {
@@ -337,7 +336,7 @@ public class MetadataResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version));
+        Struct struct = new Struct(ApiKeys.METADATA.responseSchema(version));
         List<Struct> brokerArray = new ArrayList<>();
         for (Node node : brokers) {
             Struct broker = struct.instance(BROKERS_KEY_NAME);

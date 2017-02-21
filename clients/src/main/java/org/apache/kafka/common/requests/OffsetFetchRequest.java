@@ -16,7 +16,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -132,7 +131,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 return new OffsetFetchResponse(error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_FETCH.latestVersion()));
         }
     }
 
@@ -149,8 +148,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         return partitions;
     }
 
-    public static OffsetFetchRequest parse(ByteBuffer buffer, short versionId) {
-        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer), versionId);
+    public static OffsetFetchRequest parse(ByteBuffer buffer, short version) {
+        return new OffsetFetchRequest(ApiKeys.OFFSET_FETCH.parseRequest(version, buffer), version);
     }
 
     public boolean isAllPartitions() {
@@ -159,7 +158,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_FETCH.id, version()));
+        Struct struct = new Struct(ApiKeys.OFFSET_FETCH.requestSchema(version()));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         if (partitions != null) {
             Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
