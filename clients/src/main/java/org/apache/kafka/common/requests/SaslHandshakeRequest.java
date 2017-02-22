@@ -24,7 +24,6 @@ import java.util.List;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 
@@ -44,7 +43,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     private final String mechanism;
 
     public SaslHandshakeRequest(String mechanism) {
-        super(ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
+        super(ApiKeys.SASL_HANDSHAKE.latestVersion());
         this.mechanism = mechanism;
     }
 
@@ -66,17 +65,17 @@ public class SaslHandshakeRequest extends AbstractRequest {
                 return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.SASL_HANDSHAKE.latestVersion()));
         }
     }
 
-    public static SaslHandshakeRequest parse(ByteBuffer buffer, short versionId) {
-        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer), versionId);
+    public static SaslHandshakeRequest parse(ByteBuffer buffer, short version) {
+        return new SaslHandshakeRequest(ApiKeys.SASL_HANDSHAKE.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.SASL_HANDSHAKE.id, version()));
+        Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.requestSchema(version()));
         struct.set(MECHANISM_KEY_NAME, mechanism);
         return struct;
     }

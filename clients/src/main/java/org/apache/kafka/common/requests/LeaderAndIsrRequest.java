@@ -21,7 +21,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -147,7 +146,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.LEADER_AND_ISR.id, version));
+        Struct struct = new Struct(ApiKeys.LEADER_AND_ISR.requestSchema(version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
 
@@ -193,7 +192,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
                 return new LeaderAndIsrResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LEADER_AND_ISR.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LEADER_AND_ISR.latestVersion()));
         }
     }
 
@@ -213,8 +212,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         return liveLeaders;
     }
 
-    public static LeaderAndIsrRequest parse(ByteBuffer buffer, short versionId) {
-        return new LeaderAndIsrRequest(ProtoUtils.parseRequest(ApiKeys.LEADER_AND_ISR.id, versionId, buffer), versionId);
+    public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {
+        return new LeaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.parseRequest(version, buffer), version);
     }
 
 }

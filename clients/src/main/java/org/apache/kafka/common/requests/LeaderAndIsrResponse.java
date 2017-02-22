@@ -16,7 +16,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -70,12 +69,12 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
-        return new LeaderAndIsrResponse(ProtoUtils.parseResponse(ApiKeys.LEADER_AND_ISR.id, version, buffer));
+        return new LeaderAndIsrResponse(ApiKeys.LEADER_AND_ISR.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.LEADER_AND_ISR.id, version));
+        Struct struct = new Struct(ApiKeys.LEADER_AND_ISR.responseSchema(version));
 
         List<Struct> responseDatas = new ArrayList<>(responses.size());
         for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {

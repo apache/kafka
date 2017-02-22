@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -68,7 +67,9 @@ public class ListOffsetRequest extends AbstractRequest {
             return new Builder((short) 0, desiredVersion, replicaId);
         }
 
-        public static Builder forConsumer(short minVersion) {
+        public static Builder forConsumer(boolean requireTimestamp) {
+            // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
+            short minVersion = requireTimestamp ? (short) 1 : (short) 0;
             return new Builder(minVersion, null, CONSUMER_REPLICA_ID);
         }
 
@@ -226,7 +227,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 return new ListOffsetResponse(responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_OFFSETS.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
         }
     }
 
@@ -247,14 +248,14 @@ public class ListOffsetRequest extends AbstractRequest {
         return duplicatePartitions;
     }
 
-    public static ListOffsetRequest parse(ByteBuffer buffer, short versionId) {
-        return new ListOffsetRequest(ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer), versionId);
+    public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
+        return new ListOffsetRequest(ApiKeys.LIST_OFFSETS.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_OFFSETS.id, version));
+        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
 
         Map<TopicPartition, ?> targetTimes = partitionTimestamps == null ? offsetData : partitionTimestamps;
         Map<String, Map<Integer, Object>> topicsData = CollectionUtils.groupDataByTopic(targetTimes);

@@ -15,7 +15,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -65,7 +64,7 @@ public class GroupCoordinatorRequest extends AbstractRequest {
                 return new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Node.noNode());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.GROUP_COORDINATOR.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.GROUP_COORDINATOR.latestVersion()));
         }
     }
 
@@ -73,14 +72,13 @@ public class GroupCoordinatorRequest extends AbstractRequest {
         return groupId;
     }
 
-    public static GroupCoordinatorRequest parse(ByteBuffer buffer, short versionId) {
-        return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer),
-                versionId);
+    public static GroupCoordinatorRequest parse(ByteBuffer buffer, short version) {
+        return new GroupCoordinatorRequest(ApiKeys.GROUP_COORDINATOR.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.GROUP_COORDINATOR.id, version()));
+        Struct struct = new Struct(ApiKeys.GROUP_COORDINATOR.requestSchema(version()));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         return struct;
     }

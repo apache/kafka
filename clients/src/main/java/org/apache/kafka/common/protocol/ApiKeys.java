@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
+
 /**
  * Identifiers for all the Kafka APIs
  */
@@ -64,6 +69,8 @@ public enum ApiKeys {
     public final String name;
 
     ApiKeys(int id, String name) {
+        if (id < 0)
+            throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
     }
@@ -77,6 +84,46 @@ public enum ApiKeys {
 
     public static boolean hasId(int id) {
         return id >= MIN_API_KEY && id <= MAX_API_KEY;
+    }
+
+    public short latestVersion() {
+        if (id >= Protocol.CURR_VERSION.length)
+            throw new IllegalArgumentException("Latest version for API key " + this + " is not defined");
+        return Protocol.CURR_VERSION[id];
+    }
+
+    public short oldestVersion() {
+        if (id >= Protocol.MIN_VERSIONS.length)
+            throw new IllegalArgumentException("Oldest version for API key " + this + " is not defined");
+        return Protocol.MIN_VERSIONS[id];
+    }
+
+    public Schema requestSchema(short version) {
+        return schemaFor(Protocol.REQUESTS, version);
+    }
+
+    public Schema responseSchema(short version) {
+        return schemaFor(Protocol.RESPONSES, version);
+    }
+
+    public Struct parseRequest(short version, ByteBuffer buffer) {
+        return requestSchema(version).read(buffer);
+    }
+
+    public Struct parseResponse(short version, ByteBuffer buffer) {
+        return responseSchema(version).read(buffer);
+    }
+
+    private Schema schemaFor(Schema[][] schemas, short version) {
+        if (id > schemas.length)
+            throw new IllegalArgumentException("No schema available for API key " + this);
+        if (version < 0 || version > latestVersion())
+            throw new IllegalArgumentException("Invalid version for API key " + this + ": " + version);
+
+        Schema[] versions = schemas[id];
+        if (versions[version] == null)
+            throw new IllegalArgumentException("Unsupported version for API key " + this + ": " + version);
+        return versions[version];
     }
 
     private static String toHtml() {

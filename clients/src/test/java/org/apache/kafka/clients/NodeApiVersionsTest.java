@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.junit.Assert;
@@ -64,8 +63,7 @@ public class NodeApiVersionsTest {
             } else if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
             } else {
-                versionList.add(new ApiVersion(apiKey.id,
-                        ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
+                versionList.add(new ApiVersion(apiKey));
             }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
@@ -80,15 +78,15 @@ public class NodeApiVersionsTest {
             } else {
                 bld.append(apiKey.name).append("(").
                         append(apiKey.id).append("): ");
-                if (ProtoUtils.oldestVersion(apiKey.id) ==
-                        ProtoUtils.latestVersion(apiKey.id)) {
-                    bld.append(ProtoUtils.oldestVersion(apiKey.id));
+                if (apiKey.oldestVersion() ==
+                        apiKey.latestVersion()) {
+                    bld.append(apiKey.oldestVersion());
                 } else {
-                    bld.append(ProtoUtils.oldestVersion(apiKey.id)).
+                    bld.append(apiKey.oldestVersion()).
                             append(" to ").
-                            append(ProtoUtils.latestVersion(apiKey.id));
+                            append(apiKey.latestVersion());
                 }
-                bld.append(" [usable: ").append(ProtoUtils.latestVersion(apiKey.id)).
+                bld.append(" [usable: ").append(apiKey.latestVersion()).
                         append("]");
             }
             prefix = ", ";
@@ -129,7 +127,7 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            assertEquals(ProtoUtils.latestVersion(apiKey.id), versions.usableVersion(apiKey));
+            assertEquals(apiKey.latestVersion(), versions.usableVersion(apiKey));
         }
     }
 }
