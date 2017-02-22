@@ -59,12 +59,11 @@ public class NodeApiVersionsTest {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
+                versionList.add(new ApiVersion(apiKey, (short) 0, (short) 0));
             } else if (apiKey == ApiKeys.DELETE_TOPICS) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
+                versionList.add(new ApiVersion(apiKey, (short) 10000, (short) 10001));
             } else {
-                versionList.add(new ApiVersion(apiKey.id,
-                        apiKey.oldestVersion(), apiKey.latestVersion()));
+                versionList.add(new ApiVersion(apiKey, apiKey.oldestVersion(), apiKey.latestVersion()));
             }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
@@ -99,8 +98,8 @@ public class NodeApiVersionsTest {
     @Test
     public void testUsableVersionCalculation() {
         List<ApiVersion> versionList = new ArrayList<>();
-        versionList.add(new ApiVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, (short) 0, (short) 0));
-        versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
+        versionList.add(new ApiVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY, (short) 0, (short) 0));
+        versionList.add(new ApiVersion(ApiKeys.FETCH, (short) 1, (short) 2));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         try {
             versions.usableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);

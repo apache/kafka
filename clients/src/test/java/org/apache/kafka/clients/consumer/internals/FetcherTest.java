@@ -329,7 +329,7 @@ public class FetcherTest {
     public void testFetchRequestWhenRecordTooLarge() {
         try {
             client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.FETCH.id, (short) 2, (short) 2))));
+                new ApiVersionsResponse.ApiVersion(ApiKeys.FETCH, (short) 2, (short) 2))));
             makeFetchRequestWithIncompleteRecord();
             try {
                 fetcher.fetchedRecords();
