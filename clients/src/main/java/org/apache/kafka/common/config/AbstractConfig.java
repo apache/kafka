@@ -66,11 +66,11 @@ public class AbstractConfig {
         this(definition, originals, true);
     }
 
-    protected <T> T get(String key) {
+    protected Object get(String key) {
         if (!values.containsKey(key))
             throw new ConfigException(String.format("Unknown configuration '%s'", key));
         used.add(key);
-        return (T) values.get(key);
+        return values.get(key);
     }
 
     public void ignore(String key) {
@@ -78,39 +78,40 @@ public class AbstractConfig {
     }
 
     public Short getShort(String key) {
-        return get(key);
+        return (Short) get(key);
     }
 
     public Integer getInt(String key) {
-        return get(key);
+        return (Integer) get(key);
     }
 
     public Long getLong(String key) {
-        return get(key);
+        return (Long) get(key);
     }
 
     public Double getDouble(String key) {
-        return get(key);
+        return (Double) get(key);
     }
 
+    @SuppressWarnings("unchecked")
     public List<String> getList(String key) {
-        return get(key);
+        return (List<String>) get(key);
     }
 
     public Boolean getBoolean(String key) {
-        return get(key);
+        return (Boolean) get(key);
     }
 
     public String getString(String key) {
-        return get(key);
+        return (String) get(key);
     }
 
     public Password getPassword(String key) {
-        return get(key);
+        return (Password) get(key);
     }
 
     public Class<?> getClass(String key) {
-        return get(key);
+        return (Class<?>) get(key);
     }
 
     public Set<String> unused() {
@@ -157,7 +158,8 @@ public class AbstractConfig {
     }
 
     /**
-     * Put all keys that start with {@code prefix} with the prefix stripped and their parsed values in the result map.
+     * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
+     * put all the remaining keys with the prefix stripped and their parsed values in the result map.
      *
      * This is useful if one wants to allow prefixed configs to override default ones.
      */
