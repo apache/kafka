@@ -75,12 +75,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += createNewConsumer
     }
 
-    // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      servers.head.groupCoordinator.offsetsTopicConfigs)
+    TestUtils.createOffsetsTopic(zkUtils, servers)
   }
 
   def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
