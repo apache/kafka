@@ -335,7 +335,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new IllegalSaslStateException(String.format("Unexpected handshake request with client mechanism %s, enabled mechanisms are %s",
                     mechanism, response.enabledMechanisms()));
             default:
-                throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
+                throw new AuthenticationException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
                     response.error(), mechanism, response.enabledMechanisms()));
         }
     }

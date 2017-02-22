@@ -65,8 +65,8 @@ public final class BufferPool {
     public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
-        this.free = new ArrayDeque<ByteBuffer>();
-        this.waiters = new ArrayDeque<Condition>();
+        this.free = new ArrayDeque<>();
+        this.waiters = new ArrayDeque<>();
         this.totalMemory = memory;
         this.availableMemory = memory;
         this.metrics = metrics;
@@ -228,7 +228,7 @@ public final class BufferPool {
     public long availableMemory() {
         lock.lock();
         try {
-            return this.availableMemory + this.free.size() * this.poolableSize;
+            return this.availableMemory + this.free.size() * (long) this.poolableSize;
         } finally {
             lock.unlock();
         }
