@@ -316,10 +316,10 @@ public class NetworkClient implements KafkaClient {
         if (log.isDebugEnabled()) {
             int latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} to node {}.", request, nodeId);
+                log.trace("Sending {} {} to node {}.", ApiKeys.forId(header.apiKey()), request, nodeId);
             } else {
-                log.debug("Using older server API v{} to send {} to node {}.",
-                        header.apiVersion(), request, nodeId);
+                log.debug("Using older server API v{} to send {} {} to node {}.",
+                        header.apiVersion(), ApiKeys.forId(header.apiKey()), request, nodeId);
             }
         }
         Send send = request.toSend(nodeId, header);
@@ -330,6 +330,7 @@ public class NetworkClient implements KafkaClient {
                 clientRequest.callback(),
                 clientRequest.expectResponse(),
                 isInternalRequest,
+                request,
                 send,
                 now);
         this.inFlightRequests.add(inFlightRequest);
@@ -472,7 +473,7 @@ public class NetworkClient implements KafkaClient {
         nodeApiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
-            log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
+            log.trace("Cancelled request {} due to node {} being disconnected", request.request, nodeId);
             if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
             else
@@ -798,6 +799,7 @@ public class NetworkClient implements KafkaClient {
         final String destination;
         final RequestCompletionHandler callback;
         final boolean expectResponse;
+        final AbstractRequest request;
         final boolean isInternalRequest; // used to flag requests which are initiated internally by NetworkClient
         final Send send;
         final long sendTimeMs;
@@ -809,6 +811,7 @@ public class NetworkClient implements KafkaClient {
                                RequestCompletionHandler callback,
                                boolean expectResponse,
                                boolean isInternalRequest,
+                               AbstractRequest request,
                                Send send,
                                long sendTimeMs) {
             this.header = header;
@@ -816,6 +819,7 @@ public class NetworkClient implements KafkaClient {
             this.callback = callback;
             this.expectResponse = expectResponse;
             this.isInternalRequest = isInternalRequest;
+            this.request = request;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;
