@@ -69,6 +69,8 @@ public enum ApiKeys {
     public final String name;
 
     ApiKeys(int id, String name) {
+        if (id < 0)
+            throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
     }
