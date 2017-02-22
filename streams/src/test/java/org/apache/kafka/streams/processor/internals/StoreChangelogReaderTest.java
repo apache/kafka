@@ -195,6 +195,31 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restoreCount, equalTo(3));
     }
 
+    @Test
+    public void shouldNotRestoreAnythingWhenPartitionIsEmpty() throws Exception {
+        final StateRestorer restorer = new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE);
+        setupConsumer(0, topicPartition);
+        changelogReader.register(restorer);
+
+        changelogReader.restore();
+        assertThat(callback.restoreCount, equalTo(0));
+        assertThat(restorer.restoredOffset(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldNotRestoreAnythingWhenCheckpointAtEndOffset() throws Exception {
+        final Long endOffset = 10L;
+        setupConsumer(endOffset, topicPartition);
+        final StateRestorer restorer = new StateRestorer(topicPartition, callback, endOffset, Long.MAX_VALUE);
+
+        changelogReader.register(restorer);
+
+        changelogReader.restore();
+        assertThat(callback.restoreCount, equalTo(0));
+        assertThat(restorer.restoredOffset(), equalTo(endOffset));
+
+    }
+
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {
         consumer.updatePartitions(topicPartition.topic(),
                                   Collections.singletonList(
@@ -204,7 +229,7 @@ public class StoreChangelogReaderTest {
                                                             null,
                                                             null)));
         consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, messages - 1));
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, Math.max(0, messages - 1)));
         consumer.assign(Collections.singletonList(topicPartition));
 
         for (int i = 0; i < messages; i++) {

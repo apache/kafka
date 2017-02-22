@@ -49,7 +49,7 @@ public class StateRestorer {
     }
 
     boolean hasCompleted(final long recordOffset, final long endOffset) {
-        return recordOffset >= readTo(endOffset);
+        return endOffset == 0 || recordOffset >= readTo(endOffset);
     }
 
     void setRestoredOffset(final long restoredOffset) {
@@ -60,11 +60,7 @@ public class StateRestorer {
         return restoredOffset;
     }
 
-    long offsetLimit() {
-        return offsetLimit;
-    }
-
     private Long readTo(final long endOffset) {
-        return endOffset < offsetLimit ? endOffset : offsetLimit;
+        return endOffset < offsetLimit ? endOffset + 1 : offsetLimit;
     }
 }

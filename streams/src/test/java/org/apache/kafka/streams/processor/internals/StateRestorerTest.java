@@ -38,15 +38,24 @@ public class StateRestorerTest {
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThanEqualToEndOffset() throws Exception {
-        assertTrue(restorer.hasCompleted(10, 10));
+    public void shouldBeCompletedIfRecordOffsetGreaterThanEndOffset() throws Exception {
         assertTrue(restorer.hasCompleted(11, 10));
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThenEqualToOffsetLimit() throws Exception {
-        assertTrue(restorer.hasCompleted(50, 100));
+    public void shouldBeCompletedIfRecordOffsetGreaterThanOffsetLimit() throws Exception {
         assertTrue(restorer.hasCompleted(51, 100));
+    }
+
+    @Test
+    public void shouldBeCompletedIfEndOffsetAndRecordOffsetAreZero() throws Exception {
+        assertTrue(restorer.hasCompleted(0, 0));
+    }
+
+    @Test
+    public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() throws Exception {
+        final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, 0);
+        assertTrue(restorer.hasCompleted(0, 10));
     }
 
     @Test

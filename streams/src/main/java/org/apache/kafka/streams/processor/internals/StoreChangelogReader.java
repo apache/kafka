@@ -126,8 +126,8 @@ public class StoreChangelogReader implements ChangelogReader {
         final TopicPartition topicPartition = partitionIterator.next();
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
-        final long pos = processNext(allRecords.records(topicPartition), restorer);
-        if (restorer.hasCompleted(pos, endOffset)) {
+        final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
+        if (restorer.hasCompleted(pos + 1, endOffset)) {
             if (pos > endOffset + 1) {
                 throw new IllegalStateException(
                         String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
@@ -140,10 +140,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records, final StateRestorer restorer) {
+    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records, final StateRestorer restorer, final Long endOffset) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
-            if (offset >= restorer.offsetLimit()) {
+            if (restorer.hasCompleted(offset, endOffset)) {
                 return offset;
             }
             restorer.restore(record.key(), record.value());
