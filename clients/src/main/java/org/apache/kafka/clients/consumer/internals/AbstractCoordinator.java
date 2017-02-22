@@ -315,6 +315,19 @@ public abstract class AbstractCoordinator implements Closeable {
             heartbeatThread.disable();
     }
 
+    private void closeHeartbeatThread() {
+        if (heartbeatThread != null) {
+            heartbeatThread.close();
+
+            try {
+                heartbeatThread.join();
+            } catch (InterruptedException e) {
+                log.warn("Interrupted while waiting for consumer heartbeat thread to close");
+                throw new InterruptException(e);
+            }
+        }
+    }
+
     // visible for testing. Joins the group without starting the heartbeat thread.
     void joinGroupIfNeeded() {
         while (needRejoin() || rejoinIncomplete()) {
@@ -652,19 +665,26 @@ public abstract class AbstractCoordinator implements Closeable {
         close(0);
     }
 
-    protected synchronized void close(long timeoutMs) {
-        if (heartbeatThread != null)
-            heartbeatThread.close();
-        maybeLeaveGroup();
+    protected void close(long timeoutMs) {
+        try {
+            closeHeartbeatThread();
+        } finally {
 
-        // At this point, there may be pending commits (async commits or sync commits that were
-        // interrupted using wakeup) and the leave group request which have been queued, but not
-        // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
-        // If coordinator is not known, requests are aborted.
-        Node coordinator = coordinator();
-        if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs))
-            log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
-                    client.pendingRequestCount(coordinator), groupId);
+            // Synchronize after closing the heartbeat thread since heartbeat thread
+            // needs this lock to complete and terminate after close flag is set.
+            synchronized (this) {
+                maybeLeaveGroup();
+
+                // At this point, there may be pending commits (async commits or sync commits that were
+                // interrupted using wakeup) and the leave group request which have been queued, but not
+                // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
+                // If coordinator is not known, requests are aborted.
+                Node coordinator = coordinator();
+                if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs))
+                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
+                            client.pendingRequestCount(coordinator), groupId);
+            }
+        }
     }
 
     /**
