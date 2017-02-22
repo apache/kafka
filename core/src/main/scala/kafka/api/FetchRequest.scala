@@ -203,7 +203,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     val responseData = new util.LinkedHashMap[TopicPartition, JFetchResponse.PartitionData]
     requestInfo.foreach { case (TopicAndPartition(topic, partition), _) =>
       responseData.put(new TopicPartition(topic, partition),
-        new JFetchResponse.PartitionData(Errors.forException(e), -1, MemoryRecords.EMPTY))
+        new JFetchResponse.PartitionData(Errors.forException(e), JFetchResponse.INVALID_HIGHWATERMARK,
+          JFetchResponse.INVALID_LSO, null, MemoryRecords.EMPTY))
     }
     val errorResponse = new JFetchResponse(responseData, 0)
     // Magic value does not matter here because the message set is empty

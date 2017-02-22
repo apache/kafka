@@ -450,11 +450,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LSO, null, MemoryRecords.EMPTY))
     }
 
     val unauthorizedForReadPartitionData = unauthorizedForReadRequestInfo.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LSO, null, MemoryRecords.EMPTY))
     }
 
     // the callback for sending a fetch response
@@ -470,28 +472,20 @@ class KafkaApis(val requestChannel: RequestChannel,
           // Please note that if the message format is changed from a higher version back to lower version this
           // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
           // without format down conversion.
-<<<<<<< HEAD
           val convertedData = replicaManager.getMagic(tp) match {
-            case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(Record.MAGIC_VALUE_V0) =>
-=======
-          val convertedData = replicaManager.getMagicAndTimestampType(tp) match {
-            case Some((magic, _)) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(LogEntry.MAGIC_VALUE_V0) =>
->>>>>>> Support variable length integer types in the new message format (#127)
+            case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(LogEntry.MAGIC_VALUE_V0) =>
               trace(s"Down converting message to V0 for fetch request from $clientId")
               FetchPartitionData(data.error, data.hw, data.records.downConvert(LogEntry.MAGIC_VALUE_V0))
 
-<<<<<<< HEAD
-            case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(Record.MAGIC_VALUE_V1) =>
-=======
-            case Some((magic, _)) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(LogEntry.MAGIC_VALUE_V1) =>
->>>>>>> Support variable length integer types in the new message format (#127)
+            case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(LogEntry.MAGIC_VALUE_V1) =>
               trace(s"Down converting message to V1 for fetch request from $clientId")
               FetchPartitionData(data.error, data.hw, data.records.downConvert(LogEntry.MAGIC_VALUE_V1))
 
             case _ => data
           }
 
-          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
+          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, FetchResponse.INVALID_LSO,
+            null, convertedData.records)
         }
       }
 

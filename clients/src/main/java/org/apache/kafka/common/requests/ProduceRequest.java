@@ -21,6 +21,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -29,10 +31,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public class ProduceRequest extends AbstractRequest {
+    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String ACKS_KEY_NAME = "acks";
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
@@ -79,6 +83,7 @@ public class ProduceRequest extends AbstractRequest {
 
     private final short acks;
     private final int timeout;
+    private final String transactionalId;
 
     private final Map<TopicPartition, Integer> partitionSizes;
 
@@ -91,6 +96,7 @@ public class ProduceRequest extends AbstractRequest {
         super(version);
         this.acks = acks;
         this.timeout = timeout;
+        this.transactionalId = null;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
     }
@@ -112,12 +118,34 @@ public class ProduceRequest extends AbstractRequest {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+
+                if (version >= 3)
+                    validateRecords(version, records);
+
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
         partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        transactionalId = version >= 3 ? struct.getString(TRANSACTIONAL_ID_KEY_NAME) : null;
+    }
+
+    private void validateRecords(short version, MemoryRecords records) {
+        if (version >= 3) {
+            Iterator<LogEntry.MutableLogEntry> iterator = records.entries().iterator();
+            if (!iterator.hasNext())
+                throw new InvalidRecordException("Version 3 and above of the produce request contained no log entries");
+
+            LogEntry.MutableLogEntry entry = iterator.next();
+            if (entry.magic() != LogEntry.MAGIC_VALUE_V2)
+                throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
+                        "contain log entries with magic version 2");
+
+            if (iterator.hasNext())
+                throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
+                        "contain more than one log entry");
+        }
     }
 
     /**
@@ -127,20 +155,30 @@ public class ProduceRequest extends AbstractRequest {
     public Struct toStruct() {
         // Store it in a local variable to protect against concurrent updates
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
-        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version()));
+        short version = version();
+        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
+
+        // TODO: Include transactional id once transactions are supported
+        if (version >= 3)
+            struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
+
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
-        for (Map.Entry<String, Map<Integer, MemoryRecords>> entry : recordsByTopic.entrySet()) {
+        for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
             Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entry.getKey());
+            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, MemoryRecords> partitionEntry : entry.getValue().entrySet()) {
+            for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
-                        .set(PARTITION_KEY_NAME, partitionEntry.getKey())
-                        .set(RECORD_SET_KEY_NAME, records);
+                        .set(PARTITION_KEY_NAME, partitionEntry.getKey());
+
+                if (version >= 3)
+                    validateRecords(version, records);
+
+                part.set(RECORD_SET_KEY_NAME, records);
                 partitionArray.add(part);
             }
             topicData.set(PARTITION_DATA_KEY_NAME, partitionArray.toArray());
@@ -201,6 +239,10 @@ public class ProduceRequest extends AbstractRequest {
 
     public int timeout() {
         return timeout;
+    }
+
+    public String transactionalId() {
+        return transactionalId;
     }
 
     /**

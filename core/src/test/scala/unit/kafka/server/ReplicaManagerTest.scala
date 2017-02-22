@@ -256,7 +256,7 @@ class ReplicaManagerTest {
         
       
       assertTrue(fetchCallbackFired)
-      assertEquals("Should not give an exception", Errors.NONE.code, fetchError)
+      assertEquals("Should not give an exception", Errors.NONE, fetchError)
       assertTrue("Should return some data", fetchedRecords.entries.iterator.hasNext)
       fetchCallbackFired = false
       

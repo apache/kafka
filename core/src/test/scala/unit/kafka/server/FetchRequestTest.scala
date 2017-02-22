@@ -67,9 +67,10 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest,
+                               version: Short = ApiKeys.FETCH.latestVersion): FetchResponse = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, ApiKeys.FETCH.latestVersion)
+    FetchResponse.parse(response, version)
   }
 
   @Test
@@ -158,7 +159,7 @@ class FetchRequestTest extends BaseRequestTest {
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
       createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest, version = 2)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)

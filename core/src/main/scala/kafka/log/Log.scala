@@ -469,6 +469,7 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = LogEntry.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
+
     for (entry <- records.entries.asScala) {
       // update the first offset if on the first message
       if (firstOffset < 0)
@@ -481,12 +482,12 @@ class Log(@volatile var dir: File,
       lastOffset = entry.lastOffset
 
       // Check if the message sizes are valid.
-      val messageSize = entry.sizeInBytes
-      if(messageSize > config.maxMessageSize) {
+      val entrySize = entry.sizeInBytes
+      if (entrySize > config.maxMessageSize) {
         BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-          .format(messageSize, config.maxMessageSize))
+        throw new RecordTooLargeException(s"Message size is $entrySize bytes which exceeds the maximum configured " +
+          s"message size of ${config.maxMessageSize}.")
       }
 
       // check the validity of the message by checking CRC
@@ -497,7 +498,7 @@ class Log(@volatile var dir: File,
         offsetOfMaxTimestamp = lastOffset
       }
       shallowMessageCount += 1
-      validBytesCount += messageSize
+      validBytesCount += entrySize
 
       val messageCodec = CompressionCodec.getCompressionCodec(entry.compressionType.id)
       if (messageCodec != NoCompressionCodec)

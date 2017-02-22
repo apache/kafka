@@ -28,8 +28,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.KafkaRecord;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -63,8 +68,8 @@ public class RequestResponseTest {
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
-        checkRequest(createFetchRequest(3));
-        checkErrorResponse(createFetchRequest(3), new UnknownServerException());
+        checkRequest(createFetchRequest(4));
+        checkErrorResponse(createFetchRequest(4), new UnknownServerException());
         checkResponse(createFetchResponse(), 0);
         checkRequest(createHeartBeatRequest());
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException());
@@ -103,8 +108,10 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetFetchRequest(1), new UnknownServerException());
         checkErrorResponse(createOffsetFetchRequest(2), new UnknownServerException());
         checkResponse(createOffsetFetchResponse(), 0);
-        checkRequest(createProduceRequest());
-        checkErrorResponse(createProduceRequest(), new UnknownServerException());
+        checkRequest(createProduceRequest(2));
+        checkErrorResponse(createProduceRequest(2), new UnknownServerException());
+        checkRequest(createProduceRequest(3));
+        checkErrorResponse(createProduceRequest(3), new UnknownServerException());
         checkResponse(createProduceResponse(), 2);
         checkRequest(createStopReplicaRequest(true));
         checkRequest(createStopReplicaRequest(false));
@@ -216,7 +223,7 @@ public class RequestResponseTest {
 
     @Test
     public void produceRequestToStringTest() {
-        ProduceRequest request = createProduceRequest();
+        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
         assertEquals(1, request.partitionRecordsOrFail().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
@@ -240,7 +247,7 @@ public class RequestResponseTest {
 
     @Test
     public void produceRequestGetErrorResponseTest() {
-        ProduceRequest request = createProduceRequest();
+        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
         Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
@@ -248,7 +255,7 @@ public class RequestResponseTest {
         ProduceResponse.PartitionResponse partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(Record.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertEquals(LogEntry.NO_TIMESTAMP, partitionResponse.logAppendTime);
 
         request.clearPartitionRecords();
 
@@ -258,7 +265,7 @@ public class RequestResponseTest {
         partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(Record.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertEquals(LogEntry.NO_TIMESTAMP, partitionResponse.logAppendTime);
     }
 
     @Test
@@ -283,12 +290,63 @@ public class RequestResponseTest {
         assertEquals("Response data does not match", responseData, v2Response.responses());
     }
 
+    @Test(expected = InvalidRecordException.class)
+    public void produceRequestV3ShouldContainOnlyOneLogEntry() {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        builder.append(11L, "1".getBytes(), "b".getBytes());
+        builder.append(12L, null, "c".getBytes());
+        builder.close();
+
+        buffer.flip();
+
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(buffer));
+        new ProduceRequest.Builder((short) 1, 5000, produceData).build().toStruct();
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void produceRequestV3CannotHaveNoLogEntries() {
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(new TopicPartition("test", 0), MemoryRecords.EMPTY);
+        new ProduceRequest.Builder((short) 1, 5000, produceData).build().toStruct();
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void produceRequestV3CannotUseMagicV0() {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V0, CompressionType.NONE,
+                TimestampType.NO_TIMESTAMP_TYPE, 0L);
+        builder.append(10L, null, "a".getBytes());
+
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(new TopicPartition("test", 0), builder.build());
+        new ProduceRequest.Builder((short) 1, 5000, produceData).build().toStruct();
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void produceRequestV3CannotUseMagicV1() {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
+
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(new TopicPartition("test", 0), builder.build());
+        new ProduceRequest.Builder((short) 1, 5000, produceData).build().toStruct();
+    }
+
     @Test
     public void fetchResponseVersionTest() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000, records));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000,
+                FetchResponse.INVALID_LSO, null, records));
 
         FetchResponse v0Response = new FetchResponse(responseData, 0);
         FetchResponse v1Response = new FetchResponse(responseData, 10);
@@ -383,8 +441,15 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
-        MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000, records));
+        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("blah".getBytes()));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
+                1000000, FetchResponse.INVALID_LSO, null, records));
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
+                new FetchResponse.AbortedTransaction(234L, 999L));
+        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData(Errors.NONE,
+                1000000, FetchResponse.INVALID_LSO, abortedTransactions, MemoryRecords.EMPTY));
+
         return new FetchResponse(responseData, 25);
     }
 
@@ -529,10 +594,14 @@ public class RequestResponseTest {
         return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
-    private ProduceRequest createProduceRequest() {
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(ByteBuffer.allocate(10)));
-        return new ProduceRequest.Builder((short) 1, 5000, produceData).build();
+    private ProduceRequest createProduceRequest(int version) {
+        if (version < 2)
+            throw new IllegalArgumentException("Produce request version 2 is not supported");
+
+        byte magic = version == 2 ? LogEntry.MAGIC_VALUE_V1 : LogEntry.MAGIC_VALUE_V2;
+        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new KafkaRecord("woot".getBytes()));
+        Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
+        return new ProduceRequest.Builder((short) 1, 5000, produceData).build((short) version);
     }
 
     private ProduceResponse createProduceResponse() {
