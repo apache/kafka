@@ -24,16 +24,19 @@ public class StateRestorer {
     private final StateRestoreCallback stateRestoreCallback;
     private final Long checkpoint;
     private final long offsetLimit;
+    private final boolean persistent;
     private long restoredOffset;
 
     StateRestorer(final TopicPartition partition,
                   final StateRestoreCallback stateRestoreCallback,
                   final Long checkpoint,
-                  final long offsetLimit) {
+                  final long offsetLimit,
+                  final boolean persistent) {
         this.partition = partition;
         this.stateRestoreCallback = stateRestoreCallback;
         this.checkpoint = checkpoint;
         this.offsetLimit = offsetLimit;
+        this.persistent = persistent;
     }
 
     public TopicPartition partition() {
@@ -62,5 +65,9 @@ public class StateRestorer {
 
     private Long readTo(final long endOffset) {
         return endOffset < offsetLimit ? endOffset + 1 : offsetLimit;
+    }
+
+    public boolean isPersistent() {
+        return persistent;
     }
 }

@@ -59,7 +59,6 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
-    private final List<StateRestorer> activeStateRestorers = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
@@ -151,14 +150,10 @@ public class ProcessorStateManager implements StateManager {
         } else {
             log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
-                                                                    stateRestoreCallback,
-                                                                    checkpointedOffsets.get(storePartition),
-                                                                    offsetLimit(storePartition));
-            // save the restorer for later if it is persistent as we might
-            // need to retrieve the checkpoint offset (in the case where it is never updated during processing).
-            if (store.persistent()) {
-                activeStateRestorers.add(restorer);
-            }
+                                                             stateRestoreCallback,
+                                                             checkpointedOffsets.get(storePartition),
+                                                             offsetLimit(storePartition),
+                                                             store.persistent());
             changelogReader.register(restorer);
         }
 
@@ -276,9 +271,7 @@ public class ProcessorStateManager implements StateManager {
     // write the checkpoint
     @Override
     public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
-        for (final StateRestorer activeStateRestorer : activeStateRestorers) {
-            checkpointedOffsets.put(activeStateRestorer.partition(), activeStateRestorer.restoredOffset());
-        }
+        checkpointedOffsets.putAll(changelogReader.restoredOffsets());
         for (String storeName : stores.keySet()) {
             // only checkpoint the offset to the offsets file if
             // it is persistent AND changelog enabled

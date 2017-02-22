@@ -20,7 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.internals.ChangelogReader;
 import org.apache.kafka.streams.processor.internals.StateRestorer;
 
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
@@ -39,6 +41,11 @@ public class MockChangelogReader implements ChangelogReader {
     @Override
     public void restore() {
 
+    }
+
+    @Override
+    public Map<TopicPartition, Long> restoredOffsets() {
+        return Collections.emptyMap();
     }
 
     public boolean wasRegistered(final TopicPartition partition) {
