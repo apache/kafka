@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -61,7 +60,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.DELETE_TOPICS.id, version));
+        Struct struct = new Struct(ApiKeys.DELETE_TOPICS.responseSchema(version));
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Errors> topicError : errors.entrySet()) {
             Struct topicErrorCodeStruct = struct.instance(TOPIC_ERROR_CODES_KEY_NAME);
@@ -78,6 +77,6 @@ public class DeleteTopicsResponse extends AbstractResponse {
     }
 
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsResponse(ProtoUtils.responseSchema(ApiKeys.DELETE_TOPICS.id, version).read(buffer));
+        return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.responseSchema(version).read(buffer));
     }
 }

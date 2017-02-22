@@ -20,7 +20,6 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -314,12 +313,12 @@ public class NetworkClient implements KafkaClient {
         String nodeId = clientRequest.destination();
         RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
-            int latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);
+            int latestClientVersion = clientRequest.apiKey().latestVersion();
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} to node {}.", ApiKeys.forId(header.apiKey()), request, nodeId);
+                log.trace("Sending {} {} to node {}.", clientRequest.apiKey(), request, nodeId);
             } else {
                 log.debug("Using older server API v{} to send {} {} to node {}.",
-                        header.apiVersion(), ApiKeys.forId(header.apiKey()), request, nodeId);
+                        header.apiVersion(), clientRequest.apiKey(), request, nodeId);
             }
         }
         Send send = request.toSend(nodeId, header);
@@ -454,9 +453,8 @@ public class NetworkClient implements KafkaClient {
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
-        short apiKey = requestHeader.apiKey();
-        short apiVer = requestHeader.apiVersion();
-        Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer).read(responseBuffer);
+        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+        Struct responseBody = apiKey.responseSchema(requestHeader.apiVersion()).read(responseBuffer);
         correlate(requestHeader, responseHeader);
         return AbstractResponse.getResponse(apiKey, responseBody);
     }

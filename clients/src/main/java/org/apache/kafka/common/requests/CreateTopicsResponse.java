@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -106,7 +105,7 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version));
+        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
 
         List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Error> topicError : errors.entrySet()) {
@@ -127,6 +126,6 @@ public class CreateTopicsResponse extends AbstractResponse {
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version).read(buffer));
+        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
     }
 }

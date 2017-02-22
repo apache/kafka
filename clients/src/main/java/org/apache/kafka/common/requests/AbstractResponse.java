@@ -47,8 +47,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse getResponse(int requestId, Struct struct) {
-        ApiKeys apiKey = ApiKeys.forId(requestId);
+    public static AbstractResponse getResponse(ApiKeys apiKey, Struct struct) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);

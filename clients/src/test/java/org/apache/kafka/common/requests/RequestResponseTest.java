@@ -22,7 +22,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -169,7 +168,7 @@ public class RequestResponseTest {
     }
 
     private void checkOlderFetchVersions() throws Exception {
-        int latestVersion = ProtoUtils.latestVersion(ApiKeys.FETCH.id);
+        int latestVersion = ApiKeys.FETCH.latestVersion();
         for (int i = 0; i < latestVersion; ++i) {
             checkErrorResponse(createFetchRequest(i), new UnknownServerException());
             checkRequest(createFetchRequest(i));
@@ -220,11 +219,11 @@ public class RequestResponseTest {
         assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v2Response.getThrottleTime());
-        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0),
+        assertEquals("Should use schema version 0", ApiKeys.PRODUCE.responseSchema((short) 0),
                 v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 1),
+        assertEquals("Should use schema version 1", ApiKeys.PRODUCE.responseSchema((short) 1),
                 v1Response.toStruct((short) 1).schema());
-        assertEquals("Should use schema version 2", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 2),
+        assertEquals("Should use schema version 2", ApiKeys.PRODUCE.responseSchema((short) 2),
                 v2Response.toStruct((short) 2).schema());
         assertEquals("Response data does not match", responseData, v0Response.responses());
         assertEquals("Response data does not match", responseData, v1Response.responses());
@@ -242,9 +241,9 @@ public class RequestResponseTest {
         FetchResponse v1Response = new FetchResponse(responseData, 10);
         assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
         assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0),
+        assertEquals("Should use schema version 0", ApiKeys.FETCH.responseSchema((short) 0),
                 v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 1),
+        assertEquals("Should use schema version 1", ApiKeys.FETCH.responseSchema((short) 1),
                 v1Response.toStruct((short) 1).schema());
         assertEquals("Response data does not match", responseData, v0Response.responseData());
         assertEquals("Response data does not match", responseData, v1Response.responseData());
@@ -253,7 +252,7 @@ public class RequestResponseTest {
     @Test
     public void verifyFetchResponseFullWrite() throws Exception {
         FetchResponse fetchResponse = createFetchResponse();
-        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ProtoUtils.latestVersion(ApiKeys.FETCH.id),
+        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ApiKeys.FETCH.latestVersion(),
                 "client", 15);
 
         Send send = fetchResponse.toSend("1", header);
@@ -272,7 +271,7 @@ public class RequestResponseTest {
         assertEquals(header.correlationId(), responseHeader.correlationId());
 
         // read the body
-        Struct responseBody = ProtoUtils.responseSchema(ApiKeys.FETCH.id, header.apiVersion()).read(buf);
+        Struct responseBody = ApiKeys.FETCH.responseSchema(header.apiVersion()).read(buf);
         assertEquals(fetchResponse.toStruct(header.apiVersion()), responseBody);
 
         assertEquals(size, responseHeader.sizeOf() + responseBody.sizeOf());
@@ -281,7 +280,7 @@ public class RequestResponseTest {
     @Test
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
-        short version = ProtoUtils.latestVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id);
+        short version = ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion();
         Struct struct = response.toStruct(version);
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
@@ -403,11 +402,11 @@ public class RequestResponseTest {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
                     new ListOffsetRequest.PartitionData(1000000L, 10));
-            return ListOffsetRequest.Builder.forConsumer((short) 0).setOffsetData(offsetData).build((short) version);
+            return ListOffsetRequest.Builder.forConsumer(false).setOffsetData(offsetData).build((short) version);
         } else if (version == 1) {
             Map<TopicPartition, Long> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0), 1000000L);
-            return ListOffsetRequest.Builder.forConsumer((short) 1).setTargetTimes(offsetData).build((short) version);
+            return ListOffsetRequest.Builder.forConsumer(true).setTargetTimes(offsetData).build((short) version);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }

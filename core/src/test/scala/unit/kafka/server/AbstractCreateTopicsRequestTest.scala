@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
@@ -147,9 +147,8 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val version = ProtoUtils.latestVersion(ApiKeys.METADATA.id)
     val response = connectAndSend(request, ApiKeys.METADATA, destination = destination)
-    MetadataResponse.parse(response, version)
+    MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
   }
 
 }

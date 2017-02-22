@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -227,7 +226,7 @@ public class CreateTopicsRequest extends AbstractRequest {
                 return new CreateTopicsResponse(topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.CREATE_TOPICS.id)));
+                    versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_TOPICS.latestVersion()));
         }
     }
 
@@ -247,8 +246,8 @@ public class CreateTopicsRequest extends AbstractRequest {
         return this.duplicateTopics;
     }
 
-    public static CreateTopicsRequest parse(ByteBuffer buffer, short versionId) {
-        return new CreateTopicsRequest(ProtoUtils.parseRequest(ApiKeys.CREATE_TOPICS.id, versionId, buffer), versionId);
+    public static CreateTopicsRequest parse(ByteBuffer buffer, short version) {
+        return new CreateTopicsRequest(ApiKeys.CREATE_TOPICS.parseRequest(version, buffer), version);
     }
 
     /**
@@ -257,7 +256,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     @Override
     public Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ProtoUtils.requestSchema(ApiKeys.CREATE_TOPICS.id, version));
+        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.requestSchema(version));
 
         List<Struct> createTopicRequestStructs = new ArrayList<>(topics.size());
         for (Map.Entry<String, TopicDetails> entry : topics.entrySet()) {

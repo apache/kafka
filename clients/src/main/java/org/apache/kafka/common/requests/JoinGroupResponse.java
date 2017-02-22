@@ -14,7 +14,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -117,12 +116,12 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
-        return new JoinGroupResponse(ProtoUtils.parseResponse(ApiKeys.JOIN_GROUP.id, version, buffer));
+        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version));
+        Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
 
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         struct.set(GENERATION_ID_KEY_NAME, generationId);

@@ -16,7 +16,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -69,13 +68,13 @@ public class StopReplicaResponse extends AbstractResponse {
         return error;
     }
 
-    public static StopReplicaResponse parse(ByteBuffer buffer, short versionId) {
-        return new StopReplicaResponse(ProtoUtils.parseResponse(ApiKeys.STOP_REPLICA.id, versionId, buffer));
+    public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
+        return new StopReplicaResponse(ApiKeys.STOP_REPLICA.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.STOP_REPLICA.id, version));
+        Struct struct = new Struct(ApiKeys.STOP_REPLICA.responseSchema(version));
 
         List<Struct> responseDatas = new ArrayList<>(responses.size());
         for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {

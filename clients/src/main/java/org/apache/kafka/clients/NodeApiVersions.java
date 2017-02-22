@@ -14,7 +14,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
@@ -67,8 +66,7 @@ public class NodeApiVersions {
                 }
             }
             if (!exists) {
-                apiVersions.add(new ApiVersion(apiKey.id, ProtoUtils.oldestVersion(apiKey.id),
-                    ProtoUtils.latestVersion(apiKey.id)));
+                apiVersions.add(new ApiVersion(apiKey));
             }
         }
         return new NodeApiVersions(apiVersions);
@@ -77,16 +75,16 @@ public class NodeApiVersions {
     public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
         this.nodeApiVersions = nodeApiVersions;
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
-            int nodeApiKey = nodeApiVersion.apiKey;
             // Newer brokers may support ApiKeys we don't know about, ignore them
-            if (ApiKeys.hasId(nodeApiKey)) {
-                short v = Utils.min(ProtoUtils.latestVersion(nodeApiKey), nodeApiVersion.maxVersion);
+            if (ApiKeys.hasId(nodeApiVersion.apiKey)) {
+                ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey);
+                short v = Utils.min(nodeApiKey.latestVersion(), nodeApiVersion.maxVersion);
                 if (v < nodeApiVersion.minVersion) {
-                    usableVersions.put(ApiKeys.forId(nodeApiKey), NODE_TOO_NEW);
-                } else if (v < ProtoUtils.oldestVersion(nodeApiKey)) {
-                    usableVersions.put(ApiKeys.forId(nodeApiKey), NODE_TOO_OLD);
+                    usableVersions.put(nodeApiKey, NODE_TOO_NEW);
+                } else if (v < nodeApiKey.oldestVersion()) {
+                    usableVersions.put(nodeApiKey, NODE_TOO_OLD);
                 } else {
-                    usableVersions.put(ApiKeys.forId(nodeApiKey), v);
+                    usableVersions.put(nodeApiKey, v);
                 }
             }
         }
@@ -101,10 +99,10 @@ public class NodeApiVersions {
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
         else if (usableVersion == NODE_TOO_OLD)
             throw new UnsupportedVersionException("The broker is too old to support " + apiKey +
-                " version " + ProtoUtils.oldestVersion(apiKey.id));
+                " version " + apiKey.oldestVersion());
         else if (usableVersion == NODE_TOO_NEW)
             throw new UnsupportedVersionException("The broker is too new to support " + apiKey +
-                " version " + ProtoUtils.latestVersion(apiKey.id));
+                " version " + apiKey.latestVersion());
         else
             return usableVersion;
     }
