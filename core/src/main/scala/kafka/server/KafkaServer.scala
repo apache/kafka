@@ -577,6 +577,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       if (isStartingUp.get)
         throw new IllegalStateException("Kafka server is still starting up, cannot shut down!")
 
+      // This block is locked via both, the shutdownLatch and isShuttingDown.
+      // It is important that the outer locking happens on the latch and the inner
+      // locking on isShuttingDown. This is to avoid updating isShuttingDown when the latch
+      // does not allow entering the block, potentially causing a deadlock.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
@@ -603,11 +607,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
 
-        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString))
         brokerState.newState(NotRunning)
 
         startupComplete.set(false)
         isShuttingDown.set(false)
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString))
         shutdownLatch.countDown()
         info("shut down completed")
       }
