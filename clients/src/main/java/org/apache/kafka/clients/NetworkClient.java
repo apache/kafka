@@ -315,10 +315,10 @@ public class NetworkClient implements KafkaClient {
         if (log.isDebugEnabled()) {
             int latestClientVersion = clientRequest.apiKey().latestVersion();
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} to node {}.", ApiKeys.forId(header.apiKey()), request, nodeId);
+                log.trace("Sending {} {} to node {}.", clientRequest.apiKey(), request, nodeId);
             } else {
                 log.debug("Using older server API v{} to send {} {} to node {}.",
-                        header.apiVersion(), ApiKeys.forId(header.apiKey()), request, nodeId);
+                        header.apiVersion(), clientRequest.apiKey(), request, nodeId);
             }
         }
         Send send = request.toSend(nodeId, header);
