@@ -16,6 +16,11 @@
 -->
 
 <FindBugsFilter>
+    <!-- Disable reports about findbugs bugs EI and EI2.
+         EI: May expose internal representation by returning reference to mutable object.
+         EI2: May expose internal representation by incorporating reference to mutable object.
+         See http://findbugs.sourceforge.net/bugDescriptions.html for a full description of the findbugs codes.
+    -->
     <Match>
         <Bug code="EI,EI2,MS"/>
     </Match>
