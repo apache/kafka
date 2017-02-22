@@ -66,7 +66,7 @@ public class NodeApiVersions {
                 }
             }
             if (!exists) {
-                apiVersions.add(new ApiVersion(apiKey, apiKey.oldestVersion(), apiKey.latestVersion()));
+                apiVersions.add(new ApiVersion(apiKey));
             }
         }
         return new NodeApiVersions(apiVersions);

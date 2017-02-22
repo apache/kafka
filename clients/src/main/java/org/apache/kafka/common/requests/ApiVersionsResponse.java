@@ -47,8 +47,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         public final short minVersion;
         public final short maxVersion;
 
-        public ApiVersion(ApiKeys apiKey, short minVersion, short maxVersion) {
-            this(apiKey.id, minVersion, maxVersion);
+        public ApiVersion(ApiKeys apiKey) {
+            this(apiKey.id, apiKey.oldestVersion(), apiKey.latestVersion());
         }
 
         public ApiVersion(short apiKey, short minVersion, short maxVersion) {
@@ -129,7 +129,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     private static ApiVersionsResponse createApiVersionsResponse() {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            versionList.add(new ApiVersion(apiKey, apiKey.oldestVersion(), apiKey.latestVersion()));
+            versionList.add(new ApiVersion(apiKey));
         }
         return new ApiVersionsResponse(Errors.NONE, versionList);
     }
