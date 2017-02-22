@@ -359,19 +359,20 @@ public class Worker {
         if (task instanceof SourceTask) {
             // merging connector config with worker config to apply producer overrides
             // on the connector
-            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "producer");
+            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "producer.");
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
+            producerProps.putAll(mergedConfig.originalsStringsWithPrefixIntact("producer."));
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, mergedConfig, time);
         } else if (task instanceof SinkTask) {
             // merging connector config with worker config to apply consumer overrides
             // on the connector
-            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "consumer");
+            WorkerConfig mergedConfig = getMergedConfig(config, connConfig, "consumer.");
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, mergedConfig, keyConverter,
                     valueConverter, transformationChain, time);

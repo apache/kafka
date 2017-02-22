@@ -76,6 +76,15 @@ public class AbstractConfigTest {
         assertEquals(expected, originalsWithPrefix);
     }
 
+    @Test(expected = ClassCastException.class)
+    public void testOriginalsStringWithPrefixIntact_ValueNotAString() {
+        Properties props = new Properties();
+        props.put("foo.bar", 42);
+        props.put("setting", "def");
+        TestConfig config = new TestConfig(props);
+        config.originalsStringsWithPrefixIntact("foo.");
+    }
+
     @Test
     public void testValuesWithPrefixOverride() {
         String prefix = "prefix.";

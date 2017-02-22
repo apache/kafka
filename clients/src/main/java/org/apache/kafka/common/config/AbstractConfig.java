@@ -167,12 +167,16 @@ public class AbstractConfig {
     public Map<String, String> originalsStringsWithPrefixIntact(String prefix) {
         Map<String, String> result = new RecordingMap<>(prefix, false);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (!(entry.getValue() instanceof String))
-                throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
-                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
+            String key = entry.getKey();
+            Object value = entry.getValue();
 
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
-                result.put(entry.getKey(), (String) entry.getValue());
+            if (key.startsWith(prefix) && key.length() > prefix.length()) {
+                if (!(value instanceof String))
+                    throw new ClassCastException("Non-string value found in original settings for key " + key +
+                            ": " + (value == null ? null : value.getClass().getName()));
+
+                result.put(key, (String) value);
+            }
         }
         return result;
     }
