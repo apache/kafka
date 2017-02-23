@@ -20,6 +20,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 import importlib
 import os
 import subprocess
+import signal
 
 
 """This module abstracts the implementation of a verifiable client, allowing
@@ -32,13 +33,14 @@ This file provides:
  * VerifiableClientMixin class: to be used for creating new verifiable client classes
  * VerifiableClientJava class: the default Java verifiable clients
  * VerifiableClientApp class: uses global configuration to specify
-   the command to execute and optionally a "pids" command and a deploy script.
+   the command to execute and optional "pids" command, deploy script, etc.
    Config syntax (pass as --global <json_or_jsonfile>):
       {"Verifiable(Producer|Consumer|Client)": {
        "class": "kafkatest.services.verifiable_client.VerifiableClientApp",
-       "exec_cmd": "/vagrant/x/myclient --some --args",
+       "exec_cmd": "/vagrant/x/myclient --some --standard --args",
        "pids": "pgrep -f ...", // optional
-       "deploy": "/vagrant/x/mydeploy.sh" // optional
+       "deploy": "/vagrant/x/mydeploy.sh", // optional
+       "kill_signal": 2 // optional clean_shutdown kill signal (SIGINT in this case)
       }}
  * VerifiableClientDummy class: testing dummy
 
@@ -206,6 +208,13 @@ class VerifiableClientMixin (object):
     def pids (self, node):
         """ :return: list of pids for this client instance on node """
         raise NotImplementedError()
+
+    def kill_signal (self, clean_shutdown=True):
+        """ :return: the kill signal to terminate the application. """
+        if not clean_shutdown:
+            return signal.SIGKILL
+
+        return self.conf.get("kill_signal", signal.SIGTERM)
 
 
 class VerifiableClientJava (VerifiableClientMixin):

@@ -280,10 +280,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             self.stop_node(node)
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
-        if clean_shutdown:
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
+        sig = self.impl.kill_signal(clean_shutdown)
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
