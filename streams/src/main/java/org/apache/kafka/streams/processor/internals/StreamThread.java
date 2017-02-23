@@ -628,7 +628,7 @@ public class StreamThread extends Thread {
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
-                    streamsMetrics.pollTimeSensor.record(computeLatency());
+                    streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 }
             }
 
@@ -644,7 +644,7 @@ public class StreamThread extends Thread {
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
-                        streamsMetrics.processTimeSensor.record(computeLatency());
+                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
 
                         maybePunctuate(task);
 
@@ -721,7 +721,7 @@ public class StreamThread extends Thread {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
-                streamsMetrics.punctuateTimeSensor.record(computeLatency());
+                streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
 
         } catch (KafkaException e) {
             log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
@@ -786,7 +786,7 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        streamsMetrics.commitTimeSensor.record(computeLatency());
+        streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
     }
 
     /**
