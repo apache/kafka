@@ -119,12 +119,20 @@ public interface LogRecord {
     boolean isCompressed();
 
     /**
-     * For versions prior to 2, the message contained a timestamp type attribute. This method can be
+     * For versions prior to 2, the record contained a timestamp type attribute. This method can be
      * used to check whether the value of that attribute matches a particular timestamp type. For versions
      * 2 and above, this will always be false.
      * @param timestampType the timestamp type to compare
      * @return true if the version is lower than 2 and the timestamp type matches
      */
     boolean hasTimestampType(TimestampType timestampType);
+
+    /**
+     * Check whether this is a control record (i.e. whether the control bit is set in the record attributes).
+     * For magic versions prior to 2, this is always false.
+     *
+     * @return Whether this is a control record
+     */
+    boolean isControlRecord();
 
 }

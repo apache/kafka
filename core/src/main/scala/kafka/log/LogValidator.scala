@@ -98,6 +98,7 @@ private[kafka] object LogValidator extends Logging {
 
     for (entry <- records.entries.asScala) {
       for (record <- entry.asScala) {
+        ensureNotControlRecord(record)
         validateKey(record, compactedTopic)
         validateTimestamp(entry, record, now, timestampType, messageTimestampDiffMaxMs)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
@@ -127,10 +128,10 @@ private[kafka] object LogValidator extends Logging {
       val baseOffset = offsetCounter.value
       for (record <- entry.asScala) {
         record.ensureValid()
-
+        ensureNotControlRecord(record)
         validateKey(record, compactedTopic)
-        val offset = offsetCounter.getAndIncrement()
 
+        val offset = offsetCounter.getAndIncrement()
         if (entry.magic > LogEntry.MAGIC_VALUE_V0) {
           validateTimestamp(entry, record, currentTimestamp, timestampType, timestampDiffMaxMs)
 
@@ -202,6 +203,7 @@ private[kafka] object LogValidator extends Logging {
             throw new InvalidRecordException(s"Log record magic does not match outer magic ${entry.magic}")
 
           record.ensureValid()
+          ensureNotControlRecord(record)
           validateKey(record, compactedTopic)
 
           if (!record.hasMagic(LogEntry.MAGIC_VALUE_V0) && messageFormatVersion > LogEntry.MAGIC_VALUE_V0) {
@@ -276,6 +278,13 @@ private[kafka] object LogValidator extends Logging {
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true)
+  }
+
+
+  private def ensureNotControlRecord(record: LogRecord) {
+    // Until we have implemented transaction support, we do not permit control records to be written
+    if (record.isControlRecord)
+      throw new InvalidRecordException("Control messages are not currently supported")
   }
 
   private def validateKey(record: LogRecord, compactedTopic: Boolean) {

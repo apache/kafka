@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -34,24 +35,27 @@ public class EosLogRecordTest {
             new KafkaRecord(null, null)
         };
 
-        for (KafkaRecord record : records) {
-            int baseSequence = 723;
-            long baseOffset = 37;
-            int offsetDelta = 10;
-            long baseTimestamp = System.currentTimeMillis();
-            long timestampDelta = 323;
+        for (boolean isControlRecord : Arrays.asList(true, false)) {
+            for (KafkaRecord record : records) {
+                int baseSequence = 723;
+                long baseOffset = 37;
+                int offsetDelta = 10;
+                long baseTimestamp = System.currentTimeMillis();
+                long timestampDelta = 323;
 
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
-            EosLogRecord.writeTo(buffer, offsetDelta, timestampDelta, record.key(), record.value());
-            buffer.flip();
+                ByteBuffer buffer = ByteBuffer.allocate(1024);
+                EosLogRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
+                buffer.flip();
 
-            EosLogRecord logRecord = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
-            assertNotNull(logRecord);
-            assertEquals(baseOffset + offsetDelta, logRecord.offset());
-            assertEquals(baseSequence + offsetDelta, logRecord.sequence());
-            assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
-            assertEquals(record.key(), logRecord.key());
-            assertEquals(record.value(), logRecord.value());
+                EosLogRecord logRecord = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+                assertNotNull(logRecord);
+                assertEquals(baseOffset + offsetDelta, logRecord.offset());
+                assertEquals(baseSequence + offsetDelta, logRecord.sequence());
+                assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
+                assertEquals(record.key(), logRecord.key());
+                assertEquals(record.value(), logRecord.value());
+                assertEquals(isControlRecord, logRecord.isControlRecord());
+            }
         }
     }
 
@@ -65,7 +69,7 @@ public class EosLogRecordTest {
         long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, offsetDelta, timestampDelta, key, value);
+        EosLogRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
         buffer.flip();
 
         EosLogRecord record = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, LogEntry.NO_SEQUENCE, null);

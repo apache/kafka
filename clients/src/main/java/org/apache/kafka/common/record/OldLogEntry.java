@@ -170,6 +170,11 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
         return LogEntry.NO_SEQUENCE;
     }
 
+    @Override
+    public boolean isControlRecord() {
+        return false;
+    }
+
     /**
      * Get an iterator for the nested entries contained within this log entry. Note that
      * if the entry is not compressed, then this method will return an iterator over the

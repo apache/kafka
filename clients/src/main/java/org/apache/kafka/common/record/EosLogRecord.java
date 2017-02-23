@@ -51,6 +51,7 @@ public class EosLogRecord implements LogRecord {
     private static final int MAX_RECORD_OVERHEAD = 21;
     private static final int NULL_KEY_MASK = 0x01;
     private static final int NULL_VALUE_MASK = 0x02;
+    private static final int CONTROL_FLAG_MASK = 0x04;
 
     private final int sizeInBytes;
     private final byte attributes;
@@ -149,6 +150,7 @@ public class EosLogRecord implements LogRecord {
     }
 
     public static long writeTo(DataOutputStream out,
+                               boolean isControlRecord,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
@@ -156,7 +158,7 @@ public class EosLogRecord implements LogRecord {
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value);
         ByteUtils.writeVarint(sizeInBytes, out);
 
-        byte attributes = computeAttributes(key, value);
+        byte attributes = computeAttributes(isControlRecord, key, value);
         out.write(attributes);
 
         ByteUtils.writeVarlong(timestampDelta, out);
@@ -175,12 +177,13 @@ public class EosLogRecord implements LogRecord {
     }
 
     public static long writeTo(ByteBuffer out,
+                               boolean isControlRecord,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
                                ByteBuffer value) {
         try {
-            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta,
+            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), isControlRecord, offsetDelta,
                     timestampDelta, key, value);
         } catch (IOException e) {
             // cannot actually be raised by ByteBufferOutputStream
@@ -222,6 +225,11 @@ public class EosLogRecord implements LogRecord {
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
         return false;
+    }
+
+    @Override
+    public boolean isControlRecord() {
+        return (attributes & CONTROL_FLAG_MASK) != 0;
     }
 
     public static EosLogRecord readFrom(DataInputStream input,
@@ -280,8 +288,8 @@ public class EosLogRecord implements LogRecord {
         return new EosLogRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
     }
 
-    private static byte computeAttributes(ByteBuffer key, ByteBuffer value) {
-        byte attributes = 0;
+    private static byte computeAttributes(boolean isControlRecord, ByteBuffer key, ByteBuffer value) {
+        byte attributes = isControlRecord ? CONTROL_FLAG_MASK : (byte) 0;
         if (key == null)
             attributes |= NULL_KEY_MASK;
         if (value == null)

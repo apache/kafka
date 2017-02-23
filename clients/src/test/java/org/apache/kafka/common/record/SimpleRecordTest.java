@@ -18,11 +18,13 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -146,7 +148,8 @@ public class SimpleRecordTest {
     public void buildEosRecord() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.CREATE_TIME, 1234567L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 1234567L);
         builder.appendWithOffset(1234567, System.currentTimeMillis(), "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, System.currentTimeMillis(), "b".getBytes(), "v".getBytes());
 
@@ -160,6 +163,28 @@ public class SimpleRecordTest {
                 assertTrue(record.isValid());
             }
         }
+    }
+
+    @Test
+    public void appendControlRecord() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
+
+        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.COMMIT, null);
+        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.ABORT, null);
+        MemoryRecords records = builder.build();
+
+        List<LogRecord> logRecords = TestUtils.toList(records.records());
+        assertEquals(2, logRecords.size());
+
+        LogRecord commitRecord = logRecords.get(0);
+        assertTrue(commitRecord.isControlRecord());
+        assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(commitRecord.key()));
+
+        LogRecord abortRecord = logRecords.get(1);
+        assertTrue(abortRecord.isControlRecord());
+        assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
     }
 
 }

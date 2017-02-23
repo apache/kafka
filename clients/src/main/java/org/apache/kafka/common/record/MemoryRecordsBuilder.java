@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import java.io.DataOutputStream;
@@ -240,7 +241,7 @@ public class MemoryRecordsBuilder {
      * @param value The record value
      * @return crc of the record
      */
-    public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
+    public long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key, ByteBuffer value) {
         try {
             if (lastOffset >= 0 && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
@@ -248,11 +249,14 @@ public class MemoryRecordsBuilder {
             if (timestamp < 0 && timestamp != LogEntry.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
 
+            if (isControlRecord && magic < LogEntry.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Magic v" + magic + " does not support control records");
+
             if (baseTimestamp == null)
                 baseTimestamp = timestamp;
 
             if (magic > LogEntry.MAGIC_VALUE_V1)
-                return appendEosLogRecord(offset, timestamp, key, value);
+                return appendEosLogRecord(offset, isControlRecord, timestamp, key, value);
             else
                 return appendOldLogRecord(offset, timestamp, key, value);
         } catch (IOException e) {
@@ -261,13 +265,14 @@ public class MemoryRecordsBuilder {
     }
 
     public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
-        return appendWithOffset(offset, timestamp, wrapNullable(key), wrapNullable(value));
+        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value));
     }
 
-    private long appendEosLogRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+    private long appendEosLogRecord(long offset, boolean isControlRecord, long timestamp,
+                                    ByteBuffer key, ByteBuffer value) throws IOException {
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = EosLogRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value);
+        long crc = EosLogRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
         recordWritten(offset, timestamp, EosLogRecord.sizeInBytes(offsetDelta, timestamp, key, value));
         return crc;
     }
@@ -287,7 +292,11 @@ public class MemoryRecordsBuilder {
     }
 
     public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(lastOffset < 0 ? baseOffset : lastOffset + 1, timestamp, key, value);
+        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value);
+    }
+
+    private long nextSequentialOffset() {
+        return lastOffset < 0 ? baseOffset : lastOffset + 1;
     }
 
     /**
@@ -306,8 +315,16 @@ public class MemoryRecordsBuilder {
         return append(record.timestamp(), record.key(), record.value());
     }
 
+    public long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
+        Struct keyStruct = type.recordKey();
+        ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
+        keyStruct.writeTo(key);
+        key.flip();
+        return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value);
+    }
+
     public long appendWithOffset(long offset, KafkaRecord record) {
-        return appendWithOffset(offset, record.timestamp(), record.key(), record.value());
+        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value());
     }
 
     /**
@@ -334,7 +351,7 @@ public class MemoryRecordsBuilder {
      * @param record
      */
     public void append(LogRecord record) {
-        appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
+        appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value());
     }
 
     /**
@@ -343,7 +360,7 @@ public class MemoryRecordsBuilder {
      * @param record
      */
     public void appendWithOffset(long offset, LogRecord record) {
-        appendWithOffset(offset, record.timestamp(), record.key(), record.value());
+        appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value());
     }
 
     /**
@@ -366,7 +383,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void append(Record record) {
-        appendWithOffset(lastOffset < 0 ? baseOffset : lastOffset + 1, record);
+        appendWithOffset(nextSequentialOffset(), record);
     }
 
     private long toInnerOffset(long offset) {
