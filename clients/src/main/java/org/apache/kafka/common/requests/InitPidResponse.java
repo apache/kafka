@@ -19,7 +19,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class InitPIDResponse extends AbstractResponse {
+public class InitPidResponse extends AbstractResponse {
     public static final long INVALID_PID = -1;
     private static final String PRODUCER_ID_KEY_NAME = "pid";
     private static final String EPOCH_KEY_NAME = "epoch";
@@ -28,19 +28,19 @@ public class InitPIDResponse extends AbstractResponse {
     private final long producerId;
     private final short epoch;
 
-    public InitPIDResponse(Errors error, long producerId, short epoch) {
+    public InitPidResponse(Errors error, long producerId, short epoch) {
         this.error = error;
         this.producerId = producerId;
         this.epoch = epoch;
     }
 
-    public InitPIDResponse(Struct struct) {
+    public InitPidResponse(Struct struct) {
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
         this.epoch = struct.getShort(EPOCH_KEY_NAME);
     }
 
-    public InitPIDResponse(Errors errors) {
+    public InitPidResponse(Errors errors) {
         this(errors, INVALID_PID, (short) 0);
     }
 
@@ -65,8 +65,8 @@ public class InitPIDResponse extends AbstractResponse {
         return struct;
     }
 
-    public static InitPIDResponse parse(ByteBuffer buffer, short version) {
-        return new InitPIDResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
+    public static InitPidResponse parse(ByteBuffer buffer, short version) {
+        return new InitPidResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
     }
 
 }

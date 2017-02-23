@@ -134,10 +134,10 @@ class LogTest extends JUnitSuite {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 0)
     log.append(records, assignOffsets = true)
 
-    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 2)
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 2)
     log.append(nextRecords, assignOffsets = true)
   }
 
@@ -155,10 +155,10 @@ class LogTest extends JUnitSuite {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 0)
     log.append(records, assignOffsets = true)
 
-    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 0)
     log.append(nextRecords, assignOffsets = true)
   }
 
@@ -177,10 +177,10 @@ class LogTest extends JUnitSuite {
     val newEpoch: Short = 1
     val oldEpoch: Short = 0
 
-    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = newEpoch, sequence = 0)
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = newEpoch, sequence = 0)
     log.append(records, assignOffsets = true)
 
-    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = oldEpoch, sequence = 0)
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = oldEpoch, sequence = 0)
     log.append(nextRecords, assignOffsets = true)
   }
 

@@ -794,8 +794,8 @@ public class RequestResponseTest {
         return new InitPidRequest.Builder(null).build();
     }
 
-    private InitPIDResponse createInitPIDResponse() {
-        return new InitPIDResponse(Errors.NONE, 3332, (short) 3);
+    private InitPidResponse createInitPIDResponse() {
+        return new InitPidResponse(Errors.NONE, 3332, (short) 3);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

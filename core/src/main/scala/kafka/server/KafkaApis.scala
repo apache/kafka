@@ -1322,7 +1322,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {
-      val responseBody: InitPIDResponse = new InitPIDResponse(result.error, result.pid, result.epoch)
+      val responseBody: InitPidResponse = new InitPidResponse(result.error, result.pid, result.epoch)
       trace(s"Generated new PID ${result.pid} from InitPidRequest from client ${request.header.clientId}")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
