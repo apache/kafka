@@ -483,7 +483,7 @@ public class AbstractCoordinatorTest {
         return new SyncGroupResponse(error, ByteBuffer.allocate(0));
     }
 
-    public class DummyCoordinator extends AbstractCoordinator {
+    public static class DummyCoordinator extends AbstractCoordinator {
 
         private int onJoinPrepareInvokes = 0;
         private int onJoinCompleteInvokes = 0;

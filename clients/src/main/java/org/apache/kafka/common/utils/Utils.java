@@ -130,7 +130,7 @@ public class Utils {
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8 * 0)
+        return (in.read() & 0xff)
              | (in.read() << 8 * 1)
              | (in.read() << 8 * 2)
              | (in.read() << 8 * 3);

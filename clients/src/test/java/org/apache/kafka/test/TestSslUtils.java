@@ -152,10 +152,8 @@ public class TestSslUtils {
     public static <T extends Certificate> void createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
-        try {
-            FileInputStream in = new FileInputStream(filename);
+        try (FileInputStream in = new FileInputStream(filename)) {
             ks.load(in, password.value().toCharArray());
-            in.close();
         } catch (EOFException e) {
             ks = createEmptyKeyStore();
         }

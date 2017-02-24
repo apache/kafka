@@ -47,7 +47,7 @@ public class MockClient implements KafkaClient {
         }
     };
 
-    private class FutureResponse {
+    private static class FutureResponse {
         public final AbstractResponse responseBody;
         public final boolean disconnected;
         public final RequestMatcher requestMatcher;
