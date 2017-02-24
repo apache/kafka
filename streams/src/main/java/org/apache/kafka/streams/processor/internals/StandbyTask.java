@@ -46,7 +46,6 @@ public class StandbyTask extends AbstractTask {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
-     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
@@ -56,11 +55,11 @@ public class StandbyTask extends AbstractTask {
                        final Collection<TopicPartition> partitions,
                        final ProcessorTopology topology,
                        final Consumer<byte[], byte[]> consumer,
-                       final Consumer<byte[], byte[]> restoreConsumer,
+                       final ChangelogReader changelogReader,
                        final StreamsConfig config,
                        final StreamsMetrics metrics,
                        final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);

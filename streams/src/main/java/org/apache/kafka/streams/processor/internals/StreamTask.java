@@ -101,14 +101,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
-                      Consumer<byte[], byte[]> restoreConsumer,
+                      final ChangelogReader changelogReader,
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
                       ThreadCache cache,
                       Time time,
                       final RecordCollector recordCollector) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);

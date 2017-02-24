@@ -30,12 +30,14 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -123,7 +125,8 @@ public class StandbyTaskTest {
     }
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final ProcessorStateManagerTest.MockRestoreConsumer restoreStateConsumer = new ProcessorStateManagerTest.MockRestoreConsumer();
+    private final MockRestoreConsumer restoreStateConsumer = new MockRestoreConsumer();
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -154,7 +157,7 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         assertEquals(Utils.mkSet(partition2), new HashSet<>(task.changeLogPartitions()));
 
@@ -164,7 +167,7 @@ public class StandbyTaskTest {
     @Test(expected = Exception.class)
     public void testUpdateNonPersistentStore() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -178,7 +181,7 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, restoreStateConsumer, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -236,7 +239,7 @@ public class StandbyTaskTest {
         ));
 
         StreamsConfig config = createConfig(baseDir);
-        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, restoreStateConsumer, config, null, stateDirectory);
+        StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -329,9 +332,9 @@ public class StandbyTaskTest {
         builder.stream("topic").groupByKey().count("my-store");
         final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
         StreamsConfig config = createConfig(baseDir);
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config,
-                        new MockStreamsMetrics(new Metrics()), stateDirectory);
 
+        new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
+            new MockStreamsMetrics(new Metrics()), stateDirectory);
     }
 
     @Test
@@ -352,7 +355,7 @@ public class StandbyTaskTest {
                                                  ktablePartitions,
                                                  ktableTopology,
                                                  consumer,
-                                                 restoreStateConsumer,
+                                                 changelogReader,
                                                  config,
                                                  null,
                                                  stateDirectory

@@ -57,7 +57,7 @@ public abstract class AbstractTask {
                            final Collection<TopicPartition> partitions,
                            final ProcessorTopology topology,
                            final Consumer<byte[], byte[]> consumer,
-                           final Consumer<byte[], byte[]> restoreConsumer,
+                           final ChangelogReader changelogReader,
                            final boolean isStandby,
                            final StateDirectory stateDirectory,
                            final ThreadCache cache) {
@@ -70,7 +70,7 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            stateMgr = new ProcessorStateManager(id, partitions, restoreConsumer, isStandby, stateDirectory, topology.storeToChangelogTopic());
+            stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
         } catch (IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
