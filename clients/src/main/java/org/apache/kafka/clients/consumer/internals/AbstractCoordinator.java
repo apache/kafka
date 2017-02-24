@@ -648,7 +648,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Close the coordinator, waiting if needed to send LeaveGroup.
      */
     @Override
-    public final synchronized void close() {
+    public final void close() {
         close(0);
     }
 
