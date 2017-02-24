@@ -699,6 +699,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private[tools] class MirrorMakerProducer(val producerProps: Properties) {
 
     val sync = producerProps.getProperty("producer.type", "async").equals("sync")
+    producerProps.remove("producer.type")
 
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
