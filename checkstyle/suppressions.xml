@@ -29,7 +29,7 @@
               lines="99"/>
     <suppress checks="ParameterNumber"
               files="ConfigDef.java"
-              lines="125,145,165,204,896"/>
+              lines="126,146,166,205,897"/>
 
 
     <suppress checks="ClassDataAbstractionCoupling"
