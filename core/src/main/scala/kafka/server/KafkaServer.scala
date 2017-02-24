@@ -577,8 +577,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       if (isStartingUp.get)
         throw new IllegalStateException("Kafka server is still starting up, cannot shut down!")
 
-      val canShutdown = isShuttingDown.compareAndSet(false, true)
-      if (canShutdown && shutdownLatch.getCount > 0) {
+      // To ensure correct behavior under concurrent calls, we need to check `shutdownLatch` first since it gets updated
+      // last in the `if` block. If the order is reversed, we could shutdown twice or leave `isShuttingDown` set to
+      // `true` at the end of this method.
+      if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
         if(socketServer != null)
@@ -608,7 +610,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         startupComplete.set(false)
         isShuttingDown.set(false)
-        AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString)
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString))
         shutdownLatch.countDown()
         info("shut down completed")
       }

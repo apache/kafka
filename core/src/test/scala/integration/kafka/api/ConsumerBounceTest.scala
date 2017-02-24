@@ -13,8 +13,8 @@
 
 package kafka.api
 
+import java.util.concurrent._
 import java.util.{Collection, Collections}
-import java.util.concurrent.{Callable, Executors, ExecutorService, Future, Semaphore, TimeUnit}
 
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
