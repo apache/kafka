@@ -146,5 +146,18 @@ public class ClientStateTest {
         c1.hasMoreAvailableCapacityThan(new ClientState<Integer>(0));
     }
 
+    @Test
+    public void shouldHaveUnfulfilledQuotaWhenActiveTaskSizeLessThanCapacityTimesTasksPerThread() throws Exception {
+        final ClientState<Integer> client = new ClientState<>(1);
+        client.assign(1, true);
+        assertTrue(client.hasUnfulfilledQuota(2));
+    }
+
+    @Test
+    public void shouldNotHaveUnfulfilledQuotaWhenActiveTaskSizeGreaterEqualThanCapacityTimesTasksPerThread() throws Exception {
+        final ClientState<Integer> client = new ClientState<>(1);
+        client.assign(1, true);
+        assertFalse(client.hasUnfulfilledQuota(1));
+    }
 
 }
