@@ -47,19 +47,20 @@ import java.util.Set;
  *
  * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, &quot;Configuration with default value.&quot;);
  * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
- * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default;&quot;,&quot;config_with_validator&quot;));
+ * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
- * // will return &quot;some value&quot;
+ * 
  * Map&lt;String, Object&gt; configs = defs.parse(props);
+ * // will return &quot;some value&quot;
  * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
  * // will return default value of 42
  * int anotherConfig = (Integer) configs.get(&quot;config_with_validator&quot;);
  *
  * To validate the full configuration, use:
- * List&lt;Config&gt; configs = def.validate(props);
+ * List&lt;Config&gt; configs = defs.validate(props);
  * The {@link Config} contains updated configuration information given the current configuration values.
  * </pre>
  * <p/>
@@ -497,10 +498,8 @@ public class ConfigDef {
 
     private List<String> undefinedDependentConfigs() {
         Set<String> undefinedConfigKeys = new HashSet<>();
-        for (String configName: configKeys.keySet()) {
-            ConfigKey configKey = configKeys.get(configName);
-            List<String> dependents = configKey.dependents;
-            for (String dependent: dependents) {
+        for (ConfigKey configKey : configKeys.values()) {
+            for (String dependent: configKey.dependents) {
                 if (!configKeys.containsKey(dependent)) {
                     undefinedConfigKeys.add(dependent);
                 }
@@ -564,13 +563,14 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
+        
         ConfigKey key = configKeys.get(name);
-        ConfigValue config = configs.get(name);
-        List<Object> recommendedValues;
+        ConfigValue value = configs.get(name);
+        
         if (key.recommender != null) {
             try {
-                recommendedValues = key.recommender.validValues(name, parsed);
-                List<Object> originalRecommendedValues = config.recommendedValues();
+                List<Object> recommendedValues = key.recommender.validValues(name, parsed);
+                List<Object> originalRecommendedValues = value.recommendedValues();
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
                     Iterator<Object> it = recommendedValues.iterator();
@@ -581,14 +581,14 @@ public class ConfigDef {
                         }
                     }
                 }
-                config.recommendedValues(recommendedValues);
-                config.visible(key.recommender.visible(name, parsed));
+                value.recommendedValues(recommendedValues);
+                value.visible(key.recommender.visible(name, parsed));
             } catch (ConfigException e) {
-                config.addErrorMessage(e.getMessage());
+                value.addErrorMessage(e.getMessage());
             }
         }
 
-        configs.put(name, config);
+        configs.put(name, value);
         for (String dependent: key.dependents) {
             validate(dependent, parsed, configs);
         }
@@ -636,7 +636,7 @@ public class ConfigDef {
                         throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
                 case INT:
                     if (value instanceof Integer) {
-                        return (Integer) value;
+                        return value;
                     } else if (value instanceof String) {
                         return Integer.parseInt(trimmed);
                     } else {
@@ -644,7 +644,7 @@ public class ConfigDef {
                     }
                 case SHORT:
                     if (value instanceof Short) {
-                        return (Short) value;
+                        return value;
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
                     } else {
@@ -654,7 +654,7 @@ public class ConfigDef {
                     if (value instanceof Integer)
                         return ((Integer) value).longValue();
                     if (value instanceof Long)
-                        return (Long) value;
+                        return value;
                     else if (value instanceof String)
                         return Long.parseLong(trimmed);
                     else
@@ -668,7 +668,7 @@ public class ConfigDef {
                         throw new ConfigException(name, value, "Expected value to be a double, but it was a " + value.getClass().getName());
                 case LIST:
                     if (value instanceof List)
-                        return (List<?>) value;
+                        return value;
                     else if (value instanceof String)
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
@@ -678,7 +678,7 @@ public class ConfigDef {
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
                     if (value instanceof Class)
-                        return (Class<?>) value;
+                        return value;
                     else if (value instanceof String)
                         return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
                     else
@@ -777,6 +777,7 @@ public class ConfigDef {
          * Perform single configuration validation.
          * @param name The name of the configuration
          * @param value The value of the configuration
+         * @throws ConfigException if the value is invalid.
          */
         void ensureValid(String name, Object value);
     }
@@ -831,7 +832,7 @@ public class ConfigDef {
 
     public static class ValidList implements Validator {
 
-        ValidString validString;
+        final ValidString validString;
 
         private ValidList(List<String> validStrings) {
             this.validString = new ValidString(validStrings);
@@ -855,7 +856,7 @@ public class ConfigDef {
     }
 
     public static class ValidString implements Validator {
-        List<String> validStrings;
+        final List<String> validStrings;
 
         private ValidString(List<String> validStrings) {
             this.validStrings = validStrings;
@@ -962,12 +963,12 @@ public class ConfigDef {
             b.append("</th>\n");
         }
         b.append("</tr>\n");
-        for (ConfigKey def : configs) {
+        for (ConfigKey key : configs) {
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
                 b.append("<td>");
-                b.append(getConfigValue(def, headerName));
+                b.append(getConfigValue(key, headerName));
                 b.append("</td>");
             }
             b.append("</tr>\n");
@@ -982,8 +983,8 @@ public class ConfigDef {
      */
     public String toRst() {
         StringBuilder b = new StringBuilder();
-        for (ConfigKey def : sortedConfigs()) {
-            getConfigKeyRst(def, b);
+        for (ConfigKey key : sortedConfigs()) {
+            getConfigKeyRst(key, b);
             b.append("\n");
         }
         return b.toString();
@@ -997,27 +998,27 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         String lastKeyGroupName = "";
-        for (ConfigKey def : sortedConfigs()) {
-            if (def.group != null) {
-                if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
-                    b.append(def.group).append("\n");
+        for (ConfigKey key : sortedConfigs()) {
+            if (key.group != null) {
+                if (!lastKeyGroupName.equalsIgnoreCase(key.group)) {
+                    b.append(key.group).append("\n");
 
-                    char[] underLine = new char[def.group.length()];
+                    char[] underLine = new char[key.group.length()];
                     Arrays.fill(underLine, '^');
                     b.append(new String(underLine)).append("\n\n");
                 }
-                lastKeyGroupName = def.group;
+                lastKeyGroupName = key.group;
             }
 
-            getConfigKeyRst(def, b);
+            getConfigKeyRst(key, b);
 
-            if (def.dependents != null && def.dependents.size() > 0) {
+            if (key.dependents != null && key.dependents.size() > 0) {
                 int j = 0;
                 b.append("  * Dependents: ");
-                for (String dependent : def.dependents) {
+                for (String dependent : key.dependents) {
                     b.append("``");
                     b.append(dependent);
-                    if (++j == def.dependents.size())
+                    if (++j == key.dependents.size())
                         b.append("``");
                     else
                         b.append("``, ");
@@ -1032,22 +1033,22 @@ public class ConfigDef {
     /**
      * Shared content on Rst and Enriched Rst.
      */
-    private void getConfigKeyRst(ConfigKey def, StringBuilder b) {
-        b.append("``").append(def.name).append("``").append("\n");
-        for (String docLine : def.documentation.split("\n")) {
+    private void getConfigKeyRst(ConfigKey key, StringBuilder b) {
+        b.append("``").append(key.name).append("``").append("\n");
+        for (String docLine : key.documentation.split("\n")) {
             if (docLine.length() == 0) {
                 continue;
             }
             b.append("  ").append(docLine).append("\n\n");
         }
-        b.append("  * Type: ").append(getConfigValue(def, "Type")).append("\n");
-        if (def.hasDefault()) {
-            b.append("  * Default: ").append(getConfigValue(def, "Default")).append("\n");
+        b.append("  * Type: ").append(getConfigValue(key, "Type")).append("\n");
+        if (key.hasDefault()) {
+            b.append("  * Default: ").append(getConfigValue(key, "Default")).append("\n");
         }
-        if (def.validator != null) {
-            b.append("  * Valid Values: ").append(getConfigValue(def, "Valid Values")).append("\n");
+        if (key.validator != null) {
+            b.append("  * Valid Values: ").append(getConfigValue(key, "Valid Values")).append("\n");
         }
-        b.append("  * Importance: ").append(getConfigValue(def, "Importance")).append("\n");
+        b.append("  * Importance: ").append(getConfigValue(key, "Importance")).append("\n");
     }
 
     /**
@@ -1093,8 +1094,8 @@ public class ConfigDef {
 
     public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
         int orderInGroup = startingOrd;
-        for (ConfigDef.ConfigKey key : child.sortedConfigs()) {
-            define(new ConfigDef.ConfigKey(
+        for (ConfigKey key : child.sortedConfigs()) {
+            define(new ConfigKey(
                     keyPrefix + key.name,
                     key.type,
                     key.defaultValue,
@@ -1114,7 +1115,7 @@ public class ConfigDef {
     /**
      * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
      */
-    private static ConfigDef.Validator embeddedValidator(final String keyPrefix, final ConfigDef.Validator base) {
+    private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
         return new ConfigDef.Validator() {
             @Override
@@ -1139,9 +1140,9 @@ public class ConfigDef {
     /**
      * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
      */
-    private static ConfigDef.Recommender embeddedRecommender(final String keyPrefix, final ConfigDef.Recommender base) {
+    private static Recommender embeddedRecommender(final String keyPrefix, final Recommender base) {
         if (base == null) return null;
-        return new ConfigDef.Recommender() {
+        return new Recommender() {
             private String unprefixed(String k) {
                 return k.substring(keyPrefix.length());
             }
