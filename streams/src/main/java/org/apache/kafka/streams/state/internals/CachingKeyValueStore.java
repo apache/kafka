@@ -62,7 +62,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         underlying.init(context, root);
         initInternal(context);
         // save the stream thread as we only ever want to trigger a flush
-        // when the stream thread is the the current thread.
+        // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
     }
 
