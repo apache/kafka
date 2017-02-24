@@ -246,7 +246,7 @@ public class StoreChangelogReaderTest {
                                                             null,
                                                             null)));
         consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, Math.max(0, messages - 1)));
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, Math.max(0, messages)));
         consumer.assign(Collections.singletonList(topicPartition));
 
         for (int i = 0; i < messages; i++) {

@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 public class StateRestorer {
+    static final int NO_CHECKPOINT = -1;
     private final TopicPartition partition;
     private final StateRestoreCallback stateRestoreCallback;
     private final Long checkpoint;
@@ -43,31 +44,35 @@ public class StateRestorer {
         return partition;
     }
 
-    public Long checkpoint() {
-        return checkpoint;
+    public long checkpoint() {
+        return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
     public void restore(final byte[] key, final byte[] value) {
         stateRestoreCallback.restore(key, value);
     }
 
-    boolean hasCompleted(final long recordOffset, final long endOffset) {
-        return endOffset == 0 || recordOffset >= readTo(endOffset);
+    public boolean isPersistent() {
+        return persistent;
     }
 
     void setRestoredOffset(final long restoredOffset) {
         this.restoredOffset = Math.min(offsetLimit, restoredOffset);
     }
 
+    boolean hasCompleted(final long recordOffset, final long endOffset) {
+        return endOffset == 0 || recordOffset >= readTo(endOffset);
+    }
+
     Long restoredOffset() {
         return restoredOffset;
     }
 
-    private Long readTo(final long endOffset) {
-        return endOffset < offsetLimit ? endOffset + 1 : offsetLimit;
+    long offsetLimit() {
+        return offsetLimit;
     }
 
-    public boolean isPersistent() {
-        return persistent;
+    private Long readTo(final long endOffset) {
+        return endOffset < offsetLimit ? endOffset : offsetLimit;
     }
 }
