@@ -19,9 +19,10 @@
 package kafka.server
 
 import java.io.File
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 
+import kafka.api.{Both, SaslSetup}
 import kafka.common.Topic
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.{CoreUtils, TestUtils}
@@ -38,15 +39,23 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
-class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness {
+abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeeperTestHarness with SaslSetup{
 
   private val trustStoreFile = File.createTempFile("truststore", ".jks")
   private val servers = new ArrayBuffer[KafkaServer]
   private val producers = mutable.Map[ListenerName, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ListenerName, KafkaConsumer[Array[Byte], Array[Byte]]]()
+  private val kafkaClientSaslMechanism = "PLAIN"
+  private val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
+
+  protected def setSaslProperties(listenerName: ListenerName): Option[Properties]
+  protected def addJaasSection(): Unit = {}
 
   @Before
   override def setUp(): Unit = {
+    startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, withDefaultJaasContext = false)
+    addJaasSection()
+    setJaasConfiguration()
     super.setUp()
     // 2 brokers so that we can test that the data propagates correctly via UpdateMetadadaRequest
     val numServers = 2
@@ -57,9 +66,14 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, "SECURE_INTERNAL://localhost:0, INTERNAL://localhost:0, " +
         "SECURE_EXTERNAL://localhost:0, EXTERNAL://localhost:0")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "INTERNAL:PLAINTEXT, SECURE_INTERNAL:SSL," +
-        "EXTERNAL:PLAINTEXT, SECURE_EXTERNAL:SSL")
+      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "INTERNAL:PLAINTEXT, SECURE_INTERNAL:SASL_SSL," +
+        "EXTERNAL:PLAINTEXT, SECURE_EXTERNAL:SASL_SSL")
       props.put(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
+      props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
+      props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
+      props.put(KafkaConfig.SaslKerberosServiceNameProp, "kafka")
+
       props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
 
       // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
@@ -84,16 +98,18 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
       TestUtils.createTopic(zkUtils, listenerName.value, 2, 2, servers)
 
       val trustStoreFile =
-        if (endPoint.securityProtocol == SecurityProtocol.SSL) Some(this.trustStoreFile)
+        if (endPoint.securityProtocol == SecurityProtocol.SASL_SSL) Some(this.trustStoreFile)
         else None
+
+      val saslProperties = setSaslProperties(listenerName)
 
       val bootstrapServers = TestUtils.bootstrapServers(servers, listenerName)
 
       producers(listenerName) = TestUtils.createNewProducer(bootstrapServers, acks = -1,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile)
+        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProperties)
 
       consumers(listenerName) = TestUtils.createNewConsumer(bootstrapServers, groupId = listenerName.value,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile)
+        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProperties)
     }
   }
 
@@ -128,5 +144,4 @@ class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness
       }, s"Consumed ${records.size} records until timeout instead of the expected ${producerRecords.size} records")
     }
   }
-
 }
