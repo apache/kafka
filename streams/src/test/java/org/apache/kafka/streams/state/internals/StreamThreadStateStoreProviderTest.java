@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -187,7 +188,7 @@ public class StreamThreadStateStoreProviderTest {
         return new StreamTask(taskId, applicationId, Collections
                 .singletonList(new TopicPartition("topic", taskId.partition)), topology,
                               clientSupplier.consumer,
-                              clientSupplier.restoreConsumer,
+                              new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
                               streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
             protected void initializeOffsetLimits() {

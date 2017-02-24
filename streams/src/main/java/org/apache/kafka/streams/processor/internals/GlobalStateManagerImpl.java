@@ -131,7 +131,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         log.info("restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
-        consumer.assign(topicPartitions);
         final Map<TopicPartition, Long> highWatermarks = consumer.endOffsets(topicPartitions);
         try {
             restoreState(stateRestoreCallback, topicPartitions, highWatermarks);

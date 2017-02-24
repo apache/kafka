@@ -159,8 +159,8 @@ public class StreamThreadTest {
                               StreamsConfig config,
                               StreamsMetrics metrics,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, metrics,
-                stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
+            super(id, applicationId, partitions, topology, consumer, new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000), config, metrics,
+                  stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
         }
 
         @Override
