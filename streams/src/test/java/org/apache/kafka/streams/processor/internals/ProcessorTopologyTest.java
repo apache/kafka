@@ -247,14 +247,14 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningTimestampTopology() {
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
         driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology());
         driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecordTimestamp(OUTPUT_TOPIC_1, "key1", "value1", 1000L);
-        assertNextOutputRecordTimestamp(OUTPUT_TOPIC_1, "key2", "value2", 2000L);
-        assertNextOutputRecordTimestamp(OUTPUT_TOPIC_1, "key3", "value3", 3000L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, 1000L, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, 2000L, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, 3000L, "key3", "value3");
     }
 
     @Test
@@ -309,7 +309,7 @@ public class ProcessorTopologyTest {
         assertNull(record.partition());
     }
 
-    private void assertNextOutputRecordTimestamp(String topic, String key, String value, Long timestamp) {
+    private void assertNextOutputRecord(String topic, Long timestamp, String key, String value) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
         assertEquals(key, record.key());
@@ -413,8 +413,8 @@ public class ProcessorTopologyTest {
     }
 
     /**
-     * A processor that forwards messages with modified values (without custom timestamp information) to each child, if
-     * the value is in ".*@[0-9]+" format.
+     * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
+     * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
      */
     protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
 
