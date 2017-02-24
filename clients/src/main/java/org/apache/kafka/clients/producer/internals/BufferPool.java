@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.Time;
  * buffers are deallocated.
  * </ol>
  */
-public final class BufferPool {
+public class BufferPool {
 
     private final long totalMemory;
     private final int poolableSize;
@@ -104,14 +104,14 @@ public final class BufferPool {
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
-            int freeListSize = this.free.size() * this.poolableSize;
+            int freeListSize = freeSize() * this.poolableSize;
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
                 freeUp(size);
                 this.availableMemory -= size;
                 lock.unlock();
-                return ByteBuffer.allocate(size);
+                return allocateByteBuffer(size);
             } else {
                 // we are out of memory and will have to block
                 int accumulated = 0;
@@ -174,7 +174,7 @@ public final class BufferPool {
                 // unlock and return the buffer
                 lock.unlock();
                 if (buffer == null)
-                    return ByteBuffer.allocate(size);
+                    return allocateByteBuffer(size);
                 else
                     return buffer;
             }
@@ -182,6 +182,11 @@ public final class BufferPool {
             if (lock.isHeldByCurrentThread())
                 lock.unlock();
         }
+    }
+
+    // Protected for testing.
+    protected ByteBuffer allocateByteBuffer(int size) {
+        return ByteBuffer.allocate(size);
     }
 
     /**
@@ -228,10 +233,15 @@ public final class BufferPool {
     public long availableMemory() {
         lock.lock();
         try {
-            return this.availableMemory + this.free.size() * (long) this.poolableSize;
+            return this.availableMemory + freeSize() * (long) this.poolableSize;
         } finally {
             lock.unlock();
         }
+    }
+
+    // Protected for testing.
+    protected int freeSize() {
+        return this.free.size();
     }
 
     /**
