@@ -625,7 +625,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Get the partition metadata for the give topic. This can be used for custom partitioning.
+     * Get the partition metadata for the given topic. This can be used for custom partitioning.
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
