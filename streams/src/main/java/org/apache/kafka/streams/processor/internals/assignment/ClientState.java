@@ -17,20 +17,22 @@
 
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.TaskId;
+
 import java.util.HashSet;
 import java.util.Set;
 
-public class ClientState<T> {
+public class ClientState {
 
     final static double COST_ACTIVE = 0.1;
     final static double COST_STANDBY  = 0.2;
     final static double COST_LOAD = 0.5;
 
-    public final Set<T> activeTasks;
-    public final Set<T> standbyTasks;
-    public final Set<T> assignedTasks;
-    public final Set<T> prevActiveTasks;
-    public final Set<T> prevAssignedTasks;
+    public final Set<TaskId> activeTasks;
+    public final Set<TaskId> standbyTasks;
+    public final Set<TaskId> assignedTasks;
+    public final Set<TaskId> prevActiveTasks;
+    public final Set<TaskId> prevAssignedTasks;
 
     public double capacity;
     public double cost;
@@ -40,10 +42,10 @@ public class ClientState<T> {
     }
 
     public ClientState(double capacity) {
-        this(new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), capacity);
+        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
     }
 
-    private ClientState(Set<T> activeTasks, Set<T> standbyTasks, Set<T> assignedTasks, Set<T> prevActiveTasks, Set<T> prevAssignedTasks, double capacity) {
+    private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, double capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.assignedTasks = assignedTasks;
@@ -53,12 +55,12 @@ public class ClientState<T> {
         this.cost = 0d;
     }
 
-    public ClientState<T> copy() {
-        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
+    public ClientState copy() {
+        return new ClientState(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
                 new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
     }
 
-    public void assign(T taskId, boolean active) {
+    public void assign(TaskId taskId, boolean active) {
         if (active)
             activeTasks.add(taskId);
         else
