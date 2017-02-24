@@ -258,12 +258,12 @@ public class AbstractConfig {
                 try {
                     o = Utils.newInstance((String) klass, t);
                 } catch (ClassNotFoundException e) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
                 }
             } else if (klass instanceof Class<?>) {
                 o = Utils.newInstance((Class<?>) klass);
             } else
-                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)

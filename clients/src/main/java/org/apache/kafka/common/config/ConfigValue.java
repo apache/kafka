@@ -23,10 +23,10 @@ import java.util.Objects;
 
 public class ConfigValue {
 
-    private String name;
+    private final String name;
     private Object value;
     private List<Object> recommendedValues;
-    private List<String> errorMessages;
+    private final List<String> errorMessages;
     private boolean visible;
 
     public ConfigValue(String name) {
