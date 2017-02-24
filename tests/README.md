@@ -469,6 +469,13 @@ the test driver machine.
         $ cd kafka/tests
         $ ducktape kafkatest/tests
 
+* Update Worker VM
+
+If you change code in a branch on your driver VM, you need to update your worker VM to pick up this change:
+
+        $ ./gradlew systemTestLibs
+        $ vagrant rsync
+
 * To halt your workers without destroying persistent state, run `vagrant halt`. Run `vagrant destroy -f` to destroy all traces of your workers.
 
 Unit Tests
