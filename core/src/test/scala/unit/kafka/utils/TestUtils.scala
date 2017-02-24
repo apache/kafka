@@ -20,42 +20,40 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.concurrent.{Callable, Executors, TimeUnit}
-import java.util.Properties
+import java.nio.charset.Charset
 import java.security.cert.X509Certificate
+import java.util.Properties
+import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
-import charset.Charset
 
-import kafka.security.auth.{Acl, Authorizer, Resource}
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.utils.Utils._
-import org.apache.kafka.test.TestSslUtils
-
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import kafka.server._
-import kafka.producer._
-import kafka.message._
+import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
+import kafka.common.{Topic, TopicAndPartition}
 import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
-import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
-import kafka.common.TopicAndPartition
-import kafka.admin.AdminUtils
 import kafka.log._
+import kafka.message._
+import kafka.producer._
+import kafka.security.auth.{Acl, Authorizer, Resource}
+import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
+import kafka.server._
 import kafka.utils.ZkUtils._
-import org.junit.Assert._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.junit.Assert._
 
-import scala.collection.Map
 import scala.collection.JavaConverters._
+import scala.collection.Map
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
  * Utility functions to help with testing
@@ -268,6 +266,19 @@ object TestUtils extends Logging {
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, i)
     }.toMap
+  }
+
+  /**
+    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
+    * to all brokers.
+    */
+  def createOffsetsTopic(zkUtils: ZkUtils, servers: Seq[KafkaServer]): Unit = {
+    val server = servers.head
+    createTopic(zkUtils, Topic.GroupMetadataTopicName,
+      server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
+      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
+      servers,
+      server.groupCoordinator.offsetsTopicConfigs)
   }
 
   /**
