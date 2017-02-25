@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 
 import static org.junit.Assert.assertNotEquals;
@@ -266,6 +267,35 @@ public class BufferPoolTest {
         for (StressTestThread thread : threads)
             assertTrue("Thread should have completed all iterations successfully.", thread.success.get());
         assertEquals(totalMemory, pool.availableMemory());
+    }
+
+    @Test
+    public void testLargeAvailableMemory() throws Exception {
+        long memory = 20_000_000_000L;
+        int poolableSize = 2_000_000_000;
+        final AtomicInteger freeSize = new AtomicInteger(0);
+        BufferPool pool = new BufferPool(memory, poolableSize, metrics, time, metricGroup) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                // Ignore size to avoid OOM due to large buffers
+                return ByteBuffer.allocate(0);
+            }
+
+            @Override
+            protected int freeSize() {
+                return freeSize.get();
+            }
+        };
+        pool.allocate(poolableSize, 0);
+        assertEquals(18_000_000_000L, pool.availableMemory());
+        pool.allocate(poolableSize, 0);
+        assertEquals(16_000_000_000L, pool.availableMemory());
+
+        // Emulate `deallocate` by increasing `freeSize`
+        freeSize.incrementAndGet();
+        assertEquals(18_000_000_000L, pool.availableMemory());
+        freeSize.incrementAndGet();
+        assertEquals(20_000_000_000L, pool.availableMemory());
     }
 
     public static class StressTestThread extends Thread {
