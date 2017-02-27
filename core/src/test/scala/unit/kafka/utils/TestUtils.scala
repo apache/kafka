@@ -332,9 +332,9 @@ object TestUtils extends Logging {
   def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
               magicValue: Byte = LogEntry.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
-              pid: Long = 0,
-              epoch: Short = 0,
-              sequence: Int = 0): MemoryRecords = {
+              pid: Long = LogEntry.NO_PID,
+              epoch: Short = LogEntry.NO_EPOCH,
+              sequence: Int = LogEntry.NO_SEQUENCE): MemoryRecords = {
     val kafkaRecords = records.map(record => new KafkaRecord(record._3, record._1, record._2))
     val buf = ByteBuffer.allocate(EosLogEntry.sizeInBytes(kafkaRecords.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
@@ -344,7 +344,6 @@ object TestUtils extends Logging {
     }
     builder.build()
   }
-
 
   /**
    * Generate an array of random bytes

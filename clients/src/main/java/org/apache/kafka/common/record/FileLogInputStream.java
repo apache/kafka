@@ -249,6 +249,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public boolean isTransactional() {
+            loadUnderlyingEntry();
+            return underlying.isTransactional();
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;

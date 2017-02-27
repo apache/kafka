@@ -32,6 +32,29 @@ import java.util.Iterator;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
+/**
+ * LogEntry implementation for magic 2 and above. The schema is given below:
+ *
+ * LogEntry =>
+ *  FirstOffset => int64
+ *  Length => int32
+ *  CRC => int32
+ *  Magic => int8
+ *  Attributes => int16
+ *  LastOffsetDelta => int32
+ *  FirstTimestamp => int64
+ *  MaxTimestamp => int64
+ *  PID => int64
+ *  Epoch => int16
+ *  FirstSequence => int32
+ *  Records => Record1, Record2, … , RecordN
+ *
+ *  The current attributes are given below:
+ *
+ *  -----------------------------------------------------------------------------------------------
+ *  | Unused (5-16) | Transactional (bit 4) | Timestamp Type (bit 3) | Compression Type (bits 0-2) |
+ *  -----------------------------------------------------------------------------------------------
+ */
 public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
     static final int BASE_OFFSET_OFFSET = 0;
     static final int BASE_OFFSET_LENGTH = 8;
@@ -58,7 +81,8 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     static final int RECORDS_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
 
-    private static final int COMPRESSION_CODEC_MASK = 0x07;
+    private static final byte COMPRESSION_CODEC_MASK = 0x07;
+    private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
 
     private final ByteBuffer buffer;
 
@@ -139,6 +163,11 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     @Override
     public void writeTo(ByteBuffer buffer) {
         buffer.put(this.buffer.duplicate());
+    }
+
+    @Override
+    public boolean isTransactional() {
+        return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
     }
 
     private Iterator<LogRecord> compressedIterator() {
@@ -259,8 +288,8 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return buffer != null ? buffer.hashCode() : 0;
     }
 
-    private static byte computeAttributes(CompressionType type, TimestampType timestampType) {
-        byte attributes = 0;
+    private static byte computeAttributes(CompressionType type, TimestampType timestampType, boolean isTransactional) {
+        byte attributes = isTransactional ? TRANSACTIONAL_FLAG_MASK : 0;
         if (type.id > 0)
             attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
         return timestampType.updateAttributes(attributes);
@@ -277,13 +306,14 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                             long maxTimestamp,
                             long pid,
                             short epoch,
-                            int sequence) {
+                            int sequence,
+                            boolean isTransactional) {
         if (magic < 2)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
 
-        short attributes = computeAttributes(compressionType, timestampType);
+        short attributes = computeAttributes(compressionType, timestampType, isTransactional);
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);

@@ -59,6 +59,7 @@ public class MemoryRecordsBuilder {
     private final long pid;
     private final short epoch;
     private final int baseSequence;
+    private final boolean isTransactional;
     private final int writeLimit;
     private final int initialCapacity;
 
@@ -82,6 +83,10 @@ public class MemoryRecordsBuilder {
      * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
      * @param baseOffset The initial offset to use for
      * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
+     * @param pid The producer ID associated with the producer writing this record set
+     * @param epoch The epoch of the pid
+     * @param baseSequence The sequence number of the first record in this set
+     * @param isTransactional Whether or not the records are part of a transaction
      * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
      *                   when compression is used since size estimates are rough, and in the case that the first
      *                   record added exceeds the size).
@@ -95,9 +100,29 @@ public class MemoryRecordsBuilder {
                                 long pid,
                                 short epoch,
                                 int baseSequence,
+                                boolean isTransactional,
                                 int writeLimit) {
         if (magic > LogEntry.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
+
+        if (isTransactional) {
+            if (pid == LogEntry.NO_PID)
+                throw new IllegalArgumentException("Cannot write transactional messages without a valid PID");
+
+            if (magic < LogEntry.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
+        }
+
+        if (pid != LogEntry.NO_PID) {
+            if (epoch  < 0)
+                throw new IllegalArgumentException("Invalid negative epoch number");
+
+            if (baseSequence < 0)
+                 throw new IllegalArgumentException("Invalid negative sequence number used");
+
+            if (magic < LogEntry.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
+        }
 
         this.magic = magic;
         this.timestampType = timestampType;
@@ -112,6 +137,7 @@ public class MemoryRecordsBuilder {
         this.pid = pid;
         this.epoch = epoch;
         this.baseSequence = baseSequence;
+        this.isTransactional = isTransactional;
         this.writeLimit = writeLimit;
         this.initialCapacity = buffer.capacity();
 
@@ -208,7 +234,7 @@ public class MemoryRecordsBuilder {
         }
 
         EosLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, pid, epoch, baseSequence);
+                baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional);
 
         buffer.position(pos);
     }

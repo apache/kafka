@@ -23,22 +23,6 @@ import java.nio.ByteBuffer;
  * a log entry consisted always of a single record if no compression was enabled, but could contain
  * many records otherwise. Newer versions (magic 2 and above will generally contain many records regardless
  * of compression.
- *
- * For magic 2, the following schema is used:
- *
- * LogEntry =>
- *  FirstOffset => int64
- *  Length => int32
- *  CRC => int32
- *  Magic => int8
- *  Attributes => int16
- *  LastOffsetDelta => int32
- *  FirstTimestamp => int64
- *  MaxTimestamp => int64
- *  PID => int64
- *  Epoch => int16
- *  FirstSequence => int32
- *  Records => Record1, Record2, … , RecordN
  */
 public interface LogEntry extends Iterable<LogRecord> {
 
@@ -183,6 +167,12 @@ public interface LogEntry extends Iterable<LogRecord> {
      * @param buffer The buffer to write the entry to
      */
     void writeTo(ByteBuffer buffer);
+
+    /**
+     * Whether or not this log entry is part of a transaction.
+     * @return true if it is, false otherwise
+     */
+    boolean isTransactional();
 
     /**
      * A mutable log entry is one that can be modified in place (without copying).

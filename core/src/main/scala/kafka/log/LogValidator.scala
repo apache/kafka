@@ -97,6 +97,8 @@ private[kafka] object LogValidator extends Logging {
       offsetCounter.value, now, pid, epoch, sequence)
 
     for (entry <- records.entries.asScala) {
+      ensureNotTransactional(entry)
+
       for (record <- entry.asScala) {
         ensureNotControlRecord(record)
         validateKey(record, compactedTopic)
@@ -125,6 +127,8 @@ private[kafka] object LogValidator extends Logging {
     val initialOffset = offsetCounter.value
 
     for (entry <- records.entries.asScala) {
+      ensureNotTransactional(entry)
+
       val baseOffset = offsetCounter.value
       for (record <- entry.asScala) {
         record.ensureValid()
@@ -197,7 +201,8 @@ private[kafka] object LogValidator extends Logging {
       val validatedRecords = new mutable.ArrayBuffer[LogRecord]
 
       for (entry <- records.entries.asScala) {
-        // TODO: Do message set validation?
+        ensureNotTransactional(entry)
+
         for (record <- entry.asScala) {
           if (!record.hasMagic(entry.magic))
             throw new InvalidRecordException(s"Log record magic does not match outer magic ${entry.magic}")
@@ -280,6 +285,10 @@ private[kafka] object LogValidator extends Logging {
       messageSizeMaybeChanged = true)
   }
 
+  private def ensureNotTransactional(entry: LogEntry) {
+    if (entry.isTransactional)
+      throw new InvalidRecordException("Transactional messages are not currently supported")
+  }
 
   private def ensureNotControlRecord(record: LogRecord) {
     // Until we have implemented transaction support, we do not permit control records to be written

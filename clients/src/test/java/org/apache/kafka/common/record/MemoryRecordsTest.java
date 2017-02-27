@@ -38,15 +38,24 @@ public class MemoryRecordsTest {
     private CompressionType compression;
     private byte magic;
     private long firstOffset;
-    private long pid = 134234L;
-    private short epoch = 28;
-    private int firstSequence = 777;
+    private long pid;
+    private short epoch;
+    private int firstSequence;
     private long logAppendTime = System.currentTimeMillis();
 
     public MemoryRecordsTest(byte magic, long firstOffset, CompressionType compression) {
         this.magic = magic;
         this.compression = compression;
         this.firstOffset = firstOffset;
+        if (magic >= LogEntry.MAGIC_VALUE_V2) {
+            pid = 134234L;
+            epoch = 28;
+            firstSequence = 777;
+        } else {
+            pid = LogEntry.NO_PID;
+            epoch = LogEntry.NO_EPOCH;
+            firstSequence = LogEntry.NO_SEQUENCE;
+        }
     }
 
     @Test
