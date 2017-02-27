@@ -78,8 +78,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    val ret = scala.collection.mutable.Map[String, scala.collection.Map[Int, Seq[Int]]]()
-    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    val ret = Map(Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 

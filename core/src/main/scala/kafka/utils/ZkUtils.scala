@@ -237,7 +237,7 @@ class ZkUtils(val zkClient: ZkClient,
     brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
   }
 
-  def getLeaderAndIsrForPartition(topic: String, partition: Int):Option[LeaderAndIsr] = {
+  def getLeaderAndIsrForPartition(topic: String, partition: Int): Option[LeaderAndIsr] = {
     ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topic, partition).map(_.leaderAndIsr)
   }
 
@@ -368,7 +368,7 @@ class ZkUtils(val zkClient: ZkClient,
     topicDirs.consumerOwnerDir + "/" + partition
   }
 
-
+  //  TODO: Why version is always 1, can we move this method to LeaderAndIsr?
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
     Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
                     "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
@@ -659,30 +659,27 @@ class ZkUtils(val zkClient: ZkClient,
     ret
   }
 
-  def getPartitionAssignmentForTopics(topics: Seq[String]): mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
-    val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
-    topics.foreach{ topic =>
-      val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
-      val partitionMap = jsonPartitionMapOpt match {
-        case Some(jsonPartitionMap) =>
-          Json.parseFull(jsonPartitionMap) match {
-            case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
-              case Some(replicaMap) =>
-                val m1 = replicaMap.asInstanceOf[Map[String, Seq[Int]]]
-                m1.map(p => (p._1.toInt, p._2))
-              case None => Map[Int, Seq[Int]]()
-            }
-            case None => Map[Int, Seq[Int]]()
-          }
-        case None => Map[Int, Seq[Int]]()
+  def getPartitionAssignmentForTopics(topics: Seq[String]): immutable.Map[String, immutable.Map[Int, Seq[Int]]] = {
+    val ret = topics.map { topic =>
+      val partitionMapOpt = for {
+        jsonPartitionMap <- readDataMaybeNull(getTopicPath(topic))._1
+        m <- Json.parseFull(jsonPartitionMap)
+        replicaMap <- m.asInstanceOf[immutable.Map[String, Any]].get("partitions")
+      } yield {
+        val m1 = replicaMap.asInstanceOf[immutable.Map[String, Seq[Int]]]
+        m1.map { case (partition, replicas) => partition.toInt -> replicas }
       }
-      debug("Partition map for /brokers/topics/%s is %s".format(topic, partitionMap))
-      ret += (topic -> partitionMap)
+
+      val partitionMap = partitionMapOpt.getOrElse(immutable.Map.empty[Int, Seq[Int]])
+      debug(s"Partition map for /brokers/topics/$topic is $partitionMap")
+
+      topic -> partitionMap
     }
-    ret
+
+    ret.toMap
   }
 
-  def getPartitionsForTopics(topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
+  def getPartitionsForTopics(topics: Seq[String]): immutable.Map[String, Seq[Int]] = {
     getPartitionAssignmentForTopics(topics).map {
       case (topic, partitionMap) =>
         debug(s"partition assignment of /brokers/topics/$topic is $partitionMap")

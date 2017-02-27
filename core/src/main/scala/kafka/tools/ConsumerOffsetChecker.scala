@@ -38,7 +38,6 @@ object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
   private val offsetMap: mutable.Map[TopicAndPartition, Long] = mutable.Map()
-  private var topicPidMap: immutable.Map[String, Seq[Int]] = immutable.Map()
 
   private def getConsumer(zkUtils: ZkUtils, bid: Int): Option[SimpleConsumer] = {
     try {
@@ -79,7 +78,7 @@ object ConsumerOffsetChecker extends Logging {
     }
   }
 
-  private def processTopic(zkUtils: ZkUtils, group: String, topic: String) {
+  private def processTopic(topicPidMap: Map[String, Seq[Int]], zkUtils: ZkUtils, group: String, topic: String): Unit = {
     topicPidMap.get(topic) match {
       case Some(pids) =>
         pids.sorted.foreach {
@@ -154,7 +153,7 @@ object ConsumerOffsetChecker extends Logging {
         case None => zkUtils.getChildren(groupDirs.consumerGroupDir +  "/owners").toList
       }
 
-      topicPidMap = immutable.Map(zkUtils.getPartitionsForTopics(topicList).toSeq:_*)
+      val topicPidMap = zkUtils.getPartitionsForTopics(topicList)
       val topicPartitions = topicPidMap.flatMap { case(topic, partitionSeq) => partitionSeq.map(TopicAndPartition(topic, _)) }.toSeq
       val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
 
@@ -189,7 +188,7 @@ object ConsumerOffsetChecker extends Logging {
 
       println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format("Group", "Topic", "Pid", "Offset", "logSize", "Lag", "Owner"))
       topicList.sorted.foreach {
-        topic => processTopic(zkUtils, group, topic)
+        topic => processTopic(topicPidMap, zkUtils, group, topic)
       }
 
       if (options.has("broker-info"))

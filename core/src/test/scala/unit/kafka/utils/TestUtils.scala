@@ -681,31 +681,25 @@ object TestUtils extends Logging {
     new ProducerRequest(correlationId, clientId, acks.toShort, timeout, collection.mutable.Map(data:_*))
   }
 
-  def makeLeaderForPartition(zkUtils: ZkUtils, topic: String,
+  def makeLeaderForPartition(zkUtils: ZkUtils,
+                             topic: String,
                              leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
-                             controllerEpoch: Int) {
-    leaderPerPartitionMap.foreach
-    {
-      leaderForPartition => {
-        val partition = leaderForPartition._1
-        val leader = leaderForPartition._2
+                             controllerEpoch: Int): Unit = {
+    leaderPerPartitionMap.foreach {
+      case (partition, leader) =>
         try{
-          val currentLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topic, partition)
-          var newLeaderAndIsr: LeaderAndIsr = null
-          if(currentLeaderAndIsrOpt.isEmpty)
-            newLeaderAndIsr = LeaderAndIsr(leader, List(leader))
-          else{
-            newLeaderAndIsr = currentLeaderAndIsrOpt.get
-            newLeaderAndIsr.leader = leader
-            newLeaderAndIsr.leaderEpoch += 1
-            newLeaderAndIsr.zkVersion += 1
+          val newLeaderAndIsr = zkUtils.getLeaderAndIsrForPartition(topic, partition) match {
+            case Some(current) => current.newLeader(leader)
+            case None => LeaderAndIsr(leader, List(leader))
           }
-          zkUtils.updatePersistentPath(getTopicPartitionLeaderAndIsrPath(topic, partition),
-            zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
+
+          zkUtils.updatePersistentPath(
+            getTopicPartitionLeaderAndIsrPath(topic, partition),
+            zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+          )
         } catch {
-          case oe: Throwable => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
+          case oe: Throwable => error(s"Error while electing leader for partition [$topic, $partition]", oe)
         }
-      }
     }
   }
 

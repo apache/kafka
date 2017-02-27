@@ -793,7 +793,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     }.keys
     reassignedPartitions.foreach(p => removePartitionFromReassignedPartitions(p))
     val partitionsToReassign = partitionsBeingReassigned -- reassignedPartitions
-//    TODO: Mutation here!
     controllerContext.partitionsBeingReassigned ++= partitionsToReassign
     info(s"Partitions being reassigned: $partitionsBeingReassigned")
     info(s"Partitions already reassigned: $reassignedPartitions")
@@ -1099,11 +1098,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
             val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
               newLeaderAndIsr, epoch, leaderAndIsr.zkVersion)
 
-            newLeaderAndIsr.zkVersion = newVersion
-            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
+            val newNewLeaderAndIsr = newLeaderAndIsr.newZkVersion(newVersion)
+            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newNewLeaderAndIsr, epoch))
             controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
             if (updateSucceeded)
-              info("New leader and ISR for partition %s is %s".format(topicAndPartition, newLeaderAndIsr.toString()))
+              info(s"New leader and ISR for partition $topicAndPartition is $newNewLeaderAndIsr")
             updateSucceeded
           } else {
             warn("Cannot remove replica %d from ISR of partition %s since it is not in the ISR. Leader = %d ; ISR = %s"
@@ -1147,17 +1146,17 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
           // assigned replica list
           val newLeaderAndIsr = leaderAndIsr.newEpochAndZkVersion
           // update the new leadership decision in zookeeper or retry
-          val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic,
+          val (updateSucceeded, newZkVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic,
             partition, newLeaderAndIsr, epoch, leaderAndIsr.zkVersion)
 
-          newLeaderAndIsr.zkVersion = newVersion
-          finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
+          val newNewLeaderAndIsr = newLeaderAndIsr.newZkVersion(newZkVersion)
+          finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newNewLeaderAndIsr, epoch))
           if (updateSucceeded)
-            info("Updated leader epoch for partition %s to %d".format(topicAndPartition, newLeaderAndIsr.leaderEpoch))
+            info(s"Updated leader epoch for partition $topicAndPartition to ${newNewLeaderAndIsr.leaderEpoch}")
           updateSucceeded
         case None =>
-          throw new IllegalStateException(("Cannot update leader epoch for partition %s as leaderAndIsr path is empty. " +
-            "This could mean we somehow tried to reassign a partition that doesn't exist").format(topicAndPartition))
+          throw new IllegalStateException(s"Cannot update leader epoch for partition $topicAndPartition as leaderAndIsr " +
+            "path is empty. This could mean we somehow tried to reassign a partition that doesn't exist")
           true
       }
     }
@@ -1374,32 +1373,28 @@ class IsrChangeNotificationListener(protected val controller: KafkaController) e
     controller.sendUpdateMetadataRequest(liveBrokers, topicAndPartitions)
   }
 
-  private def getTopicAndPartition(child: String): Set[TopicAndPartition] = {
+  private def getTopicAndPartition(child: String): immutable.Set[TopicAndPartition] = {
     val changeZnode: String = ZkUtils.IsrChangeNotificationPath + "/" + child
     val (jsonOpt, _) = controller.controllerContext.zkUtils.readDataMaybeNull(changeZnode)
-    if (jsonOpt.isDefined) {
-      val json = Json.parseFull(jsonOpt.get)
-
-      json match {
-        case Some(m) =>
-          val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
-          val isrChanges = m.asInstanceOf[Map[String, Any]]
-          val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
-          topicAndPartitionList.foreach {
-            tp =>
-              val topicAndPartition = tp.asInstanceOf[Map[String, Any]]
-              val topic = topicAndPartition("topic").asInstanceOf[String]
-              val partition = topicAndPartition("partition").asInstanceOf[Int]
-              topicAndPartitions += TopicAndPartition(topic, partition)
-          }
-          topicAndPartitions
-        case None =>
-          error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
-          Set.empty
+    jsonOpt.toSet[String]
+      .flatMap { json =>
+        Json.parseFull(json) match {
+          case Some(m) =>
+            val isrChanges = m.asInstanceOf[Map[String, Any]]
+            val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
+            topicAndPartitionList.toSet[Any].map {
+              tp =>
+                val topicAndPartition = tp.asInstanceOf[Map[String, Any]]
+                val topic = topicAndPartition("topic").asInstanceOf[String]
+                val partition = topicAndPartition("partition").asInstanceOf[Int]
+                TopicAndPartition(topic, partition)
+            }
+          case None =>
+//            TODO: If we get rid of this message, whole method can be rewritten via for comprehension
+            error(s"Invalid topic and partition JSON: $json in ZK: $changeZnode")
+            immutable.Set.empty[TopicAndPartition]
+        }
       }
-    } else {
-      Set.empty
-    }
   }
 }
 
@@ -1443,7 +1438,7 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
   def doHandleDataDeleted(dataPath: String) {}
 }
 
-//TODO: Very dangerous, if put into map as key and later any var will change, magic will happen!!!
+//TODO: Change to val, can newReplicas be Set?
 case class ReassignedPartitionsContext(newReplicas: Seq[Int],
                                        var isrChangeListener: ReassignedPartitionsIsrChangeListener = null)
 

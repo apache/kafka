@@ -68,9 +68,7 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-//    TODO: Get rid of mutable and collection
-    val ret = scala.collection.mutable.Map[String, scala.collection.Map[Int, Seq[Int]]]()
-    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    val ret = Map(Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
     zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(Topic.GroupMetadataTopicName))).andReturn(ret)

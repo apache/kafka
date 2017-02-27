@@ -103,8 +103,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
 
   def removeFetcherForPartitions(partitions: Set[TopicPartition]) {
     mapLock synchronized {
-      for (fetcher <- fetcherThreadMap.values)
-        fetcher.removePartitions(partitions)
+      fetcherThreadMap.valuesIterator.foreach(_.removePartitions(partitions))
     }
     info(s"Removed fetcher for partitions ${partitions.mkString(",")}")
   }

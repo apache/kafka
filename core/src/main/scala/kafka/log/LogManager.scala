@@ -67,6 +67,7 @@ class LogManager(val logDirs: Array[File],
   loadLogs()
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
+//  TODO: Make Option[LogCleaner]
   val cleaner: LogCleaner =
     if(cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
@@ -289,21 +290,22 @@ class LogManager(val logDirs: Array[File],
    *
    * @param partitionOffsets Partition logs that need to be truncated
    */
-  def truncateTo(partitionOffsets: Map[TopicPartition, Long]) {
-    for ((topicPartition, truncateOffset) <- partitionOffsets) {
-      val log = logs.get(topicPartition)
-      // If the log does not exist, skip it
-      if (log != null) {
-        //May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
-        if (needToStopCleaner && cleaner != null)
-          cleaner.abortAndPauseCleaning(topicPartition)
-        log.truncateTo(truncateOffset)
-        if (needToStopCleaner && cleaner != null) {
-          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
-          cleaner.resumeCleaning(topicPartition)
+  def truncateTo(partitionOffsets: Map[TopicPartition, Long]): Unit = {
+    partitionOffsets.foreach {
+      case (topicPartition, truncateOffset) =>
+        val log = logs.get(topicPartition)
+        // If the log does not exist, skip it
+        if (log != null) {
+          //May need to abort and pause the cleaning of the log, and resume after truncation is done.
+          val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
+          if (needToStopCleaner && cleaner != null)
+            cleaner.abortAndPauseCleaning(topicPartition)
+          log.truncateTo(truncateOffset)
+          if (needToStopCleaner && cleaner != null) {
+            cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+            cleaner.resumeCleaning(topicPartition)
+          }
         }
-      }
     }
     checkpointRecoveryPointOffsets()
   }

@@ -643,13 +643,13 @@ class GroupMetadataManager(val brokerId: Int,
    * Gets the partition count of the offsets topic from ZooKeeper.
    * If the topic does not exist, the configured partition count is returned.
    */
-  private def getOffsetsTopicPartitionCount = {
+  private def getOffsetsTopicPartitionCount: Int = {
     val topic = Topic.GroupMetadataTopicName
-    val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
-    if (topicData(topic).nonEmpty)
-      topicData(topic).size
-    else
-      config.offsetsTopicNumPartitions
+    zkUtils.getPartitionAssignmentForTopics(Seq(topic))
+      .get(topic)
+      .filter(_.nonEmpty)
+      .map(_.size)
+      .getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

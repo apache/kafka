@@ -32,22 +32,24 @@ object LeaderAndIsr {
 
   def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
 
-  def apply(partitionState: PartitionState): LeaderAndIsr = {
+  def apply(partitionState: PartitionState): LeaderAndIsr =
     LeaderAndIsr(
       partitionState.leader,
       partitionState.leaderEpoch,
       partitionState.isr.asScala.map(_.toInt).toList,
       partitionState.zkVersion
     )
-  }
 }
 
-//TODO: Do not use vars!!!, change isr to Set[Int]
-case class LeaderAndIsr(var leader: Int,
-                        var leaderEpoch: Int,
-                        var isr: List[Int],
-                        var zkVersion: Int) {
-  def newLeader(newLeader: Int) = LeaderAndIsr(newLeader, leaderEpoch + 1, isr, zkVersion + 1)
+//TODO: Can we change isr to Set[Int]?
+case class LeaderAndIsr(leader: Int,
+                        leaderEpoch: Int,
+                        isr: List[Int],
+                        zkVersion: Int) {
+  def newLeader(leader: Int) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+
+//  TODO: Remove this method.
+  def newZkVersion(zkVersion: Int) = this.copy(zkVersion = zkVersion)
 
   def newLeaderAndIsr(newLeader: Int, newIsr: List[Int]) =
     LeaderAndIsr(newLeader, leaderEpoch + 1, newIsr, zkVersion + 1)
@@ -61,12 +63,10 @@ case class LeaderAndIsr(var leader: Int,
 
 case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                               allReplicas: Set[Int]) {
-  def replicationFactor = allReplicas.size
-
   override def toString: String = {
     val partitionStateInfo = new StringBuilder
     partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
-    partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
+    partitionStateInfo.append(",ReplicationFactor:" + allReplicas.size + ")")
     partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
     partitionStateInfo.toString()
   }

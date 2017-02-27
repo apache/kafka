@@ -469,13 +469,13 @@ class Partition(val topic: String,
 
   private def updateIsr(newIsr: Set[Replica]) {
     val newLeaderAndIsr = LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(r => r.brokerId).toList, zkVersion)
-    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partitionId,
+    val (updateSucceeded, newZkVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partitionId,
       newLeaderAndIsr, controllerEpoch, zkVersion)
 
-    if(updateSucceeded) {
+    if (updateSucceeded) {
       replicaManager.recordIsrChange(topicPartition)
       inSyncReplicas = newIsr
-      zkVersion = newVersion
+      zkVersion = newZkVersion
       trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newIsr.mkString(","), zkVersion))
     } else {
       info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))

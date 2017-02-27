@@ -658,12 +658,10 @@ object AdminUtils extends Logging with AdminUtilities {
     if (zkUtils.pathExists(getTopicPath(topic))) {
       val topicPartitionAssignment = zkUtils.getPartitionAssignmentForTopics(List(topic))(topic)
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
-      val partitionMetadata = sortedPartitions.map { partitionMap =>
-        val partition = partitionMap._1
-        val replicas = partitionMap._2
+      val partitionMetadata = sortedPartitions.map { case (partition, replicas) =>
         val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partition)
         val leader = zkUtils.getLeaderForPartition(topic, partition)
-        debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
+        debug(s"replicas = $replicas, in sync replicas = $inSyncReplicas, leader = $leader")
 
         var leaderInfo: Node = Node.noNode()
         var replicaInfo: Seq[Node] = Nil
@@ -678,12 +676,14 @@ object AdminUtils extends Logging with AdminUtilities {
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
+
           try {
             replicaInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, replicas).map(_.getNode(listenerName))
             isrInfo = getBrokerInfoFromCache(zkUtils, cachedBrokerInfo, inSyncReplicas).map(_.getNode(listenerName))
           } catch {
             case e: Throwable => throw new ReplicaNotAvailableException(e)
           }
+
           if (replicaInfo.size < replicas.size)
             throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
               replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
@@ -691,6 +691,7 @@ object AdminUtils extends Logging with AdminUtilities {
             throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
               inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
           new MetadataResponse.PartitionMetadata(Errors.NONE, partition, leaderInfo, replicaInfo.asJava, isrInfo.asJava)
+
         } catch {
           case e: Throwable =>
             debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
@@ -707,6 +708,7 @@ object AdminUtils extends Logging with AdminUtilities {
   private def getBrokerInfoFromCache(zkUtils: ZkUtils,
                                      cachedBrokerInfo: scala.collection.mutable.Map[Int, Broker],
                                      brokerIds: Seq[Int]): Seq[Broker] = {
+//    TODO: This buffer is ignored, can be deleted?
     var failedBrokerIds: ListBuffer[Int] = new ListBuffer()
     val brokerMetadata = brokerIds.map { id =>
       val optionalBrokerInfo = cachedBrokerInfo.get(id)

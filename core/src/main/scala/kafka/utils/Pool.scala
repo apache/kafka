@@ -78,7 +78,8 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   }
 
   def contains(id: K): Boolean = pool.containsKey(id)
-  
+
+//  TODO: Return Option[V]
   def get(key: K): V = pool.get(key)
   
   def remove(key: K): V = pool.remove(key)
