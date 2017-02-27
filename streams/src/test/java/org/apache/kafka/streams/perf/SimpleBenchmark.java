@@ -459,10 +459,10 @@ public class SimpleBenchmark {
      *                   when this produce step is part of another benchmark that produces its own stats
      */
     private void produce(String topic, int valueSizeBytes, String clientId, int numRecords, boolean sequential,
-                        int upperRange, boolean printStats) throws Exception {
+                         int upperRange, boolean printStats) throws Exception {
 
-	processedRecords = 0;
-	processedBytes = 0;
+        processedRecords = 0;
+        processedBytes = 0;
         if (sequential) {
             if (upperRange < numRecords) throw new Exception("UpperRange must be >= numRecords");
         }
@@ -488,15 +488,15 @@ public class SimpleBenchmark {
             producer.send(new ProducerRecord<>(topic, key, value));
             if (sequential) key++;
             else key = rand.nextInt(upperRange);
-	    processedRecords++;
-	    processedBytes += value.length + Integer.SIZE;
+            processedRecords++;
+            processedBytes += value.length + Integer.SIZE;
         }
         producer.close();
 
         long endTime = System.currentTimeMillis();
 
         if (printStats) {
-	    printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", (endTime - startTime));
+            printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
         }
     }
 
@@ -540,7 +540,7 @@ public class SimpleBenchmark {
         long endTime = System.currentTimeMillis();
 
         consumer.close();
-        printResults("Consumer Performance [records/latency/rec-sec/MB-sec read]: ", (endTime - startTime));
+        printResults("Consumer Performance [records/latency/rec-sec/MB-sec read]: ", endTime - startTime);
     }
 
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {

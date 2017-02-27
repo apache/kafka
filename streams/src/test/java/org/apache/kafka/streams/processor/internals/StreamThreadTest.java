@@ -486,7 +486,7 @@ public class StreamThreadTest {
             stateDir3.mkdir();
             extraDir.mkdir();
 
-            MockTime mockTime = new MockTime();
+            final MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
@@ -496,8 +496,8 @@ public class StreamThreadTest {
                                                    0) {
 
                 @Override
-                public void maybeClean() {
-                    super.maybeClean();
+                public void maybeClean(long now) {
+                    super.maybeClean(now);
                 }
 
                 @Override
@@ -548,7 +548,7 @@ public class StreamThreadTest {
 
             // all directories should still exit before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertTrue(stateDir3.exists());
@@ -556,7 +556,7 @@ public class StreamThreadTest {
 
             // all state directories except for task task2 & task3 will be removed. the extra directory should still exists
             mockTime.sleep(11L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -586,7 +586,7 @@ public class StreamThreadTest {
 
             // all state directories for task task1 & task2 still exist before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -594,7 +594,7 @@ public class StreamThreadTest {
 
             // all state directories for task task1 & task2 are removed
             mockTime.sleep(11L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertFalse(stateDir1.exists());
             assertFalse(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -616,7 +616,7 @@ public class StreamThreadTest {
 
             StreamsConfig config = new StreamsConfig(props);
 
-            MockTime mockTime = new MockTime();
+            final MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
@@ -626,8 +626,8 @@ public class StreamThreadTest {
                                                    0) {
 
                 @Override
-                public void maybeCommit() {
-                    super.maybeCommit();
+                public void maybeCommit(long now) {
+                    super.maybeCommit(now);
                 }
 
                 @Override
@@ -658,14 +658,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
@@ -673,14 +673,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval, again
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval, again
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
