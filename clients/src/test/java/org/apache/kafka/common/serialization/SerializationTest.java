@@ -193,6 +193,25 @@ public class SerializationTest {
     }
 
     @Test
+    public void floatSerdeShouldPreserveNaNValues() {
+        final int someNaNAsIntBits = 0x7f800001;
+        final float someNaN = Float.intBitsToFloat(someNaNAsIntBits);
+        final int anotherNaNAsIntBits = 0x7f800002;
+        final float anotherNaN = Float.intBitsToFloat(anotherNaNAsIntBits);
+
+        final Serde<Float> serde = Serdes.Float();
+        // Because of NaN semantics we must assert based on the raw int bits.
+        final Float roundtrip = serde.deserializer().deserialize(topic,
+            serde.serializer().serialize(topic, someNaN));
+        assertThat(Float.floatToRawIntBits(roundtrip), equalTo(someNaNAsIntBits));
+        final Float otherRoundtrip = serde.deserializer().deserialize(topic,
+            serde.serializer().serialize(topic, anotherNaN));
+        assertThat(Float.floatToRawIntBits(otherRoundtrip), equalTo(anotherNaNAsIntBits));
+
+        serde.close();
+    }
+
+    @Test
     public void testDoubleSerializer() {
         Double[] doubles = new Double[]{
             5678567.12312d,
