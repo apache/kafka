@@ -62,7 +62,7 @@ public class StreamsMetadataStateTest {
     private TopicPartition topic4P0;
     private List<PartitionInfo> partitionInfos;
     private Cluster cluster;
-    private final String globalTable = "global-table";;
+    private final String globalTable = "global-table";
     private StreamPartitioner<String, Object> partitioner;
 
     @Before
@@ -200,8 +200,9 @@ public class StreamsMetadataStateTest {
         final StreamsMetadata expected = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
                 Collections.singleton(topic3P0));
 
-        final StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key",
-                Serdes.String().serializer());
+        final StreamsMetadata actual = discovery.getMetadataWithKey("table-three",
+                                                                    "the-key",
+                                                                    Serdes.String().serializer());
 
         assertEquals(expected, actual);
     }

@@ -16,14 +16,11 @@
               files="KerberosLogin.java"/>
 
     <suppress checks="ParameterNumber"
-              files="NetworkClient.java"
-              lines="132"/>
+              files="NetworkClient.java"/>
     <suppress checks="ParameterNumber"
-              files="KafkaConsumer.java"
-              lines="722"/>
+              files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
-              files="ConsumerCoordinator.java"
-              lines="91"/>
+              files="ConsumerCoordinator.java"/>
     <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
@@ -98,8 +95,7 @@
               files="KafkaConfigBackingStore.java"/>
 
     <suppress checks="ParameterNumber"
-              files="WorkerSourceTask.java"
-              lines="79"/>
+              files="WorkerSourceTask.java"/>
     <suppress checks="ParameterNumber"
               files="WorkerCoordinator.java"/>
     <suppress checks="ParameterNumber"
