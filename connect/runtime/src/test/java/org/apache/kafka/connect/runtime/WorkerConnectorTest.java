@@ -20,6 +20,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.EasyMockSupport;
@@ -55,6 +56,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Mock Connector connector;
     @Mock ConnectorContext ctx;
     @Mock ConnectorStatus.Listener listener;
+    @Mock OffsetStorageReader offsetStorageReader;
 
     @Before
     public void setup() {
@@ -85,7 +87,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertFailedMetric(workerConnector);
@@ -115,7 +117,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertFailedMetric(workerConnector);
@@ -149,7 +151,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -186,7 +188,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -225,7 +227,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -257,7 +259,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -290,7 +292,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -326,7 +328,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -361,7 +363,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);
@@ -400,7 +402,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, ctx, metrics, listener, offsetStorageReader);
 
         workerConnector.initialize(connectorConfig);
         assertInitializedMetric(workerConnector);

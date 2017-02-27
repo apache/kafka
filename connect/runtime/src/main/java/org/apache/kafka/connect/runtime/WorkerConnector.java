@@ -21,6 +21,9 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.sink.SinkConnectorContext;
+import org.apache.kafka.connect.source.SourceConnectorContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,41 +61,40 @@ public class WorkerConnector {
 
     private Map<String, String> config;
     private State state;
+    private final OffsetStorageReader offsetStorageReader;
 
-    public WorkerConnector(String connName,
-                           Connector connector,
-                           ConnectorContext ctx,
-                           ConnectMetrics metrics,
-                           ConnectorStatus.Listener statusListener) {
+    public WorkerConnector(final String connName,
+                           final Connector connector,
+                           final ConnectorContext ctx,
+                           final ConnectMetrics metrics,
+                           final ConnectorStatus.Listener statusListener,
+                           final OffsetStorageReader offsetStorageReader) {
         this.connName = connName;
         this.ctx = ctx;
         this.connector = connector;
         this.state = State.INIT;
         this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
+        this.offsetStorageReader = offsetStorageReader;
     }
 
     public void initialize(ConnectorConfig connectorConfig) {
         try {
             this.config = connectorConfig.originalsStrings();
+
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
             }
 
-            connector.initialize(new ConnectorContext() {
-                @Override
-                public void requestTaskReconfiguration() {
-                    ctx.requestTaskReconfiguration();
-                }
+            final ConnectorContext delegateCtx = new DelegateToWorkerConnectorContext();
 
-                @Override
-                public void raiseError(Exception e) {
-                    log.error("{} Connector raised an error", WorkerConnector.this, e);
-                    onFailure(e);
-                    ctx.raiseError(e);
-                }
-            });
+            if (isSinkConnector()) {
+                SinkConnectorConfig.validate(config);
+                connector.initialize(new DelegateSinkConnectorContext(delegateCtx));
+            } else {
+                connector.initialize(new DelegateSourceConnectorContext(delegateCtx, offsetStorageReader));
+            }
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
             onFailure(t);
@@ -317,6 +319,73 @@ public class WorkerConnector {
 
         protected MetricGroup metricGroup() {
             return metricGroup;
+        }
+    }
+
+    private class DelegateToWorkerConnectorContext implements ConnectorContext {
+
+        @Override
+        public void requestTaskReconfiguration() {
+            WorkerConnector.this.ctx.requestTaskReconfiguration();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            log.error("{} Connector raised an error", WorkerConnector.this, e);
+            onFailure(e);
+            WorkerConnector.this.ctx.raiseError(e);
+        }
+    }
+
+    /**
+     * An internal SinkConnectorContext that delegates to worker connector.
+     */
+    private static class DelegateSinkConnectorContext implements SinkConnectorContext {
+
+        private final ConnectorContext delegateCtx;
+
+        DelegateSinkConnectorContext(final ConnectorContext delegateCtx) {
+            this.delegateCtx = delegateCtx;
+        }
+
+        @Override
+        public void requestTaskReconfiguration() {
+            delegateCtx.requestTaskReconfiguration();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            delegateCtx.raiseError(e);
+        }
+    }
+
+    /**
+     * An internal SourceConnectorContext that delegates to worker connector.
+     */
+    private static class DelegateSourceConnectorContext implements SourceConnectorContext {
+
+        private final ConnectorContext delegateCtx;
+        private final OffsetStorageReader offsetStorageReader;
+
+        DelegateSourceConnectorContext(final ConnectorContext delegateCtx,
+                                       final OffsetStorageReader offsetStorageReader) {
+            this.delegateCtx = delegateCtx;
+            this.offsetStorageReader = offsetStorageReader;
+        }
+
+        @Override
+        public void requestTaskReconfiguration() {
+            delegateCtx.requestTaskReconfiguration();
+        }
+
+        @Override
+        public void raiseError(Exception e) {
+            delegateCtx.raiseError(e);
+        }
+
+        @Override
+        public OffsetStorageReader offsetStorageReader() {
+            return offsetStorageReader;
         }
     }
 }

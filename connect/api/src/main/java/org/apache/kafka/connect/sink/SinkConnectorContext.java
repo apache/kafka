@@ -16,30 +16,10 @@
  */
 package org.apache.kafka.connect.sink;
 
-import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.ConnectorContext;
 
 /**
- * SinkConnectors implement the Connector interface to send Kafka data to another system.
+ * A context to allow a {@link SinkConnector} to interact with the Kafka Connect runtime.
  */
-public abstract class SinkConnector extends Connector {
-
-    /**
-     * <p>
-     * Configuration key for the list of input topics for this connector.
-     * </p>
-     * <p>
-     * Usually this setting is only relevant to the Kafka Connect framework, but is provided here for
-     * the convenience of Connector developers if they also need to know the set of topics.
-     * </p>
-     */
-    public static final String TOPICS_CONFIG = "topics";
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected SinkConnectorContext context() {
-        return (SinkConnectorContext) context;
-    }
-
+public interface SinkConnectorContext extends ConnectorContext {
 }

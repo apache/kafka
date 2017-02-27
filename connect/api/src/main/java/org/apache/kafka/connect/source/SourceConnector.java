@@ -24,4 +24,11 @@ import org.apache.kafka.connect.connector.Connector;
  */
 public abstract class SourceConnector extends Connector {
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    protected SourceConnectorContext context() {
+        return (SourceConnectorContext) context;
+    }
 }
