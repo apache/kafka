@@ -47,6 +47,7 @@ import java.io.File;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -252,9 +253,12 @@ public class ProcessorTopologyTest {
         driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, 1000L, "key1", "value1");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, 2000L, "key2", "value2");
-        assertNextOutputRecord(OUTPUT_TOPIC_1, 3000L, "key3", "value3");
+        assertEquals(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                new ProducerRecord<>(OUTPUT_TOPIC_1, null, 1000L, "key1", "value1"));
+        assertEquals(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                new ProducerRecord<>(OUTPUT_TOPIC_1, null, 2000L, "key2", "value2"));
+        assertEquals(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                new ProducerRecord<>(OUTPUT_TOPIC_1, null, 3000L, "key3", "value3"));
     }
 
     @Test
@@ -306,15 +310,6 @@ public class ProcessorTopologyTest {
         assertEquals(topic, record.topic());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
-        assertNull(record.partition());
-    }
-
-    private void assertNextOutputRecord(String topic, Long timestamp, String key, String value) {
-        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
-        assertEquals(topic, record.topic());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-        assertEquals(timestamp, record.timestamp());
         assertNull(record.partition());
     }
 
