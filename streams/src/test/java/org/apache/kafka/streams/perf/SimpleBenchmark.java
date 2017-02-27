@@ -461,7 +461,8 @@ public class SimpleBenchmark {
     private void produce(String topic, int valueSizeBytes, String clientId, int numRecords, boolean sequential,
                         int upperRange, boolean printStats) throws Exception {
 
-
+	processedRecords = 0;
+	processedBytes = 0;
         if (sequential) {
             if (upperRange < numRecords) throw new Exception("UpperRange must be >= numRecords");
         }
@@ -487,17 +488,15 @@ public class SimpleBenchmark {
             producer.send(new ProducerRecord<>(topic, key, value));
             if (sequential) key++;
             else key = rand.nextInt(upperRange);
+	    processedRecords++;
+	    processedBytes += value.length + Integer.SIZE;
         }
         producer.close();
 
         long endTime = System.currentTimeMillis();
 
         if (printStats) {
-            System.out.println("Producer Performance [records/latency/rec-sec/MB-sec write]: " +
-                numRecords + "/" +
-                (endTime - startTime) + "/" +
-                recordsPerSec(endTime - startTime, numRecords) + "/" +
-                megabytesPerSec(endTime - startTime, numRecords * valueSizeBytes));
+	    printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", (endTime - startTime));
         }
     }
 
@@ -541,11 +540,7 @@ public class SimpleBenchmark {
         long endTime = System.currentTimeMillis();
 
         consumer.close();
-        System.out.println("Consumer Performance [records/latency/rec-sec/MB-sec read]: " +
-            processedRecords + "/" +
-            (endTime - startTime) + "/" +
-            recordsPerSec(endTime - startTime, processedRecords) + "/" +
-            megabytesPerSec(endTime - startTime, processedBytes));
+        printResults("Consumer Performance [records/latency/rec-sec/MB-sec read]: ", (endTime - startTime));
     }
 
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
@@ -735,11 +730,11 @@ public class SimpleBenchmark {
     }
 
     private double megabytesPerSec(long time, long processedBytes) {
-        return  ((double) processedBytes / 1024 / 1024) / (time / 1000.0);
+        return  ((double) processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
     }
 
     private double recordsPerSec(long time, int numRecords) {
-        return (double) numRecords / ((double) time / 1000);
+        return (double) numRecords / ((double) time / 1000.0);
     }
 
     private List<TopicPartition> getAllPartitions(KafkaConsumer<?, ?> consumer, String... topics) {
