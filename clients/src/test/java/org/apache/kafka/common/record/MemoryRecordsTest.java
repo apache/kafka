@@ -42,6 +42,7 @@ public class MemoryRecordsTest {
     private short epoch;
     private int firstSequence;
     private long logAppendTime = System.currentTimeMillis();
+    private int partitionLeaderEpoch = 998;
 
     public MemoryRecordsTest(byte magic, long firstOffset, CompressionType compression) {
         this.magic = magic;
@@ -60,8 +61,11 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
-                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
+                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false,
+                partitionLeaderEpoch, buffer.limit());
 
         byte[][] keys = new byte[][] {"a".getBytes(), "b".getBytes(), "c".getBytes(), null, "d".getBytes(), null};
         byte[][] values = new byte[][] {"1".getBytes(), "2".getBytes(), "3".getBytes(), "4".getBytes(), null, null};
@@ -83,6 +87,12 @@ public class MemoryRecordsTest {
                     assertEquals(pid, entry.pid());
                     assertEquals(epoch, entry.epoch());
                     assertEquals(firstSequence + total, entry.baseSequence());
+                    assertEquals(partitionLeaderEpoch, entry.partitionLeaderEpoch());
+                } else {
+                    assertEquals(LogEntry.NO_PID, entry.pid());
+                    assertEquals(LogEntry.NO_EPOCH, entry.epoch());
+                    assertEquals(LogEntry.NO_SEQUENCE, entry.baseSequence());
+                    assertEquals(LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, entry.partitionLeaderEpoch());
                 }
 
                 int records = 0;

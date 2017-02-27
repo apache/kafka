@@ -52,6 +52,12 @@ public interface LogEntry extends Iterable<LogRecord> {
     int NO_SEQUENCE = -1;
 
     /**
+     * Used to indicate an unknown leader epoch, which will be the case when the record set is
+     * first created by the producer.
+     */
+    int UNKNOWN_PARTITION_LEADER_EPOCH = -1;
+
+    /**
      * Check whether the checksum of this entry is correct.
      *
      * @return true If so, false otherwise
@@ -175,12 +181,20 @@ public interface LogEntry extends Iterable<LogRecord> {
     boolean isTransactional();
 
     /**
+     * Get the partition leader epoch of this entry.
+     * @return The leader epoch or -1 if it is unknown
+     */
+    int partitionLeaderEpoch();
+
+    /**
      * A mutable log entry is one that can be modified in place (without copying).
      */
     interface MutableLogEntry extends LogEntry {
         void setOffset(long offset);
 
         void setMaxTimestamp(TimestampType timestampType, long maxTimestamp);
+
+        void setPartitionLeaderEpoch(int epoch);
     }
 
 }

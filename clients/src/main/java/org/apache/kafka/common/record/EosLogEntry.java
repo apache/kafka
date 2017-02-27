@@ -36,24 +36,25 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * LogEntry implementation for magic 2 and above. The schema is given below:
  *
  * LogEntry =>
- *  FirstOffset => int64
- *  Length => int32
- *  CRC => int32
- *  Magic => int8
- *  Attributes => int16
- *  LastOffsetDelta => int32
- *  FirstTimestamp => int64
- *  MaxTimestamp => int64
- *  PID => int64
- *  Epoch => int16
- *  FirstSequence => int32
+ *  BaseOffset => Int64
+ *  Length => Int32
+ *  CRC => Int32
+ *  Magic => Int8
+ *  Attributes => Int16
+ *  LastOffsetDelta => Int32
+ *  BaseTimestamp => Int64
+ *  MaxTimestamp => Int64
+ *  PID => Int64
+ *  Epoch => Int16
+ *  BaseSequence => Int32
+ *  PartitionLeaderEpoch => Int32
  *  Records => Record1, Record2, … , RecordN
  *
  *  The current attributes are given below:
  *
- *  -----------------------------------------------------------------------------------------------
- *  | Unused (5-16) | Transactional (bit 4) | Timestamp Type (bit 3) | Compression Type (bits 0-2) |
- *  -----------------------------------------------------------------------------------------------
+ *  -----------------------------------------------------------------------------------
+ *  | Unused (5-16) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  -----------------------------------------------------------------------------------
  */
 public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
     static final int BASE_OFFSET_OFFSET = 0;
@@ -78,7 +79,9 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     static final int EPOCH_LENGTH = 2;
     static final int BASE_SEQUENCE_OFFSET = EPOCH_OFFSET + EPOCH_LENGTH;
     static final int BASE_SEQUENCE_LENGTH = 4;
-    static final int RECORDS_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
+    static final int PARTITION_LEADER_EPOCH_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
+    static final int PARTITION_LEADER_EPOCH_LENGTH = 4;
+    static final int RECORDS_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
     public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
@@ -170,6 +173,11 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
     }
 
+    @Override
+    public int partitionLeaderEpoch() {
+        return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
+    }
+
     private Iterator<LogRecord> compressedIterator() {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
@@ -257,6 +265,11 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     @Override
+    public void setPartitionLeaderEpoch(int epoch) {
+        buffer.putInt(PARTITION_LEADER_EPOCH_LENGTH, epoch);
+    }
+
+    @Override
     public long checksum() {
         return ByteUtils.readUnsignedInt(buffer, CRC_OFFSET);
     }
@@ -307,8 +320,9 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                             long pid,
                             short epoch,
                             int sequence,
-                            boolean isTransactional) {
-        if (magic < 2)
+                            boolean isTransactional,
+                            int partitionLeaderEpoch) {
+        if (magic < LogEntry.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
@@ -326,6 +340,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         buffer.putLong(position + PID_OFFSET, pid);
         buffer.putShort(position + EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
+        buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
     }

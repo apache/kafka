@@ -255,6 +255,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public int partitionLeaderEpoch() {
+            loadUnderlyingEntry();
+            return underlying.partitionLeaderEpoch();
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;

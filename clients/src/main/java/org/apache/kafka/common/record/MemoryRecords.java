@@ -275,7 +275,7 @@ public class MemoryRecords extends AbstractRecords {
                                                int writeLimit) {
         return new MemoryRecordsBuilder(buffer, LogEntry.CURRENT_MAGIC_VALUE, compressionType, timestampType, 0L,
                 System.currentTimeMillis(), LogEntry.NO_PID, LogEntry.NO_EPOCH, LogEntry.NO_SEQUENCE, false,
-                writeLimit);
+                LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, writeLimit);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -315,7 +315,8 @@ public class MemoryRecords extends AbstractRecords {
                                                short epoch,
                                                int baseSequence) {
         return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, pid, epoch, baseSequence, false, buffer.capacity());
+                logAppendTime, pid, epoch, baseSequence, false, LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH,
+                buffer.capacity());
     }
 
     public static MemoryRecords withRecords(CompressionType compressionType, KafkaRecord ... records) {

@@ -176,6 +176,11 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
     }
 
     @Override
+    public int partitionLeaderEpoch() {
+        return LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH;
+    }
+
+    @Override
     public boolean isControlRecord() {
         return false;
     }
@@ -400,6 +405,11 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
                 return;
 
             setTimestampAndUpdateCrc(timestampType, timestamp);
+        }
+
+        @Override
+        public void setPartitionLeaderEpoch(int epoch) {
+            throw new UnsupportedOperationException("Magic versions prior to 2 do not support partition leader epoch");
         }
 
         private void setTimestampAndUpdateCrc(TimestampType timestampType, long timestamp) {

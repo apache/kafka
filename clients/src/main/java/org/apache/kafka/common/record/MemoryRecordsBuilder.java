@@ -60,6 +60,7 @@ public class MemoryRecordsBuilder {
     private final short epoch;
     private final int baseSequence;
     private final boolean isTransactional;
+    private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int initialCapacity;
 
@@ -101,6 +102,7 @@ public class MemoryRecordsBuilder {
                                 short epoch,
                                 int baseSequence,
                                 boolean isTransactional,
+                                int partitionLeaderEpoch,
                                 int writeLimit) {
         if (magic > LogEntry.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
@@ -138,6 +140,7 @@ public class MemoryRecordsBuilder {
         this.epoch = epoch;
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
+        this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialCapacity = buffer.capacity();
 
@@ -234,7 +237,7 @@ public class MemoryRecordsBuilder {
         }
 
         EosLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional);
+                baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional, partitionLeaderEpoch);
 
         buffer.position(pos);
     }
