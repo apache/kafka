@@ -68,13 +68,12 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  var timerMs: Long = 0
-
   def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
+    var startTime = time.milliseconds
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
     var response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
 
-    while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - timerMs < timeoutMs) {
+    while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
       Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
       response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     }
@@ -188,14 +187,13 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): ConsumerGroupSummary = describeConsumerGroup(groupId, 0)
 
   def describeConsumerGroup(groupId: String, timeoutMs: Long): ConsumerGroupSummary = {
-    timerMs = time.milliseconds
-
+    val startTime = time.milliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
     var metadata = describeConsumerGroupHandler(coordinator, groupId)
 
     while (metadata.state != "Dead" && metadata.state != "Empty" &&
            metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE &&
-           time.milliseconds - timerMs < timeoutMs) {
+           time.milliseconds - startTime < timeoutMs) {
       Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
       metadata = describeConsumerGroupHandler(coordinator, groupId)
     }

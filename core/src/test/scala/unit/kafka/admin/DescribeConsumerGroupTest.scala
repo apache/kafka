@@ -288,7 +288,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic)
 
     // set the group initialization timeout too low for the group to stabilize
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "group", "--group-init-timeout", "10")
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "group", "--timeout", "10")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
