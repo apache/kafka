@@ -46,6 +46,7 @@ import java.io.File;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -246,6 +247,20 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology());
+        driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 1000L, "key1", "value1")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 2000L, "key2", "value2")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 3000L, "key3", "value3")));
+    }
+
+    @Test
     public void shouldCreateStringWithSourceAndTopics() throws Exception {
         builder.addSource("source", "topic1", "topic2");
         final ProcessorTopology topology = builder.build(null);
@@ -356,6 +371,15 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_1, "source1");
     }
 
+    private TopologyBuilder createInternalRepartitioningWithValueTimestampTopology() {
+        return builder.addSource("source", INPUT_TOPIC_1)
+                .addInternalTopic(THROUGH_TOPIC_1)
+                .addProcessor("processor", define(new ValueTimestampProcessor()), "source")
+                .addSink("sink0", THROUGH_TOPIC_1, "processor")
+                .addSource("source1", THROUGH_TOPIC_1)
+                .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
+
     private TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return builder.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
@@ -379,6 +403,18 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             context().forward(Long.toString(streamTime), "punctuate");
+        }
+    }
+
+    /**
+     * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
+     * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
+     */
+    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
+
+        @Override
+        public void process(String key, String value) {
+            context().forward(key, value.split("@")[0]);
         }
     }
 
@@ -487,9 +523,19 @@ public class ProcessorTopologyTest {
         };
     }
 
+    /**
+     * A custom timestamp extractor that extracts the timestamp from the record's value if the value is in ".*@[0-9]+"
+     * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is zero.
+    */
     public static class CustomTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+            if (record.value().toString().matches(".*@[0-9]+"))
+                return Long.parseLong(record.value().toString().split("@")[1]);
+
+            if (record.timestamp() > 0L)
+                return record.timestamp();
+
             return timestamp;
         }
     }
