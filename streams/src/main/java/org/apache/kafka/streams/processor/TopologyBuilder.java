@@ -294,7 +294,7 @@ public class TopologyBuilder {
      * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
      */
     public enum AutoOffsetReset {
-        EARLIEST , LATEST
+        EARLIEST, LATEST
     }
 
     /**
@@ -864,7 +864,7 @@ public class TopologyBuilder {
         }
     }
 
-    private Set<String> findSourceTopicsForProcessorParents(String [] parents) {
+    private Set<String> findSourceTopicsForProcessorParents(String[] parents) {
         final Set<String> sourceTopics = new HashSet<>();
         for (String parent : parents) {
             NodeFactory nodeFactory = nodeFactories.get(parent);
