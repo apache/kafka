@@ -417,11 +417,6 @@ public class ProcessorTopologyTest {
         public void process(String key, String value) {
             context().forward(key, value.split("@")[0]);
         }
-
-        @Override
-        public void punctuate(long streamTime) {
-            context().forward(Long.toString(streamTime), "punctuate");
-        }
     }
 
     /**
