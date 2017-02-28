@@ -192,7 +192,7 @@ public interface KStream<K, V> {
      * and emit a record {@code <word:1>} for each word.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
+     * KStream<String, Integer> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
      *     Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
      *         String[] tokens = value.split(" ");
      *         List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
@@ -238,7 +238,7 @@ public interface KStream<K, V> {
      * The example below splits input records {@code <null:String>} containing sentences as values into their words.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new ValueMapper<String, Iterable<String>> {
+     * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
      *     Iterable<String> apply(String value) {
      *         return Arrays.asList(value.split(" "));
      *     }
