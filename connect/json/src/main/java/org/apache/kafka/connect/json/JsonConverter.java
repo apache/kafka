@@ -332,7 +332,7 @@ public class JsonConverter implements Converter {
         return new SchemaAndValue(schema, convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
     }
 
-    private ObjectNode asJsonSchema(Schema schema) {
+    public ObjectNode asJsonSchema(Schema schema) {
         if (schema == null)
             return null;
 
@@ -413,7 +413,7 @@ public class JsonConverter implements Converter {
     }
 
 
-    private Schema asConnectSchema(JsonNode jsonSchema) {
+    public Schema asConnectSchema(JsonNode jsonSchema) {
         if (jsonSchema.isNull())
             return null;
 
