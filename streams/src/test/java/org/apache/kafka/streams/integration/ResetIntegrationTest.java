@@ -422,7 +422,7 @@ public class ResetIntegrationTest {
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
         @Override
         public boolean conditionMet() {
-            return adminClient.describeConsumerGroup(APP_ID + testNo).consumers().get().isEmpty();
+            return adminClient.describeConsumerGroup(APP_ID + testNo, 0).consumers().get().isEmpty();
         }
     }
 

@@ -547,7 +547,7 @@ object ConsumerGroupCommand extends Logging {
     def checkArgs() {
       // check required args
       if (options.has(timeoutMsOpt) && (!describeOptPresent || useOldConsumer))
-        warn(s"Option '$timeoutMsOpt' is valid only when both '$bootstrapServerOpt' and '$describeOpt' are used.")
+        debug(s"Option '$timeoutMsOpt' is applicable only when both '$bootstrapServerOpt' and '$describeOpt' are used.")
 
       if (useOldConsumer) {
         if (options.has(bootstrapServerOpt))

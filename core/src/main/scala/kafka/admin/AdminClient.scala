@@ -68,13 +68,14 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
+  def findCoordinator(groupId: String, timeoutMs: Long = 0,
+                      retryIntervalMs: Int = AdminClient.DefaultGroupQueryRetryIntervalMs): Node = {
     var startTime = time.milliseconds
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
     var response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
 
     while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
-      Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
+      Thread.sleep(retryIntervalMs)
       response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     }
 
@@ -184,21 +185,21 @@ class AdminClient(val time: Time,
     metadata
   }
 
-  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = describeConsumerGroup(groupId, 0)
+  def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
 
-  def describeConsumerGroup(groupId: String, timeoutMs: Long): ConsumerGroupSummary = {
+    def validateConsumerGroup(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
+      metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE
+
     val startTime = time.milliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
     var metadata = describeConsumerGroupHandler(coordinator, groupId)
 
-    while (metadata.state != "Dead" && metadata.state != "Empty" &&
-           metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE &&
-           time.milliseconds - startTime < timeoutMs) {
+    while (!validateConsumerGroup(metadata) && time.milliseconds - startTime < timeoutMs) {
       Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
       metadata = describeConsumerGroupHandler(coordinator, groupId)
     }
 
-    if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+    if (!validateConsumerGroup(metadata))
       throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
 
     metadata.error.maybeThrow()
@@ -229,7 +230,7 @@ object AdminClient {
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
-  val DefaultGroupQueryRetryIntervalMs: Long = 100
+  val DefaultGroupQueryRetryIntervalMs: Int = 100
 
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
