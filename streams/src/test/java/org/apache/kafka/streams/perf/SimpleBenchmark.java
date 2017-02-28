@@ -730,11 +730,11 @@ public class SimpleBenchmark {
     }
 
     private double megabytesPerSec(long time, long processedBytes) {
-        return  ((double) processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
+        return  (processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
     }
 
     private double recordsPerSec(long time, int numRecords) {
-        return (double) numRecords / ((double) time / 1000.0);
+        return numRecords / (time / 1000.0);
     }
 
     private List<TopicPartition> getAllPartitions(KafkaConsumer<?, ?> consumer, String... topics) {

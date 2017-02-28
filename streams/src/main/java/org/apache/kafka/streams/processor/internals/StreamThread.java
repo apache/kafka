@@ -683,7 +683,7 @@ public class StreamThread extends Thread {
     /**
      * Commit all tasks owned by this thread if specified interval time has elapsed
      */
-    protected void maybeCommit(long now) {
+    protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
             log.info("{} Committing all tasks because the commit interval {}ms has elapsed", logPrefix, commitTimeMs);
@@ -698,7 +698,7 @@ public class StreamThread extends Thread {
     /**
      * Cleanup any states of the tasks that have been removed from this thread
      */
-    protected void maybeClean(long now) {
+    protected void maybeClean(final long now) {
 
         if (now > lastCleanMs + cleanTimeMs) {
             stateDirectory.cleanRemovedTasks(cleanTimeMs);
