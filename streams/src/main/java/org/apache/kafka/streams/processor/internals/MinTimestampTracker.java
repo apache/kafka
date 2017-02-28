@@ -47,11 +47,18 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     }
 
     public void removeElement(Stamped<E> elem) {
-        if (elem != null && descendingSubsequence.peekFirst() == elem)
-            descendingSubsequence.removeFirst();
+        if (elem == null) {
+            return;
+        }
 
-        if (descendingSubsequence.isEmpty())
+        if (descendingSubsequence.peekFirst() == elem) {
+            descendingSubsequence.removeFirst();
+        }
+
+        if (descendingSubsequence.isEmpty()) {
             lastKnownTime = elem.timestamp;
+        }
+
     }
 
     public int size() {
