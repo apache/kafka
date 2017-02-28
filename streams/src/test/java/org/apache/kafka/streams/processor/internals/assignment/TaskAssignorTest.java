@@ -261,7 +261,8 @@ public class TaskAssignorTest {
         }
 
         // # of clients > # of tasks
-        tasks = mkList(0, 1, 2, 3, -1, -1);
+        tasks = mkList(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                 new TaskId(-1, -1), new TaskId(-1, -1));
         Collections.shuffle(tasks);
         statesWithPrevTasks = new HashMap<>();
         i = 0;
