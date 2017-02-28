@@ -316,7 +316,7 @@ public class Struct {
             Field f = this.schema.get(i);
             if (f.type() instanceof ArrayOf) {
                 if (this.get(f) != null) {
-                    Object[] arrayObject = (Object []) this.get(f);
+                    Object[] arrayObject = (Object[]) this.get(f);
                     for (Object arrayItem: arrayObject)
                         result = prime * result + arrayItem.hashCode();
                 }
