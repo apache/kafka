@@ -17,9 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.ZkUtils
-import kafka.utils.CoreUtils
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -41,6 +39,28 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     server.shutdown()
     CoreUtils.delete(server.config.logDirs)
+  }
+
+  @Test
+  def testConflictBrokerStartupWithSamePort {
+    // Create and start first broker
+    val brokerId1 = 0
+    val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
+    val server1 = TestUtils.createServer(KafkaConfig.fromProps(props1))
+    val port = TestUtils.boundPort(server1)
+
+    // Create a second broker with same port
+    val brokerId2 = 1
+    val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
+    try {
+      TestUtils.createServer(KafkaConfig.fromProps(props2))
+      fail("Starting a broker with the same port should fail")
+    } catch {
+      case _: RuntimeException => // expected
+    } finally {
+      server1.shutdown()
+      CoreUtils.delete(server1.config.logDirs)
+    }
   }
 
   @Test

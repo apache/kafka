@@ -313,4 +313,20 @@ public class KTableFilterTest {
         proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
         proc2.checkEmptyAndClearProcessResult();
     }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return false;
+            }
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>table("empty", "emptyStore")
+            .filter(numberKeyPredicate)
+            .filterNot(numberKeyPredicate)
+            .to("nirvana");
+    }
 }

@@ -13,8 +13,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -25,8 +24,6 @@ import java.util.Map;
 
 public class JoinGroupResponse extends AbstractResponse {
 
-    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id);
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
@@ -53,47 +50,20 @@ public class JoinGroupResponse extends AbstractResponse {
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_MEMBER_ID = "";
 
-    private final short errorCode;
+    private final Errors error;
     private final int generationId;
     private final String groupProtocol;
     private final String memberId;
     private final String leaderId;
     private final Map<String, ByteBuffer> members;
 
-    public JoinGroupResponse(short errorCode,
+    public JoinGroupResponse(Errors error,
                              int generationId,
                              String groupProtocol,
                              String memberId,
                              String leaderId,
                              Map<String, ByteBuffer> groupMembers) {
-        this(CURRENT_VERSION, errorCode, generationId, groupProtocol, memberId, leaderId, groupMembers);
-    }
-
-    public JoinGroupResponse(int version,
-                             short errorCode,
-                             int generationId,
-                             String groupProtocol,
-                             String memberId,
-                             String leaderId,
-                             Map<String, ByteBuffer> groupMembers) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version)));
-
-        struct.set(ERROR_CODE_KEY_NAME, errorCode);
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        struct.set(LEADER_ID_KEY_NAME, leaderId);
-
-        List<Struct> memberArray = new ArrayList<>();
-        for (Map.Entry<String, ByteBuffer> entries: groupMembers.entrySet()) {
-            Struct memberData = struct.instance(MEMBERS_KEY_NAME);
-            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
-            memberData.set(MEMBER_METADATA_KEY_NAME, entries.getValue());
-            memberArray.add(memberData);
-        }
-        struct.set(MEMBERS_KEY_NAME, memberArray.toArray());
-
-        this.errorCode = errorCode;
+        this.error = error;
         this.generationId = generationId;
         this.groupProtocol = groupProtocol;
         this.memberId = memberId;
@@ -102,7 +72,6 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public JoinGroupResponse(Struct struct) {
-        super(struct);
         members = new HashMap<>();
 
         for (Object memberDataObj : struct.getArray(MEMBERS_KEY_NAME)) {
@@ -111,15 +80,15 @@ public class JoinGroupResponse extends AbstractResponse {
             ByteBuffer memberMetadata = memberData.getBytes(MEMBER_METADATA_KEY_NAME);
             members.put(memberId, memberMetadata);
         }
-        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
+        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         generationId = struct.getInt(GENERATION_ID_KEY_NAME);
         groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
     }
 
-    public short errorCode() {
-        return errorCode;
+    public Errors error() {
+        return error;
     }
 
     public int generationId() {
@@ -146,7 +115,29 @@ public class JoinGroupResponse extends AbstractResponse {
         return members;
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer) {
-        return new JoinGroupResponse(CURRENT_SCHEMA.read(buffer));
+    public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
+        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer));
+    }
+
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
+
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(GENERATION_ID_KEY_NAME, generationId);
+        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(LEADER_ID_KEY_NAME, leaderId);
+
+        List<Struct> memberArray = new ArrayList<>();
+        for (Map.Entry<String, ByteBuffer> entries : members.entrySet()) {
+            Struct memberData = struct.instance(MEMBERS_KEY_NAME);
+            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
+            memberData.set(MEMBER_METADATA_KEY_NAME, entries.getValue());
+            memberArray.add(memberData);
+        }
+        struct.set(MEMBERS_KEY_NAME, memberArray.toArray());
+
+        return struct;
     }
 }

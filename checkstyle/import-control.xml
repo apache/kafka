@@ -42,6 +42,7 @@
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
 
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />
@@ -76,6 +77,11 @@
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.common.errors" />
         <allow pkg="org.apache.kafka.clients" />
+      </subpackage>
+      <subpackage name="scram">
+        <allow pkg="javax.crypto" />
+        <allow pkg="javax.xml.bind" />
+        <allow pkg="org.apache.kafka.common.errors" />
       </subpackage>
     </subpackage>
 
@@ -120,6 +126,12 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="server">
+    <allow pkg="org.slf4j" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -145,6 +157,7 @@
     
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
+      <allow pkg="kafka.api" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
@@ -251,6 +264,13 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
+    <subpackage name="transforms">
+      <allow class="org.apache.kafka.connect.connector.ConnectRecord" />
+      <allow class="org.apache.kafka.connect.source.SourceRecord" />
+      <allow class="org.apache.kafka.connect.sink.SinkRecord" />
+      <allow pkg="org.apache.kafka.connect.transforms.util" />
     </subpackage>
   </subpackage>
 

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Closeable;
@@ -227,11 +228,15 @@ public class Utils {
      */
     public static long min(long first, long ... rest) {
         long min = first;
-        for (int i = 0; i < rest.length; i++) {
-            if (rest[i] < min)
-                min = rest[i];
+        for (long r : rest) {
+            if (r < min)
+                min = r;
         }
         return min;
+    }
+
+    public static short min(short first, short second) {
+        return (short) Math.min(first, second);
     }
 
     /**
@@ -456,6 +461,24 @@ public class Utils {
         return sb.toString();
     }
 
+    public static <K, V> String mkString(Map<K, V> map) {
+        return mkString(map, "{", "}", "=", " ,");
+    }
+
+    public static <K, V> String mkString(Map<K, V> map, String begin, String end,
+                                         String keyValueSeparator, String elementSeperator) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(begin);
+        String prefix = "";
+        for (Map.Entry<K, V> entry : map.entrySet()) {
+            bld.append(prefix).append(entry.getKey()).
+                    append(keyValueSeparator).append(entry.getValue());
+            prefix = elementSeperator;
+        }
+        bld.append(end);
+        return bld.toString();
+    }
+
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
@@ -523,7 +546,7 @@ public class Utils {
      */
     public static void croak(String message) {
         System.err.println(message);
-        System.exit(1);
+        Exit.exit(1);
     }
 
     /**
@@ -605,7 +628,6 @@ public class Utils {
     public static <T> List<T> mkList(T... elems) {
         return Arrays.asList(elems);
     }
-
 
     /*
      * Create a string from a collection
@@ -779,9 +801,58 @@ public class Utils {
      * @param size The number of bytes to include
      */
     public static long computeChecksum(ByteBuffer buffer, int start, int size) {
-        Crc32 crc = new Crc32();
-        crc.update(buffer.array(), buffer.arrayOffset() + start, size);
-        return crc.getValue();
+        return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer. If the end
+     * of the file is reached while there are bytes remaining in the buffer, an EOFException is thrown.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     * @param description A description of what is being read, this will be included in the EOFException if it is thrown
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws EOFException If the end of the file is reached while there are remaining bytes in the destination buffer
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position,
+                                       String description) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        int expectedReadBytes = destinationBuffer.remaining();
+        readFully(channel, destinationBuffer, position);
+        if (destinationBuffer.hasRemaining()) {
+            throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
+                    "but reached end of file after reading %d bytes. Started read from position %d.",
+                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+        }
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or the end
+     * of the file has been reached.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        long currentPosition = position;
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
+            currentPosition += bytesRead;
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
 }

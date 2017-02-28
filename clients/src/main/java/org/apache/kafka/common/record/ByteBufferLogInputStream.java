@@ -92,20 +92,18 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
             // We don't need to recompute crc if the timestamp is not updated.
             if (record.timestampType() == TimestampType.CREATE_TIME && currentTimestamp == timestamp)
                 return;
-
-            byte attributes = record.attributes();
-            buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, TimestampType.CREATE_TIME.updateAttributes(attributes));
-            buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
-            long crc = record.computeChecksum();
-            Utils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
+            setTimestampAndUpdateCrc(TimestampType.CREATE_TIME, timestamp);
         }
 
         public void setLogAppendTime(long timestamp) {
             if (record.magic() == Record.MAGIC_VALUE_V0)
                 throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
+            setTimestampAndUpdateCrc(TimestampType.LOG_APPEND_TIME, timestamp);
+        }
 
+        private void setTimestampAndUpdateCrc(TimestampType timestampType, long timestamp) {
             byte attributes = record.attributes();
-            buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, TimestampType.LOG_APPEND_TIME.updateAttributes(attributes));
+            buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
             buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
             Utils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);

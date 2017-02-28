@@ -31,9 +31,8 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
-import org.apache.kafka.common.utils.Crc32
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Utils
-
 
 /**
  * General helper functions!
@@ -130,26 +129,6 @@ object CoreUtils extends Logging {
   }
 
   /**
-   * Compute the CRC32 of the byte array
-   * @param bytes The array to compute the checksum for
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
-
-  /**
-   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
-   * @param bytes The bytes to checksum
-   * @param offset the offset at which to begin checksumming
-   * @param size the number of bytes to checksum
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new Crc32()
-    crc.update(bytes, offset, size)
-    crc.getValue()
-  }
-
-  /**
    * Read some bytes into the provided buffer, and return the number of bytes read. If the
    * channel has been closed or we get -1 on the read for any reason, throw an EOFException
    */
@@ -192,7 +171,7 @@ object CoreUtils extends Logging {
   /**
    * Create an instance of the class with the given class name
    */
-  def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
+  def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
     val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
@@ -276,9 +255,26 @@ object CoreUtils extends Logging {
       .keys
   }
 
-  def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
-    val listenerList = parseCsvList(listeners)
-    listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    def validate(endPoints: Seq[EndPoint]): Unit = {
+      // filter port 0 for unit tests
+      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
+      val distinctPorts = portsExcludingZero.distinct
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+
+      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+    }
+
+    val endPoints = try {
+      val listenerList = parseCsvList(listeners)
+      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+    } catch {
+      case e: Exception =>
+        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
+    }
+    validate(endPoints)
+    endPoints
   }
 
   def generateUuidAsBase64(): String = {

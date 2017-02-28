@@ -41,8 +41,8 @@ interface MetadataUpdater {
      * Starts a cluster metadata update if needed and possible. Returns the time until the metadata update (which would
      * be 0 if an update has been started as a result of this call).
      *
-     * If the implementation relies on `NetworkClient` to send requests, the completed receive will be passed to
-     * `handleCompletedMetadataResponse`.
+     * If the implementation relies on `NetworkClient` to send requests, `handleCompletedMetadataResponse` will be
+     * invoked after the metadata response is received.
      *
      * The semantics of `needed` and `possible` are implementation-dependent and may take into account a number of
      * factors like node availability, how long since the last metadata update, etc.

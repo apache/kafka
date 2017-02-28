@@ -156,8 +156,9 @@ public class SaslClientAuthenticator implements Authenticator {
                 // API_VERSIONS_REQUEST must be sent prior to sending SASL_HANDSHAKE_REQUEST to
                 // fetch supported versions.
                 String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, clientId, correlationId++);
                 SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);
+                currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id,
+                        handshakeRequest.version(), clientId, correlationId++);
                 send(handshakeRequest.toSend(node, currentRequestHeader));
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
@@ -323,7 +324,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void handleSaslHandshakeResponse(SaslHandshakeResponse response) {
-        Errors error = Errors.forCode(response.errorCode());
+        Errors error = response.error();
         switch (error) {
             case NONE:
                 break;
@@ -334,8 +335,8 @@ public class SaslClientAuthenticator implements Authenticator {
                 throw new IllegalSaslStateException(String.format("Unexpected handshake request with client mechanism %s, enabled mechanisms are %s",
                     mechanism, response.enabledMechanisms()));
             default:
-                throw new AuthenticationException(String.format("Unknown error code %d, client mechanism is %s, enabled mechanisms are %s",
-                    response.errorCode(), mechanism, response.enabledMechanisms()));
+                throw new AuthenticationException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
+                    response.error(), mechanism, response.enabledMechanisms()));
         }
     }
 }

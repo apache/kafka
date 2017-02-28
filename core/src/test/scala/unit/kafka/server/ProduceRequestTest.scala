@@ -40,13 +40,14 @@ class ProduceRequestTest extends BaseRequestTest {
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
       val topicPartition = new TopicPartition("topic", partition)
       val partitionRecords = Map(topicPartition -> memoryRecords)
-      val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
+      val produceResponse = sendProduceRequest(leader,
+          new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
-      assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+      assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
-      assertEquals(-1, partitionResponse.timestamp)
+      assertEquals(-1, partitionResponse.logAppendTime)
       partitionResponse
     }
 
@@ -76,18 +77,19 @@ class ProduceRequestTest extends BaseRequestTest {
     memoryRecords.buffer.array.update(40, 0)
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
-    val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
+    val produceResponse = sendProduceRequest(leader, 
+      new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
-    assertEquals(Errors.CORRUPT_MESSAGE.code, partitionResponse.errorCode)
+    assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
-    assertEquals(-1, partitionResponse.timestamp)
+    assertEquals(-1, partitionResponse.logAppendTime)
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
-    ProduceResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
+    ProduceResponse.parse(response, request.version)
   }
 
 }

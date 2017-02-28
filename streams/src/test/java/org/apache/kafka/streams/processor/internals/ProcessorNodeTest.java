@@ -17,12 +17,19 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Map;
+
+import static org.junit.Assert.assertNotNull;
 
 public class ProcessorNodeTest {
 
@@ -59,6 +66,64 @@ public class ProcessorNodeTest {
         @Override
         public void close() {
             throw new RuntimeException();
+        }
+    }
+
+    private static class NoOpProcessor implements Processor {
+        @Override
+        public void init(final ProcessorContext context) {
+
+        }
+
+        @Override
+        public void process(final Object key, final Object value) {
+
+        }
+
+        @Override
+        public void punctuate(final long timestamp) {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
+
+    @Test
+    public void testMetrics() {
+        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+
+        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null));
+        final ProcessorNode node = new ProcessorNode("name", new NoOpProcessor(), Collections.emptySet());
+        node.init(context);
+
+        Metrics metrics = context.baseMetrics();
+        String name = "task." + context.taskId() + "." + node.name();
+        String[] entities = {"all", name};
+        String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
+        String throughputOperation =  "forward";
+        String groupName = "stream-processor-node-metrics";
+        Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
+
+        for (String operation : latencyOperations) {
+            assertNotNull(metrics.getSensor(operation));
+            assertNotNull(metrics.getSensor(name + "-" + operation));
+        }
+        assertNotNull(metrics.getSensor(throughputOperation));
+
+        for (String entity : entities) {
+            for (String operation : latencyOperations) {
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
+                    "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
+                    "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
+                    "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+            }
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
+                "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
     }
 

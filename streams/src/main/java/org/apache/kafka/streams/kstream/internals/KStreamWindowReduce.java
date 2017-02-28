@@ -64,7 +64,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         public void init(ProcessorContext context) {
             super.init(context);
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
@@ -108,7 +108,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
+                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -117,7 +117,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
                 windowStore.put(key, value, windowStartMs);
-                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), value, null, false);
+                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), value, null);
             }
         }
     }

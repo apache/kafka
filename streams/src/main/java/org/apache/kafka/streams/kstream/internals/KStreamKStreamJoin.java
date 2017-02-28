@@ -32,10 +32,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final long joinBeforeMs;
     private final long joinAfterMs;
 
-    private final ValueJoiner<V1, V2, R> joiner;
+    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
 
-    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoiner<V1, V2, R> joiner, boolean outer) {
+    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoiner<? super V1, ? super V2, ? extends R> joiner, boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;

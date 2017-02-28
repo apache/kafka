@@ -17,20 +17,28 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
 
-class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator<K, V> {
+/**
+ * Optimized {@link KeyValueIterator} used when the same element could be peeked multiple times.
+ */
+class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
     private final KeyValueIterator<K, V> underlying;
+    private final String storeName;
     private KeyValue<K, V> next;
 
-    public DelegatingPeekingKeyValueIterator(final KeyValueIterator<K, V> underlying) {
+    private volatile boolean open = true;
+
+    public DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
+        this.storeName = storeName;
         this.underlying = underlying;
     }
 
     @Override
-    public K peekNextKey() {
+    public synchronized K peekNextKey() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
@@ -38,12 +46,16 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         underlying.close();
+        open = false;
     }
 
     @Override
-    public boolean hasNext() {
+    public synchronized boolean hasNext() {
+        if (!open) {
+            throw new InvalidStateStoreException(String.format("Store %s has closed", storeName));
+        }
         if (next != null) {
             return true;
         }
@@ -57,7 +69,7 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
     }
 
     @Override
-    public KeyValue<K, V> next() {
+    public synchronized KeyValue<K, V> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
@@ -68,6 +80,14 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("remove not supported");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
+    }
+
+    @Override
+    public KeyValue<K, V> peekNext() {
+        if (!hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return next;
     }
 }

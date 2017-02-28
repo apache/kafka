@@ -32,9 +32,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final KeyValueMapper<K, V, KeyValue<K1, V1>> mapper;
+    private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
 
-    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
+    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
@@ -82,8 +82,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
 
             // if the value is null, we do not need to forward its selected key-value further
-            KeyValue<K1, V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
-            KeyValue<K1, V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
+            KeyValue<? extends K1, ? extends V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
+            KeyValue<? extends K1, ? extends V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate

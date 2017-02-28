@@ -44,11 +44,11 @@ public interface Records {
     int sizeInBytes();
 
     /**
-     * Write the contents of this buffer to a channel.
+     * Attempts to write the contents of this buffer to a channel.
      * @param channel The channel to write to
      * @param position The position in the buffer to write from
      * @param length The number of bytes to write
-     * @return The number of bytes written
+     * @return The number of bytes actually written
      * @throws IOException For any IO errors
      */
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
@@ -83,8 +83,9 @@ public interface Records {
      * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
+     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0
      * @return A Records (which may or may not be the same instance)
      */
-    Records toMessageFormat(byte toMagic);
+    Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType);
 
 }

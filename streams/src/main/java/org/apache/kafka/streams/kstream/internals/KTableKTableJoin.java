@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -25,7 +25,14 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
+    private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
+        @Override
+        public K apply(final K key, final V1 value) {
+            return key;
+        }
+    };
+
+    KTableKTableJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -46,7 +53,10 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
         }
 
         public KTableValueGetter<K, R> get() {
-            return new KTableKTableJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
+            return new KTableKTableJoinValueGetter<>(valueGetterSupplier1.get(),
+                                                     valueGetterSupplier2.get(),
+                                                     joiner,
+                                                     keyValueMapper);
         }
     }
 
@@ -65,14 +75,12 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             valueGetter.init(context);
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
         @Override
         public void process(final K key, final Change<V1> change) {
-            // the keys should never be null
-            if (key == null)
-                throw new StreamsException("Record key for KTable join operator should not be null.");
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            if (key == null) {
+                return;
+            }
 
             R newValue = null;
             R oldValue = null;
@@ -92,39 +100,6 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
 
             context().forward(key, new Change<>(newValue, oldValue));
         }
-    }
-
-    private class KTableKTableJoinValueGetter implements KTableValueGetter<K, R> {
-
-        private final KTableValueGetter<K, V1> valueGetter1;
-        private final KTableValueGetter<K, V2> valueGetter2;
-
-        public KTableKTableJoinValueGetter(KTableValueGetter<K, V1> valueGetter1, KTableValueGetter<K, V2> valueGetter2) {
-            this.valueGetter1 = valueGetter1;
-            this.valueGetter2 = valueGetter2;
-        }
-
-        @Override
-        public void init(ProcessorContext context) {
-            valueGetter1.init(context);
-            valueGetter2.init(context);
-        }
-
-        @Override
-        public R get(K key) {
-            R newValue = null;
-            V1 value1 = valueGetter1.get(key);
-
-            if (value1 != null) {
-                V2 value2 = valueGetter2.get(key);
-
-                if (value2 != null)
-                    newValue = joiner.apply(value1, value2);
-            }
-
-            return newValue;
-        }
-
     }
 
 }

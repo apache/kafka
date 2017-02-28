@@ -21,23 +21,15 @@ import org.apache.kafka.streams.kstream.Aggregator;
 
 public class MockAggregator {
 
-    private static class StringAdd implements Aggregator<String, String, String> {
+    public final static Aggregator<Object, Object, String> TOSTRING_ADDER = toStringInstance("+");
+    public final static Aggregator<Object, Object, String> TOSTRING_REMOVER = toStringInstance("-");
 
-        @Override
-        public String apply(String aggKey, String value, String aggregate) {
-            return aggregate + "+" + value;
-        }
+    public static <K, V> Aggregator<K, V, String> toStringInstance(final String sep) {
+        return new Aggregator<K, V, String>() {
+            @Override
+            public String apply(K aggKey, V value, String aggregate) {
+                return aggregate + sep + value;
+            }
+        };
     }
-
-    private static class StringRemove implements Aggregator<String, String, String> {
-
-        @Override
-        public String apply(String aggKey, String value, String aggregate) {
-            return aggregate + "-" + value;
-        }
-    }
-
-    public final static Aggregator<String, String, String> STRING_ADDER = new StringAdd();
-
-    public final static Aggregator<String, String, String> STRING_REMOVER = new StringRemove();
 }

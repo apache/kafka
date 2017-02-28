@@ -37,7 +37,7 @@ class TopicTest {
       invalidTopicNames += "Is" + weirdChar + "illegal"
     }
 
-    for (i <- 0 until invalidTopicNames.size) {
+    for (i <- invalidTopicNames.indices) {
       try {
         Topic.validate(invalidTopicNames(i))
         fail("Should throw InvalidTopicException.")
@@ -49,7 +49,7 @@ class TopicTest {
 
     val validTopicNames = new ArrayBuffer[String]()
     validTopicNames += ("valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_.", longName.drop(7))
-    for (i <- 0 until validTopicNames.size) {
+    for (i <- validTopicNames.indices) {
       try {
         Topic.validate(validTopicNames(i))
       }

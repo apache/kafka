@@ -23,6 +23,8 @@ import kafka.utils.nonthreadsafe
 
 import scala.collection.Map
 
+import org.apache.kafka.common.protocol.Errors
+
 
 case class MemberSummary(memberId: String,
                          clientId: String,
@@ -62,7 +64,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
 
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
+  var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
 

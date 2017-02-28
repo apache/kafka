@@ -17,11 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -46,58 +43,4 @@ public class StateStoreTestUtils {
 
     }
 
-    static class NoOpReadOnlyStore<K, V>
-            implements ReadOnlyKeyValueStore<K, V>, StateStore {
-
-        @Override
-        public V get(final K key) {
-            return null;
-        }
-
-        @Override
-        public KeyValueIterator<K, V> range(final K from, final K to) {
-            return null;
-        }
-
-        @Override
-        public KeyValueIterator<K, V> all() {
-            return null;
-        }
-
-        @Override
-        public long approximateNumEntries() {
-            return 0L;
-        }
-
-        @Override
-        public String name() {
-            return "";
-        }
-
-        @Override
-        public void init(final ProcessorContext context, final StateStore root) {
-
-        }
-
-        @Override
-        public void flush() {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
-
-        @Override
-        public boolean persistent() {
-            return false;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return false;
-        }
-
-    }
 }

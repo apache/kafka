@@ -19,8 +19,9 @@ package kafka.tools
 
 import java.io.BufferedReader
 import java.io.FileReader
+
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security.JaasUtils
 
@@ -61,7 +62,7 @@ object ImportZkOffsets extends Logging {
     
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
     
     CommandLineUtils.checkRequiredArgs(parser, options, inFileOpt)

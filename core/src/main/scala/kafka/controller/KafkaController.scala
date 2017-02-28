@@ -188,7 +188,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
           if (!isActive)
             0
           else
-            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
+            controllerContext.partitionLeadershipInfo.count(p => 
+              (!controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
+              && (!deleteTopicManager.isTopicQueuedUpForDeletion(p._1.topic))
+            )
         }
       }
     }
@@ -203,19 +206,22 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
             0
           else
             controllerContext.partitionReplicaAssignment.count {
-              case (topicPartition, replicas) => controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head
+              case (topicPartition, replicas) => 
+                (controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head 
+                && (!deleteTopicManager.isTopicQueuedUpForDeletion(topicPartition.topic))
+                )
             }
         }
       }
     }
   )
 
-  def epoch = controllerContext.epoch
+  def epoch: Int = controllerContext.epoch
 
-  def clientId = {
-    val listeners = config.listeners
-    val controllerListener = listeners.get(config.interBrokerSecurityProtocol)
-    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
+  def clientId: String = {
+    val controllerListener = config.listeners.find(_.listenerName == config.interBrokerListenerName).getOrElse(
+      throw new IllegalArgumentException(s"No listener with name ${config.interBrokerListenerName} is configured."))
+    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.host, controllerListener.port)
   }
 
   /**
@@ -226,7 +232,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def shutdownBroker(id: Int) : Set[TopicAndPartition] = {
+  def shutdownBroker(id: Int): Set[TopicAndPartition] = {
 
     if (!isActive) {
       throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")
@@ -689,8 +695,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     onControllerResignation()
   }
 
-  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractResponse => Unit = null) = {
-    controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, apiVersion, request, callback)
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                  callback: AbstractResponse => Unit = null) = {
+    controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
   }
 
   def incrementControllerEpoch(zkClient: ZkClient) = {
@@ -1162,9 +1169,16 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     @throws[Exception]
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
-      onControllerResignation()
-      inLock(controllerContext.controllerLock) {
-        controllerElector.elect
+      if (controllerElector.getControllerID() != config.brokerId) {
+        onControllerResignation()
+        inLock(controllerContext.controllerLock) {
+          controllerElector.elect
+        }
+      } else {
+        // This can happen when there are multiple consecutive session expiration and handleNewSession() are called multiple
+        // times. The first call may already register the controller path using the newest ZK session. Therefore, the
+        // controller path will exist in subsequent calls to handleNewSession().
+        info("ZK expired, but the current controller id %d is the same as this broker id, skip re-elect".format(config.brokerId))
       }
     }
 

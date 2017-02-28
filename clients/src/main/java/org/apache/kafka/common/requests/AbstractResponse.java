@@ -21,19 +21,33 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
+
 public abstract class AbstractResponse extends AbstractRequestResponse {
 
-    public AbstractResponse(Struct struct) {
-        super(struct);
+    public Send toSend(String destination, RequestHeader requestHeader) {
+        return toSend(destination, requestHeader.apiVersion(), requestHeader.toResponseHeader());
     }
 
-    public Send toSend(String destination, RequestHeader request) {
-        ResponseHeader responseHeader = new ResponseHeader(request.correlationId());
-        return new NetworkSend(destination, serialize(responseHeader, this));
+    /**
+     * This should only be used if we need to return a response with a different version than the request, which
+     * should be very rare (an example is @link {@link ApiVersionsResponse#unsupportedVersionSend(String, RequestHeader)}).
+     * Typically {@link #toSend(String, RequestHeader)} should be used.
+     */
+    public Send toSend(String destination, short version, ResponseHeader responseHeader) {
+        return new NetworkSend(destination, serialize(version, responseHeader));
     }
 
-    public static AbstractResponse getResponse(int requestId, Struct struct) {
-        ApiKeys apiKey = ApiKeys.forId(requestId);
+    /**
+     * Visible for testing, typically {@link #toSend(String, RequestHeader)} should be used instead.
+     */
+    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
+        return serialize(responseHeader.toStruct(), toStruct(version));
+    }
+
+    protected abstract Struct toStruct(short version);
+
+    public static AbstractResponse getResponse(ApiKeys apiKey, Struct struct) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);

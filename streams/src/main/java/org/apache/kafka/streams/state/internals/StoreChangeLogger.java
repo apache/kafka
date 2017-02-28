@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -58,7 +57,7 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(new ProducerRecord<>(this.topic, this.partition, context.timestamp(), key, value), keySerializer, valueSerializer);
+            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
 

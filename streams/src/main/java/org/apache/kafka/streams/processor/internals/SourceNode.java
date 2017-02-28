@@ -21,31 +21,35 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+import java.util.List;
+
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
+    private final List<String> topics;
+
+    private ProcessorContext context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
-    private ProcessorContext context;
-    private String[] topics;
 
-    public SourceNode(String name, String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
     }
 
-    public K deserializeKey(String topic, byte[] data) {
+    K deserializeKey(String topic, byte[] data) {
         return keyDeserializer.deserialize(topic, data);
     }
 
-    public V deserializeValue(String topic, byte[] data) {
+    V deserializeValue(String topic, byte[] data) {
         return valDeserializer.deserialize(topic, data);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
+        super.init(context);
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
@@ -64,24 +68,30 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-    }
-
-    @Override
-    public void close() {
-        // do nothing
+        nodeMetrics.sourceNodeForwardSensor.record();
     }
 
     /**
      * @return a string representation of this node, useful for debugging.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("topics: [");
+        return toString("");
+    }
+
+    /**
+     * @return a string representation of this node starting with the given indent, useful for debugging.
+     */
+    public String toString(String indent) {
+        final StringBuilder sb = new StringBuilder(super.toString(indent));
+        sb.append(indent).append("\ttopics:\t\t[");
         for (String topic : topics) {
-            sb.append(topic + ",");
+            sb.append(topic);
+            sb.append(", ");
         }
-        sb.setLength(sb.length() - 1);
-        sb.append("] ");
+        sb.setLength(sb.length() - 2);  // remove the last comma
+        sb.append("]\n");
         return sb.toString();
     }
+
 }

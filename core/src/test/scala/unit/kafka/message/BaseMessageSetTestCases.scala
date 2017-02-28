@@ -18,7 +18,8 @@
 package kafka.message
 
 import java.nio.ByteBuffer
-import java.nio.channels.GatheringByteChannel
+import java.nio.channels.{FileChannel, GatheringByteChannel}
+import java.nio.file.StandardOpenOption
 
 import org.junit.Assert._
 import kafka.utils.TestUtils._
@@ -118,14 +119,13 @@ trait BaseMessageSetTestCases extends JUnitSuite {
     // do the write twice to ensure the message set is restored to its original state
     for (_ <- 0 to 1) {
       val file = tempFile()
-      val fileRecords = FileRecords.open(file, true)
+      val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
       try {
-        val written = write(fileRecords.channel)
-        fileRecords.resize() // resize since we wrote to the channel directly
-
+        val written = write(channel)
         assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
+        val fileRecords = new FileRecords(file, channel, 0, Integer.MAX_VALUE, false)
         assertEquals(set.asRecords.deepEntries.asScala.toVector, fileRecords.deepEntries.asScala.toVector)
-      } finally fileRecords.close()
+      } finally channel.close()
     }
   }
   

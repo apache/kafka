@@ -19,7 +19,7 @@
 # due to python version naming restrictions, which are enforced by python packaging tools
 # (see  https://www.python.org/dev/peps/pep-0440/)
 #
-# Instead, in trunk, the version should have a suffix of the form ".devN"
+# Instead, in development branches, the version should have a suffix of the form ".devN"
 #
 # For example, when Kafka is at version 0.9.0.0-SNAPSHOT, this should be something like "0.9.0.0.dev0"
-__version__ = '0.10.2.0.dev0'
+__version__ = '0.10.3.0.dev0'

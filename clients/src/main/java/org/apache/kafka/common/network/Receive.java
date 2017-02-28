@@ -27,12 +27,12 @@ public interface Receive {
     /**
      * The numeric id of the source from which we are receiving data.
      */
-    public String source();
+    String source();
 
     /**
      * Are we done receiving data?
      */
-    public boolean complete();
+    boolean complete();
 
     /**
      * Read bytes into this receive from the given channel
@@ -40,6 +40,6 @@ public interface Receive {
      * @return The number of bytes read
      * @throws IOException If the reading fails
      */
-    public long readFrom(ScatteringByteChannel channel) throws IOException;
+    long readFrom(ScatteringByteChannel channel) throws IOException;
 
 }

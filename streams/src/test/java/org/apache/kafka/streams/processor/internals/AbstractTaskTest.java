@@ -25,6 +25,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -58,6 +61,7 @@ public class AbstractTaskTest {
     }
 
     private AbstractTask createTask(final Consumer consumer) {
+        final MockTime time = new MockTime();
         return new AbstractTask(new TaskId(0, 0),
                                 "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
@@ -66,13 +70,12 @@ public class AbstractTaskTest {
                                                       Collections.<String, SinkNode>emptyMap(),
                                                       Collections.<StateStore>emptyList(),
                                                       Collections.<String, String>emptyMap(),
-                                                      Collections.<StateStore, ProcessorNode>emptyMap()
-                                               ),
+                                                      Collections.<StateStore>emptyList()),
                                 consumer,
-                                consumer,
+                                new StoreChangelogReader(consumer, Time.SYSTEM, 5000),
                                 false,
-                                new StateDirectory("app", TestUtils.tempDirectory().getPath()),
-                                new ThreadCache(0)) {
+                                new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
+                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
             public void commit() {
                 // do nothing

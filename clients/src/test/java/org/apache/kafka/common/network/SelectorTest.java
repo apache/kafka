@@ -111,7 +111,7 @@ public class SelectorTest {
      */
     @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
     }
 
     /**
@@ -261,7 +261,7 @@ public class SelectorTest {
         assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
     }
 
-    
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -272,7 +272,7 @@ public class SelectorTest {
                     return asString(receive);
         }
     }
-    
+
     protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
         selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
     }

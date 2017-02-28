@@ -16,19 +16,35 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-public interface RecordCollector {
-    <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer);
+import java.util.Map;
 
-    <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                     StreamPartitioner<K, V> partitioner);
+public interface RecordCollector {
+    <K, V> void send(final String topic,
+                     K key,
+                     V value,
+                     Integer partition,
+                     Long timestamp,
+                     Serializer<K> keySerializer,
+                     Serializer<V> valueSerializer);
+
+    <K, V> void send(final String topic,
+                     K key,
+                     V value,
+                     Integer partition,
+                     Long timestamp,
+                     Serializer<K> keySerializer,
+                     Serializer<V> valueSerializer,
+                     StreamPartitioner<? super K, ? super V> partitioner);
 
     void flush();
 
     void close();
+
+    Map<TopicPartition, Long> offsets();
 
     /**
      * A supplier of a {@link RecordCollectorImpl} instance.

@@ -14,18 +14,31 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * Indicates that there was a problem when trying to access
- * a {@link org.apache.kafka.streams.processor.StateStore}, i.e, the Store is no longer valid because it is closed
- * or doesn't exist any more due to a rebalance.
- *
+ * Indicates that there was a problem when trying to access a
+ * {@link org.apache.kafka.streams.processor.StateStore StateStore}, i.e, the Store is no longer valid because it is
+ * closed or doesn't exist any more due to a rebalance.
+ * <p>
  * These exceptions may be transient, i.e., during a rebalance it won't be possible to query the stores as they are
  * being (re)-initialized. Once the rebalance has completed the stores will be available again. Hence, it is valid
  * to backoff and retry when handling this exception.
  */
+@InterfaceStability.Unstable
 public class InvalidStateStoreException extends StreamsException {
+
+    private final static long serialVersionUID = 1L;
 
     public InvalidStateStoreException(final String message) {
         super(message);
+    }
+
+    public InvalidStateStoreException(final String message, final Throwable throwable) {
+        super(message, throwable);
+    }
+
+    public InvalidStateStoreException(final Throwable throwable) {
+        super(throwable);
     }
 }

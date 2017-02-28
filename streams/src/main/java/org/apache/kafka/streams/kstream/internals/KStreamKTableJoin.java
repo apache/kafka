@@ -17,59 +17,32 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
+    private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
+        @Override
+        public K apply(final K key, final V1 value) {
+            return key;
+        }
+    };
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoiner<V1, V2, R> joiner;
+    private final ValueJoiner<? super V1, ? super V2, R> joiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean leftJoin) {
-        valueGetterSupplier = table.valueGetterSupplier();
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final ValueJoiner<? super V1, ? super V2, R> joiner, final boolean leftJoin) {
+        this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
     }
 
     @Override
     public Processor<K, V1> get() {
-        return new KStreamKTableJoinProcessor(valueGetterSupplier.get(), leftJoin);
+        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin);
     }
 
-    private class KStreamKTableJoinProcessor extends AbstractProcessor<K, V1> {
-
-        private final KTableValueGetter<K, V2> valueGetter;
-        private final boolean leftJoin;
-
-        KStreamKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter, final boolean leftJoin) {
-            this.valueGetter = valueGetter;
-            this.leftJoin = leftJoin;
-        }
-
-        @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            valueGetter.init(context);
-        }
-
-        @Override
-        public void process(final K key, final V1 value) {
-            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
-            //
-            // we also ignore the record if value is null, because in a key-value data model a null-value indicates
-            // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
-            // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
-            // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-            if (key != null && value != null) {
-                final V2 value2 = valueGetter.get(key);
-                if (leftJoin || value2 != null) {
-                    context().forward(key, joiner.apply(value, value2));
-                }
-            }
-        }
-    }
 }

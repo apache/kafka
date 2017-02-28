@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 
@@ -41,8 +40,7 @@ import java.util.Map;
  * "table_name"} and the sourceOffset as a Long containing the timestamp of the row.
  * </p>
  */
-@InterfaceStability.Unstable
-public class SourceRecord extends ConnectRecord {
+public class SourceRecord extends ConnectRecord<SourceRecord> {
     private final Map<String, ?> sourcePartition;
     private final Map<String, ?> sourceOffset;
 
@@ -83,6 +81,11 @@ public class SourceRecord extends ConnectRecord {
 
     public Map<String, ?> sourceOffset() {
         return sourceOffset;
+    }
+
+    @Override
+    public SourceRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp);
     }
 
     @Override

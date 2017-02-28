@@ -32,7 +32,6 @@ buildscript {
 
 allprojects {
   apply plugin: 'idea'
-  apply plugin: 'eclipse'
   apply plugin: "jacoco"
 
   repositories {
@@ -108,13 +107,20 @@ if (new File('.git').exists()) {
         'CONTRIBUTING.md',
         'gradlew',
         'gradlew.bat',
-        '**/README.md'
+        '**/README.md',
+        '**/id_rsa',
+        '**/id_rsa.pub'
     ])
   }
 }
 
 subprojects {
   apply plugin: 'java'
+  // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
+  if (!project.name.equals('connect')) {
+    apply plugin: 'eclipse'
+    fineTuneEclipseClasspathFile(eclipse, project)
+  }
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
@@ -175,21 +181,21 @@ subprojects {
   }
 
   jar {
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
   }
 
   task srcJar(type: Jar) {
     classifier = 'sources'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier 'javadoc'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from javadoc.destinationDir
   }
 
@@ -211,15 +217,15 @@ subprojects {
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
       classifier = 'test'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.output
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
       classifier = 'test-sources'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.allSource
     }
 
@@ -232,8 +238,8 @@ subprojects {
   plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from scaladoc.destinationDir
     }
 
@@ -250,7 +256,6 @@ subprojects {
       "-deprecation",
       "-unchecked",
       "-encoding", "utf8",
-      "-target:jvm-${sourceCompatibility}".toString(),
       "-Xlog-reflective-calls",
       "-feature",
       "-language:postfixOps",
@@ -285,6 +290,41 @@ subprojects {
       }
     }
   }
+
+  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+  task reportCoverage(dependsOn: [coverageGen])
+
+}
+
+def fineTuneEclipseClasspathFile(eclipse, project) {
+  eclipse.classpath.file {
+    beforeMerged { cp ->
+      cp.entries.clear()
+      // for the core project add the directories defined under test/scala as separate source directories
+      if (project.name.equals('core')) {
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/integration", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/other", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/unit", null))
+      }
+    }
+    whenMerged { cp ->
+      // for the core project exclude the separate sub-directories defined under test/scala. These are added as source dirs above
+      if (project.name.equals('core')) {
+        cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
+      }
+      /* 
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+       * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
+       * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
+       */
+      cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
+      /*
+       * Some projects have explicitly added test output dependencies. These are required for the gradle build but not required
+       * in Eclipse since the dependent projects are added as dependencies. So clean up these from the generated classpath.
+       */
+      cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
+    }
+  }
 }
 
 // Aggregates all jacoco results into the root project directory
@@ -311,7 +351,7 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
 for ( sv in ['2_10', '2_11', '2_12'] ) {
   String svInDot = sv.replaceAll( "_", ".")
@@ -359,7 +399,7 @@ for ( sv in ['2_10', '2_11', '2_12'] ) {
   }
 }
 
-def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
@@ -414,6 +454,7 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalaTest
+    testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
@@ -505,11 +546,11 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs',
+                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
                                ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
-    from project.file("../docs")
+    from project.file("$rootDir/docs")
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -517,10 +558,10 @@ project(':core') {
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${versions.baseScala}-${version}"
     compression = Compression.GZIP
-    from(project.file("../bin")) { into "bin/" }
-    from(project.file("../config")) { into "config/" }
-    from '../LICENSE'
-    from '../NOTICE'
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
@@ -530,6 +571,8 @@ project(':core') {
     from(project(':connect:api').configurations.runtime) { into("libs/") }
     from(project(':connect:runtime').jar) { into("libs/") }
     from(project(':connect:runtime').configurations.runtime) { into("libs/") }
+    from(project(':connect:transforms').jar) { into("libs/") }
+    from(project(':connect:transforms').configurations.runtime) { into("libs/") }
     from(project(':connect:json').jar) { into("libs/") }
     from(project(':connect:json').configurations.runtime) { into("libs/") }
     from(project(':connect:file').jar) { into("libs/") }
@@ -602,12 +645,12 @@ project(':clients') {
   task determineCommitId {
     ext.commitId = "unknown"
     def takeFromHash = 16
-    if (file("../.git/HEAD").exists()) {
-      def headRef = file("../.git/HEAD").text
+    if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("../.git/$headRef").exists()) {
-        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+        if (file("$rootDir/.git/$headRef").exists()) {
+        commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
         }
       } else {
         commitId = headRef.trim().take(takeFromHash)
@@ -695,21 +738,6 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jApi
     compile libs.rocksDBJni
-
-    // the following 3 dependencies should be removed after KIP-4 (zkclient, zookeeper, jacksonDatabind)
-    compile (libs.zkclient) {
-      exclude module: 'zookeeper'
-    }
-
-    compile (libs.zookeeper) {
-      exclude module: 'jline'
-      exclude module: 'netty'
-      // users should be able to choose the logging implementation (and slf4j bridge)
-      exclude module: 'slf4j-log4j12'
-      exclude module: 'log4j'
-    }
-
-    compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
@@ -828,6 +856,42 @@ project(':connect:api') {
   }
 }
 
+project(':connect:transforms') {
+  archivesBaseName = "connect-transforms"
+
+  dependencies {
+    compile project(':connect:api')
+    compile libs.slf4jApi
+
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
 project(':connect:json') {
   archivesBaseName = "connect-json"
 
@@ -870,6 +934,7 @@ project(':connect:runtime') {
 
   dependencies {
     compile project(':connect:api')
+    compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
     compile libs.slf4jApi
@@ -889,6 +954,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
+
     testCompile project(":connect:json")
 
     testRuntime libs.slf4jlog4j
@@ -919,6 +985,13 @@ project(':connect:runtime') {
     main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
+  }
+
+  task genConnectTransformationDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.tools.TransformationDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
 }
 

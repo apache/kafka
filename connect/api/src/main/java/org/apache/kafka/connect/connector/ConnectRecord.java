@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.data.Schema;
 
 /**
@@ -28,8 +27,7 @@ import org.apache.kafka.connect.data.Schema;
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
-@InterfaceStability.Unstable
-public abstract class ConnectRecord {
+public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final String topic;
     private final Integer kafkaPartition;
     private final Schema keySchema;
@@ -78,6 +76,9 @@ public abstract class ConnectRecord {
     public Long timestamp() {
         return timestamp;
     }
+
+    /** Generate a new record of the same type as itself, with the specified parameter values. **/
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
 
     @Override
     public String toString() {

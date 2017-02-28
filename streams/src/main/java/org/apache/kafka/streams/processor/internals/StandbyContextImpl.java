@@ -17,29 +17,39 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import java.io.File;
+import java.util.Collections;
 import java.util.Map;
 
-public class StandbyContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
         @Override
-        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
         }
 
         @Override
-        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<K, V> partitioner) {
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer,
+                                StreamPartitioner<? super K, ? super V> partitioner) {
 
         }
 
@@ -52,89 +62,29 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
         public void close() {
 
         }
+
+        @Override
+        public Map<TopicPartition, Long> offsets() {
+            return Collections.emptyMap();
+        }
     };
 
-    private final TaskId id;
-    private final String applicationId;
-    private final StreamsMetrics metrics;
-    private final ProcessorStateManager stateMgr;
-
-    private final StreamsConfig config;
-    private final Serde<?> keySerde;
-    private final Serde<?> valSerde;
-    private final ThreadCache zeroSizedCache = new ThreadCache(0);
-
-    private boolean initialized;
-
-    public StandbyContextImpl(TaskId id,
-                              String applicationId,
-                              StreamsConfig config,
-                              ProcessorStateManager stateMgr,
-                              StreamsMetrics metrics) {
-        this.id = id;
-        this.applicationId = applicationId;
-        this.metrics = metrics;
-        this.stateMgr = stateMgr;
-
-        this.config = config;
-        this.keySerde = config.keySerde();
-        this.valSerde = config.valueSerde();
-
-        this.initialized = false;
+    public StandbyContextImpl(final TaskId id,
+                       final String applicationId,
+                       final StreamsConfig config,
+                       final ProcessorStateManager stateMgr,
+                       final StreamsMetrics metrics) {
+        super(id, applicationId, config, metrics, stateMgr, new ThreadCache("zeroCache", 0, metrics));
     }
 
-    public void initialized() {
-        this.initialized = true;
-    }
 
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
-    }
-
-    @Override
-    public TaskId taskId() {
-        return id;
-    }
-
-    @Override
-    public String applicationId() {
-        return applicationId;
+    StateManager getStateMgr() {
+        return stateManager;
     }
 
     @Override
     public RecordCollector recordCollector() {
         return NO_OP_COLLECTOR;
-    }
-
-    @Override
-    public Serde<?> keySerde() {
-        return this.keySerde;
-    }
-
-    @Override
-    public Serde<?> valueSerde() {
-        return this.valSerde;
-    }
-
-    @Override
-    public File stateDir() {
-        return stateMgr.baseDir();
-    }
-
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
-    }
-
-    /**
-     * @throws IllegalStateException
-     */
-    @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
-
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
     /**
@@ -143,11 +93,6 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     @Override
     public StateStore getStateStore(String name) {
         throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
-    }
-
-    @Override
-    public ThreadCache getCache() {
-        return zeroSizedCache;
     }
 
     /**
@@ -222,15 +167,6 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 
-    @Override
-    public Map<String, Object> appConfigs() {
-        return config.originals();
-    }
-
-    @Override
-    public Map<String, Object> appConfigsWithPrefix(String prefix) {
-        return config.originalsWithPrefix(prefix);
-    }
 
     @Override
     public RecordContext recordContext() {

@@ -17,15 +17,28 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * A {@link TransformerSupplier} interface which can create one or more {@link Transformer} instances.
+ * A {@code TransformerSupplier} interface which can create one or more {@link Transformer} instances.
+ *
+ * @param <K> key type
+ * @param <V> value type
+ * @param <R> {@link org.apache.kafka.streams.KeyValue KeyValue} return type (both key and value type can be set
+ *            arbitrarily)
+ * @see Transformer
+ * @see KStream#transform(TransformerSupplier, String...)
+ * @see ValueTransformer
+ * @see ValueTransformerSupplier
+ * @see KStream#transformValues(ValueTransformerSupplier, String...)
  */
+@InterfaceStability.Unstable
 public interface TransformerSupplier<K, V, R> {
 
     /**
      * Return a new {@link Transformer} instance.
      *
-     * @return  a new {@link Transformer} instance
+     * @return a new {@link Transformer} instance
      */
     Transformer<K, V, R> get();
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -85,6 +86,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Mock private SourceTask sourceTask;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private TransformationChain<SourceRecord> transformationChain;
     @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private OffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
@@ -124,8 +126,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask(TargetState initialState) {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter,
-                valueConverter, producer, offsetReader, offsetWriter, config, Time.SYSTEM);
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, transformationChain,
+                producer, offsetReader, offsetWriter, config, Time.SYSTEM);
     }
 
     @Test
@@ -144,6 +146,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         });
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
@@ -189,6 +194,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -237,6 +245,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -282,6 +293,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -320,6 +334,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -361,6 +378,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -415,6 +435,46 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Whitebox.setInternalState(workerTask, "toSend", records);
         Whitebox.invokeMethod(workerTask, "sendRecords");
         assertEquals(timestamp, sent.getValue().timestamp());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testSendRecordsCorruptTimestamp() throws Exception {
+        final Long timestamp = -3L;
+        createWorkerTask();
+
+        List<SourceRecord> records = Collections.singletonList(
+                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
+        );
+
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", records);
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(null, sent.getValue().timestamp());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSendRecordsNoTimestamp() throws Exception {
+        final Long timestamp = -1L;
+        createWorkerTask();
+
+        List<SourceRecord> records = Collections.singletonList(
+                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
+        );
+
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", records);
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(null, sent.getValue().timestamp());
 
         PowerMock.verifyAll();
     }
@@ -509,6 +569,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -553,6 +616,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
         expectConvertKeyValue(false);
+        expectApplyTransformationChain(false);
 
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall();
@@ -581,6 +645,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
+        expectApplyTransformationChain(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
 
@@ -632,6 +697,25 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             convertValueExpect.andStubReturn(SERIALIZED_RECORD);
         else
             convertValueExpect.andReturn(SERIALIZED_RECORD);
+    }
+
+    private void expectApplyTransformationChain(boolean anyTimes) {
+        final Capture<SourceRecord> recordCapture = EasyMock.newCapture();
+        IExpectationSetters<SourceRecord> convertKeyExpect = EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)));
+        if (anyTimes)
+            convertKeyExpect.andStubAnswer(new IAnswer<SourceRecord>() {
+                @Override
+                public SourceRecord answer() {
+                    return recordCapture.getValue();
+                }
+            });
+        else
+            convertKeyExpect.andAnswer(new IAnswer<SourceRecord>() {
+                @Override
+                public SourceRecord answer() {
+                    return recordCapture.getValue();
+                }
+            });
     }
 
     private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {

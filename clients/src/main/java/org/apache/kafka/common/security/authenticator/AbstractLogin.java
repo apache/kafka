@@ -18,7 +18,6 @@
 
 package org.apache.kafka.common.security.authenticator;
 
-import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.security.sasl.RealmCallback;
@@ -29,6 +28,7 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.Subject;
 
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.Login;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,20 +41,17 @@ import java.util.Map;
 public abstract class AbstractLogin implements Login {
     private static final Logger log = LoggerFactory.getLogger(AbstractLogin.class);
 
-    private Configuration jaasConfig;
-    private String loginContextName;
+    private JaasContext jaasContext;
     private LoginContext loginContext;
 
-
     @Override
-    public void configure(Map<String, ?> configs, Configuration jaasConfig, String loginContextName) {
-        this.jaasConfig = jaasConfig;
-        this.loginContextName = loginContextName;
+    public void configure(Map<String, ?> configs, JaasContext jaasContext) {
+        this.jaasContext = jaasContext;
     }
 
     @Override
     public LoginContext login() throws LoginException {
-        loginContext = new LoginContext(loginContextName, null, new LoginCallbackHandler(), jaasConfig);
+        loginContext = new LoginContext(jaasContext.name(), null, new LoginCallbackHandler(), jaasContext.configuration());
         loginContext.login();
         log.info("Successfully logged in.");
         return loginContext;
@@ -65,8 +62,8 @@ public abstract class AbstractLogin implements Login {
         return loginContext.getSubject();
     }
 
-    protected Configuration jaasConfig() {
-        return jaasConfig;
+    protected JaasContext jaasContext() {
+        return jaasContext;
     }
 
     /**

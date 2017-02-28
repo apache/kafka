@@ -49,13 +49,13 @@ public class KStreamFlatMapTest {
     public void testFlatMap() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        KeyValueMapper<Integer, String, Iterable<KeyValue<String, String>>> mapper =
-            new KeyValueMapper<Integer, String, Iterable<KeyValue<String, String>>>() {
+        KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
+            new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
                 @Override
-                public Iterable<KeyValue<String, String>> apply(Integer key, String value) {
+                public Iterable<KeyValue<String, String>> apply(Number key, Object value) {
                     ArrayList<KeyValue<String, String>> result = new ArrayList<>();
-                    for (int i = 0; i < key; i++) {
-                        result.add(KeyValue.pair(Integer.toString(key * 10 + i), value));
+                    for (int i = 0; i < key.intValue(); i++) {
+                        result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
                     }
                     return result;
                 }
@@ -71,8 +71,8 @@ public class KStreamFlatMapTest {
         stream.flatMap(mapper).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(6, processor.processed.size());

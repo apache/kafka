@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -25,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
+    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -66,14 +65,12 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
             valueGetter.init(context);
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
         @Override
         public void process(final K key, final Change<V1> change) {
-            // the keys should never be null
-            if (key == null)
-                throw new StreamsException("Record key for KTable left-join operator should not be null.");
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            if (key == null) {
+                return;
+            }
 
             R newValue = null;
             R oldValue = null;

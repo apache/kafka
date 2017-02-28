@@ -21,15 +21,12 @@ import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.utils.Utils;
 
 public class FetchRequest extends AbstractRequest {
-
     public static final int CONSUMER_REPLICA_ID = -1;
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.FETCH.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
@@ -63,6 +60,11 @@ public class FetchRequest extends AbstractRequest {
             this.offset = offset;
             this.maxBytes = maxBytes;
         }
+
+        @Override
+        public String toString() {
+            return "(offset=" + offset + ", maxBytes=" + maxBytes + ")";
+        }
     }
 
     static final class TopicAndPartitionData<T> {
@@ -88,67 +90,66 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    /**
-     * Create a non-replica fetch request for versions 0, 1 or 2 (the version is set via the RequestHeader).
-     */
-    @Deprecated
-    public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        // Any of 0, 1 or 2 would do here since the schemas for these versions are identical
-        this(2, CONSUMER_REPLICA_ID, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
-    }
+    public static class Builder extends AbstractRequest.Builder<FetchRequest> {
+        private final int maxWait;
+        private final int minBytes;
+        private final int replicaId;
+        private final LinkedHashMap<TopicPartition, PartitionData> fetchData;
+        private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
 
-    /**
-     * Create a non-replica fetch request for the current version.
-     */
-    public FetchRequest(int maxWait, int minBytes, int maxBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, maxBytes, fetchData);
-    }
-
-    /**
-     * Create a replica fetch request for versions 0, 1 or 2 (the actual version is determined by the RequestHeader).
-     */
-    @Deprecated
-    public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes,
-                                           Map<TopicPartition, PartitionData> fetchData) {
-        // Any of 0, 1 or 2 would do here since the schemas for these versions are identical
-        return new FetchRequest(2, replicaId, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
-    }
-
-    /**
-     * Create a replica fetch request for the current version.
-     */
-    public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes, int maxBytes,
-                                           LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-        return new FetchRequest(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, maxBytes, fetchData);
-    }
-
-    private FetchRequest(int version, int replicaId, int maxWait, int minBytes, int maxBytes,
-                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version)));
-        List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
-
-        struct.set(REPLICA_ID_KEY_NAME, replicaId);
-        struct.set(MAX_WAIT_KEY_NAME, maxWait);
-        struct.set(MIN_BYTES_KEY_NAME, minBytes);
-        if (version >= 3)
-            struct.set(MAX_BYTES_KEY_NAME, maxBytes);
-        List<Struct> topicArray = new ArrayList<>();
-        for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
-            Struct topicData = struct.instance(TOPICS_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
-                PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(FETCH_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                partitionData.set(MAX_BYTES_KEY_NAME, fetchPartitionData.maxBytes);
-                partitionArray.add(partitionData);
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
+        public static Builder forConsumer(int maxWait, int minBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+            return new Builder(null, CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData);
         }
-        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+
+        public static Builder forReplica(short desiredVersion, int replicaId, int maxWait, int minBytes,
+                                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+            return new Builder(desiredVersion, replicaId, maxWait, minBytes, fetchData);
+        }
+
+        private Builder(Short desiredVersion, int replicaId, int maxWait, int minBytes,
+                        LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+            super(ApiKeys.FETCH, desiredVersion);
+            this.replicaId = replicaId;
+            this.maxWait = maxWait;
+            this.minBytes = minBytes;
+            this.fetchData = fetchData;
+        }
+
+        public LinkedHashMap<TopicPartition, PartitionData> fetchData() {
+            return this.fetchData;
+        }
+
+        public Builder setMaxBytes(int maxBytes) {
+            this.maxBytes = maxBytes;
+            return this;
+        }
+
+        @Override
+        public FetchRequest build(short version) {
+            if (version < 3) {
+                maxBytes = -1;
+            }
+
+            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type:FetchRequest").
+                    append(", replicaId=").append(replicaId).
+                    append(", maxWait=").append(maxWait).
+                    append(", minBytes=").append(minBytes).
+                    append(", maxBytes=").append(maxBytes).
+                    append(", fetchData=").append(Utils.mkString(fetchData)).
+                    append(")");
+            return bld.toString();
+        }
+    }
+
+    private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
+                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+        super(version);
         this.replicaId = replicaId;
         this.maxWait = maxWait;
         this.minBytes = minBytes;
@@ -156,8 +157,8 @@ public class FetchRequest extends AbstractRequest {
         this.fetchData = fetchData;
     }
 
-    public FetchRequest(Struct struct) {
-        super(struct);
+    public FetchRequest(Struct struct, short version) {
+        super(version);
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         maxWait = struct.getInt(MAX_WAIT_KEY_NAME);
         minBytes = struct.getInt(MIN_BYTES_KEY_NAME);
@@ -181,27 +182,16 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+    public AbstractResponse getErrorResponse(Throwable e) {
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
-            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
+            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e),
                     FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY);
 
             responseData.put(entry.getKey(), partitionResponse);
         }
-
-        switch (versionId) {
-            case 0:
-                return new FetchResponse(responseData);
-            case 1:
-            case 2:
-            case 3:
-                return new FetchResponse(responseData, 0);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.FETCH.id)));
-        }
+        return new FetchResponse(responseData, 0);
     }
 
     public int replicaId() {
@@ -228,11 +218,38 @@ public class FetchRequest extends AbstractRequest {
         return replicaId >= 0;
     }
 
-    public static FetchRequest parse(ByteBuffer buffer, int versionId) {
-        return new FetchRequest(ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer));
+    public static FetchRequest parse(ByteBuffer buffer, short version) {
+        return new FetchRequest(ApiKeys.FETCH.parseRequest(version, buffer), version);
     }
 
-    public static FetchRequest parse(ByteBuffer buffer) {
-        return new FetchRequest(CURRENT_SCHEMA.read(buffer));
+    @Override
+    protected Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ApiKeys.FETCH.requestSchema(version));
+        List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
+
+        struct.set(REPLICA_ID_KEY_NAME, replicaId);
+        struct.set(MAX_WAIT_KEY_NAME, maxWait);
+        struct.set(MIN_BYTES_KEY_NAME, minBytes);
+        if (version >= 3)
+            struct.set(MAX_BYTES_KEY_NAME, maxBytes);
+        List<Struct> topicArray = new ArrayList<>();
+        for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
+            Struct topicData = struct.instance(TOPICS_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
+                PartitionData fetchPartitionData = partitionEntry.getValue();
+                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                partitionData.set(FETCH_OFFSET_KEY_NAME, fetchPartitionData.offset);
+                partitionData.set(MAX_BYTES_KEY_NAME, fetchPartitionData.maxBytes);
+                partitionArray.add(partitionData);
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        return struct;
     }
 }

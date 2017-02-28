@@ -100,6 +100,22 @@
 
     For any other options, you should consult the documentation for the connector.
 
+    <h4><a id="connect_transforms" href="#connect_transforms">Transformations</a></h4>
+
+    Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for minor data massaging and routing changes.
+
+    A transformation chain can be specified in the connector configuration.
+
+    <ul>
+        <li><code>transforms</code> - List of aliases for the transformation, specifying the order in which the transformations will be applied.</li>
+        <li><code>transforms.$alias.type</code> - Fully qualified class name for the transformation.</li>
+        <li><code>transforms.$alias.$transformationSpecificConfig</code> Configuration properties for the transformation</li>
+    </ul>
+
+    Several widely-applicable data and routing transformations are included with Kafka Connect:
+
+    <!--#include virtual="generated/connect_transforms.html" -->
+
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
     Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:

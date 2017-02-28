@@ -39,11 +39,9 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -52,8 +50,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -128,19 +124,16 @@ import java.util.concurrent.atomic.AtomicReference;
  * The <code>key.serializer</code> and <code>value.serializer</code> instruct how to turn the key and value objects the user provides with
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
  * {@link org.apache.kafka.common.serialization.StringSerializer} for simple string or byte types.
+ * <p>
+ * This client can communicate with brokers that are version 0.10.0 or newer. Older or newer brokers may not support
+ * certain client features.  You will receive an UnsupportedVersionException when invoking an API that is not available
+ * with the running broker verion.
  */
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
-    /**
-     * APIs used by KafkaProducer
-     */
-    private static final List<ApiKeys> PRODUCER_APIS = Arrays.asList(
-            ApiKeys.METADATA,
-            ApiKeys.PRODUCE);
-    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(PRODUCER_APIS);
 
     private String clientId;
     private final Partitioner partitioner;
@@ -253,7 +246,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             // load interceptors and make sure they get clientId
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs, false)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
 
@@ -309,7 +302,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
                     this.metadata,
@@ -320,7 +313,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                     this.requestTimeoutMs,
                     time,
-                    EXPECTED_API_VERSIONS);
+                    true);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
@@ -632,7 +625,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Get the partition metadata for the give topic. This can be used for custom partitioning.
+     * Get the partition metadata for the given topic. This can be used for custom partitioning.
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override

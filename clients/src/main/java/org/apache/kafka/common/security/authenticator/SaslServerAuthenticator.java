@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -44,6 +45,9 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -54,7 +58,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.security.auth.Subject;
-import javax.security.auth.login.Configuration;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
@@ -78,11 +81,12 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private final String node;
-    private final Configuration jaasConfig;
+    private final JaasContext jaasContext;
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
     private final int maxReceiveSize;
     private final String host;
+    private final CredentialCache credentialCache;
 
     // Current SASL state
     private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
@@ -101,15 +105,16 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
 
-    public SaslServerAuthenticator(String node, Configuration jaasConfig, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
+    public SaslServerAuthenticator(String node, JaasContext jaasContext, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize, CredentialCache credentialCache) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.node = node;
-        this.jaasConfig = jaasConfig;
+        this.jaasContext = jaasContext;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
         this.maxReceiveSize = maxReceiveSize;
         this.host = host;
+        this.credentialCache = credentialCache;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
@@ -123,7 +128,10 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
-        callbackHandler = new SaslServerCallbackHandler(jaasConfig, kerberosNamer);
+        if (!ScramMechanism.isScram(mechanism))
+            callbackHandler = new SaslServerCallbackHandler(jaasContext, kerberosNamer);
+        else
+            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             if (subject.getPrincipals().isEmpty())
@@ -300,11 +308,12 @@ public class SaslServerAuthenticator implements Authenticator {
 
             if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
                 if (apiKey == ApiKeys.API_VERSIONS)
-                    sendKafkaResponse(requestHeader, ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION));
+                    sendKafkaResponse(ApiVersionsResponse.unsupportedVersionSend(node, requestHeader));
                 else
                     throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
             } else {
-                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(),
+                        requestBuffer).request;
 
                 LOG.debug("Handle Kafka request {}", apiKey);
                 switch (apiKey) {
@@ -320,7 +329,7 @@ public class SaslServerAuthenticator implements Authenticator {
             }
         } catch (SchemaException | IllegalArgumentException e) {
             if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
-                // SchemaException is thrown if the request is not in Kafka format. IIlegalArgumentException is thrown
+                // SchemaException is thrown if the request is not in Kafka format. IllegalArgumentException is thrown
                 // if the API key is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
                 // starting with 0x60, revert to GSSAPI for both these exceptions.
                 if (LOG.isDebugEnabled()) {
@@ -351,11 +360,11 @@ public class SaslServerAuthenticator implements Authenticator {
         String clientMechanism = handshakeRequest.mechanism();
         if (enabledMechanisms.contains(clientMechanism)) {
             LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
-            sendKafkaResponse(requestHeader, new SaslHandshakeResponse((short) 0, enabledMechanisms));
+            sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.NONE, enabledMechanisms));
             return clientMechanism;
         } else {
             LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
-            sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM.code(), enabledMechanisms));
+            sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
     }
@@ -365,7 +374,11 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {
-        netOutBuffer = response.toSend(node, requestHeader);
+        sendKafkaResponse(response.toSend(node, requestHeader));
+    }
+
+    private void sendKafkaResponse(Send send) throws IOException {
+        netOutBuffer = send;
         flushNetOutBufferAndUpdateInterestOps();
     }
 }

@@ -57,12 +57,7 @@ public class ByteBufferSend implements Send {
         if (written < 0)
             throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
         remaining -= written;
-        // This is temporary workaround. As Send , Receive interfaces are being used by BlockingChannel.
-        // Once BlockingChannel is removed we can make Send, Receive to work with transportLayer rather than
-        // GatheringByteChannel or ScatteringByteChannel.
-        if (channel instanceof TransportLayer)
-            pending = ((TransportLayer) channel).hasPendingWrites();
-
+        pending = TransportLayers.hasPendingWrites(channel);
         return written;
     }
 }

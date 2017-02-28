@@ -25,12 +25,12 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final Predicate<K, V> predicate;
+    private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
 
     private boolean sendOldValues = false;
 
-    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterNot) {
+    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<? super K, ? super V> predicate, boolean filterNot) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;

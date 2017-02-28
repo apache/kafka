@@ -99,8 +99,8 @@ object Message {
 
 
   def fromRecord(record: Record): Message = {
-    val wrapperTimestamp: Option[Long] = if (record.wrapperRecordTimestamp() == null) None else Some(record.wrapperRecordTimestamp())
-    val wrapperTimestampType = Option(record.wrapperRecordTimestampType())
+    val wrapperTimestamp: Option[Long] = if (record.wrapperRecordTimestamp == null) None else Some(record.wrapperRecordTimestamp)
+    val wrapperTimestampType = Option(record.wrapperRecordTimestampType)
     new Message(record.buffer, wrapperTimestamp, wrapperTimestampType)
   }
 }
@@ -139,13 +139,9 @@ class Message(val buffer: ByteBuffer,
   
   import kafka.message.Message._
 
-  private[message] def asRecord: Record = {
-    wrapperMessageTimestamp match {
-      case None => new Record(buffer)
-      case Some(timestamp) =>
-        val timestampType = wrapperMessageTimestampType.orNull
-        new Record(buffer, timestamp, timestampType)
-    }
+  private[message] def asRecord: Record = wrapperMessageTimestamp match {
+    case None => new Record(buffer)
+    case Some(timestamp) => new Record(buffer, timestamp, wrapperMessageTimestampType.orNull)
   }
 
   /**
@@ -227,7 +223,7 @@ class Message(val buffer: ByteBuffer,
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum: Long =
-    CoreUtils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
+    Utils.computeChecksum(buffer, MagicOffset, buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message

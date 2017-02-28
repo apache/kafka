@@ -16,6 +16,7 @@
  **/
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -28,6 +29,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
@@ -38,6 +40,18 @@ public class MemoryRecordsBuilderTest {
     public MemoryRecordsBuilderTest(int bufferOffset, CompressionType compressionType) {
         this.bufferOffset = bufferOffset;
         this.compressionType = compressionType;
+    }
+
+    @Test
+    public void testWriteEmptyRecordSet() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.MAGIC_VALUE_V0, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, buffer.capacity());
+        MemoryRecords records = builder.build();
+        assertEquals(0, records.sizeInBytes());
+        assertEquals(bufferOffset, buffer.position());
     }
 
     @Test
@@ -175,6 +189,33 @@ public class MemoryRecordsBuilderTest {
             assertEquals(TimestampType.CREATE_TIME, record.timestampType());
             assertEquals(expectedTimestamps[i++], record.timestamp());
         }
+    }
+
+    @Test
+    public void testSmallWriteLimit() {
+        // with a small write limit, we always allow at least one record to be added
+
+        byte[] key = "foo".getBytes();
+        byte[] value = "bar".getBytes();
+        int writeLimit = 0;
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, Record.CURRENT_MAGIC_VALUE, compressionType,
+                TimestampType.CREATE_TIME, 0L, Record.NO_TIMESTAMP, writeLimit);
+
+        assertFalse(builder.isFull());
+        assertTrue(builder.hasRoomFor(key, value));
+        builder.append(0L, key, value);
+
+        assertTrue(builder.isFull());
+        assertFalse(builder.hasRoomFor(key, value));
+
+        MemoryRecords memRecords = builder.build();
+        List<Record> records = TestUtils.toList(memRecords.records());
+        assertEquals(1, records.size());
+
+        Record record = records.get(0);
+        assertEquals(ByteBuffer.wrap(key), record.key());
+        assertEquals(ByteBuffer.wrap(value), record.value());
     }
 
     @Test

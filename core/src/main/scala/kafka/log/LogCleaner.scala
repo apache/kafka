@@ -451,11 +451,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
 
-    def shouldRetainEntry(logEntry: LogEntry): Boolean =
-      shouldRetainMessage(source, map, retainDeletes, logEntry, stats)
-
-    class LogCleanerFilter extends LogEntryFilter {
-      def shouldRetain(logEntry: LogEntry): Boolean = shouldRetainEntry(logEntry)
+    val logCleanerFilter = new LogEntryFilter {
+      def shouldRetain(logEntry: LogEntry): Boolean = shouldRetainMessage(source, map, retainDeletes, logEntry, stats)
     }
 
     var position = 0
@@ -468,7 +465,7 @@ private[log] class Cleaner(val id: Int,
       source.log.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(new LogCleanerFilter, writeBuffer)
+      val result = records.filterTo(logCleanerFilter, writeBuffer)
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 

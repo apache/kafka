@@ -16,7 +16,6 @@ import static org.apache.kafka.common.protocol.Protocol.REQUEST_HEADER;
 
 import java.nio.ByteBuffer;
 
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -36,28 +35,27 @@ public class RequestHeader extends AbstractRequestResponse {
     private final String clientId;
     private final int correlationId;
 
-    public RequestHeader(Struct header) {
-        super(header);
+    public RequestHeader(Struct struct) {
         apiKey = struct.getShort(API_KEY_FIELD);
         apiVersion = struct.getShort(API_VERSION_FIELD);
         clientId = struct.getString(CLIENT_ID_FIELD);
         correlationId = struct.getInt(CORRELATION_ID_FIELD);
     }
 
-    public RequestHeader(short apiKey, String client, int correlation) {
-        this(apiKey, ProtoUtils.latestVersion(apiKey), client, correlation);
-    }
-
     public RequestHeader(short apiKey, short version, String client, int correlation) {
-        super(new Struct(Protocol.REQUEST_HEADER));
-        struct.set(API_KEY_FIELD, apiKey);
-        struct.set(API_VERSION_FIELD, version);
-        struct.set(CLIENT_ID_FIELD, client);
-        struct.set(CORRELATION_ID_FIELD, correlation);
         this.apiKey = apiKey;
         this.apiVersion = version;
         this.clientId = client;
         this.correlationId = correlation;
+    }
+
+    public Struct toStruct() {
+        Struct struct = new Struct(Protocol.REQUEST_HEADER);
+        struct.set(API_KEY_FIELD, apiKey);
+        struct.set(API_VERSION_FIELD, apiVersion);
+        struct.set(CLIENT_ID_FIELD, clientId);
+        struct.set(CORRELATION_ID_FIELD, correlationId);
+        return struct;
     }
 
     public short apiKey() {
@@ -74,6 +72,10 @@ public class RequestHeader extends AbstractRequestResponse {
 
     public int correlationId() {
         return correlationId;
+    }
+
+    public ResponseHeader toResponseHeader() {
+        return new ResponseHeader(correlationId);
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {

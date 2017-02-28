@@ -50,11 +50,12 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     val config: Properties = createBrokerConfig(1)
+    config.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
     server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "")
+    simpleConsumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 1000000, 64*1024, "")
   }
 
   @After
@@ -71,7 +72,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val request = OffsetRequest(
       Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
     val offsetResponse = simpleConsumer.getOffsetsBefore(request)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                  offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
   }
 

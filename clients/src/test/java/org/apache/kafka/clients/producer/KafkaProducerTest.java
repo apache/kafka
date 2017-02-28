@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -53,10 +54,24 @@ import static org.junit.Assert.fail;
 public class KafkaProducerTest {
 
     @Test
+    public void testConstructorWithSerializers() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer()).close();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testNoSerializerProvided() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer(producerProps);
+    }
+
+    @Test
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar:9999");
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();

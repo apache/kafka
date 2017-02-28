@@ -33,7 +33,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
   @volatile var acksPending = false
 
   override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
-    .format(acksPending, responseStatus.errorCode, responseStatus.baseOffset, requiredOffset)
+    .format(acksPending, responseStatus.error.code, responseStatus.baseOffset, requiredOffset)
 }
 
 /**
@@ -58,10 +58,10 @@ class DelayedProduce(delayMs: Long,
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-    if (status.responseStatus.errorCode == Errors.NONE.code) {
+    if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
+      status.responseStatus.error = Errors.REQUEST_TIMED_OUT
     } else {
       status.acksPending = false
     }
@@ -95,7 +95,7 @@ class DelayedProduce(delayMs: Long,
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
-          status.responseStatus.errorCode = error.code
+          status.responseStatus.error = error
         }
       }
     }

@@ -14,42 +14,56 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.API_VERSIONS.id);
-    public static final ApiVersionsRequest API_VERSIONS_REQUEST = new ApiVersionsRequest();
+    public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
 
-    public ApiVersionsRequest() {
-        super(new Struct(CURRENT_SCHEMA));
-    }
+        public Builder() {
+            super(ApiKeys.API_VERSIONS);
+        }
 
-    public ApiVersionsRequest(Struct struct) {
-        super(struct);
-    }
+        @Override
+        public ApiVersionsRequest build(short version) {
+            return new ApiVersionsRequest(version);
+        }
 
-    @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
-        switch (versionId) {
-            case 0:
-                short errorCode = Errors.forException(e).code();
-                return new ApiVersionsResponse(errorCode, Collections.<ApiVersionsResponse.ApiVersion>emptyList());
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.API_VERSIONS.id)));
+        @Override
+        public String toString() {
+            return "(type=ApiVersionsRequest)";
         }
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ApiVersionsRequest(ProtoUtils.parseRequest(ApiKeys.API_VERSIONS.id, versionId, buffer));
+    public ApiVersionsRequest(short version) {
+        super(version);
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer) {
-        return new ApiVersionsRequest(CURRENT_SCHEMA.read(buffer));
+    public ApiVersionsRequest(Struct struct, short version) {
+        super(version);
     }
+
+    @Override
+    protected Struct toStruct() {
+        return new Struct(ApiKeys.API_VERSIONS.requestSchema(version()));
+    }
+
+    @Override
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
+        switch (versionId) {
+            case 0:
+                return new ApiVersionsResponse(Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ApiKeys.API_VERSIONS.latestVersion()));
+        }
+    }
+
+    public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
+        return new ApiVersionsRequest(ApiKeys.API_VERSIONS.parseRequest(version, buffer), version);
+    }
+
 }

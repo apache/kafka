@@ -18,41 +18,79 @@
 package kafka.server
 
 import org.junit.Assert._
-import kafka.utils.{TestUtils, CoreUtils, ZkUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.{Test, After, Before}
+import org.junit.{After, Test}
+
+import scala.collection.mutable.ArrayBuffer
 
 class AdvertiseBrokerTest extends ZooKeeperTestHarness {
-  var server : KafkaServer = null
+  val servers = ArrayBuffer[KafkaServer]()
+
   val brokerId = 0
-  val advertisedHostName = "routable-host"
-  val advertisedPort = 1234
-
-  @Before
-  override def setUp() {
-    super.setUp()
-
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    props.put("advertised.host.name", advertisedHostName)
-    props.put("advertised.port", advertisedPort.toString)
-
-    server = TestUtils.createServer(KafkaConfig.fromProps(props))
-  }
 
   @After
   override def tearDown() {
-    server.shutdown()
-    CoreUtils.delete(server.config.logDirs)
+    servers.foreach { s =>
+      s.shutdown()
+      CoreUtils.delete(s.config.logDirs)
+    }
     super.tearDown()
   }
 
   @Test
-  def testBrokerAdvertiseToZK {
-    val brokerInfo = zkUtils.getBrokerInfo(brokerId)
-    val endpoint = brokerInfo.get.endPoints.get(SecurityProtocol.PLAINTEXT).get
+  def testBrokerAdvertiseHostNameAndPortToZK: Unit = {
+    val advertisedHostName = "routable-host1"
+    val advertisedPort = 1234
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    props.put("advertised.host.name", advertisedHostName)
+    props.put("advertised.port", advertisedPort.toString)
+    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+
+    val brokerInfo = zkUtils.getBrokerInfo(brokerId).get
+    assertEquals(1, brokerInfo.endPoints.size)
+    val endpoint = brokerInfo.endPoints.head
     assertEquals(advertisedHostName, endpoint.host)
     assertEquals(advertisedPort, endpoint.port)
+    assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
+    assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName.value)
+  }
+
+  def testBrokerAdvertiseListenersToZK: Unit = {
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    props.put("advertised.listeners", "PLAINTEXT://routable-listener:3334")
+    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+
+    val brokerInfo = zkUtils.getBrokerInfo(brokerId).get
+    assertEquals(1, brokerInfo.endPoints.size)
+    val endpoint = brokerInfo.endPoints.head
+    assertEquals("routable-listener", endpoint.host)
+    assertEquals(3334, endpoint.port)
+    assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
+    assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName)
+  }
+
+  def testBrokerAdvertiseListenersWithCustomNamesToZK: Unit = {
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    props.put("listeners", "INTERNAL://:0,EXTERNAL://:0")
+    props.put("advertised.listeners", "EXTERNAL://external-listener:9999,INTERNAL://internal-listener:10999")
+    props.put("listener.security.protocol.map", "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT")
+    props.put("inter.broker.listener.name", "INTERNAL")
+    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+
+    val brokerInfo = zkUtils.getBrokerInfo(brokerId).get
+    assertEquals(1, brokerInfo.endPoints.size)
+    val endpoint = brokerInfo.endPoints.head
+    assertEquals("external-listener", endpoint.host)
+    assertEquals(9999, endpoint.port)
+    assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
+    assertEquals("EXTERNAL", endpoint.listenerName.value)
+    val endpoint2 = brokerInfo.endPoints(1)
+    assertEquals("internal-listener", endpoint2.host)
+    assertEquals(10999, endpoint2.port)
+    assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
+    assertEquals("INTERNAL", endpoint2.listenerName)
   }
   
 }

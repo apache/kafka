@@ -35,13 +35,13 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(value = Parameterized.class)
 public class RecordTest {
 
-    private byte magic;
-    private long timestamp;
-    private ByteBuffer key;
-    private ByteBuffer value;
-    private CompressionType compression;
-    private TimestampType timestampType;
-    private Record record;
+    private final byte magic;
+    private final long timestamp;
+    private final ByteBuffer key;
+    private final ByteBuffer value;
+    private final CompressionType compression;
+    private final TimestampType timestampType;
+    private final Record record;
 
     public RecordTest(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
         this.magic = magic;

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.PluginDiscovery;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 
@@ -60,6 +60,6 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/")
     public List<ConnectorPluginInfo> listConnectorPlugins() {
-        return AbstractHerder.connectorPlugins();
+        return PluginDiscovery.connectorPlugins();
     }
 }

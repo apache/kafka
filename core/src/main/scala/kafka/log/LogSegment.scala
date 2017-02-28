@@ -98,7 +98,11 @@ class LogSegment(val log: FileRecords,
    * @param records The log entries to append.
    */
   @nonthreadsafe
-  def append(firstOffset: Long, largestOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords) {
+  def append(firstOffset: Long,
+             largestOffset: Long,
+             largestTimestamp: Long,
+             shallowOffsetOfMaxTimestamp: Long,
+             records: MemoryRecords) {
     if (records.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at shallow offset %d"
           .format(records.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
@@ -312,7 +316,7 @@ class LogSegment(val log: FileRecords,
     if (ms == null) {
       baseOffset
     } else {
-      ms.records.shallowEntries.asScala.toSeq.lastOption match {
+      ms.records.shallowEntries.asScala.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }
@@ -419,9 +423,9 @@ class LogSegment(val log: FileRecords,
    */
   def close() {
     CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true))
-    CoreUtils.swallow(index.close)
+    CoreUtils.swallow(index.close())
     CoreUtils.swallow(timeIndex.close())
-    CoreUtils.swallow(log.close)
+    CoreUtils.swallow(log.close())
   }
 
   /**

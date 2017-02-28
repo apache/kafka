@@ -289,11 +289,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
-    @Override
-    public void close() {
-        super.close();
-    }
-
     private boolean isLeader() {
         return assignmentSnapshot != null && memberId().equals(assignmentSnapshot.leader());
     }

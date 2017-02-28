@@ -14,44 +14,54 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ListGroupsRequest extends AbstractRequest {
+    public static class Builder extends AbstractRequest.Builder<ListGroupsRequest> {
+        public Builder() {
+            super(ApiKeys.LIST_GROUPS);
+        }
 
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_GROUPS.id);
+        @Override
+        public ListGroupsRequest build(short version) {
+            return new ListGroupsRequest(version);
+        }
 
-    public ListGroupsRequest() {
-        super(new Struct(CURRENT_SCHEMA));
-    }
-
-    public ListGroupsRequest(Struct struct) {
-        super(struct);
-    }
-
-    @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
-        switch (versionId) {
-            case 0:
-                short errorCode = Errors.forException(e).code();
-                return new ListGroupsResponse(errorCode, Collections.<ListGroupsResponse.Group>emptyList());
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_GROUPS.id)));
+        @Override
+        public String toString() {
+            return "(type=ListGroupsRequest)";
         }
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListGroupsRequest(ProtoUtils.parseRequest(ApiKeys.LIST_GROUPS.id, versionId, buffer));
+    public ListGroupsRequest(short version) {
+        super(version);
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer) {
-        return new ListGroupsRequest(CURRENT_SCHEMA.read(buffer));
+    public ListGroupsRequest(Struct struct, short versionId) {
+        super(versionId);
     }
 
+    @Override
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
+        switch (versionId) {
+            case 0:
+                return new ListGroupsResponse(Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_GROUPS.latestVersion()));
+        }
+    }
 
+    public static ListGroupsRequest parse(ByteBuffer buffer, short version) {
+        return new ListGroupsRequest(ApiKeys.LIST_GROUPS.parseRequest(version, buffer), version);
+    }
+
+    @Override
+    protected Struct toStruct() {
+        return new Struct(ApiKeys.LIST_GROUPS.requestSchema(version()));
+    }
 }
