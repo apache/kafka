@@ -35,9 +35,6 @@ import java.util.TreeMap;
  * An internal class which represents the API versions supported by a particular node.
  */
 public class NodeApiVersions {
-    private static final short NODE_TOO_OLD = (short) -1;
-    private static final short NODE_TOO_NEW = (short) -2;
-
     // An array of the usable versions of each API, indexed by the ApiKeys ID.
     private final Map<ApiKeys, UsableVersion> usableVersions = new EnumMap<>(ApiKeys.class);
 
@@ -79,18 +76,18 @@ public class NodeApiVersions {
 
     public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
-            // Newer brokers may support ApiKeys we don't know about, ignore them
             if (ApiKeys.hasId(nodeApiVersion.apiKey)) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey);
                 short v = Utils.min(nodeApiKey.latestVersion(), nodeApiVersion.maxVersion);
                 if (v < nodeApiVersion.minVersion) {
-                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, NODE_TOO_NEW));
+                    usableVersions.put(nodeApiKey, UsableVersion.tooNew(nodeApiVersion));
                 } else if (v < nodeApiKey.oldestVersion()) {
-                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, NODE_TOO_OLD));
+                    usableVersions.put(nodeApiKey, UsableVersion.tooOld(nodeApiVersion));
                 } else {
                     usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, v));
                 }
             } else {
+                // Newer brokers may support ApiKeys we don't know about
                 unknownApis.add(nodeApiVersion);
             }
         }
@@ -120,9 +117,8 @@ public class NodeApiVersions {
         UsableVersion usableVersion = usableVersions.get(apiKey);
         if (usableVersion == null)
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        else if (usableVersion.apiVersion.minVersion > version ||
-                usableVersion.apiVersion.maxVersion < version)
-            throw new UnsupportedVersionException("The broker does not support requested version " + version +
+        else if (usableVersion.apiVersion.minVersion > version || usableVersion.apiVersion.maxVersion < version)
+            throw new UnsupportedVersionException("The broker does not support the requested version " + version +
                     " for api " + apiKey);
     }
 
@@ -210,8 +206,19 @@ public class NodeApiVersions {
     }
 
     private static class UsableVersion {
+        private static final short NODE_TOO_OLD = (short) -1;
+        private static final short NODE_TOO_NEW = (short) -2;
+
         private final ApiVersion apiVersion;
         private final Short defaultVersion;
+
+        private static UsableVersion tooOld(ApiVersion apiVersion) {
+            return new UsableVersion(apiVersion, NODE_TOO_OLD);
+        }
+
+        private static UsableVersion tooNew(ApiVersion apiVersion) {
+            return new UsableVersion(apiVersion, NODE_TOO_NEW);
+        }
 
         private UsableVersion(ApiVersion apiVersion, Short defaultVersion) {
             this.apiVersion = apiVersion;

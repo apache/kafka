@@ -184,19 +184,23 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
                 new ByteBufferInputStream(buffer), magic()));
 
-        // FIXME: This mimics current deep iteration, but we can actually do better with the new
-        // format because we know the start and end offset. Hence we can stream the records as we need
-        // them. The trick perhaps is ensuring that the underlying stream always gets cleaned up.
+        // TODO: An improvement for the consumer would be to only decompress the records
+        // we need to fill max.poll.records and leave the rest compressed.
         Deque<LogRecord> records = new ArrayDeque<>();
         try {
             Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             long baseOffset = baseOffset();
             long baseTimestamp = baseTimestamp();
             int baseSequence = baseSequence();
+            long lastOffset = lastOffset();
 
             while (true) {
                 try {
-                    records.add(EosLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime));
+                    EosLogRecord record = EosLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    records.add(record);
+
+                    if (record.offset() == lastOffset)
+                        break;
                 } catch (EOFException e) {
                     break;
                 }

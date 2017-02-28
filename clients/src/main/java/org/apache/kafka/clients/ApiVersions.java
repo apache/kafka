@@ -23,9 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Maintains node api versions for access to api versions without dependence on the NetworkClient
- * (which is the source of the information). The pattern is akin to the use of {@link Metadata} for
- * topic metadata.
+ * Maintains node api versions for access outside of NetworkClient (which is where the information is derived).
+ * The pattern is akin to the use of {@link Metadata} for topic metadata.
  */
 public class ApiVersions {
 
