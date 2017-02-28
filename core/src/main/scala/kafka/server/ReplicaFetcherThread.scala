@@ -27,7 +27,7 @@ import kafka.api.{FetchRequest => _, _}
 import kafka.common.KafkaStorageException
 import ReplicaFetcherThread._
 import kafka.utils.Exit
-import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
@@ -108,7 +108,8 @@ class ReplicaFetcherThread(name: String,
       brokerConfig.replicaSocketReceiveBufferBytes,
       brokerConfig.requestTimeoutMs,
       time,
-      false
+      false,
+      new ApiVersions
     )
   }
 

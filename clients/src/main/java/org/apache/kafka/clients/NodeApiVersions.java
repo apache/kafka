@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -36,12 +37,12 @@ import java.util.TreeMap;
 public class NodeApiVersions {
     private static final short NODE_TOO_OLD = (short) -1;
     private static final short NODE_TOO_NEW = (short) -2;
-    private final Collection<ApiVersion> nodeApiVersions;
 
-    /**
-     * An array of the usable versions of each API, indexed by the ApiKeys ID.
-     */
-    private final Map<ApiKeys, Short> usableVersions = new EnumMap<>(ApiKeys.class);
+    // An array of the usable versions of each API, indexed by the ApiKeys ID.
+    private final Map<ApiKeys, UsableVersion> usableVersions = new EnumMap<>(ApiKeys.class);
+
+    // List of APIs which the broker supports, but which are unknown to the client.
+    private final List<ApiVersion> unknownApis = new ArrayList<>();
 
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
@@ -77,19 +78,20 @@ public class NodeApiVersions {
     }
 
     public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
-        this.nodeApiVersions = nodeApiVersions;
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             // Newer brokers may support ApiKeys we don't know about, ignore them
             if (ApiKeys.hasId(nodeApiVersion.apiKey)) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey);
                 short v = Utils.min(nodeApiKey.latestVersion(), nodeApiVersion.maxVersion);
                 if (v < nodeApiVersion.minVersion) {
-                    usableVersions.put(nodeApiKey, NODE_TOO_NEW);
+                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, NODE_TOO_NEW));
                 } else if (v < nodeApiKey.oldestVersion()) {
-                    usableVersions.put(nodeApiKey, NODE_TOO_OLD);
+                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, NODE_TOO_OLD));
                 } else {
-                    usableVersions.put(nodeApiKey, v);
+                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, v));
                 }
+            } else {
+                unknownApis.add(nodeApiVersion);
             }
         }
     }
@@ -98,17 +100,30 @@ public class NodeApiVersions {
      * Return the most recent version supported by both the node and the local software.
      */
     public short usableVersion(ApiKeys apiKey) {
-        Short usableVersion = usableVersions.get(apiKey);
+        UsableVersion usableVersion = usableVersions.get(apiKey);
         if (usableVersion == null)
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        else if (usableVersion == NODE_TOO_OLD)
+        else if (usableVersion.isTooOld())
             throw new UnsupportedVersionException("The broker is too old to support " + apiKey +
                 " version " + apiKey.oldestVersion());
-        else if (usableVersion == NODE_TOO_NEW)
+        else if (usableVersion.isTooNew())
             throw new UnsupportedVersionException("The broker is too new to support " + apiKey +
                 " version " + apiKey.latestVersion());
         else
-            return usableVersion;
+            return usableVersion.defaultVersion;
+    }
+
+    /**
+     * Ensure that a certain version of an API is usable by the broker.
+     */
+    public void ensureUsable(ApiKeys apiKey, short version) {
+        UsableVersion usableVersion = usableVersions.get(apiKey);
+        if (usableVersion == null)
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+        else if (usableVersion.apiVersion.minVersion > version ||
+                usableVersion.apiVersion.maxVersion < version)
+            throw new UnsupportedVersionException("The broker does not support requested version " + version +
+                    " for api " + apiKey);
     }
 
     /**
@@ -131,7 +146,9 @@ public class NodeApiVersions {
         // a TreeMap before printing it out to ensure that we always print in
         // ascending order.
         TreeMap<Short, String> apiKeysText = new TreeMap<>();
-        for (ApiVersion apiVersion : this.nodeApiVersions)
+        for (UsableVersion usableVersion : this.usableVersions.values())
+            apiKeysText.put(usableVersion.apiVersion.apiKey, apiVersionToText(usableVersion.apiVersion));
+        for (ApiVersion apiVersion : unknownApis)
             apiKeysText.put(apiVersion.apiKey, apiVersionToText(apiVersion));
 
         // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
@@ -173,23 +190,41 @@ public class NodeApiVersions {
         }
 
         if (apiKey != null) {
-            Short usableVersion = usableVersions.get(apiKey);
-            if (usableVersion == NODE_TOO_OLD)
+            UsableVersion usableVersion = usableVersions.get(apiKey);
+            if (usableVersion.isTooOld())
                 bld.append(" [unusable: node too old]");
-            else if (usableVersion == NODE_TOO_NEW)
+            else if (usableVersion.isTooNew())
                 bld.append(" [unusable: node too new]");
             else
-                bld.append(" [usable: ").append(usableVersion).append("]");
+                bld.append(" [usable: ").append(usableVersion.defaultVersion).append("]");
         }
         return bld.toString();
     }
 
     public ApiVersion apiVersion(ApiKeys apiKey) {
-        for (ApiVersion nodeApiVersion : nodeApiVersions) {
-            if (nodeApiVersion.apiKey == apiKey.id) {
-                return nodeApiVersion;
-            }
+        for (UsableVersion usableVersion : usableVersions.values()) {
+            if (usableVersion.apiVersion.apiKey == apiKey.id)
+                return usableVersion.apiVersion;
         }
         throw new NoSuchElementException();
     }
+
+    private static class UsableVersion {
+        private final ApiVersion apiVersion;
+        private final Short defaultVersion;
+
+        private UsableVersion(ApiVersion apiVersion, Short defaultVersion) {
+            this.apiVersion = apiVersion;
+            this.defaultVersion = defaultVersion;
+        }
+
+        private boolean isTooOld() {
+            return defaultVersion == NODE_TOO_OLD;
+        }
+
+        private boolean isTooNew() {
+            return defaultVersion == NODE_TOO_NEW;
+        }
+    }
+
 }

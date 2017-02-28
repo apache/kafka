@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, KafkaRecord, LogEntry, MemoryRecords}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -41,7 +41,7 @@ class ProduceRequestTest extends BaseRequestTest {
       val topicPartition = new TopicPartition("topic", partition)
       val partitionRecords = Map(topicPartition -> memoryRecords)
       val produceResponse = sendProduceRequest(leader,
-          new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
+          new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
@@ -78,7 +78,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
     val produceResponse = sendProduceRequest(leader, 
-      new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
+      new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)

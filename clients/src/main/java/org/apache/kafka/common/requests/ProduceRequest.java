@@ -50,12 +50,17 @@ public class ProduceRequest extends AbstractRequest {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
+        private final byte magic;
         private final short acks;
         private final int timeout;
         private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
-        public Builder(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
-            super(ApiKeys.PRODUCE);
+        public Builder(byte magic,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords) {
+            super(ApiKeys.PRODUCE, (short) (magic == LogEntry.MAGIC_VALUE_V2 ? 3 : 2));
+            this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
             this.partitionRecords = partitionRecords;
@@ -73,6 +78,7 @@ public class ProduceRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=ProduceRequest")
+                    .append(", magic=").append(magic)
                     .append(", acks=").append(acks)
                     .append(", timeout=").append(timeout)
                     .append(", partitionRecords=(").append(Utils.mkString(partitionRecords))

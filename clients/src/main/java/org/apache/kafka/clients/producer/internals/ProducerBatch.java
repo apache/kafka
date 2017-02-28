@@ -244,4 +244,7 @@ public final class ProducerBatch {
         return !recordsBuilder.isClosed();
     }
 
+    public byte magic() {
+        return recordsBuilder.magic();
+    }
 }

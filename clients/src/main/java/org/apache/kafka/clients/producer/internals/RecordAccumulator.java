@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -73,6 +74,7 @@ public final class RecordAccumulator {
     private final long retryBackoffMs;
     private final BufferPool free;
     private final Time time;
+    private final ApiVersions apiVersions;
     private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
@@ -92,6 +94,7 @@ public final class RecordAccumulator {
      *        exhausting all retries in a short period of time.
      * @param metrics The metrics
      * @param time The time instance to use
+     * @param apiVersions Request API versions for current connected brokers
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
@@ -99,7 +102,8 @@ public final class RecordAccumulator {
                              long lingerMs,
                              long retryBackoffMs,
                              Metrics metrics,
-                             Time time) {
+                             Time time,
+                             ApiVersions apiVersions) {
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
@@ -114,6 +118,7 @@ public final class RecordAccumulator {
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
+        this.apiVersions = apiVersions;
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -195,7 +200,9 @@ public final class RecordAccumulator {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
-                MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, compression,
+
+                byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+                MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, maxUsableMagic, compression,
                         TimestampType.CREATE_TIME, this.batchSize);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
