@@ -12,22 +12,20 @@
   */
 package kafka.api
 
-import kafka.utils.JaasTestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   protected val zkSaslEnabled: Boolean
-  protected val kafkaServerJaasEntryName = JaasTestUtils.KafkaServerContextName
   protected val kafkaClientSaslMechanism = "GSSAPI"
   protected val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
 
   @Before
   override def setUp() {
     if (zkSaslEnabled)
-      startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, kafkaServerJaasEntryName)
+      startSasl(Both, kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism))
     else
-      startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName)
+      startSasl(KafkaSasl, kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism))
     super.setUp
   }
 

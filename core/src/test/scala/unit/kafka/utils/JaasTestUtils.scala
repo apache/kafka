@@ -99,7 +99,7 @@ object JaasTestUtils {
   private val ZkUserPassword = "fpjsecret"
   private val ZkModule = "org.apache.zookeeper.server.auth.DigestLoginModule"
 
-  val KafkaServerContextName = "KafkaServer"
+  private val KafkaServerContextName = "KafkaServer"
   val KafkaServerPrincipalUnqualifiedName = "kafka"
   private val KafkaServerPrincipal = KafkaServerPrincipalUnqualifiedName + "/localhost@EXAMPLE.COM"
   private val KafkaClientContextName = "KafkaClient"
@@ -128,22 +128,16 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
 
-  def writeKafkaFile(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
-                     kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
-                     clientKeyTabLocation: Option[File]): String = {
+  def writeKafkaFile(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
-      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections)
     jaasFile.getCanonicalPath
   }
 
-  def writeZkAndKafkaFiles(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
-                           kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
-                           clientKeyTabLocation: Option[File]): String = {
+  def writeZkAndKafkaFiles(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File], clientKeyTabLocation: Option[File]): String = {
     val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
-      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
+    val kafkaSections = Seq(kafkaServerSection(kafkaServerSaslMechanisms, serverKeyTabLocation), kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
     writeToFile(jaasFile, kafkaSections ++ zkSections)
     jaasFile.getCanonicalPath
   }
@@ -157,7 +151,7 @@ object JaasTestUtils {
     new JaasSection(ZkClientContextName, Seq(JaasModule(ZkModule, false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
-  private def kafkaServerSection(contextName: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
+  private def kafkaServerSection(mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
     val modules = mechanisms.map {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -180,7 +174,7 @@ object JaasTestUtils {
           debug = false).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(contextName, modules)
+    new JaasSection(KafkaServerContextName, modules)
   }
 
   // consider refactoring if more mechanisms are added
