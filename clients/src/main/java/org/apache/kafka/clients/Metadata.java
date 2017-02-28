@@ -200,7 +200,7 @@ public final class Metadata {
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      */
-    public synchronized void update(Cluster cluster, long now) {
+    public synchronized void update(Cluster cluster, boolean hasUnavailablePartitions, long now) {
         Objects.requireNonNull(cluster, "cluster should not be null");
 
         this.needUpdate = false;
@@ -223,7 +223,7 @@ public final class Metadata {
         }
 
         for (Listener listener: listeners)
-            listener.onMetadataUpdate(cluster);
+            listener.onMetadataUpdate(cluster, hasUnavailablePartitions);
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
@@ -306,7 +306,7 @@ public final class Metadata {
      * MetadataUpdate Listener
      */
     public interface Listener {
-        void onMetadataUpdate(Cluster cluster);
+        void onMetadataUpdate(Cluster cluster, boolean hasUnavailablePartitions);
     }
 
     private synchronized void requestUpdateForNewTopics() {
