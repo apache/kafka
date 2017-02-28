@@ -76,7 +76,7 @@ public class NetworkClientTest {
 
     @Before
     public void setup() {
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, false, time.milliseconds());
     }
 
     @Test(expected = IllegalStateException.class)

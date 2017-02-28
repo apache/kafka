@@ -15,6 +15,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -197,6 +198,19 @@ public class MetadataResponse extends AbstractResponse {
                 errorTopics.add(metadata.topic());
         }
         return errorTopics;
+    }
+
+    public boolean hasUnavailablePartitions() {
+        for (TopicMetadata topicMetadata : this.topicMetadata) {
+            if (topicMetadata.error.exception() instanceof InvalidMetadataException)
+                return true;
+            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
+                if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
