@@ -25,6 +25,8 @@ object ConsumerOffsetMigrator {
     val zookeeperUrl = opts.options.valueOf(opts.zkConnectOpt)
     val bootstrapServers = opts.options.valueOf(opts.bootstrapServerOpt)
     val group = opts.options.valueOf(opts.groupOpt)
+    val zkGroup = Option(opts.options.valueOf(opts.zkGroupOpt)).getOrElse(group)
+
     val dryRun = opts.options.has(opts.dryRunOpt)
     val quiet = opts.options.has(opts.quietOpt)
 
@@ -32,8 +34,10 @@ object ConsumerOffsetMigrator {
     val consumerClient = createConsumerClient(bootstrapServers, group)
 
     try {
-      println(s"Looking up Zookeeper offsets for group $group")
-      val zookeeperOffsets = getZookeeperOffsets(zkClient, group)
+      println(s"Looking up Zookeeper offsets for group $zkGroup")
+      val zookeeperOffsets = getZookeeperOffsets(zkClient, zkGroup)
+
+
       if (!quiet) {
         printOffsets(zookeeperOffsets)
         println()
@@ -150,7 +154,8 @@ object ConsumerOffsetMigrator {
   class ConsumerGroupCommandOptions(args: Array[String]) {
     val ZkConnectDoc = "REQUIRED: The connection string for the zookeeper connection in the form host:port. Multiple URLS can be given to allow fail-over."
     val BootstrapServerDoc = "REQUIRED: A list of host/port pairs to use for establishing the initial connection to the Kafka cluster."
-    val GroupDoc = "REQUIRED: The consumer group to migrate offsets for."
+    val GroupDoc = "REQUIRED: The destination consumer group to migrate offsets to. If zk-group is not set, this consumer group name will also be used for fetching offsets from Zookeeper."
+    val ZkGroupDoc = "Optional: The source consumer group name. If set, offsets will be fetched from Zookeeper using this consumer group name. This is useful if renaming your consumer group as part of this migration."
     val DryRunDoc = "If set, offsets will only be read and logged. No Offsets will be committed."
     val QuietDoc = "If set, verbose offset logging will be disabled."
     val parser = new OptionParser
@@ -165,6 +170,10 @@ object ConsumerOffsetMigrator {
     val groupOpt = parser.accepts("group", GroupDoc)
       .withRequiredArg
       .describedAs("consumer group")
+      .ofType(classOf[String])
+    val zkGroupOpt = parser.accepts("zk-group", ZkGroupDoc)
+      .withOptionalArg
+      .describedAs("zookeeper consumer group")
       .ofType(classOf[String])
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val quietOpt = parser.accepts("quiet", QuietDoc)
