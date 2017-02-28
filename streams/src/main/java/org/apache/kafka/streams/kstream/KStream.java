@@ -238,7 +238,7 @@ public interface KStream<K, V> {
      * The example below splits input records {@code <null:String>} containing sentences as values into their words.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new ValueMapper<String, Iterable<String>> {
+     * KStream<Integer, String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
      *     Iterable<String> apply(String value) {
      *         return Arrays.asList(value.split(" "));
      *     }
