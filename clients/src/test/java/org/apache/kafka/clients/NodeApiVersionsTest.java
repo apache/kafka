@@ -54,6 +54,18 @@ public class NodeApiVersionsTest {
         assertTrue(versions.toString().endsWith("UNKNOWN(337): 0 to 1)"));
     }
 
+    @Test(expected = UnsupportedVersionException.class)
+    public void testEnsureUsableUnusuableVersion() {
+        NodeApiVersions apiVersions = NodeApiVersions.create();
+        apiVersions.ensureUsable(ApiKeys.PRODUCE, (short) 15);
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testEnsureUsableUnsupportedApi() {
+        NodeApiVersions apiVersions = new NodeApiVersions(Collections.<ApiVersion>emptyList());
+        apiVersions.ensureUsable(ApiKeys.PRODUCE, (short) 0);
+    }
+
     @Test
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
