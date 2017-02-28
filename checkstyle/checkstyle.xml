@@ -24,8 +24,8 @@
   <module name="FileTabCharacter"/>
 
   <!-- header -->
-  <module name="RegexpHeader">
-    <property name="header" value="/\*\*\nLicensed to the Apache.*"/>
+  <module name="Header">
+    <property name="headerFile" value="checkstyle/java.header" />
   </module>
 
   <module name="TreeWalker">
