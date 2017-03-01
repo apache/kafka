@@ -66,7 +66,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.")
+    }, "Expected to have an empty assignations map.")
 
     consumerGroupCommand.close()
   }
@@ -107,7 +107,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.", 30000) //TODO fix description
+    }, "Expected that consumer group has consumed all messages from topic/partition.")
 
     executor.shutdown()
 
@@ -127,7 +127,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to when offset was 50.")
 
     printConsumerGroup
 
@@ -157,7 +157,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest by duration).")
 
     printConsumerGroup
 
@@ -187,7 +187,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 100 (latest by duration).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -216,7 +216,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -248,7 +248,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 200 (latest).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -280,7 +280,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 100 (current).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -312,7 +312,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.", 30000) //TODO fix description
+    }, "Expected the consumer group to consume all messages from topic.")
 
     executor.shutdown()
   }
@@ -340,7 +340,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 1 (specific offset).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -371,7 +371,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 150 (current + 50).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -403,7 +403,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 50 (current - 50).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -434,7 +434,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest by shift).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -465,7 +465,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 200 (latest by shift).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -494,7 +494,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -523,7 +523,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -559,7 +559,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -596,7 +596,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
@@ -622,7 +622,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
         val bw = new BufferedWriter(new FileWriter(file))
         bw.write(consumerGroupCommand.exportAssignmentsToReset(assignmentsResetted))
         bw.close()
-        assignmentsResetted.exists { assignment => assignment._2 == 0 }
+        assignmentsResetted.exists { assignment => assignment._2 == 0 } && file.exists()
       } catch {
         case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
           // Do nothing while the group initializes
@@ -631,7 +631,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consume all messages and save reset offsets plan to file")
 
 
     val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--from-file", file.getCanonicalPath)
@@ -651,7 +651,9 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           e.printStackTrace()
           throw e
       }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+    }, "Expected the consumer group to reset to offset 0 (earliest) by file.")
+
+    file.deleteOnExit()
 
     printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
