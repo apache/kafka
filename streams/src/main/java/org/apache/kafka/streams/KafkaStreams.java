@@ -142,17 +142,18 @@ public class KafkaStreams {
      * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
      * The expected state transition with the following defined states is:
      *
+     * <pre>
      *                 +-----------+
      *         +<------|Created    |
      *         |       +-----+-----+
-     *         |             |   +--+
-     *         |             v   |  |
-     *         |       +-----+---v--+--+
+     *         |             |
+     *         |             v
+     *         |       +-----+---------+
      *         +<----- | Rebalancing   |<--------+
      *         |       +-----+---------+         ^
-     *         |                 +--+            |
-     *         |                 |  |            |
-     *         |       +-----+---v--+-----+      |
+     *         |                                 |
+     *         |                                 |
+     *         |       +-----+------------+      |
      *         +------>|Running           |------+
      *         |       +-----+------------+
      *         |             |
@@ -166,6 +167,7 @@ public class KafkaStreams {
      *                 +-----+-----+
      *                 |Not Running|
      *                 +-----------+
+     * </pre>
      */
     public enum State {
         CREATED(1, 2, 3), RUNNING(2, 3), REBALANCING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;

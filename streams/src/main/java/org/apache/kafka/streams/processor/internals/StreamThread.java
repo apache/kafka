@@ -74,6 +74,7 @@ public class StreamThread extends Thread {
      * A thread must only be in one state at a time
      * The expected state transitions with the following defined states is:
      *
+     * <pre>
      *                +-----------+
      *                |Not Running|<---------------+
      *                +-----+-----+                |
@@ -100,7 +101,7 @@ public class StreamThread extends Thread {
      *          +--->|Pending         |------------+
      *               |Shutdown        |
      *               +-----+----------+
-     *
+     * </pre>
      */
     public enum State {
         NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
