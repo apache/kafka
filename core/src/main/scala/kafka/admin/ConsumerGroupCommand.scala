@@ -665,13 +665,13 @@ object ConsumerGroupCommand extends Logging {
             }
           }
         ).toMap
-      } else if(opts.options.has(opts.resetToDurationOpt)){
+      } else if(opts.options.has(opts.resetByDurationOpt)){
         assignmentsToReset.map(
           assignment => {
-            val duration = opts.options.valueOf(opts.resetToDurationOpt)
+            val duration = opts.options.valueOf(opts.resetByDurationOpt)
             val durationParsed = Duration.parse(duration)
-            println(durationParsed)
-            val timestamp = Instant.now().minus(durationParsed).toEpochMilli
+            val instant = Instant.now().minus(durationParsed)
+            val timestamp = instant.toEpochMilli
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
             logTimestampOffset match {
@@ -773,7 +773,7 @@ object ConsumerGroupCommand extends Logging {
     val ResetToOffsetDoc = "The offset to reset to."
     val ResetFromFileDoc = "Path to Reset plan JSON file."
     val ResetToDatetimeDoc = "Datetime to reset offset to."
-    val ResetToDurationDoc = "Duration to reset offset to."
+    val ResetByDurationDoc = "Duration to reset offset to."
     val ResetToEarliestDoc = "Reset offset to earliest."
     val ResetToLatestDoc = "Reset offset to latest."
     val ResetShiftByDoc = "Reset offset shifting current offset by 'n', where 'n' can be positive or negative"
@@ -827,7 +827,7 @@ object ConsumerGroupCommand extends Logging {
                                    .withRequiredArg()
                                    .describedAs("datetime to reset offset to")
                                    .ofType(classOf[String])
-    val resetToDurationOpt = parser.accepts("to-duration", ResetToDurationDoc)
+    val resetByDurationOpt = parser.accepts("by-duration", ResetByDurationDoc)
                                    .withRequiredArg()
                                    .describedAs("duration to reset offset to")
                                    .ofType(classOf[String])
@@ -843,7 +843,7 @@ object ConsumerGroupCommand extends Logging {
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
-      resetToDatetimeOpt, resetToDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetFromFileOpt)
+      resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetFromFileOpt)
 
     def checkArgs() {
       // check required args
@@ -869,7 +869,7 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, allResetOffsetScenarioOpts - resetToOffsetOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, allResetOffsetScenarioOpts - resetToDatetimeOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToDurationOpt, allResetOffsetScenarioOpts - resetToDurationOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, allResetOffsetScenarioOpts - resetByDurationOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, allResetOffsetScenarioOpts - resetToEarliestOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, allResetOffsetScenarioOpts - resetShiftByOpt)
