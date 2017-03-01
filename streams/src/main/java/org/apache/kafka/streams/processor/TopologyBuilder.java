@@ -99,6 +99,10 @@ public class TopologyBuilder {
     // are connected to these state stores
     private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
 
+    // map from state store names to all the regex subscribed topics from source processors that
+    // are connected to these state stores
+    private final Map<String, Set<Pattern>> stateStoreNameToSourceRegex = new HashMap<>();
+
     // map from state store names to this state store's corresponding changelog topic if possible,
     // this is used in the extended KStreamBuilder.
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
@@ -174,7 +178,7 @@ public class TopologyBuilder {
 
         private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
             super(name);
-            this.topics = topics != null ? Arrays.asList(topics) : null;
+            this.topics = topics != null ? Arrays.asList(topics) : new ArrayList<String>();
             this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
@@ -858,7 +862,7 @@ public class TopologyBuilder {
         if (nodeFactory instanceof ProcessorNodeFactory) {
             ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
             processorNodeFactory.addStateStore(stateStoreName);
-            connectStateStoreNameToSourceTopics(stateStoreName, processorNodeFactory);
+            connectStateStoreNameToSourceTopicsOrPattern(stateStoreName, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
@@ -877,23 +881,46 @@ public class TopologyBuilder {
         return sourceTopics;
     }
 
-    private void connectStateStoreNameToSourceTopics(final String stateStoreName,
-                                                     final ProcessorNodeFactory processorNodeFactory) {
+    private Set<Pattern> findSourcePatternsForProcessorParents(String[] parents) {
+        final Set<Pattern> sourcePattern = new HashSet<>();
+        for (String parent : parents) {
+            NodeFactory nodeFactory = nodeFactories.get(parent);
+            if (nodeFactory instanceof SourceNodeFactory) {
+                if (((SourceNodeFactory) nodeFactory).pattern != null) {
+                    sourcePattern.add(((SourceNodeFactory) nodeFactory).pattern);
+                }
+            } else if (nodeFactory instanceof ProcessorNodeFactory) {
+                sourcePattern.addAll(findSourcePatternsForProcessorParents(((ProcessorNodeFactory) nodeFactory).parents));
+            }
+        }
+        return sourcePattern;
+    }
+
+    private void connectStateStoreNameToSourceTopicsOrPattern(final String stateStoreName,
+                                                              final ProcessorNodeFactory processorNodeFactory) {
+
+        final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
+        final Set<Pattern> sourcePatterns = findSourcePatternsForProcessorParents(processorNodeFactory.parents);
+
+        if (sourceTopics.isEmpty() && sourcePatterns.isEmpty()) {
+            throw new TopologyBuilderException("can't find source topic or source Pattern for state store " +
+                    stateStoreName);
+        }
 
         // we should never update the mapping from state store names to source topics if the store name already exists
         // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
         // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
-        if (stateStoreNameToSourceTopics.containsKey(stateStoreName)) {
-            return;
+
+        if (!stateStoreNameToSourceTopics.containsKey(stateStoreName) && !sourceTopics.isEmpty()) {
+            stateStoreNameToSourceTopics.put(stateStoreName,
+                    Collections.unmodifiableSet(sourceTopics));
         }
 
-        final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
-        if (sourceTopics.isEmpty()) {
-            throw new TopologyBuilderException("can't find source topic for state store " +
-                    stateStoreName);
+        if (!stateStoreNameToSourceRegex.containsKey(stateStoreName) && !sourcePatterns.isEmpty()) {
+            stateStoreNameToSourceRegex.put(stateStoreName,
+                    Collections.unmodifiableSet(sourcePatterns));
+
         }
-        stateStoreNameToSourceTopics.put(stateStoreName,
-                Collections.unmodifiableSet(sourceTopics));
     }
 
 
@@ -1183,6 +1210,24 @@ public class TopologyBuilder {
         }
     }
 
+    private void setRegexMatchedTopicToStateStore() {
+        if (subscriptionUpdates.hasUpdates()) {
+            for (Map.Entry<String, Set<Pattern>> storePattern : stateStoreNameToSourceRegex.entrySet()) {
+                final Set<String> updatedTopicsForStateStore = new HashSet<>();
+                for (String subscriptionUpdateTopic : subscriptionUpdates.getUpdates()) {
+                    for (Pattern pattern : storePattern.getValue()) {
+                        if (pattern.matcher(subscriptionUpdateTopic).matches()) {
+                            updatedTopicsForStateStore.add(subscriptionUpdateTopic);
+                        }
+                    }
+                }
+                if (!updatedTopicsForStateStore.isEmpty() && !stateStoreNameToSourceTopics.containsKey(storePattern.getKey())) {
+                    stateStoreNameToSourceTopics.put(storePattern.getKey(), Collections.unmodifiableSet(updatedTopicsForStateStore));
+                }
+            }
+        }
+    }
+    
     private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier<?> supplier, final String name) {
         if (!(supplier instanceof WindowStoreSupplier)) {
             return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
@@ -1338,5 +1383,6 @@ public class TopologyBuilder {
         log.debug("stream-thread [{}] updating builder with {} topic(s) with possible matching regex subscription(s)", threadId, subscriptionUpdates);
         this.subscriptionUpdates = subscriptionUpdates;
         setRegexMatchedTopicsToSourceNodes();
+        setRegexMatchedTopicToStateStore();
     }
 }
