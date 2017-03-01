@@ -63,7 +63,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                              numStandbyReplicas, taskId);
                     break;
                 }
-                assign(taskId, ids, false);
+                allocateTaskWithClientCandidates(taskId, ids, false);
             }
         }
     }
@@ -107,14 +107,14 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
         // assign any remaining unassigned tasks
         for (final TaskId taskId : unassigned) {
-            assign(taskId, clients.keySet(), true);
+            allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
         }
 
     }
 
 
 
-    private void assign(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
+    private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
         final ClientState<TaskId> client = findClient(taskId, clientsWithin);
         taskPairs.addPairs(taskId, client.assignedTasks());
         client.assign(taskId, active);
