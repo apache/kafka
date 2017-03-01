@@ -131,9 +131,9 @@ public class Utils {
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
         return (in.read() & 0xff)
-             | (in.read() << 8 * 1)
-             | (in.read() << 8 * 2)
-             | (in.read() << 8 * 3);
+             | (in.read() << 8)
+             | (in.read() << 16)
+             | (in.read() << 24);
     }
 
     /**
@@ -144,9 +144,9 @@ public class Utils {
     public static byte[] toArrayLE(int val) {
         return new byte[] {
             (byte) (val & 0xff),
-            (byte) (val >> 8 * 1),
-            (byte) (val >> 8 * 2),
-            (byte) (val >> 8 * 3)
+            (byte) (val >> 8),
+            (byte) (val >> 16),
+            (byte) (val >> 24)
         };
     }
 
@@ -160,10 +160,11 @@ public class Utils {
      * @return The integer read
      */
     public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset] & 0xff)
-             | ((buffer[offset + 1] & 0xff) << 8)
-             | ((buffer[offset + 2] & 0xff) << 16)
-             | ((buffer[offset + 3] & 0xff) << 24);
+        int a1 = buffer[offset] & 0xff;
+        int a2 = (buffer[offset + 1] & 0xff) << 8;
+        int a3 = (buffer[offset + 2] & 0xff) << 16;
+        int a4 = (buffer[offset + 3] & 0xff) << 24;
+        return a1 | a2 | a3 | a4;
     }
 
     /**
@@ -195,9 +196,9 @@ public class Utils {
      */
     public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
         out.write(value & 0xff);
-        out.write(value >>> 8 * 1);
-        out.write(value >>> 8 * 2);
-        out.write(value >>> 8 * 3);
+        out.write(value >>> 8);
+        out.write(value >>> 16);
+        out.write(value >>> 24);
     }
 
     /**
@@ -210,9 +211,9 @@ public class Utils {
      */
     public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
         buffer[offset++] = (byte) (value & 0xff);
-        buffer[offset++] = (byte) (value >>> 8 * 1);
-        buffer[offset++] = (byte) (value >>> 8 * 2);
-        buffer[offset]   = (byte) (value >>> 8 * 3);
+        buffer[offset++] = (byte) (value >>> 8);
+        buffer[offset++] = (byte) (value >>> 16);
+        buffer[offset]   = (byte) (value >>> 24);
     }
 
 
