@@ -107,9 +107,10 @@ object ConsumerGroupCommand extends Logging {
           case service: KafkaConsumerGroupService =>
             val assignmentsResetted = service.resetOffsets()
             val export = opts.options.has(opts.exportOpt)
-            if(export)
-              service.exportAssignmentsToReset(assignmentsResetted)
-            else
+            if(export) {
+              val exported = service.exportAssignmentsToReset(assignmentsResetted)
+              println(exported)
+            } else
               printAssignmentResetted(assignmentsResetted, true)
 
           case _ => throw new IllegalStateException(s"reset-offsets is not supported for $consumerGroupService.")
@@ -713,11 +714,9 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    def exportAssignmentsToReset(assignmentsToReset: Map[PartitionAssignmentState, Long]): Unit = {
-      for (key <- assignmentsToReset.keySet) {
-        println(s"${key.topic.get},${key.partition.get},${assignmentsToReset(key)}")
-      }
-      println
+    def exportAssignmentsToReset(assignmentsToReset: Map[PartitionAssignmentState, Long]): String = {
+      val rows = assignmentsToReset.map { case (k,v) => s"${k.topic.get},${k.partition.get},${v}" }(collection.breakOut): List[String]
+      rows.foldRight("")(_ + "\n" + _)
     }
 
   }

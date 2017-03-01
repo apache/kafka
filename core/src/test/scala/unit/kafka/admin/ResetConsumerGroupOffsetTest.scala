@@ -1,11 +1,11 @@
 package unit.kafka.admin
 
-import java.time.temporal.ChronoUnit
-import java.time.{Duration, Instant, LocalDateTime}
+import java.io.{BufferedWriter, File, FileWriter}
+import java.time.{Duration, LocalDateTime}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
-import kafka.admin.AdminUtils
+import kafka.admin.{AdminUtils, ConsumerGroupCommand}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -129,6 +129,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
+
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -156,6 +158,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
           throw e
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
 
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
@@ -185,6 +189,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -213,6 +218,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -244,6 +250,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -275,212 +282,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsToSpecificOffset() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-offset", "1", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists({ assignment => assignment._2 == 1 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsShiftPlus() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "50", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists({ assignment => assignment._2 == 150 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsShiftMinus() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-50", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
-
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists({ assignment => assignment._2 == 50 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsShiftByLowerThanEarliest() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-150", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists({ assignment => assignment._2 == 0 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsShiftByHigherThanLatest() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "150", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists({ assignment => assignment._2 == 200 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsToEarliestOnOneTopic() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic1, "--to-earliest", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
-    AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
-  }
-
-  @Test
-  def testResetOffsetsToEarliestOnOneTopicAndPartition() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", String.format("%s:1", topic1), "--to-earliest", "--execute")
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
-
-    AdminUtils.createTopic(zkUtils, topic1, 2, 1)
-
-    produceConsumeAndShutdown(consumerGroupCommand, 2, topic1, 100)
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsResetted = consumerGroupCommand.resetOffsets()
-        assignmentsResetted.exists { assignment => assignment._2 == 0 && assignment._1.partition.get == 1 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-        case e: Throwable =>
-          e.printStackTrace()
-          throw e
-      }
-    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
-
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -516,6 +318,219 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testResetOffsetsToSpecificOffset() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-offset", "1", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists({ assignment => assignment._2 == 1 })
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsShiftPlus() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "50", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists({ assignment => assignment._2 == 150 })
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsShiftMinus() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-50", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
+
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists({ assignment => assignment._2 == 50 })
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsShiftByLowerThanEarliest() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-150", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists({ assignment => assignment._2 == 0 })
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsShiftByHigherThanLatest() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "150", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists({ assignment => assignment._2 == 200 })
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsToEarliestOnOneTopic() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic1, "--to-earliest", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists { assignment => assignment._2 == 0 }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsToEarliestOnOneTopicAndPartition() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", String.format("%s:1", topic1), "--to-earliest", "--execute")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 2, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 2, topic1, 100)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        assignmentsResetted.exists { assignment => assignment._2 == 0 && assignment._1.partition.get == 1 }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
   def testResetOffsetsToEarliestOnTopics() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets",
       "--group", group,
@@ -546,6 +561,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
     consumerGroupCommand.close()
@@ -582,19 +598,69 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
 
+    printConsumerGroup
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
     consumerGroupCommand.close()
   }
 
   @Test
-  def testExportResetOffsetsPlan() {
-    //TODO
+  def testResetOffsetsExportImportPlan() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--export")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    AdminUtils.createTopic(zkUtils, topic1, 2, 1)
+
+    produceConsumeAndShutdown(consumerGroupCommand, 2, topic1, 100)
+
+    val file = File.createTempFile("reset", ".csv")
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand.resetOffsets()
+        val bw = new BufferedWriter(new FileWriter(file))
+        bw.write(consumerGroupCommand.exportAssignmentsToReset(assignmentsResetted))
+        bw.close()
+        assignmentsResetted.exists { assignment => assignment._2 == 0 }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+
+    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--from-file", file.getCanonicalPath)
+    val optsExec = new ConsumerGroupCommandOptions(cgcArgsExec)
+    val consumerGroupCommandExec = new KafkaConsumerGroupService(optsExec)
+
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommandExec.resetOffsets()
+        assignmentsResetted.exists { assignment => assignment._2 == 0 }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the state to be 'Dead' with no members in the group.") //TODO fix description
+
+    printConsumerGroup
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
   }
 
-  @Test
-  def testResetOffsetsFromFile() {
-    //TODO
+  private def printConsumerGroup() {
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--group", group, "--describe")
+    ConsumerGroupCommand.main(cgcArgs)
   }
 
 }
