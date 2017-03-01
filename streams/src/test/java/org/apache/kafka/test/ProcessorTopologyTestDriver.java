@@ -164,6 +164,8 @@ public class ProcessorTopologyTestDriver {
      * @param config the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
      * @param storeNames the optional names of the state stores that are used by the topology
+     *
+     * TODO: parameter storeNames can be removed now. It is not used.
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
@@ -178,7 +180,7 @@ public class ProcessorTopologyTestDriver {
                 return Collections.singletonList(new PartitionInfo(topic, 0, null, null, null));
             }
         };
-        restoreStateConsumer = createRestoreConsumer(id, storeNames);
+        restoreStateConsumer = createRestoreConsumer(id, topology.storeToChangelogTopic());
 
         // Identify internal topics for forwarding in process ...
         for (TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
@@ -187,7 +189,7 @@ public class ProcessorTopologyTestDriver {
 
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
-            TopicPartition tp = new TopicPartition(topic, 1);
+            TopicPartition tp = new TopicPartition(topic, id.partition);
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
@@ -393,10 +395,10 @@ public class ProcessorTopologyTestDriver {
      * driver object unless this method is overwritten with a functional consumer.
      *
      * @param id the ID of the stream task
-     * @param storeNames the names of the stores that this
+     * @param storeToChangelogTopic the map of the names of the stores to the changelog topics
      * @return the mock consumer; never null
      */
-    protected MockConsumer<byte[], byte[]> createRestoreConsumer(TaskId id, String... storeNames) {
+    protected MockConsumer<byte[], byte[]> createRestoreConsumer(TaskId id, Map<String, String> storeToChangelogTopic) {
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
             public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
@@ -415,8 +417,8 @@ public class ProcessorTopologyTestDriver {
             }
         };
         // For each store name ...
-        for (String storeName : storeNames) {
-            String topicName = ProcessorStateManager.storeChangelogTopic(applicationId, storeName);
+        for (String storeName : storeToChangelogTopic.keySet()) {
+            String topicName = storeToChangelogTopic.get(storeName);
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
