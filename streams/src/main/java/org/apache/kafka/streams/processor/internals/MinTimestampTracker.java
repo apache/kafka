@@ -35,7 +35,7 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     /**
      * @throws NullPointerException if the element is null
      */
-    public void addElement(Stamped<E> elem) {
+    public void addElement(final Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 
         Stamped<E> minElem = descendingSubsequence.peekLast();
@@ -46,7 +46,7 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
         descendingSubsequence.offerLast(elem);
     }
 
-    public void removeElement(Stamped<E> elem) {
+    public void removeElement(final Stamped<E> elem) {
         if (elem == null) {
             return;
         }

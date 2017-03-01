@@ -73,7 +73,7 @@ public class MinTimestampTrackerTest {
         tracker.addElement(null);
     }
 
-    private Stamped<String> elem(long timestamp) {
+    private Stamped<String> elem(final long timestamp) {
         return new Stamped<>("", timestamp);
     }
 }
