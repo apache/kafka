@@ -65,7 +65,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
         warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
           s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
-          s"This may result in potential frequent log rolling.")
+          s"This may result in frequent log rolling.")
       logs.foreach(_.config = logConfig)
     }
 
@@ -98,16 +98,15 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   }
   
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
-    val excludeConfigs: mutable.Set[String] = new mutable.HashSet[String]
     // Verify message format version
-    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
       if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
         warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
           s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        excludeConfigs += LogConfig.MessageFormatVersionProp
-      }
-    }
-    excludeConfigs.toSet
+        Some(LogConfig.MessageFormatVersionProp)
+      } else
+        None
+    }.toSet
   }
 }
 

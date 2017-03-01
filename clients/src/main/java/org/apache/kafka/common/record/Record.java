@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -479,7 +479,7 @@ public final class Record {
                               CompressionType compressionType,
                               TimestampType timestampType) {
         try {
-            ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+            DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -521,7 +521,6 @@ public final class Record {
         write(out, magic, crc, attributes, timestamp, key, value);
         return crc;
     }
-
 
     /**
      * Write a record using raw fields (without validation). This should only be used in testing.

@@ -191,11 +191,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 100))
-    new requests.FetchRequest.Builder(100, Int.MaxValue, partitionMap).setReplicaId(5000).build()
+    val version = ApiKeys.FETCH.latestVersion
+    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
-    new requests.ListOffsetRequest.Builder().setTargetTimes(
+    requests.ListOffsetRequest.Builder.forConsumer(false).setTargetTimes(
       Map(tp -> (0L: java.lang.Long)).asJava).
       build()
   }
@@ -214,7 +215,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
       Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
         ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
-    new requests.UpdateMetadataRequest.Builder(brokerId, Int.MaxValue, partitionState, brokers).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, partitionState, brokers).build()
   }
 
   private def createJoinGroupRequest = {
@@ -770,17 +772,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testUnauthorizedDeleteWithoutDescribe() {
-    val response = send(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val deleteResponse = DeleteTopicsResponse.parse(response)
-
+    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
+    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val deleteResponse = DeleteTopicsResponse.parse(response, version)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, deleteResponse.errors.asScala.head._2)
   }
 
   @Test
   def testUnauthorizedDeleteWithDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
-    val response = send(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val deleteResponse = DeleteTopicsResponse.parse(response)
+    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
+    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteResponse.errors.asScala.head._2)
   }
@@ -788,8 +791,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testDeleteWithWildCardAuth() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
-    val response = send(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val deleteResponse = DeleteTopicsResponse.parse(response)
+    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
+    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
   }
@@ -807,8 +811,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                             isAuthorized: Boolean,
                                             isAuthorizedTopicDescribe: Boolean,
                                             topicExists: Boolean = true): AbstractResponse = {
-    val resp = send(request, apiKey)
-    val response = RequestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer]).invoke(null, resp).asInstanceOf[AbstractResponse]
+    val resp = connectAndSend(request, apiKey)
+    val response = RequestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer], classOf[Short]).invoke(
+      null, resp, request.version: java.lang.Short).asInstanceOf[AbstractResponse]
     val error = RequestKeyToError(apiKey).asInstanceOf[(AbstractResponse) => Errors](response)
 
     val authorizationErrorCodes = resources.flatMap { resourceType =>
@@ -877,7 +882,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest,
                                      socketServer: SocketServer): requests.OffsetFetchResponse = {
-    val response = send(request, ApiKeys.OFFSET_FETCH, socketServer)
+    val response = connectAndSend(request, ApiKeys.OFFSET_FETCH, socketServer)
     requests.OffsetFetchResponse.parse(response, request.version)
   }
 

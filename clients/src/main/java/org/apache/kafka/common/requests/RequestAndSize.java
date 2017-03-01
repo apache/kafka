@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,27 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.requests;
 
-package kafka.message
+public class RequestAndSize {
+    public final AbstractRequest request;
+    public final int size;
 
-import java.io.InputStream
-import java.nio.ByteBuffer
-
-class ByteBufferBackedInputStream(buffer:ByteBuffer) extends InputStream {
-  override def read():Int  = {
-    if (buffer.hasRemaining)
-      buffer.get() & 0xFF
-    else
-      -1
-  }
-
-  override def read(bytes:Array[Byte], off:Int, len:Int):Int = {
-    if (buffer.hasRemaining) {
-      // Read only what's left
-      val realLen = math.min(len, buffer.remaining())
-      buffer.get(bytes, off, realLen)
-      realLen
-    } else
-      -1
-  }
+    public RequestAndSize(AbstractRequest request, int size) {
+        this.request = request;
+        this.size = size;
+    }
 }

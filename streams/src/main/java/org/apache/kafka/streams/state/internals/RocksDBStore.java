@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -70,8 +69,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     // TODO: these values should be configurable
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
-    private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
-    private static final long BLOCK_CACHE_SIZE = 100 * 1024 * 1024L;
+    private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
+    private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int TTL_SECONDS = TTL_NOT_USED;
     private static final int MAX_WRITE_BUFFERS = 3;

@@ -109,7 +109,8 @@ if (new File('.git').exists()) {
         'gradlew.bat',
         '**/README.md',
         '**/id_rsa',
-        '**/id_rsa.pub'
+        '**/id_rsa.pub',
+        'checkstyle/suppressions.xml'
     ])
   }
 }
@@ -124,6 +125,7 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
+  apply plugin: 'findbugs'
 
   sourceCompatibility = 1.7
 
@@ -272,8 +274,23 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+    // version 7.x requires Java 8
+    toolVersion = '6.19'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  findbugs {
+    toolVersion = "3.0.1"
+    excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+    ignoreFailures = true
+  }
+
+  tasks.withType(FindBugs) {
+    reports {
+      xml.enabled false
+      html.enabled true
+    }
+  }
 
   // Ignore core since its a scala project
   if (it.path != ':core') {

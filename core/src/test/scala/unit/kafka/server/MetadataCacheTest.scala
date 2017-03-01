@@ -22,7 +22,7 @@ import util.Arrays.asList
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{PartitionState, UpdateMetadataRequest}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.{Broker, EndPoint}
 import org.junit.Test
@@ -69,8 +69,9 @@ class MetadataCacheTest {
       new TopicPartition(topic, 1) -> new PartitionState(controllerEpoch, 1, 1, asList(1), zkVersion, asSet(1)),
       new TopicPartition(topic, 2) -> new PartitionState(controllerEpoch, 2, 2, asList(2), zkVersion, asSet(2)))
 
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-      controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
@@ -120,8 +121,9 @@ class MetadataCacheTest {
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, asList(0), zkVersion, asSet(0)))
 
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-      controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName)
@@ -163,8 +165,9 @@ class MetadataCacheTest {
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas))
 
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-      controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -222,8 +225,9 @@ class MetadataCacheTest {
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas))
 
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-      controllerId, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -273,8 +277,9 @@ class MetadataCacheTest {
     val isr = asList[Integer](0, 1)
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, 3, replicas))
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-      2, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, partitionStates.asJava,
+      brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
     try {
@@ -305,8 +310,9 @@ class MetadataCacheTest {
       val isr = asList[Integer](0, 1)
       val partitionStates = Map(
         new TopicPartition(topic, 0) -> new PartitionState(controllerEpoch, leader, leaderEpoch, isr, 3, replicas))
-      val updateMetadataRequest = new UpdateMetadataRequest.Builder(
-        2, controllerEpoch, partitionStates.asJava, brokers.asJava).build()
+      val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+      val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, partitionStates.asJava,
+        brokers.asJava).build()
       cache.updateCache(15, updateMetadataRequest)
     }
 

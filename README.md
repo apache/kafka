@@ -133,11 +133,26 @@ Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradl
 ### Determining if any dependencies could be updated ###
     ./gradlew dependencyUpdates
 
-### Running checkstyle on the java code ###
+### Running code quality checks ###
+There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
+
+#### Checkstyle
+Checkstyle enforces a consistent coding style in Kafka.
+You can run checkstyle using:
+
     ./gradlew checkstyleMain checkstyleTest
 
-This will most commonly be useful for automated builds where the full resources of the host running the build and tests
-may not be dedicated to Kafka's build.
+The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
+subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
+
+#### Findbugs
+Findbugs uses static analysis to look for bugs in the code.
+You can run findbugs using:
+
+    ./gradlew findbugsMain findbugsTest -x test
+
+The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
+directories. Currently, findbugs warnings do not cause the build to fail.
 
 ### Common build options ###
 

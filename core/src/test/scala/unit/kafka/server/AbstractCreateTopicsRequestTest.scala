@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
@@ -82,13 +82,13 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def error(error: Errors, errorMessage: Option[String] = None): CreateTopicsResponse.Error =
     new CreateTopicsResponse.Error(error, errorMessage.orNull)
 
-  protected def duplicateFirstTopic(request: CreateTopicsRequest) = {
+  protected def toStructWithDuplicateFirstTopic(request: CreateTopicsRequest): Struct = {
     val struct = request.toStruct
     val topics = struct.getArray("create_topic_requests")
     val firstTopic = topics(0).asInstanceOf[Struct]
     val newTopics = firstTopic :: topics.toList
     struct.set("create_topic_requests", newTopics.toArray)
-    new CreateTopicsRequest(struct, request.version)
+    struct
   }
 
   protected def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
@@ -102,8 +102,10 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, CreateTopicsResponse.Error],
-                                                  checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request)
+                                                  checkErrorMessage: Boolean = true,
+                                                  requestStruct: Option[Struct] = None): Unit = {
+    val response = requestStruct.map(sendCreateTopicRequestStruct(_, request.version)).getOrElse(
+      sendCreateTopicRequest(request))
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
@@ -133,15 +135,20 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     assignments.map { case (k, v) => (k: Integer, v.map { i => i: Integer }.asJava) }.asJava
   }
 
+  protected def sendCreateTopicRequestStruct(requestStruct: Struct, apiVersion: Short,
+                                             socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
+    val response = connectAndSendStruct(requestStruct, ApiKeys.CREATE_TOPICS, apiVersion, socketServer)
+    CreateTopicsResponse.parse(response, apiVersion)
+  }
+
   protected def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = send(request, ApiKeys.CREATE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKeys.CREATE_TOPICS, socketServer)
     CreateTopicsResponse.parse(response, request.version)
   }
 
   protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val version = ProtoUtils.latestVersion(ApiKeys.METADATA.id)
-    val response = send(request, ApiKeys.METADATA, destination = destination)
-    MetadataResponse.parse(response, version)
+    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination)
+    MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
   }
 
 }

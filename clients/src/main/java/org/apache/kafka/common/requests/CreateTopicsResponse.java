@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,8 +19,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -30,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 public class CreateTopicsResponse extends AbstractResponse {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CREATE_TOPICS.id);
-
     private static final String TOPIC_ERRORS_KEY_NAME = "topic_errors";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -87,27 +83,11 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     private final Map<String, Error> errors;
 
-    public CreateTopicsResponse(Map<String, Error> errors, short version) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version)));
-
-        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, Error> topicError : errors.entrySet()) {
-            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
-            topicErrorsStruct.set(TOPIC_KEY_NAME, topicError.getKey());
-            Error error = topicError.getValue();
-            topicErrorsStruct.set(ERROR_CODE_KEY_NAME, error.error.code());
-            if (version >= 1)
-                topicErrorsStruct.set(ERROR_MESSAGE_KEY_NAME, error.message());
-            topicErrorsStructs.add(topicErrorsStruct);
-        }
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
-
+    public CreateTopicsResponse(Map<String, Error> errors) {
         this.errors = errors;
     }
 
     public CreateTopicsResponse(Struct struct) {
-        super(struct);
-
         Object[] topicErrorStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
         Map<String, Error> errors = new HashMap<>();
         for (Object topicErrorStructObj : topicErrorStructs) {
@@ -123,15 +103,29 @@ public class CreateTopicsResponse extends AbstractResponse {
         this.errors = errors;
     }
 
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
+
+        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
+        for (Map.Entry<String, Error> topicError : errors.entrySet()) {
+            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
+            topicErrorsStruct.set(TOPIC_KEY_NAME, topicError.getKey());
+            Error error = topicError.getValue();
+            topicErrorsStruct.set(ERROR_CODE_KEY_NAME, error.error.code());
+            if (version >= 1)
+                topicErrorsStruct.set(ERROR_MESSAGE_KEY_NAME, error.message());
+            topicErrorsStructs.add(topicErrorsStruct);
+        }
+        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
+        return struct;
+    }
+
     public Map<String, Error> errors() {
         return errors;
     }
 
-    public static CreateTopicsResponse parse(ByteBuffer buffer) {
-        return new CreateTopicsResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static CreateTopicsResponse parse(ByteBuffer buffer, int version) {
-        return new CreateTopicsResponse(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version).read(buffer));
+    public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
+        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
     }
 }

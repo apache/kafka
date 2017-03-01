@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -76,8 +75,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
             // 2) flush produced records in the downstream and change logs of local states
             recordCollector.flush();
-
-            // 3) commit consumed offsets if it is dirty already
+            // 3) write checkpoints for any local state
+            stateMgr.checkpoint(recordCollectorOffsets());
+            // 4) commit consumed offsets if it is dirty already
             commitOffsets();
         }
     };
@@ -100,14 +100,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
-                      Consumer<byte[], byte[]> restoreConsumer,
+                      final ChangelogReader changelogReader,
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
                       ThreadCache cache,
                       Time time,
                       final RecordCollector recordCollector) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);

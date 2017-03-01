@@ -1,21 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -27,8 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 public class ApiVersionsResponse extends AbstractResponse {
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id);
 
     public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse();
     public static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -50,6 +51,10 @@ public class ApiVersionsResponse extends AbstractResponse {
         public final short minVersion;
         public final short maxVersion;
 
+        public ApiVersion(ApiKeys apiKey) {
+            this(apiKey.id, apiKey.oldestVersion(), apiKey.latestVersion());
+        }
+
         public ApiVersion(short apiKey, short minVersion, short maxVersion) {
             this.apiKey = apiKey;
             this.minVersion = minVersion;
@@ -67,23 +72,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public ApiVersionsResponse(Errors error, List<ApiVersion> apiVersions) {
-        super(new Struct(CURRENT_SCHEMA));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        List<Struct> apiVersionList = new ArrayList<>();
-        for (ApiVersion apiVersion : apiVersions) {
-            Struct apiVersionStruct = struct.instance(API_VERSIONS_KEY_NAME);
-            apiVersionStruct.set(API_KEY_NAME, apiVersion.apiKey);
-            apiVersionStruct.set(MIN_VERSION_KEY_NAME, apiVersion.minVersion);
-            apiVersionStruct.set(MAX_VERSION_KEY_NAME, apiVersion.maxVersion);
-            apiVersionList.add(apiVersionStruct);
-        }
-        struct.set(API_VERSIONS_KEY_NAME, apiVersionList.toArray());
         this.error = error;
         this.apiKeyToApiVersion = buildApiKeyToApiVersion(apiVersions);
     }
 
     public ApiVersionsResponse(Struct struct) {
-        super(struct);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         List<ApiVersion> tempApiVersions = new ArrayList<>();
         for (Object apiVersionsObj : struct.getArray(API_VERSIONS_KEY_NAME)) {
@@ -94,6 +87,31 @@ public class ApiVersionsResponse extends AbstractResponse {
             tempApiVersions.add(new ApiVersion(apiKey, minVersion, maxVersion));
         }
         this.apiKeyToApiVersion = buildApiKeyToApiVersion(tempApiVersions);
+    }
+
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.API_VERSIONS.responseSchema(version));
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        List<Struct> apiVersionList = new ArrayList<>();
+        for (ApiVersion apiVersion : apiKeyToApiVersion.values()) {
+            Struct apiVersionStruct = struct.instance(API_VERSIONS_KEY_NAME);
+            apiVersionStruct.set(API_KEY_NAME, apiVersion.apiKey);
+            apiVersionStruct.set(MIN_VERSION_KEY_NAME, apiVersion.minVersion);
+            apiVersionStruct.set(MAX_VERSION_KEY_NAME, apiVersion.maxVersion);
+            apiVersionList.add(apiVersionStruct);
+        }
+        struct.set(API_VERSIONS_KEY_NAME, apiVersionList.toArray());
+        return struct;
+    }
+
+    /**
+     * Returns Errors.UNSUPPORTED_VERSION response with version 0 since we don't support the requested version.
+     */
+    public static Send unsupportedVersionSend(String destination, RequestHeader requestHeader) {
+        ApiVersionsResponse response = new ApiVersionsResponse(Errors.UNSUPPORTED_VERSION,
+                Collections.<ApiVersion>emptyList());
+        return response.toSend(destination, (short) 0, requestHeader.toResponseHeader());
     }
 
     public Collection<ApiVersion> apiVersions() {
@@ -108,18 +126,14 @@ public class ApiVersionsResponse extends AbstractResponse {
         return error;
     }
 
-    public static ApiVersionsResponse parse(ByteBuffer buffer) {
-        return new ApiVersionsResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static ApiVersionsResponse fromError(Errors error) {
-        return new ApiVersionsResponse(error, Collections.<ApiVersion>emptyList());
+    public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
+        return new ApiVersionsResponse(ApiKeys.API_VERSIONS.responseSchema(version).read(buffer));
     }
 
     private static ApiVersionsResponse createApiVersionsResponse() {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            versionList.add(new ApiVersion(apiKey.id, ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
+            versionList.add(new ApiVersion(apiKey));
         }
         return new ApiVersionsResponse(Errors.NONE, versionList);
     }

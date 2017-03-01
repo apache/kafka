@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -56,6 +56,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -201,7 +202,7 @@ public class ProcessorTopologyTestDriver {
             final MockConsumer<byte[], byte[]> globalConsumer = createGlobalConsumer();
             for (final String topicName : globalTopology.sourceTopics()) {
                 List<PartitionInfo> partitionInfos = new ArrayList<>();
-                partitionInfos.add(new PartitionInfo(topicName , 1, null, null, null));
+                partitionInfos.add(new PartitionInfo(topicName, 1, null, null, null));
                 globalConsumer.updatePartitions(topicName, partitionInfos);
                 final TopicPartition partition = new TopicPartition(topicName, 1);
                 globalConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
@@ -211,7 +212,8 @@ public class ProcessorTopologyTestDriver {
             final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
                                                         new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
-                                                        stateManager);
+                                                        stateManager
+            );
             globalStateTask.initialize();
         }
 
@@ -221,7 +223,7 @@ public class ProcessorTopologyTestDriver {
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
-                                  restoreStateConsumer,
+                                  new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
@@ -231,23 +233,27 @@ public class ProcessorTopologyTestDriver {
     }
 
     /**
-     * Send an input message with the given key and value on the specified topic to the topology, and then commit the messages.
+     * Send an input message with the given key, value and timestamp on the specified topic to the topology, and then commit the messages.
      *
      * @param topicName the name of the topic on which the message is to be sent
      * @param key the raw message key
      * @param value the raw message value
+     * @param timestamp the raw message timestamp
      */
-    public void process(String topicName, byte[] key, byte[] value) {
+    private void process(String topicName, byte[] key, byte[] value, long timestamp) {
+
         TopicPartition tp = partitionsByTopic.get(topicName);
         if (tp != null) {
             // Add the record ...
             long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
-            task.addRecords(tp, records(new ConsumerRecord<>(tp.topic(), tp.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
+            task.addRecords(tp, records(new ConsumerRecord<>(tp.topic(), tp.partition(), offset, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
             producer.clear();
+
             // Process the record ...
             task.process();
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(0L, offset, tp.partition(), topicName));
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(timestamp, offset, tp.partition(), topicName));
             task.commit();
+
             // Capture all the records sent to the producer ...
             for (ProducerRecord<byte[], byte[]> record : producer.history()) {
                 Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
@@ -259,7 +265,7 @@ public class ProcessorTopologyTestDriver {
 
                 // Forward back into the topology if the produced record is to an internal topic ...
                 if (internalTopics.contains(record.topic())) {
-                    process(record.topic(), record.key(), record.value());
+                    process(record.topic(), record.key(), record.value(), record.timestamp());
                 }
             }
         } else {
@@ -268,11 +274,20 @@ public class ProcessorTopologyTestDriver {
                 throw new IllegalArgumentException("Unexpected topic: " + topicName);
             }
             final long offset = offsetsByTopicPartition.get(global).incrementAndGet();
-            globalStateTask.update(new ConsumerRecord<>(global.topic(), global.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value));
+            globalStateTask.update(new ConsumerRecord<>(global.topic(), global.partition(), offset, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, key, value));
             globalStateTask.flushState();
         }
+    }
 
-
+    /**
+     * Send an input message with the given key and value on the specified topic to the topology.
+     *
+     * @param topicName the name of the topic on which the message is to be sent
+     * @param key the raw message key
+     * @param value the raw message value
+     */
+    public void process(String topicName, byte[] key, byte[] value) {
+        process(topicName, key, value, 0L);
     }
 
     /**
@@ -315,7 +330,7 @@ public class ProcessorTopologyTestDriver {
         if (record == null) return null;
         K key = keyDeserializer.deserialize(record.topic(), record.key());
         V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new ProducerRecord<K, V>(record.topic(), record.partition(), key, value);
+        return new ProducerRecord<K, V>(record.topic(), record.partition(), record.timestamp(), key, value);
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]> record) {

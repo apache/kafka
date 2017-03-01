@@ -1,21 +1,23 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,8 +28,6 @@ import java.util.Map;
 
 public class JoinGroupResponse extends AbstractResponse {
 
-    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id);
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
@@ -67,33 +67,6 @@ public class JoinGroupResponse extends AbstractResponse {
                              String memberId,
                              String leaderId,
                              Map<String, ByteBuffer> groupMembers) {
-        this(CURRENT_VERSION, error, generationId, groupProtocol, memberId, leaderId, groupMembers);
-    }
-
-    public JoinGroupResponse(int version,
-                             Errors error,
-                             int generationId,
-                             String groupProtocol,
-                             String memberId,
-                             String leaderId,
-                             Map<String, ByteBuffer> groupMembers) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version)));
-
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        struct.set(LEADER_ID_KEY_NAME, leaderId);
-
-        List<Struct> memberArray = new ArrayList<>();
-        for (Map.Entry<String, ByteBuffer> entries: groupMembers.entrySet()) {
-            Struct memberData = struct.instance(MEMBERS_KEY_NAME);
-            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
-            memberData.set(MEMBER_METADATA_KEY_NAME, entries.getValue());
-            memberArray.add(memberData);
-        }
-        struct.set(MEMBERS_KEY_NAME, memberArray.toArray());
-
         this.error = error;
         this.generationId = generationId;
         this.groupProtocol = groupProtocol;
@@ -103,7 +76,6 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public JoinGroupResponse(Struct struct) {
-        super(struct);
         members = new HashMap<>();
 
         for (Object memberDataObj : struct.getArray(MEMBERS_KEY_NAME)) {
@@ -147,11 +119,29 @@ public class JoinGroupResponse extends AbstractResponse {
         return members;
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer, int version) {
-        return new JoinGroupResponse(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version).read(buffer));
+    public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
+        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer));
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer) {
-        return new JoinGroupResponse(CURRENT_SCHEMA.read(buffer));
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
+
+        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(GENERATION_ID_KEY_NAME, generationId);
+        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(LEADER_ID_KEY_NAME, leaderId);
+
+        List<Struct> memberArray = new ArrayList<>();
+        for (Map.Entry<String, ByteBuffer> entries : members.entrySet()) {
+            Struct memberData = struct.instance(MEMBERS_KEY_NAME);
+            memberData.set(MEMBER_ID_KEY_NAME, entries.getKey());
+            memberData.set(MEMBER_METADATA_KEY_NAME, entries.getValue());
+            memberArray.add(memberData);
+        }
+        struct.set(MEMBERS_KEY_NAME, memberArray.toArray());
+
+        return struct;
     }
 }

@@ -46,7 +46,7 @@ fi
 echo "Using kafka image: ${KAFKA_IMAGE}"
 docker inspect ${KAFKA_IMAGE}
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
-  docker run -d -t --name knode${i} --network knw -v ${KAFKA_SRC}:/kafka_src ${KAFKA_IMAGE}
+  docker run -d -t --name knode${i} --network knw -v ${KAFKA_SRC}:/opt/kafka-dev ${KAFKA_IMAGE}
 done
 
 docker info
@@ -55,18 +55,8 @@ docker network inspect knw
 
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
   echo knode${i}
-  docker exec knode${i} bash -c "(tar xfz /kafka_src/core/build/distributions/kafka_*SNAPSHOT.tgz -C /opt || echo missing kafka tgz did you build kafka tarball) && mv /opt/kafka*SNAPSHOT /opt/kafka-dev && ls -l /opt"
-  docker exec knode01 bash -c "ssh knode$i hostname"
-done
-
-# hack to copy test dependencies
-# this is required for running MiniKDC
-(cd ${KAFKA_SRC} && ./gradlew copyDependantTestLibs)
-for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
-  echo knode${i}
-  docker exec knode${i} bash -c "cp /kafka_src/core/build/dependant-testlibs/* /opt/kafka-dev/libs/"
   docker exec knode01 bash -c "ssh knode$i hostname"
 done
 
 bash tests/cluster_file_generator.sh > tests/cluster_file.json
-docker exec knode01 bash -c "cd /kafka_src; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"
+docker exec knode01 bash -c "cd /opt/kafka-dev; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"
