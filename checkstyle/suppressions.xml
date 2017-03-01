@@ -88,6 +88,9 @@
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher)Test.java"/>
 
+    <suppress checks="JavaNCSS"
+              files="RequestResponseTest.java"/>
+
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
               files="DistributedHerder.java"/>

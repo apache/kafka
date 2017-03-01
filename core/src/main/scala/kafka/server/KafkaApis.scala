@@ -1318,7 +1318,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
   def handleInitPIDRequest(request: RequestChannel.Request): Unit = {
-    val initPidRequest = request.body.asInstanceOf[InitPidRequest]
+    val initPidRequest = request.body[InitPidRequest]
 
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {
