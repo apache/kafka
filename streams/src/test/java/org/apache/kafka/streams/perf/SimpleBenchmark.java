@@ -142,7 +142,7 @@ public class SimpleBenchmark {
                 kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
                 break;
             case "produce":
-                produce(SOURCE_TOPIC, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
+                produce(SOURCE_TOPIC);
                 break;
             case "consume":
                 consume(SOURCE_TOPIC);
@@ -445,7 +445,6 @@ public class SimpleBenchmark {
             return;
         }
         produce(topic, VALUE_SIZE, "simple-benchmark-produce", numRecords, true, numRecords, true);
-
     }
     /**
      * Produce values to a topic
