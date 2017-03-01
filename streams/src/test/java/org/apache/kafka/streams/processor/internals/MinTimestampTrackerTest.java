@@ -16,77 +16,63 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.junit.Assert.assertEquals;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import org.junit.Test;
 
 public class MinTimestampTrackerTest {
 
-    private Stamped<String> elem(long timestamp) {
+    private MinTimestampTracker<String> tracker = new MinTimestampTracker<>();
+
+    @Test
+    public void shouldReturnNotKnownTimestampWhenNoRecordsEverAdded() throws Exception {
+        assertThat(tracker.get(), equalTo(TimestampTracker.NOT_KNOWN));
+    }
+
+    @Test
+    public void shouldReturnTimestampOfOnlyRecord() throws Exception {
+        tracker.addElement(elem(100));
+        assertThat(tracker.get(), equalTo(100L));
+    }
+
+    @Test
+    public void shouldReturnLowestAvailableTimestampFromAllInputs() throws Exception {
+        tracker.addElement(elem(100));
+        tracker.addElement(elem(99));
+        tracker.addElement(elem(102));
+        assertThat(tracker.get(), equalTo(99L));
+    }
+
+    @Test
+    public void shouldReturnLowestAvailableTimestampAfterPreviousLowestRemoved() throws Exception {
+        final Stamped<String> lowest = elem(88);
+        tracker.addElement(lowest);
+        tracker.addElement(elem(101));
+        tracker.addElement(elem(99));
+        tracker.removeElement(lowest);
+        assertThat(tracker.get(), equalTo(99L));
+    }
+
+    @Test
+    public void shouldReturnLastKnownTimestampWhenAllElementsHaveBeenRemoved() throws Exception {
+        final Stamped<String> record = elem(98);
+        tracker.addElement(record);
+        tracker.removeElement(record);
+        assertThat(tracker.get(), equalTo(98L));
+    }
+
+    @Test
+    public void shouldIgnoreNullRecordOnRemove() throws Exception {
+        tracker.removeElement(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionWhenTryingToAddNullElement() throws Exception {
+        tracker.addElement(null);
+    }
+
+    private Stamped<String> elem(final long timestamp) {
         return new Stamped<>("", timestamp);
     }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void testTracking() {
-        TimestampTracker<String> tracker = new MinTimestampTracker<>();
-
-        Object[] elems = new Object[]{
-            elem(100), elem(101), elem(102), elem(98), elem(99), elem(100)
-        };
-
-        int insertionIndex = 0;
-        int removalIndex = 0;
-
-        // add 100
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(100L, tracker.get());
-
-        // add 101
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(100L, tracker.get());
-
-        // remove 100
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(101L, tracker.get());
-
-        // add 102
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(101L, tracker.get());
-
-        // add 98
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(98L, tracker.get());
-
-        // add 99
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(98L, tracker.get());
-
-        // add 100
-        tracker.addElement((Stamped<String>) elems[insertionIndex++]);
-        assertEquals(98L, tracker.get());
-
-        // remove 101
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(98L, tracker.get());
-
-        // remove 102
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(98L, tracker.get());
-
-        // remove 98
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(99L, tracker.get());
-
-        // remove 99
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(100L, tracker.get());
-
-        // remove 100
-        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(100L, tracker.get());
-
-        assertEquals(insertionIndex, removalIndex);
-    }
-
 }
