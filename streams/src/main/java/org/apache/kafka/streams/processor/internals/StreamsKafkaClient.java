@@ -144,14 +144,16 @@ public class StreamsKafkaClient {
                              final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
 
         final Map<String, CreateTopicsRequest.TopicDetails> topicRequestDetails = new HashMap<>();
-        for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsMap.entrySet()) {
+            InternalTopicConfig internalTopicConfig = entry.getKey();
+            Integer partitions = entry.getValue();
             final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
             final Map<String, String> topicConfig = new HashMap<>();
             for (String key : topicProperties.stringPropertyNames()) {
                 topicConfig.put(key, topicProperties.getProperty(key));
             }
             final CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(
-                topicsMap.get(internalTopicConfig),
+                partitions,
                 (short) replicationFactor,
                 topicConfig);
 

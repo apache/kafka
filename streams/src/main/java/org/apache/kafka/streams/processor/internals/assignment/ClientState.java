@@ -117,11 +117,12 @@ public class ClientState<T> {
         final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
         final double thisLoad = (double) assignedTaskCount() / capacity;
 
-        if (thisLoad == otherLoad) {
+        if (thisLoad < otherLoad)
+            return true;
+        else if (thisLoad > otherLoad)
+            return false;
+        else
             return capacity > other.capacity;
-        }
-
-        return thisLoad < otherLoad;
     }
 
     Set<T> previousStandbyTasks() {
