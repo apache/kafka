@@ -143,7 +143,7 @@ public class Utils {
      */
     public static byte[] toArrayLE(int val) {
         return new byte[] {
-            (byte) (val >> 8 * 0),
+            (byte) (val & 0xff),
             (byte) (val >> 8 * 1),
             (byte) (val >> 8 * 2),
             (byte) (val >> 8 * 3)
@@ -157,13 +157,13 @@ public class Utils {
      *
      * @param buffer The byte array to read from
      * @param offset The position in buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
+     * @return The integer read
      */
     public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset++] << 8 * 0)
-             | (buffer[offset++] << 8 * 1)
-             | (buffer[offset++] << 8 * 2)
-             | (buffer[offset]   << 8 * 3);
+        return (buffer[offset] & 0xff)
+             | ((buffer[offset + 1] & 0xff) << 8)
+             | ((buffer[offset + 2] & 0xff) << 16)
+             | ((buffer[offset + 3] & 0xff) << 24);
     }
 
     /**
@@ -194,7 +194,7 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value >>> 8 * 0);
+        out.write(value & 0xff);
         out.write(value >>> 8 * 1);
         out.write(value >>> 8 * 2);
         out.write(value >>> 8 * 3);
@@ -209,7 +209,7 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset++] = (byte) (value >>> 8 * 0);
+        buffer[offset++] = (byte) (value & 0xff);
         buffer[offset++] = (byte) (value >>> 8 * 1);
         buffer[offset++] = (byte) (value >>> 8 * 2);
         buffer[offset]   = (byte) (value >>> 8 * 3);

@@ -333,4 +333,15 @@ public class UtilsTest {
                 assertEquals(closeablesWithException[i].closeException, suppressed[i - 1]);
         }
     }
+
+    @Test
+    public void testReadUnsignedIntLE() throws Exception {
+        byte[] array1 = {(byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04, (byte) 0x05 };
+        assertEquals(0x04030201, Utils.readUnsignedIntLE(array1, 0));
+        assertEquals(0x05040302, Utils.readUnsignedIntLE(array1, 1));
+
+        byte[] array2 = {(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4, (byte) 0xf5, (byte) 0xf6 };
+        assertEquals(0xf4f3f2f1, Utils.readUnsignedIntLE(array2, 0));
+        assertEquals(0xf6f5f4f3, Utils.readUnsignedIntLE(array2, 2));
+    }
 }
