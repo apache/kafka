@@ -222,7 +222,11 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
-    
+
+    public static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "leave.group.on.close";
+    private static final String LEAVE_GROUP_ON_CLOSE_CONFIG_DOC = "Whether or not the consumer should leave the group on close. If set to <code>true</code> then a rebalance "
+                                                                + "won't occur until <code>session.timeout.ms</code> expires.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -397,6 +401,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(LEAVE_GROUP_ON_CLOSE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        LEAVE_GROUP_ON_CLOSE_CONFIG_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
 
