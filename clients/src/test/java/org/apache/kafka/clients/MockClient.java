@@ -26,6 +26,8 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -63,7 +65,7 @@ public class MockClient implements KafkaClient {
 
     private final Time time;
     private final Metadata metadata;
-    private boolean hasUnavailablePartitions;
+    private Collection<String> unavailableTopics;
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
@@ -83,6 +85,7 @@ public class MockClient implements KafkaClient {
     public MockClient(Time time, Metadata metadata) {
         this.time = time;
         this.metadata = metadata;
+        this.unavailableTopics = Collections.emptySet();
     }
 
     @Override
@@ -168,10 +171,10 @@ public class MockClient implements KafkaClient {
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate == null)
-                metadata.update(metadata.fetch(), this.hasUnavailablePartitions, time.milliseconds());
+                metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
-                this.hasUnavailablePartitions = metadataUpdate.hasUnavailablePartitions;
-                metadata.update(metadataUpdate.cluster, metadataUpdate.hasUnavailablePartitions, time.milliseconds());
+                this.unavailableTopics = metadataUpdate.unavailableTopics;
+                metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
             }
         }
 
@@ -280,8 +283,8 @@ public class MockClient implements KafkaClient {
         metadataUpdates.clear();
     }
 
-    public void prepareMetadataUpdate(Cluster cluster, boolean hasUnavailablePartitions) {
-        metadataUpdates.add(new MetadataUpdate(cluster, hasUnavailablePartitions));
+    public void prepareMetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
     }
 
     public void setNode(Node node) {
@@ -345,10 +348,10 @@ public class MockClient implements KafkaClient {
 
     private static class MetadataUpdate {
         final Cluster cluster;
-        final boolean hasUnavailablePartitions;
-        MetadataUpdate(Cluster cluster, boolean hasUnavailablePartitions) {
+        final Collection<String> unavailableTopics;
+        MetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
             this.cluster = cluster;
-            this.hasUnavailablePartitions = hasUnavailablePartitions;
+            this.unavailableTopics = unavailableTopics;
         }
     }
 }

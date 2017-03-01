@@ -204,17 +204,25 @@ public class MetadataResponse extends AbstractResponse {
         return errorTopics;
     }
 
-    public boolean hasUnavailablePartitions() {
+    /**
+     * Returns the set of topics with an error indicating invalid metadata
+     * and topics with any partition whose error indicates invalid metadata.
+     * This includes all non-existent topics specified in the metadata request
+     * and any topic returned with one or more partitions whose leader is not known.
+     */
+    public Collection<String> unavailableTopics() {
+        Collection<String> invalidMetadataTopics = new HashSet<>();
         for (TopicMetadata topicMetadata : this.topicMetadata) {
             if (topicMetadata.error.exception() instanceof InvalidMetadataException)
-                return true;
+                invalidMetadataTopics.add(topicMetadata.topic);
             for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
                 if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
-                    return true;
+                    invalidMetadataTopics.add(topicMetadata.topic);
+                    break;
                 }
             }
         }
-        return false;
+        return invalidMetadataTopics;
     }
 
     /**
