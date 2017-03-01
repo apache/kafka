@@ -150,4 +150,8 @@ public class ClientState<T> {
     int capacity() {
         return capacity;
     }
+
+    boolean hasUnfulfilledQuota(final int tasksPerThread) {
+        return activeTasks.size() < capacity * tasksPerThread;
+    }
 }
