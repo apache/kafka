@@ -80,7 +80,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static class ClientMetadata {
         final HostInfo hostInfo;
         final Set<String> consumers;
-        final ClientState<TaskId> state;
+        final ClientState state;
 
         ClientMetadata(final String endPoint) {
 
@@ -101,7 +101,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             consumers = new HashSet<>();
 
             // initialize the client state
-            state = new ClientState<>();
+            state = new ClientState();
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
@@ -453,7 +453,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ---------------- Step Two ---------------- //
 
         // assign tasks to clients
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+        Map<UUID, ClientState> states = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             states.put(entry.getKey(), entry.getValue().state);
         }
@@ -474,7 +474,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             if (hostInfo != null) {
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
-                final ClientState<TaskId> state = entry.getValue().state;
+                final ClientState state = entry.getValue().state;
 
                 for (TaskId id : state.activeTasks) {
                     topicPartitions.addAll(partitionsForTask.get(id));
@@ -488,7 +488,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             Set<String> consumers = entry.getValue().consumers;
-            ClientState<TaskId> state = entry.getValue().state;
+            ClientState state = entry.getValue().state;
 
             ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
             final int numActiveTasks = state.activeTasks.size();

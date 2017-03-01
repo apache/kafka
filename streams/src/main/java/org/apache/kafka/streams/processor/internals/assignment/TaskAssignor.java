@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,17 +29,17 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-public class TaskAssignor<C, T extends Comparable<T>> {
+public class TaskAssignor<C> {
 
     private static final Logger log = LoggerFactory.getLogger(TaskAssignor.class);
 
-    public static <C, T extends Comparable<T>> void assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas) {
+    public static <C, T extends Comparable<T>> void assign(Map<C, ClientState> states, Set<TaskId> tasks, int numStandbyReplicas) {
         long seed = 0L;
         for (C client : states.keySet()) {
             seed += client.hashCode();
         }
 
-        TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
+        TaskAssignor<C> assignor = new TaskAssignor<>(states, tasks, seed);
 
         // assign active tasks
         assignor.assignTasks();
@@ -49,29 +50,29 @@ public class TaskAssignor<C, T extends Comparable<T>> {
     }
 
     private final Random rand;
-    private final Map<C, ClientState<T>> states;
-    private final Set<TaskPair<T>> taskPairs;
+    private final Map<C, ClientState> states;
+    private final Set<TaskPair> taskPairs;
     private final int maxNumTaskPairs;
-    private final ArrayList<T> tasks;
+    private final ArrayList<TaskId> tasks;
     private boolean prevAssignmentBalanced = true;
     private boolean prevClientsUnchanged = true;
 
-    private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed) {
+    private TaskAssignor(Map<C, ClientState> states, Set<TaskId> tasks, long randomSeed) {
         this.rand = new Random(randomSeed);
-        this.tasks = new ArrayList<>(tasks);
+        this.tasks = new ArrayList(tasks);
         this.states = states;
 
         int avgNumTasks = tasks.size() / states.size();
-        Set<T> existingTasks = new HashSet<>();
-        for (Map.Entry<C, ClientState<T>> entry : states.entrySet()) {
-            Set<T> oldTasks = entry.getValue().prevAssignedTasks;
+        Set<TaskId> existingTasks = new HashSet<>();
+        for (Map.Entry<C, ClientState> entry : states.entrySet()) {
+            Set<TaskId> oldTasks = entry.getValue().prevAssignedTasks;
 
             // make sure the previous assignment is balanced
             prevAssignmentBalanced = prevAssignmentBalanced &&
-                oldTasks.size() < 2 * avgNumTasks && oldTasks.size() > avgNumTasks / 2;
+                    oldTasks.size() < 2 * avgNumTasks && oldTasks.size() > avgNumTasks / 2;
 
             // make sure there are no duplicates
-            for (T task : oldTasks) {
+            for (TaskId task : oldTasks) {
                 prevClientsUnchanged = prevClientsUnchanged && !existingTasks.contains(task);
             }
             existingTasks.addAll(oldTasks);
@@ -99,8 +100,8 @@ public class TaskAssignor<C, T extends Comparable<T>> {
     private void assignTasks(boolean active) {
         Collections.shuffle(this.tasks, rand);
 
-        for (T task : tasks) {
-            ClientState<T> state = findClientFor(task);
+        for (TaskId task : tasks) {
+            ClientState state = findClientFor(task);
 
             if (state != null) {
                 state.assign(task, active);
@@ -112,10 +113,10 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         }
     }
 
-    private ClientState<T> findClientFor(T task) {
+    private ClientState findClientFor(TaskId task) {
         boolean checkTaskPairs = taskPairs.size() < maxNumTaskPairs;
 
-        ClientState<T> state = findClientByAdditionCost(task, checkTaskPairs);
+        ClientState state = findClientByAdditionCost(task, checkTaskPairs);
 
         if (state == null && checkTaskPairs)
             state = findClientByAdditionCost(task, false);
@@ -126,11 +127,11 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         return state;
     }
 
-    private ClientState<T> findClientByAdditionCost(T task, boolean checkTaskPairs) {
-        ClientState<T> candidate = null;
+    private ClientState findClientByAdditionCost(TaskId task, boolean checkTaskPairs) {
+        ClientState candidate = null;
         double candidateAdditionCost = 0d;
 
-        for (ClientState<T> state : states.values()) {
+        for (ClientState state : states.values()) {
             if (prevAssignmentBalanced && prevClientsUnchanged &&
                 state.prevAssignedTasks.contains(task)) {
                 return state;
@@ -143,7 +144,7 @@ public class TaskAssignor<C, T extends Comparable<T>> {
                 double additionCost = computeAdditionCost(task, state);
                 if (candidate == null ||
                         (additionCost < candidateAdditionCost ||
-                            (additionCost == candidateAdditionCost && state.cost < candidate.cost))) {
+                                (additionCost == candidateAdditionCost && state.cost < candidate.cost))) {
                     candidate = state;
                     candidateAdditionCost = additionCost;
                 }
@@ -153,21 +154,21 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         return candidate;
     }
 
-    private void addTaskPairs(T task, ClientState<T> state) {
-        for (T other : state.assignedTasks) {
+    private void addTaskPairs(TaskId task, ClientState state) {
+        for (TaskId other : state.assignedTasks) {
             taskPairs.add(pair(task, other));
         }
     }
 
-    private boolean hasNewTaskPair(T task, ClientState<T> state) {
-        for (T other : state.assignedTasks) {
+    private boolean hasNewTaskPair(TaskId task, ClientState state) {
+        for (TaskId other : state.assignedTasks) {
             if (!taskPairs.contains(pair(task, other)))
                 return true;
         }
         return false;
     }
 
-    private double computeAdditionCost(T task, ClientState<T> state) {
+    private double computeAdditionCost(TaskId task, ClientState state) {
         double cost = Math.floor((double) state.assignedTasks.size() / state.capacity);
 
         if (state.prevAssignedTasks.contains(task)) {
@@ -183,19 +184,19 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         return cost;
     }
 
-    private TaskPair<T> pair(T task1, T task2) {
+    private TaskPair pair(TaskId task1, TaskId task2) {
         if (task1.compareTo(task2) < 0) {
-            return new TaskPair<>(task1, task2);
+            return new TaskPair(task1, task2);
         } else {
-            return new TaskPair<>(task2, task1);
+            return new TaskPair(task2, task1);
         }
     }
 
-    private static class TaskPair<T> {
-        final T task1;
-        final T task2;
+    private static class TaskPair {
+        final TaskId task1;
+        final TaskId task2;
 
-        TaskPair(T task1, T task2) {
+        TaskPair(TaskId task1, TaskId task2) {
             this.task1 = task1;
             this.task2 = task2;
         }
@@ -209,7 +210,7 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         @Override
         public boolean equals(Object o) {
             if (o instanceof TaskPair) {
-                TaskPair<T> other = (TaskPair<T>) o;
+                TaskPair other = (TaskPair) o;
                 return this.task1.equals(other.task1) && this.task2.equals(other.task2);
             }
             return false;

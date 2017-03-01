@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+
+import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -33,9 +35,9 @@ import static org.junit.Assert.assertTrue;
 
 public class TaskAssignorTest {
 
-    private static Map<Integer, ClientState<Integer>> copyStates(Map<Integer, ClientState<Integer>> states) {
-        Map<Integer, ClientState<Integer>> copy = new HashMap<>();
-        for (Map.Entry<Integer, ClientState<Integer>> entry : states.entrySet()) {
+    private static Map<Integer, ClientState> copyStates(Map<Integer, ClientState> states) {
+        Map<Integer, ClientState> copy = new HashMap<>();
+        for (Map.Entry<Integer, ClientState> entry : states.entrySet()) {
             copy.put(entry.getKey(), entry.getValue().copy());
         }
 
@@ -44,23 +46,24 @@ public class TaskAssignorTest {
 
     @Test
     public void testAssignWithoutStandby() {
-        HashMap<Integer, ClientState<Integer>> statesWithNoPrevTasks = new HashMap<>();
+        HashMap<Integer, ClientState> statesWithNoPrevTasks = new HashMap<>();
         for (int i = 0; i < 6; i++) {
-            statesWithNoPrevTasks.put(i, new ClientState<Integer>(1d));
+            statesWithNoPrevTasks.put(i, new ClientState(1d));
         }
-        Set<Integer> tasks;
+        Set<TaskId> tasks;
         int numActiveTasks;
         int numAssignedTasks;
 
-        Map<Integer, ClientState<Integer>> states;
+        Map<Integer, ClientState> states;
 
         // # of clients and # of tasks are equal.
         states = copyStates(statesWithNoPrevTasks);
-        tasks = mkSet(0, 1, 2, 3, 4, 5);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5));
         TaskAssignor.assign(states, tasks, 0);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertEquals(1, assignment.activeTasks.size());
@@ -70,12 +73,13 @@ public class TaskAssignorTest {
         assertEquals(tasks.size(), numAssignedTasks);
 
         // # of clients < # of tasks
-        tasks = mkSet(0, 1, 2, 3, 4, 5, 6, 7);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5), new TaskId(6, 6), new TaskId(7, 7));
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 0);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(1 <= assignment.activeTasks.size());
@@ -87,12 +91,12 @@ public class TaskAssignorTest {
         assertEquals(tasks.size(), numAssignedTasks);
 
         // # of clients > # of tasks
-        tasks = mkSet(0, 1, 2, 3);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3));
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 0);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(0 <= assignment.activeTasks.size());
@@ -106,24 +110,25 @@ public class TaskAssignorTest {
 
     @Test
     public void testAssignWithStandby() {
-        HashMap<Integer, ClientState<Integer>> statesWithNoPrevTasks = new HashMap<>();
+        HashMap<Integer, ClientState> statesWithNoPrevTasks = new HashMap<>();
         for (int i = 0; i < 6; i++) {
-            statesWithNoPrevTasks.put(i, new ClientState<Integer>(1d));
+            statesWithNoPrevTasks.put(i, new ClientState(1d));
         }
-        Set<Integer> tasks;
-        Map<Integer, ClientState<Integer>> states;
+        Set<TaskId> tasks;
+        Map<Integer, ClientState> states;
         int numActiveTasks;
         int numAssignedTasks;
 
         // # of clients and # of tasks are equal.
-        tasks = mkSet(0, 1, 2, 3, 4, 5);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5));
 
         // 1 standby replicas.
         numActiveTasks = 0;
         numAssignedTasks = 0;
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 1);
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertEquals(1, assignment.activeTasks.size());
@@ -133,14 +138,15 @@ public class TaskAssignorTest {
         assertEquals(tasks.size() * 2, numAssignedTasks);
 
         // # of clients < # of tasks
-        tasks = mkSet(0, 1, 2, 3, 4, 5, 6, 7);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5), new TaskId(6, 6), new TaskId(7, 7));
 
         // 1 standby replicas.
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 1);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(1 <= assignment.activeTasks.size());
@@ -152,14 +158,14 @@ public class TaskAssignorTest {
         assertEquals(tasks.size() * 2, numAssignedTasks);
 
         // # of clients > # of tasks
-        tasks = mkSet(0, 1, 2, 3);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3));
 
         // 1 standby replicas.
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 1);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(0 <= assignment.activeTasks.size());
@@ -171,14 +177,14 @@ public class TaskAssignorTest {
         assertEquals(tasks.size() * 2, numAssignedTasks);
 
         // # of clients >> # of tasks
-        tasks = mkSet(0, 1);
+        tasks = mkSet(new TaskId(0, 0), new TaskId(1, 1));
 
         // 1 standby replicas.
         states = copyStates(statesWithNoPrevTasks);
         TaskAssignor.assign(states, tasks, 1);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(0 <= assignment.activeTasks.size());
@@ -194,7 +200,7 @@ public class TaskAssignorTest {
         TaskAssignor.assign(states, tasks, 2);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(0 <= assignment.activeTasks.size());
@@ -209,7 +215,7 @@ public class TaskAssignorTest {
         TaskAssignor.assign(states, tasks, 3);
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        for (ClientState<Integer> assignment : states.values()) {
+        for (ClientState assignment : states.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
             assertTrue(0 <= assignment.activeTasks.size());
@@ -223,80 +229,91 @@ public class TaskAssignorTest {
 
     @Test
     public void testStickiness() {
-        List<Integer> tasks;
-        Map<Integer, ClientState<Integer>> statesWithPrevTasks;
-        Map<Integer, ClientState<Integer>> assignments;
+        List<TaskId> tasks;
+        Map<Integer, ClientState> statesWithPrevTasks;
+        Map<Integer, ClientState> assignments;
         int i;
 
         // # of clients and # of tasks are equal.
-        Map<Integer, ClientState<Integer>> states;
-        tasks = mkList(0, 1, 2, 3, 4, 5);
+        Map<Integer, ClientState> states;
+        tasks = mkList(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5));
         Collections.shuffle(tasks);
         statesWithPrevTasks = new HashMap<>();
         i = 0;
-        for (int task : tasks) {
-            ClientState<Integer> state = new ClientState<>(1d);
+        for (TaskId task : tasks) {
+            ClientState state = new ClientState(1d);
             state.prevActiveTasks.add(task);
             state.prevAssignedTasks.add(task);
             statesWithPrevTasks.put(i++, state);
         }
         states = copyStates(statesWithPrevTasks);
-        TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5), 0);
+        TaskAssignor.assign(states, mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5)), 0);
         for (int client : states.keySet()) {
-            Set<Integer> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
-            Set<Integer> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
-            Set<Integer> newActive = states.get(client).activeTasks;
-            Set<Integer> newAssigned = states.get(client).assignedTasks;
+            Set<TaskId> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
+            Set<TaskId> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
+            Set<TaskId> newActive = states.get(client).activeTasks;
+            Set<TaskId> newAssigned = states.get(client).assignedTasks;
 
             assertEquals(oldActive, newActive);
             assertEquals(oldAssigned, newAssigned);
         }
 
         // # of clients > # of tasks
-        tasks = mkList(0, 1, 2, 3, -1, -1);
+        tasks = mkList(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(-1, -1), new TaskId(-1, -1));
         Collections.shuffle(tasks);
         statesWithPrevTasks = new HashMap<>();
         i = 0;
-        for (int task : tasks) {
-            ClientState<Integer> state = new ClientState<>(1d);
-            if (task >= 0) {
+        for (TaskId task : tasks) {
+            ClientState state = new ClientState(1d);
+            if (task.topicGroupId >= 0) {
                 state.prevActiveTasks.add(task);
                 state.prevAssignedTasks.add(task);
             }
             statesWithPrevTasks.put(i++, state);
         }
         states = copyStates(statesWithPrevTasks);
-        TaskAssignor.assign(states, mkSet(0, 1, 2, 3), 0);
+        TaskAssignor.assign(states, mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2),
+                new TaskId(3, 3)), 0);
         for (int client : states.keySet()) {
-            Set<Integer> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
-            Set<Integer> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
-            Set<Integer> newActive = states.get(client).activeTasks;
-            Set<Integer> newAssigned = states.get(client).assignedTasks;
+            Set<TaskId> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
+            Set<TaskId> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
+            Set<TaskId> newActive = states.get(client).activeTasks;
+            Set<TaskId> newAssigned = states.get(client).assignedTasks;
 
             assertEquals(oldActive, newActive);
             assertEquals(oldAssigned, newAssigned);
         }
 
         // # of clients < # of tasks
-        List<Set<Integer>> taskSets = mkList(mkSet(0, 1), mkSet(2, 3), mkSet(4, 5), mkSet(6, 7), mkSet(8, 9), mkSet(10, 11));
+        List<Set<TaskId>> taskSets = mkList(mkSet(new TaskId(0, 0), new TaskId(1, 1)),
+                mkSet(new TaskId(2, 2), new TaskId(3, 3)),
+                mkSet(new TaskId(4, 4), new TaskId(5, 5)),
+                mkSet(new TaskId(6, 6), new TaskId(7, 7)),
+                mkSet(new TaskId(8, 8), new TaskId(9, 9)),
+                mkSet(new TaskId(10, 10), new TaskId(11, 11)));
         Collections.shuffle(taskSets);
         statesWithPrevTasks = new HashMap<>();
         i = 0;
-        for (Set<Integer> taskSet : taskSets) {
-            ClientState<Integer> state = new ClientState<>(1d);
+        for (Set<TaskId> taskSet : taskSets) {
+            ClientState state = new ClientState(1d);
             state.prevActiveTasks.addAll(taskSet);
             state.prevAssignedTasks.addAll(taskSet);
             statesWithPrevTasks.put(i++, state);
         }
         states = copyStates(statesWithPrevTasks);
-        TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), 0);
+        TaskAssignor.assign(states, mkSet(new TaskId(0, 0), new TaskId(1, 1), new TaskId(2, 2), new TaskId(3, 3),
+                new TaskId(4, 4), new TaskId(5, 5), new TaskId(6, 6), new TaskId(7, 7)
+                , new TaskId(8, 8), new TaskId(9, 9), new TaskId(10, 10), new TaskId(11, 11)), 0);
         for (int client : states.keySet()) {
-            Set<Integer> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
-            Set<Integer> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
-            Set<Integer> newActive = states.get(client).activeTasks;
-            Set<Integer> newAssigned = states.get(client).assignedTasks;
+            Set<TaskId> oldActive = statesWithPrevTasks.get(client).prevActiveTasks;
+            Set<TaskId> oldAssigned = statesWithPrevTasks.get(client).prevAssignedTasks;
+            Set<TaskId> newActive = states.get(client).activeTasks;
+            Set<TaskId> newAssigned = states.get(client).assignedTasks;
 
-            Set<Integer> intersection = new HashSet<>();
+            Set<TaskId> intersection = new HashSet<>();
 
             intersection.addAll(oldActive);
             intersection.retainAll(newActive);
