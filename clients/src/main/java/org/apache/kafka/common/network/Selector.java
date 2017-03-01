@@ -94,7 +94,7 @@ public class Selector implements Selectable {
     private final Map<String, KafkaChannel> closingChannels;
     private final List<String> disconnected;
     private final List<String> connected;
-    private final List<String> authFailed;
+    private final List<String> authenticationFailed;
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
@@ -142,7 +142,7 @@ public class Selector implements Selectable {
         this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
-        this.authFailed = new ArrayList<>();
+        this.authenticationFailed = new ArrayList<>();
         this.failedSends = new ArrayList<>();
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
@@ -379,7 +379,7 @@ public class Selector implements Selectable {
             } catch (Exception e) {
                 String desc = channel.socketDescription();
                 if (e instanceof AuthenticationException) {
-                    authFailed.add(channel.id());
+                    authenticationFailed.add(channel.id());
                     log.warn("Authentication failed for connection with {}; closing connection", desc, e);
                 } else if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
@@ -406,8 +406,8 @@ public class Selector implements Selectable {
     }
 
     @Override
-    public List<String> authFailed() {
-        return this.authFailed;
+    public List<String> authenticationFailed() {
+        return this.authenticationFailed;
     }
 
     @Override
@@ -472,7 +472,7 @@ public class Selector implements Selectable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
-        this.authFailed.clear();
+        this.authenticationFailed.clear();
         // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();

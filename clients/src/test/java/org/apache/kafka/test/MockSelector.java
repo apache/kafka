@@ -39,7 +39,7 @@ public class MockSelector implements Selectable {
     private final List<NetworkReceive> completedReceives = new ArrayList<NetworkReceive>();
     private final List<String> disconnected = new ArrayList<String>();
     private final List<String> connected = new ArrayList<String>();
-    private final List<String> authFailed = new ArrayList<String>();
+    private final List<String> authenticationFailed = new ArrayList<String>();
     private final List<DelayedReceive> delayedReceives = new ArrayList<>();
 
     public MockSelector(Time time) {
@@ -134,8 +134,8 @@ public class MockSelector implements Selectable {
     }
 
     @Override
-    public List<String> authFailed() {
-        return authFailed;
+    public List<String> authenticationFailed() {
+        return authenticationFailed;
     }
 
     @Override

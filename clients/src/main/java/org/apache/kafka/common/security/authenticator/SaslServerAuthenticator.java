@@ -209,8 +209,7 @@ public class SaslServerAuthenticator implements Authenticator {
         if (saslState == SaslState.FAILED)
             throw Errors.AUTHENTICATION_FAILED.exception();
 
-        if (saslServer != null && saslServer.isComplete()) {
-            setSaslState(SaslState.COMPLETE);
+        if (updateCompleteState()) {
             return;
         }
 
@@ -242,11 +241,9 @@ public class SaslServerAuthenticator implements Authenticator {
                             }
                             // When the authentication exchange is complete and no more tokens are expected from the client,
                             // update SASL state. Current SASL state will be updated when outgoing writes to the client complete.
-                            if (saslServer.isComplete())
-                                setSaslState(SaslState.COMPLETE);
+                            updateCompleteState();
                         } catch (SaslException e) {
-                            if (failAuthentication())
-                                throw e;
+                            failAuthentication(e);
                         }
                         break;
                     default:
@@ -284,17 +281,26 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private boolean failAuthentication() {
+    private boolean updateCompleteState() {
+        if (saslServer != null && saslServer.isComplete()) {
+            setSaslState(SaslState.COMPLETE);
+            return true;
+        } else
+            return false;
+    }
+
+    private void failAuthentication(SaslException exception) throws SaslException {
         setSaslState(SaslState.FAILED);
         ByteBuffer response = ByteBuffer.allocate(2);
         response.putShort(Errors.AUTHENTICATION_FAILED.code());
         response.rewind();
         netOutBuffer = new NetworkSend(node, response);
         try {
-            return flushNetOutBufferAndUpdateInterestOps();
+            if (flushNetOutBufferAndUpdateInterestOps())
+                throw exception;
         } catch (IOException e) {
             LOG.debug("Authentication error could not be sent to the client", e);
-            return true;
+            throw exception;
         }
     }
 

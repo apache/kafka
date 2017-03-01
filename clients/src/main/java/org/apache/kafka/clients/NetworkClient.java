@@ -233,8 +233,8 @@ public class NetworkClient implements KafkaClient {
     }
 
     @Override
-    public boolean authFailed() {
-        return connectionStates.authFailed();
+    public boolean authenticationFailed() {
+        return connectionStates.authenticationFailed();
     }
 
     /**
@@ -581,9 +581,9 @@ public class NetworkClient implements KafkaClient {
             log.debug("Node {} disconnected.", node);
             processDisconnection(responses, node, now);
         }
-        for (String node : this.selector.authFailed()) {
+        for (String node : this.selector.authenticationFailed()) {
             log.debug("Node {} authentication failed.", node);
-            connectionStates.authFailed(node, now);
+            connectionStates.authenticationFailed(node, now);
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
@@ -688,7 +688,7 @@ public class NetworkClient implements KafkaClient {
                 return metadataTimeout;
             }
 
-            if (authFailed()) {
+            if (authenticationFailed()) {
                 log.debug("Give up sending metadata request since authentication failed to all nodes");
                 return requestTimeoutMs;
             } else {

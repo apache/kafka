@@ -95,7 +95,7 @@ public interface Selectable {
      * The list of connections that failed authentication on the last {@link #poll(long) poll()}
      * call.
      */
-    public List<String> authFailed();
+    public List<String> authenticationFailed();
 
     /**
      * Disable reads from the given connection

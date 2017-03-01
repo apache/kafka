@@ -126,7 +126,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public boolean authFailed() {
+    public boolean authenticationFailed() {
         return false;
     }
 

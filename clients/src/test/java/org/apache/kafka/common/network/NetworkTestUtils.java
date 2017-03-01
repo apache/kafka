@@ -90,7 +90,7 @@ public class NetworkTestUtils {
         int authFailed = 0;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
-            authFailed += selector.authFailed().size();
+            authFailed += selector.authenticationFailed().size();
             if (selector.channel(node) == null) {
                 closed = true;
                 break;
