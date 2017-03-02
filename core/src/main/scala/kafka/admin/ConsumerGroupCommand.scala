@@ -532,7 +532,7 @@ object ConsumerGroupCommand extends Logging {
                              .withRequiredArg
                              .describedAs("timeout (ms)")
                              .ofType(classOf[Long])
-                             .defaultsTo(1000)
+                             .defaultsTo(5000)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")

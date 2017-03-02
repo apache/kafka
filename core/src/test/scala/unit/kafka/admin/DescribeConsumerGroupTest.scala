@@ -38,6 +38,7 @@ import kafka.utils.TestUtils
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 
@@ -296,10 +297,10 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       val (state, assignments) = consumerGroupCommand.describeGroup()
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e @ (_: GroupCoordinatorNotAvailableException | _: IllegalArgumentException) =>
+      case e: TimeoutException =>
         // OK
       case e: Throwable =>
-        fail("An unexpected exception occurred")
+        fail("An unexpected exception occurred: " + e.getMessage)
         throw e
     } finally {
       consumerGroupCommand.close()

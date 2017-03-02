@@ -24,6 +24,8 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -78,6 +80,9 @@ class AdminClient(val time: Time,
       Thread.sleep(retryIntervalMs)
       response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     }
+
+    if (timeoutMs > 0 && time.milliseconds - startTime > timeoutMs)
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", response.error.exception)
 
     response.error.maybeThrow()
     response.node
@@ -188,7 +193,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
 
     def validateConsumerGroup(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
-      metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE
+      metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
 
     val startTime = time.milliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
@@ -199,8 +204,8 @@ class AdminClient(val time: Time,
       metadata = describeConsumerGroupHandler(coordinator, groupId)
     }
 
-    if (!validateConsumerGroup(metadata))
-      throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
+    if (timeoutMs > 0 && time.milliseconds - startTime > timeoutMs)
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
 
     metadata.error.maybeThrow()
     val consumers = metadata.members.asScala.map { consumer =>
