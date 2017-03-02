@@ -750,10 +750,10 @@ object ConsumerGroupCommand extends Logging {
       "Multiple URLS can be given to allow fail-over."
     val BootstrapServerDoc = "REQUIRED (unless old consumer is used): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
-    val TopicDoc = "The topic whose consumer group information should be deleted."
-    val TopicsDoc = "The topics that should be included in the reset offset process."
-    val AllTopicsDoc = "Consider all topics assigned to a group in the reset offset process."
-    val PartitionsDoc = "The topic partitions that should be included in the reset offset process."
+    val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
+      "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
+      "Reset-offsets also supports multiple topic inputs."
+    val AllTopicsDoc = "Consider all topics assigned to a group in the `reset-offsets` process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
@@ -766,16 +766,19 @@ object ConsumerGroupCommand extends Logging {
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
-    val ResetOffsetsDoc = "Reset offset of consumer group."
-    val ExecuteDoc = "Execute operation. Supported operations: reset-offset"
-    val ExportDoc = "Export operation execution to a JSON file. Supported operations: reset-offset"
-    val ResetToOffsetDoc = "The offset to reset to."
-    val ResetFromFileDoc = "Path to Reset plan JSON file."
-    val ResetToDatetimeDoc = "Datetime to reset offset to."
-    val ResetByDurationDoc = "Duration to reset offset to."
-    val ResetToEarliestDoc = "Reset offset to earliest."
-    val ResetToLatestDoc = "Reset offset to latest."
-    val ResetShiftByDoc = "Reset offset shifting current offset by 'n', where 'n' can be positive or negative"
+    val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
+      "Has 3 execution options: (default) to plan which offsets to reset, --execute to execute the reset-offsets process, and --export to export the results to a CSV format." + nl +
+      "Has the following scenarios to choose: --to-datetime, --by-period, --to-earliest, --to-latest, --shift-by, --from-file. And by default it resets to current offset." + nl +
+      "To define the scope use: --all-topics or --topic"
+    val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."
+    val ExportDoc = "Export operation execution to a CSV file. Supported operations: reset-offsets."
+    val ResetToOffsetDoc = "Reset offsets to a specific offset."
+    val ResetFromFileDoc = "Reset offsets to values defined in CSV file."
+    val ResetToDatetimeDoc = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'"
+    val ResetByDurationDoc = "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'"
+    val ResetToEarliestDoc = "Reset offsets to earliest offset."
+    val ResetToLatestDoc = "Reset offsets to latest offset."
+    val ResetShiftByDoc = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative"
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -793,16 +796,7 @@ object ConsumerGroupCommand extends Logging {
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
-    val topicsOpt = parser.accepts("topics", TopicsDoc)
-                          .withRequiredArg
-                          .describedAs("topics")
-                          .ofType(classOf[String])
     val allTopicsOpt = parser.accepts("all-topics", AllTopicsDoc)
-    val partitionsOpt = parser.accepts("partitions", PartitionsDoc)
-                              .withRequiredArg
-                              .describedAs("partitions")
-                              .withValuesSeparatedBy(",")
-                              .ofType(classOf[Long])
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
@@ -816,25 +810,25 @@ object ConsumerGroupCommand extends Logging {
     val exportOpt = parser.accepts("export", ExportDoc)
     val resetToOffsetOpt = parser.accepts("to-offset", ResetToOffsetDoc)
                            .withRequiredArg()
-                           .describedAs("offset to reset to")
+                           .describedAs("offset")
                            .ofType(classOf[Long])
     val resetFromFileOpt = parser.accepts("from-file", ResetFromFileDoc)
                                  .withRequiredArg()
-                                 .describedAs("json file path")
+                                 .describedAs("path to CSV file")
                                  .ofType(classOf[String])
     val resetToDatetimeOpt = parser.accepts("to-datetime", ResetToDatetimeDoc)
                                    .withRequiredArg()
-                                   .describedAs("datetime to reset offset to")
+                                   .describedAs("datetime")
                                    .ofType(classOf[String])
     val resetByDurationOpt = parser.accepts("by-duration", ResetByDurationDoc)
                                    .withRequiredArg()
-                                   .describedAs("duration to reset offset to")
+                                   .describedAs("duration")
                                    .ofType(classOf[String])
     val resetToEarliestOpt = parser.accepts("to-earliest", ResetToEarliestDoc)
     val resetToLatestOpt = parser.accepts("to-latest", ResetToLatestDoc)
     val resetShiftByOpt = parser.accepts("shift-by", ResetShiftByDoc)
                              .withRequiredArg()
-                             .describedAs("number of positions to shift")
+                             .describedAs("number-of-offsets")
                              .ofType(classOf[Long])
     val options = parser.parse(args : _*)
 
@@ -873,7 +867,6 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, allResetOffsetScenarioOpts - resetShiftByOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, allResetOffsetScenarioOpts - resetFromFileOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, topicsOpt, Set(topicOpt, partitionsOpt))
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetsOpt)
