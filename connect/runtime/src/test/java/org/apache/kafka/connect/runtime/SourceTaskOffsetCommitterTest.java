@@ -41,6 +41,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.easymock.EasyMock.eq;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -184,7 +186,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
             committer.remove(taskId);
             fail("Expected ConnectException to be raised");
         } catch (ConnectException e) {
-            //ignore
+            assertThat(e.getMessage(), containsString(String.format("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: %s", taskId.toString())));
         }
 
         PowerMock.verifyAll();

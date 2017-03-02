@@ -470,6 +470,7 @@ project(':core') {
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
+    testCompile libs.hamcrest
     testCompile libs.scalaTest
     testCompile libs.jfreechart
 
@@ -652,6 +653,7 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
+    testCompile libs.hamcrest
     testCompile libs.easymock
     testCompile libs.powermock
     testCompile libs.powermockEasymock
@@ -725,6 +727,7 @@ project(':tools') {
 
     testCompile project(':clients')
     testCompile libs.junit
+    testCompile libs.hamcrest
   }
 
   javadoc {
@@ -760,6 +763,7 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
   }
@@ -831,6 +835,7 @@ project(':log4j-appender') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
+    testCompile libs.hamcrest
   }
 
   javadoc {
@@ -847,6 +852,7 @@ project(':connect:api') {
     compile libs.slf4jApi
 
     testCompile libs.junit
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
   }
@@ -919,6 +925,7 @@ project(':connect:json') {
 
     testCompile libs.easymock
     testCompile libs.junit
+    testCompile libs.hamcrest
     testCompile libs.powermock
     testCompile libs.powermockEasymock
 
@@ -969,6 +976,7 @@ project(':connect:runtime') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
     testCompile libs.junit
+    testCompile libs.hamcrest
     testCompile libs.powermock
     testCompile libs.powermockEasymock
 
@@ -1021,6 +1029,7 @@ project(':connect:file') {
 
     testCompile libs.easymock
     testCompile libs.junit
+    testCompile libs.hamcrest
     testCompile libs.powermock
     testCompile libs.powermockEasymock
 

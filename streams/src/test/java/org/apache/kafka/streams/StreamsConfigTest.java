@@ -36,8 +36,10 @@ import java.util.Properties;
 
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class StreamsConfigTest {
 
@@ -59,26 +61,26 @@ public class StreamsConfigTest {
     @Test
     public void testGetProducerConfigs() throws Exception {
         Map<String, Object> returnedProps = streamsConfig.getProducerConfigs("client");
-        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), "client-producer");
-        assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "100");
-        assertNull(returnedProps.get("DUMMY"));
+        assertThat("client-producer", is(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG)));
+        assertThat("100", is(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG)));
+        assertThat(returnedProps.get("DUMMY"), is(nullValue()));
     }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
         Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, "example-application", "client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
-        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-application");
-        assertEquals(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "1000");
-        assertNull(returnedProps.get("DUMMY"));
+        assertThat("client-consumer", is(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG)));
+        assertThat("example-application", is(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG)));
+        assertThat("1000", is(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG)));
+        assertThat(returnedProps.get("DUMMY"), is(nullValue()));
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
         Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs("client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
-        assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
-        assertNull(returnedProps.get("DUMMY"));
+        assertThat("client-restore-consumer", is(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG)));
+        assertThat(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), is(nullValue()));
+        assertThat(returnedProps.get("DUMMY"), is(nullValue()));
     }
 
     @Test

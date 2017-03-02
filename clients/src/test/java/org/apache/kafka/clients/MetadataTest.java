@@ -34,6 +34,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -206,7 +208,7 @@ public class MetadataTest {
             metadata.awaitUpdate(metadata.requestUpdate(), twoSecondWait);
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
-            // expected
+            assertThat(te.getMessage(), containsString(String.format("Failed to update metadata after %s ms.", twoSecondWait)));
         }
     }
 
