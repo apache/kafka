@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+//import org.apache.kafka.common.utils.SystemTime;
+//import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +40,10 @@ public class RecordQueue {
     private final TimestampExtractor timestampExtractor;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
-    private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
+    //private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
+    private long prevTimestamp = TimestampTracker.NOT_KNOWN;
     private final RecordDeserializer recordDeserializer;
+    //private final Time time;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
 
@@ -50,8 +54,9 @@ public class RecordQueue {
         this.source = source;
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
-        this.timeTracker = new MinTimestampTracker<>();
+        //this.timeTracker = new MinTimestampTracker<>();
         this.recordDeserializer = new SourceNodeRecordDeserializer(source);
+        //this.time = new SystemTime();
     }
 
 
@@ -80,30 +85,49 @@ public class RecordQueue {
      * @return the size of this queue
      */
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
+        //long start1 = 0, end1 = 0, end2 = 0, end3 = 0;
+        //long sum1 = 0, sum2 = 0, sum3 = 0;
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
+            //start1 = time.nanoseconds();
             ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
-            long timestamp = timestampExtractor.extract(record, timeTracker.get());
-            log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
+            //end1 = time.nanoseconds();
+            long timestamp = timestampExtractor.extract(record, prevTimestamp);
+            //log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
             // drop message if TS is invalid, i.e., negative
             if (timestamp < 0) {
                 continue;
             }
+            //end2 = time.nanoseconds();
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
             fifoQueue.addLast(stampedRecord);
-            timeTracker.addElement(stampedRecord);
+            //timeTracker.addElement(stampedRecord);
+            //end3 = time.nanoseconds();
+
+            //sum1 += (end1 - start1);
+            //sum2 += (end2 - end1);
+            //sum3 += (end3 - end2);
         }
+        //System.out.println(sum1 + "\t" +
+        //    sum2 + "\t" +
+        //    sum3);
 
         // update the partition timestamp if its currently
         // tracked min timestamp has exceed its value; this will
         // usually only take effect for the first added batch
-        long timestamp = timeTracker.get();
-
-        if (timestamp > partitionTime)
-            partitionTime = timestamp;
+        advanceTime();
 
         return size();
+    }
+
+    private void advanceTime() {
+        StampedRecord elem = fifoQueue.peekFirst();
+        if (elem != null) {
+            prevTimestamp = elem.timestamp;
+        }
+        if (prevTimestamp > partitionTime)
+            partitionTime = prevTimestamp;
     }
 
     /**
@@ -117,14 +141,11 @@ public class RecordQueue {
         if (elem == null)
             return null;
 
-        timeTracker.removeElement(elem);
+        //timeTracker.removeElement(elem);
 
         // only advance the partition timestamp if its currently
         // tracked min timestamp has exceeded its value
-        long timestamp = timeTracker.get();
-
-        if (timestamp > partitionTime)
-            partitionTime = timestamp;
+        advanceTime();
 
         return elem;
     }
