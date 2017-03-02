@@ -398,9 +398,19 @@ public class ConsumerNetworkClient implements Closeable {
                 // Remove entry before invoking request callback to avoid callbacks handling
                 // coordinator failures traversing the unsent list again.
                 List<ClientRequest> requests = unsent.remove(node);
-                for (ClientRequest request : requests) {
-                    client.send(request, now);
-                    requestsSent = true;
+                try {
+                    Iterator<ClientRequest> iterator = requests.iterator();
+                    while (iterator.hasNext()) {
+                        ClientRequest request = iterator.next();
+                        if (!client.ready(node, now))
+                            break;
+                        client.send(request, now);
+                        requestsSent = true;
+                        iterator.remove();
+                    }
+                } finally {
+                    if (!requests.isEmpty())
+                        unsent.put(node, requests);
                 }
             }
         }
@@ -534,6 +544,15 @@ public class ConsumerNetworkClient implements Closeable {
 
         public UnsentRequests() {
             unsent = new HashMap<>();
+        }
+
+        public synchronized void put(Node node, List<ClientRequest> requests) {
+            List<ClientRequest> nodeUnsent = unsent.get(node);
+            if (nodeUnsent == null) {
+                nodeUnsent = new ArrayList<>();
+                unsent.put(node, nodeUnsent);
+            }
+            nodeUnsent.addAll(requests);
         }
 
         public synchronized void put(Node node, ClientRequest request) {
