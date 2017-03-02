@@ -150,6 +150,12 @@ class Log(@volatile var dir: File,
     },
     tags)
 
+  newGauge("LogDir",
+    new Gauge[String] {
+      def value = dir.getCanonicalPath
+    },
+    tags)
+
   /** The name of this log */
   def name  = dir.getName()
 
