@@ -279,7 +279,7 @@ public class StreamsMetadataState {
             this.sourceTopics = sourceTopics;
             for (String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
-                if (partitions != null && partitions.size() > maxPartitions) {
+                if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();
                     topicWithMostPartitions = partitions.get(0).topic();
                 }

@@ -329,7 +329,7 @@ public final class Metadata {
 
             for (String topic : this.topics.keySet()) {
                 List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
-                if (partitionInfoList != null) {
+                if (!partitionInfoList.isEmpty()) {
                     partitionInfos.addAll(partitionInfoList);
                 }
             }
