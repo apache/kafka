@@ -406,7 +406,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
         for (String topic : allSourceTopics) {
             List<PartitionInfo> partitionInfoList = metadataWithInternalTopics.partitionsForTopic(topic);
-            if (partitionInfoList != null) {
+            if (!partitionInfoList.isEmpty()) {
                 for (PartitionInfo partitionInfo : partitionInfoList) {
                     TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
                     if (!allAssignedPartitions.contains(partition)) {
