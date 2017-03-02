@@ -208,7 +208,6 @@ class AdminClient(val time: Time,
     if (!isValidConsumerGroupResponse(metadata))
       throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
 
-    metadata.error.maybeThrow()
     val consumers = metadata.members.asScala.map { consumer =>
       ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
         case "Stable" =>
