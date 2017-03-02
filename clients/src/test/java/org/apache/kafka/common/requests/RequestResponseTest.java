@@ -791,7 +791,7 @@ public class RequestResponseTest {
     }
 
     private InitPidRequest createInitPidRequest() {
-        return new InitPidRequest.Builder(null).build();
+        return new InitPidRequest.Builder(null, 100).build();
     }
 
     private InitPidResponse createInitPidResponse() {

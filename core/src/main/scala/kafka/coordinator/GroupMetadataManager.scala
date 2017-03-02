@@ -1101,22 +1101,22 @@ case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
   def this(group: String, topic: String, partition: Int) =
     this(group, new TopicPartition(topic, partition))
 
-  override def toString =
+  override def toString: String =
     "[%s,%s,%d]".format(group, topicPartition.topic, topicPartition.partition)
 }
 
 trait BaseKey{
   def version: Short
-  def key: Object
+  def key: Any
 }
 
 case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
 
-  override def toString = key.toString
+  override def toString: String = key.toString
 }
 
 case class GroupMetadataKey(version: Short, key: String) extends BaseKey {
 
-  override def toString = key
+  override def toString: String = key
 }
 
