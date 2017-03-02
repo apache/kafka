@@ -265,8 +265,8 @@ public class ProcessorTopologyTestDriver {
                 }
                 outputRecords.add(record);
 
-                // Forward back into the topology if the produced record is to an internal topic ...
-                if (internalTopics.contains(record.topic())) {
+                // Forward back into the topology if the produced record is to an internal or a source topic ...
+                if (internalTopics.contains(record.topic()) || topology.sourceTopics().contains(record.topic())) {
                     process(record.topic(), record.key(), record.value(), record.timestamp());
                 }
             }
