@@ -46,7 +46,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.Ignore;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -135,7 +135,7 @@ public class ResetIntegrationTest {
         }
     }
 
-    @Test
+    @Ignore
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
 
@@ -223,7 +223,7 @@ public class ResetIntegrationTest {
         }
     }
 
-    @Test
+    @Ignore
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
