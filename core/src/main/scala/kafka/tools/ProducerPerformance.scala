@@ -31,6 +31,8 @@ import java.math.BigInteger
 
 import org.apache.log4j.Logger
 
+import scala.util.control.NonFatal
+
 /**
  * Load test for the producer
  */
@@ -266,14 +268,14 @@ object ProducerPerformance extends Logging {
                 Thread.sleep(config.messageSendGapMs)
             })
         } catch {
-          case e: Throwable => error("Error when sending message " + new String(message), e)
+          case NonFatal(e) => error("Error when sending message " + new String(message), e)
         }
         i += 1
       }
       try {
         producer.close()
       } catch {
-        case e: Throwable => error("Error when closing producer", e)
+        case NonFatal(e) => error("Error when closing producer", e)
       }
       totalBytesSent.addAndGet(bytesSent)
       totalMessagesSent.addAndGet(nSends)

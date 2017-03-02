@@ -23,6 +23,8 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Meter
 
+import scala.util.control.NonFatal
+
 /**
  * A thread that answers kafka requests.
  */
@@ -58,7 +60,7 @@ class KafkaRequestHandler(id: Int,
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {
-        case e: Throwable => error("Exception when handling request", e)
+        case NonFatal(e) => error("Exception when handling request", e)
       }
     }
   }

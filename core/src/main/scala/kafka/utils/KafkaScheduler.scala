@@ -20,6 +20,7 @@ package kafka.utils
 import java.util.concurrent._
 import atomic._
 import collection.mutable.HashMap
+import scala.util.control.NonFatal
 
 /**
  * A scheduler for running jobs
@@ -98,7 +99,7 @@ class KafkaScheduler(val threads: Int,
         trace("Begining execution of scheduled task '%s'.".format(name))
         fun()
       } catch {
-        case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
+        case NonFatal(t) => error("Uncaught exception in scheduled task '" + name +"'", t)
       } finally {
         trace("Completed execution of scheduled task '%s'.".format(name))
       }

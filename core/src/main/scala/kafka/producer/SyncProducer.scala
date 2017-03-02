@@ -24,6 +24,8 @@ import java.util.Random
 
 import org.apache.kafka.common.utils.Utils._
 
+import scala.util.control.NonFatal
+
 object SyncProducer {
   val RequestKey: Short = 0
   val randomGenerator = new Random
@@ -80,7 +82,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
           // no way to tell if write succeeded. Disconnect and re-throw exception to let client handle retry
           disconnect()
           throw e
-        case e: Throwable => throw e
+        case NonFatal(e) => throw e
       }
       response
     }

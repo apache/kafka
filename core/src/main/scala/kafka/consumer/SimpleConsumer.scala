@@ -23,6 +23,8 @@ import kafka.utils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import org.apache.kafka.common.utils.Utils._
 
+import scala.util.control.NonFatal
+
 /**
  * A consumer of kafka messages
  */
@@ -70,7 +72,7 @@ class SimpleConsumer(val host: String,
         blockingChannel.send(request)
         response = blockingChannel.receive()
       } catch {
-        case e : Throwable =>
+        case NonFatal(e) =>
           info("Reconnect due to socket error: %s".format(e.toString))
           // retry once
           try {
@@ -78,7 +80,7 @@ class SimpleConsumer(val host: String,
             blockingChannel.send(request)
             response = blockingChannel.receive()
           } catch {
-            case e: Throwable =>
+            case NonFatal(e) =>
               disconnect()
               throw e
           }

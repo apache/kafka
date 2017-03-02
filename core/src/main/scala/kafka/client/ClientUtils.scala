@@ -23,7 +23,8 @@ import kafka.producer._
 import kafka.common.{ErrorMapping, KafkaException}
 import kafka.utils.{Utils, Logging}
 import java.util.Properties
-import util.Random
+ import scala.util.control.NonFatal
+ import util.Random
  import kafka.network.BlockingChannel
  import kafka.utils.ZkUtils._
  import org.I0Itec.zkclient.ZkClient
@@ -59,7 +60,7 @@ object ClientUtils extends Logging{
         fetchMetaDataSucceeded = true
       }
       catch {
-        case e: Throwable =>
+        case NonFatal(e) =>
           warn("Fetching topic metadata with correlation id %d for topics [%s] from broker [%s] failed"
             .format(correlationId, topics, shuffledBrokers(i).toString), e)
           t = e

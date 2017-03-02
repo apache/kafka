@@ -22,6 +22,8 @@ import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
 
+import scala.util.control.NonFatal
+
 object Kafka extends Logging {
 
   def main(args: Array[String]): Unit = {
@@ -47,7 +49,7 @@ object Kafka extends Logging {
       kafkaServerStartable.awaitShutdown
     }
     catch {
-      case e: Throwable => fatal(e)
+      case NonFatal(e) => fatal(e)
     }
     System.exit(0)
   }
