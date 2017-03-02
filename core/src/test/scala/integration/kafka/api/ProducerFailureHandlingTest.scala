@@ -18,7 +18,7 @@
 package kafka.api
 
 import kafka.common.Topic
-import org.apache.kafka.common.errors.{InvalidTopicException,NotEnoughReplicasException}
+import org.apache.kafka.common.errors.{NotEnoughReplicasAfterAppendException, InvalidTopicException, NotEnoughReplicasException}
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
@@ -351,8 +351,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
       fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
     } catch {
       case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
+        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
+          !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
+          !e.getCause.isInstanceOf[TimeoutException]) {
+          fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
+            "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
         }
     }
 
