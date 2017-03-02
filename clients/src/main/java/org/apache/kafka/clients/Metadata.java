@@ -205,7 +205,7 @@ public final class Metadata {
      *        leader is not known
      * @param now current time in milliseconds
      */
-    public synchronized void update(Cluster cluster, Collection<String> unavailableTopics, long now) {
+    public synchronized void update(Cluster cluster, Set<String> unavailableTopics, long now) {
         Objects.requireNonNull(cluster, "cluster should not be null");
 
         this.needUpdate = false;
@@ -318,7 +318,7 @@ public final class Metadata {
          * @param unavailableTopics topics which are non-existent or have one or more partitions whose
          *        leader is not known
          */
-        void onMetadataUpdate(Cluster cluster, Collection<String> unavailableTopics);
+        void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics);
     }
 
     private synchronized void requestUpdateForNewTopics() {

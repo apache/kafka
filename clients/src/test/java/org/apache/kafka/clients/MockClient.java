@@ -26,7 +26,6 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -65,7 +64,7 @@ public class MockClient implements KafkaClient {
 
     private final Time time;
     private final Metadata metadata;
-    private Collection<String> unavailableTopics;
+    private Set<String> unavailableTopics;
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
@@ -283,7 +282,7 @@ public class MockClient implements KafkaClient {
         metadataUpdates.clear();
     }
 
-    public void prepareMetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
+    public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
         metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
     }
 
@@ -348,8 +347,8 @@ public class MockClient implements KafkaClient {
 
     private static class MetadataUpdate {
         final Cluster cluster;
-        final Collection<String> unavailableTopics;
-        MetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
+        final Set<String> unavailableTopics;
+        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
             this.cluster = cluster;
             this.unavailableTopics = unavailableTopics;
         }

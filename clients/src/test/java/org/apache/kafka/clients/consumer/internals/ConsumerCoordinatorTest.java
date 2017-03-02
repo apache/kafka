@@ -809,7 +809,7 @@ public class ConsumerCoordinatorTest {
         unavailableTopicTest(true, false, Collections.<String>emptySet());
     }
 
-    private void unavailableTopicTest(boolean patternSubscribe, boolean assign, Collection<String> unavailableTopicsInLastMetadata) {
+    private void unavailableTopicTest(boolean patternSubscribe, boolean assign, Set<String> unavailableTopicsInLastMetadata) {
         final String consumerId = "consumer";
 
         metadata.setTopics(singletonList(topic1));

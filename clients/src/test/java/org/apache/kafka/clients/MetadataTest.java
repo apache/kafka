@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -287,7 +286,7 @@ public class MetadataTest {
         metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         metadata.addListener(new Metadata.Listener() {
             @Override
-            public void onMetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
+            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
                 topics.clear();
                 topics.addAll(cluster.topics());
             }
@@ -314,7 +313,7 @@ public class MetadataTest {
         metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         final Metadata.Listener listener = new Metadata.Listener() {
             @Override
-            public void onMetadataUpdate(Cluster cluster, Collection<String> unavailableTopics) {
+            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
                 topics.clear();
                 topics.addAll(cluster.topics());
             }

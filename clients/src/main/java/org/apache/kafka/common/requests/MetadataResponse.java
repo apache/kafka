@@ -210,15 +210,17 @@ public class MetadataResponse extends AbstractResponse {
      * This includes all non-existent topics specified in the metadata request
      * and any topic returned with one or more partitions whose leader is not known.
      */
-    public Collection<String> unavailableTopics() {
-        Collection<String> invalidMetadataTopics = new HashSet<>();
+    public Set<String> unavailableTopics() {
+        Set<String> invalidMetadataTopics = new HashSet<>();
         for (TopicMetadata topicMetadata : this.topicMetadata) {
             if (topicMetadata.error.exception() instanceof InvalidMetadataException)
                 invalidMetadataTopics.add(topicMetadata.topic);
-            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
-                    invalidMetadataTopics.add(topicMetadata.topic);
-                    break;
+            else {
+                for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
+                    if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
+                        invalidMetadataTopics.add(topicMetadata.topic);
+                        break;
+                    }
                 }
             }
         }
