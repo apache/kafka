@@ -46,6 +46,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -135,6 +136,7 @@ public class ResetIntegrationTest {
         }
     }
 
+    @Ignore
     @Test
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
