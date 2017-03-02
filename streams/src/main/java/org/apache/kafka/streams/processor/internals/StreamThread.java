@@ -516,12 +516,13 @@ public class StreamThread extends Thread {
         int totalNumBuffered = 0;
         boolean requiresPoll = true;
         boolean polledRecords = false;
-
+        long start1 = 0, end1 = 0, end2 = 0, end3 = 0, end4 = 0;
+        long sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0;
         consumer.subscribe(sourceTopicPattern, rebalanceListener);
 
         while (stillRunning()) {
             this.timerStartedMs = time.milliseconds();
-
+            start1 = end1 = end2 = end3 = end4 = time.nanoseconds();
             // try to fetch some records if necessary
             if (requiresPoll) {
                 requiresPoll = false;
@@ -529,7 +530,7 @@ public class StreamThread extends Thread {
                 boolean longPoll = totalNumBuffered == 0;
 
                 ConsumerRecords<byte[], byte[]> records = null;
-
+                start1 = time.nanoseconds();
                 try {
                     records = consumer.poll(longPoll ? this.pollTimeMs : 0);
                 } catch (NoOffsetForPartitionException ex) {
@@ -559,7 +560,7 @@ public class StreamThread extends Thread {
                     }
 
                 }
-
+                end1 = time.nanoseconds();
                 if (rebalanceException != null)
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
@@ -580,6 +581,7 @@ public class StreamThread extends Thread {
                 if (longPoll) {
                     streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 }
+                end2 = time.nanoseconds();
             }
 
             // try to process one fetch record from each task via the topology, and also trigger punctuate
@@ -594,12 +596,12 @@ public class StreamThread extends Thread {
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
-                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
+                        //streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
 
-                        maybePunctuate(task);
+                        //maybePunctuate(task);
 
-                        if (task.commitNeeded())
-                            commitOne(task);
+                        //if (task.commitNeeded())
+                         //   commitOne(task);
                     }
 
                 } else {
@@ -610,11 +612,22 @@ public class StreamThread extends Thread {
             } else {
                 requiresPoll = true;
             }
+            end3 = time.nanoseconds();
             maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks();
 
             maybeClean(timerStartedMs);
+            end4 = time.nanoseconds();
+            //System.out.println(start1 + "\t" + end1 + "\t" + end2 + "\t" + end3);
+            //System.out.println((end1 - start1) + "\t" + (end2 - end1) + "\t" + (end3 - end2));
+            sum1 += (end1 - start1);
+            sum2 += (end2 - end1);
+            sum3 += (end3 - end2);
+            sum4 += (end4 - end3);
+            //System.out.println(sum1 + "\t" + sum2 + "\t" + sum3);
+
         }
+        System.out.println(sum1 + "\t" + sum2 + "\t" + sum3 + "\t" + sum4);
         log.info("{} Shutting down at user request", logPrefix);
     }
 
