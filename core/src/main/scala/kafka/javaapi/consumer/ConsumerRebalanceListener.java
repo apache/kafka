@@ -36,7 +36,7 @@ public interface ConsumerRebalanceListener {
      * also be used in more general cases.
      * @param partitionOwnership The partition this consumer currently owns.
      */
-    public void beforeReleasingPartitions(Map<String, Set<Integer>> partitionOwnership);
+    void beforeReleasingPartitions(Map<String, Set<Integer>> partitionOwnership);
 
     /**
      * This method is called after the new partition assignment is finished but before fetcher
@@ -45,6 +45,6 @@ public interface ConsumerRebalanceListener {
      * @param globalPartitionAssignment A Map[topic, Map[Partition, ConsumerThreadId]]. It is the global partition
      *                                  assignment of this consumer group.
      */
-    public void beforeStartingFetchers(String consumerId, Map<String, Map<Integer, ConsumerThreadId>> globalPartitionAssignment);
+    void beforeStartingFetchers(String consumerId, Map<String, Map<Integer, ConsumerThreadId>> globalPartitionAssignment);
 
 }
