@@ -1334,7 +1334,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"InitPidRequest : Generated new PID ${result.pid} from InitPidRequest from client ${request.header.clientId}")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
-    txnCoordinator.handleInitPid(initPidRequest.transactionalId, sendResponseCallback)
+    txnCoordinator.handleInitPid(initPidRequest.transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
   def handleEndTxnRequest(request: Request): Unit = {
