@@ -92,6 +92,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         return count;
     }
 
+    /**
+     * Get partitions of records returned by a {@link Consumer#poll(long)} operation
+     */
+    public Set<TopicPartition> partitions() {
+        return Collections.unmodifiableSet(this.records.keySet());
+    }
+
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables;
