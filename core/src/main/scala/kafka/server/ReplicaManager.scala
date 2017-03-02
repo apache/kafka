@@ -359,6 +359,7 @@ class ReplicaManager(val config: KafkaConfig,
                 "epoch %d for partition [%s,%d] as itself is not in assigned replica list %s")
                 .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
                 topic, partition.partitionId, partitionStateInfo.allReplicas.mkString(",")))
+              responseMap.put((topic, partitionId), ErrorMapping.InvalidBrokerCode)
             }
           } else {
             // Otherwise record the error code in response

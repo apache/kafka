@@ -49,6 +49,7 @@ object ErrorMapping {
   val MessageSetSizeTooLargeCode: Short = 18
   val NotEnoughReplicasCode : Short = 19
   val NotEnoughReplicasAfterAppendCode: Short = 20
+  val InvalidBrokerCode : Short = 21
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
