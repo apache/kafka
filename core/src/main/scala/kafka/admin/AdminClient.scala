@@ -192,19 +192,20 @@ class AdminClient(val time: Time,
 
   def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
 
-    def validateConsumerGroup(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
+    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
       metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
 
     val startTime = time.milliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
     var metadata = describeConsumerGroupHandler(coordinator, groupId)
 
-    while (!validateConsumerGroup(metadata) && time.milliseconds - startTime < timeoutMs) {
+    while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
+      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group may be initializing.")
       Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
       metadata = describeConsumerGroupHandler(coordinator, groupId)
     }
 
-    if (timeoutMs > 0 && time.milliseconds - startTime > timeoutMs)
+    if (!isValidConsumerGroupResponse(metadata))
       throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
 
     metadata.error.maybeThrow()
