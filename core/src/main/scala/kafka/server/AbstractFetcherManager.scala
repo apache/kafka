@@ -84,7 +84,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
 
       for ((brokerAndFetcherId, partitionAndOffsets) <- partitionsPerFetcher) {
         val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
-        fetcherThreadMap.get(BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)) match {
+        fetcherThreadMap.get(brokerIdAndFetcherId) match {
           case Some(f) if f.sourceBroker.host == brokerAndFetcherId.broker.host && f.sourceBroker.port == brokerAndFetcherId.broker.port =>
             // reuse the fetcher thread
           case Some(f) =>
