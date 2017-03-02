@@ -110,6 +110,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
               .foldLeft(0.toLong)(_ + _)
             sumOffset == 100
           }
+          case _ => false
         }
       } catch {
         case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
@@ -315,6 +316,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
               .foldLeft(0.toLong)(_ + _)
             sumOffset == totalMessages
           }
+          case _ => false
         }
       } catch {
         case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
