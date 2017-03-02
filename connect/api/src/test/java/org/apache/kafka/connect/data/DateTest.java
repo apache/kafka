@@ -24,6 +24,7 @@ import java.util.GregorianCalendar;
 import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class DateTest {
     private static final GregorianCalendar EPOCH;
@@ -50,8 +51,8 @@ public class DateTest {
 
     @Test
     public void testFromLogical() {
-        assertEquals(0, Date.fromLogical(Date.SCHEMA, EPOCH.getTime()));
-        assertEquals(10000, Date.fromLogical(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()));
+        assertEquals((Integer) 0, Date.fromLogical(Date.SCHEMA, EPOCH.getTime()));
+        assertEquals((Integer) 10000, Date.fromLogical(Date.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime()));
     }
 
     @Test(expected = DataException.class)
@@ -73,5 +74,33 @@ public class DateTest {
     @Test(expected = DataException.class)
     public void testToLogicalInvalidSchema() {
         Date.toLogical(Date.builder().name("invalid").build(), 0);
+    }
+
+    @Test
+    public void testToLogicalNullValue() {
+        Schema nullableSchema = Date.builder().optional().build();
+        java.util.Date actual = Date.toLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test(expected = DataException.class)
+    public void testToLogicalNullValueNonOptionalSchema() {
+        Schema nullableSchema = Date.builder().build();
+        java.util.Date actual = Date.toLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test
+    public void testFromLogicalNullValue() {
+        Schema nullableSchema = Date.builder().optional().build();
+        Integer actual = Date.fromLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test(expected = DataException.class)
+    public void testFromLogicalNullValueNonOptionalSchema() {
+        Schema nullableSchema = Date.builder().build();
+        Integer actual = Date.fromLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
     }
 }
