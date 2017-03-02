@@ -44,7 +44,7 @@ import org.apache.kafka.common.record.MemoryRecords
  */
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
-                                     sourceBroker: BrokerEndPoint,
+                                     val sourceBroker: BrokerEndPoint,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
