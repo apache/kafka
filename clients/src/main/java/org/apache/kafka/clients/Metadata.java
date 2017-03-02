@@ -166,7 +166,7 @@ public final class Metadata {
             listener.onMetadataUpdate(cluster);
 
         // Do this after notifying listeners as subscribed topics' list can be changed by listeners
-        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
+        this.cluster = getClusterForCurrentTopics(cluster);
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
