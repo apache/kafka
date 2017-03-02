@@ -85,6 +85,11 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
 
+
+    @property
+    def security_config(self):
+        return self.kafka.security_config.client_config()
+
     def prop_file(self, node):
         idx = self.idx(node)
         prop_file = str(self.security_config)
