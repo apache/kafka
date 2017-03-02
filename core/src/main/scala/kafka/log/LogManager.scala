@@ -25,6 +25,8 @@ import kafka.common.{TopicAndPartition, KafkaException}
 import kafka.server.{RecoveringFromUncleanShutdown, BrokerState, OffsetCheckpoint}
 import java.util.concurrent.{Executors, ExecutorService, ExecutionException, Future}
 
+import scala.util.control.NonFatal
+
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
  * All read and write operations are delegated to the individual log instances.
@@ -478,7 +480,7 @@ class LogManager(val logDirs: Array[File],
         if(timeSinceLastFlush >= log.config.flushMs)
           log.flush
       } catch {
-        case e: Throwable =>
+        case NonFatal(e) =>
           error("Error flushing topic " + topicAndPartition.topic, e)
       }
     }

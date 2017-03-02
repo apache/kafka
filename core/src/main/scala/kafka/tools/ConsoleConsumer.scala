@@ -29,6 +29,8 @@ import kafka.utils._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.consumer.{Blacklist,Whitelist,ConsumerConfig,Consumer}
 
+import scala.util.control.NonFatal
+
 /**
  * Consumer that dumps messages out to standard out.
  *
@@ -168,7 +170,7 @@ object ConsoleConsumer extends Logging {
           formatter.writeTo(messageAndTopic.key, messageAndTopic.message, System.out)
           numMessages += 1
         } catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             if (skipMessageOnError)
               error("Error processing message, skipping this message: ", e)
             else
@@ -184,7 +186,7 @@ object ConsoleConsumer extends Logging {
         }
       }
     } catch {
-      case e: Throwable => error("Error processing message, stopping consumer: ", e)
+      case NonFatal(e) => error("Error processing message, stopping consumer: ", e)
     }
     System.err.println("Consumed %d messages".format(numMessages))
     System.out.flush()
@@ -208,7 +210,7 @@ object ConsoleConsumer extends Logging {
       val zk = new ZkClient(zkUrl, 30*1000,30*1000, ZKStringSerializer);
       zk.exists(path)
     } catch {
-      case _: Throwable => false
+      case NonFatal(_) => false
     }
   }
 }

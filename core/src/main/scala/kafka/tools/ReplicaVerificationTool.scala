@@ -31,6 +31,8 @@ import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.utils._
 import kafka.consumer.{ConsumerConfig, Whitelist, SimpleConsumer}
 
+import scala.util.control.NonFatal
+
 /**
  *  For verifying the consistency among replicas.
  *
@@ -306,7 +308,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
             } else
               isMessageInAllReplicas = false
           } catch {
-            case t: Throwable =>
+            case NonFatal(t) =>
               throw new RuntimeException("Error in processing replica %d in partition %s at offset %d."
               .format(replicaId, topicAndPartition, fetchOffsetMap.get(topicAndPartition)), t)
           }
@@ -362,7 +364,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Broker, topicAndPartiti
     try {
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         if (!isRunning.get)
           throw t
     }

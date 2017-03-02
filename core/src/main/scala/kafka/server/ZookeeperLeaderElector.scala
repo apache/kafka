@@ -24,6 +24,8 @@ import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 import kafka.controller.KafkaController
 
+import scala.util.control.NonFatal
+
 /**
  * This class handles zookeeper based leader election based on an ephemeral path. The election module does not handle
  * session expiration, instead it assumes the caller will handle it by probably try to re-elect again. If the existing
@@ -89,7 +91,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         else
           warn("A leader has been elected but just resigned, this will result in another round of election")
 
-      case e2: Throwable =>
+      case NonFatal(e2) =>
         error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
         resign()
     }

@@ -29,6 +29,8 @@ import org.apache.log4j.Logger
 import kafka.controller.Callbacks.CallbackBuilder
 import kafka.utils.Utils._
 
+import scala.util.control.NonFatal
+
 /**
  * This class represents the state machine for partitions. It defines the states that a partition can be in, and
  * transitions to move the partition to another legal state. The different states that a partition can be in are -
@@ -122,7 +124,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     } catch {
-      case e: Throwable => error("Error while moving some partitions to the online state", e)
+      case NonFatal(e) => error("Error while moving some partitions to the online state", e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger leader election for those partitions
     }
   }
@@ -147,7 +149,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     }catch {
-      case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
+      case NonFatal(e) => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
     }
   }
@@ -230,7 +232,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // post: partition state is deleted from all brokers and zookeeper
       }
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         stateChangeLogger.error("Controller %d epoch %d initiated state change for partition %s from %s to %s failed"
           .format(controllerId, controller.epoch, topicAndPartition, currState, targetState), t)
     }
@@ -374,7 +376,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
-      case sce: Throwable =>
+      case NonFatal(sce) =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(topicAndPartition, sce.getMessage)
         stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
         throw new StateChangeFailedException(failMsg, sce)
@@ -448,7 +450,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if(newTopics.size > 0)
               controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet.toSet)
           } catch {
-            case e: Throwable => error("Error while handling new topic", e )
+            case NonFatal(e) => error("Error while handling new topic", e )
           }
         }
       }
@@ -531,7 +533,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             }
           }
         } catch {
-          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
+          case NonFatal(e) => error("Error while handling add partitions for data path " + dataPath, e )
         }
       }
     }

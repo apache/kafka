@@ -32,6 +32,8 @@ import scala.collection.JavaConversions._
 
 import joptsimple.OptionParser
 
+import scala.util.control.NonFatal
+
 object MirrorMaker extends Logging {
 
   private var connectors: Seq[ZookeeperConsumerConnector] = null
@@ -153,7 +155,7 @@ object MirrorMaker extends Logging {
     try {
       streams = connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams, new DefaultDecoder(), new DefaultDecoder())).flatten
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         fatal("Unable to create stream - shutting down mirror maker.")
         connectors.foreach(_.shutdown)
     }
@@ -261,7 +263,7 @@ object MirrorMaker extends Logging {
           mirrorDataChannel.put(data)
         }
       } catch {
-        case e: Throwable => {
+        case NonFatal(e) => {
           fatal("Stream unexpectedly exited.", e)
           isCleanShutdown = false
         }
@@ -309,7 +311,7 @@ object MirrorMaker extends Logging {
           producer.send(data.topic(), data.key(), data.value())
         }
       } catch {
-        case t: Throwable => {
+        case NonFatal(t) => {
           fatal("Producer thread failure due to ", t)
           isCleanShutdown = false
         }

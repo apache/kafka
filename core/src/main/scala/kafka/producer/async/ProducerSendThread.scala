@@ -24,6 +24,8 @@ import kafka.producer.KeyedMessage
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 
+import scala.util.control.NonFatal
+
 class ProducerSendThread[K,V](val threadName: String,
                               val queue: BlockingQueue[KeyedMessage[K,V]],
                               val handler: EventHandler[K,V],
@@ -44,7 +46,7 @@ class ProducerSendThread[K,V](val threadName: String,
     try {
       processEvents
     }catch {
-      case e: Throwable => error("Error in sending events: ", e)
+      case NonFatal(e) => error("Error in sending events: ", e)
     }finally {
       shutdownLatch.countDown
     }
@@ -104,7 +106,7 @@ class ProducerSendThread[K,V](val threadName: String,
       if(size > 0)
         handler.handle(events)
     }catch {
-      case e: Throwable => error("Error in handling batch of " + size + " events", e)
+      case NonFatal(e) => error("Error in handling batch of " + size + " events", e)
     }
   }
 

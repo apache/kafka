@@ -31,6 +31,8 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import com.yammer.metrics.core.{Gauge, Meter}
 
+import scala.util.control.NonFatal
+
 /**
  * An NIO socket server. The threading model is
  *   1 Acceptor thread that handles new connections
@@ -229,7 +231,7 @@ private[kafka] class Acceptor(val host: String,
             // round robin to the next processor thread
             currentProcessor = (currentProcessor + 1) % processors.length
           } catch {
-            case e: Throwable => error("Error while accepting connection", e)
+            case NonFatal(e) => error("Error while accepting connection", e)
           }
         }
       }
@@ -351,7 +353,7 @@ private[kafka] class Processor(val id: Int,
             } case e: InvalidRequestException => {
               info("Closing socket connection to %s due to invalid request: %s".format(channelFor(key).socket.getInetAddress, e.getMessage))
               close(key)
-            } case e: Throwable => {
+            } case NonFatal(e) => {
               error("Closing socket for " + channelFor(key).socket.getInetAddress + " because of error", e)
               close(key)
             }

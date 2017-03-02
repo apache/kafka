@@ -39,6 +39,7 @@ import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener,
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
+import scala.util.control.NonFatal
 
 
 /**
@@ -207,7 +208,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
           if (offsetsChannel != null) offsetsChannel.disconnect()
         } catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             fatal("error during consumer connector shutdown", e)
         }
         info("ZKConsumerConnector shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
@@ -271,7 +272,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       commitOffsets(isAutoCommit = false)
     }
     catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
       // log it and let it go
         error("exception during autoCommit: ", t)
     }
@@ -349,7 +350,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                 true
             }
             catch {
-              case t: Throwable =>
+              case NonFatal(t) =>
                 error("Error while committing offsets.", t)
                 offsetsChannel.disconnect()
                 false
@@ -502,7 +503,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         // There is no need to re-subscribe the watcher since it will be automatically
         // re-registered upon firing of this event by zkClient
       } catch {
-        case e: Throwable => error("Error while handling topic partition change for data path " + dataPath, e )
+        case NonFatal(e) => error("Error while handling topic partition change for data path " + dataPath, e )
       }
     }
 
@@ -550,7 +551,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if (doRebalance)
               syncedRebalance
           } catch {
-            case t: Throwable => error("error during syncedRebalance", t)
+            case NonFatal(t) => error("error during syncedRebalance", t)
           }
         }
         info("stopping watcher executor thread for consumer " + consumerIdString)
@@ -607,7 +608,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                 cluster = getCluster(zkClient)
                 done = rebalance(cluster)
               } catch {
-                case e: Throwable =>
+                case NonFatal(e) =>
                   /** occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
                     * For example, a ZK node can disappear between the time we get all children and the time we try to get
                     * the value of a child. Just let this go since another rebalance will be triggered.
@@ -783,7 +784,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
             info("waiting for the partition ownership to be deleted: " + partition)
             false
-          case e2: Throwable => throw e2
+          case NonFatal(e2) => throw e2
         }
       }
       val hasPartitionOwnershipFailed = partitionOwnershipSuccessful.foldLeft(0)((sum, decision) => sum + (if(decision) 0 else 1))

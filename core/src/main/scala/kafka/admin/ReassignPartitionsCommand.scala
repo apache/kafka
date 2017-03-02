@@ -23,6 +23,8 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 
+import scala.util.control.NonFatal
+
 object ReassignPartitionsCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
@@ -46,7 +48,7 @@ object ReassignPartitionsCommand extends Logging {
       else if (opts.options.has(opts.executeOpt))
         executeAssignment(zkClient, opts)
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         println("Partitions reassignment failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
@@ -215,7 +217,7 @@ class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.Map[T
         val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
         throw new AdminCommandFailedException("Partition reassignment currently in " +
         "progress for %s. Aborting operation".format(partitionsBeingReassigned))
-      case e: Throwable => error("Admin command failed", e); false
+      case NonFatal(e) => error("Admin command failed", e); false
     }
   }
 

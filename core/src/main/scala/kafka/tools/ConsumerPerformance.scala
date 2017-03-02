@@ -27,6 +27,8 @@ import java.util.{ Random, Properties }
 import kafka.consumer._
 import java.text.SimpleDateFormat
 
+import scala.util.control.NonFatal
+
 /**
  * Performance test for the full zookeeper consumer
  */
@@ -171,7 +173,7 @@ object ConsumerPerformance {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
         case _: ConsumerTimeoutException =>
-        case e: Throwable => e.printStackTrace()
+        case NonFatal(e) => e.printStackTrace()
       }
       totalMessagesRead.addAndGet(messagesRead)
       totalBytesRead.addAndGet(bytesRead)
