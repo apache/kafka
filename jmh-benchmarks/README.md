@@ -27,17 +27,15 @@ If no benchmark mode is specified, the default is used which is throughput.
 If you want to set specific JMH flags or only run a certain test(s) passing arguments via
 gradle tasks is cumbersome.  Instead you can use the "jhm.sh" script
 
-* Run a specific test setting fork-mode (number iterations) to 2 :`./jmh.sh -f 2 MemoryBytesCacheBenchmark`
+* Run a specific test setting fork-mode (number iterations) to 2 :`./jmh.sh -f 2 LRUCacheBenchmark`
 
 * By default all JMH output goes to stdout.  To run a benchmark and capture the results in a file:
-`./jmh.sh -f 2 -o benchmarkResults.txt MemoryBytesCacheBenchmark`
-
-
+`./jmh.sh -f 2 -o benchmarkResults.txt LRUCacheBenchmark`
 NOTE: For now this script needs to be run from the jmh-benchmarks directory.
  
 ### Running JMH outside of gradle
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
-`java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-0.10.1.0-SNAPSHOT-all.jar -f2 MemoryBytesCacheBenchmark`
+`java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-0.10.1.0-SNAPSHOT-all.jar -f2 LRUCacheBenchmark`
 
 ### JMH Options
 Some common JMH options are:
@@ -59,5 +57,3 @@ Some common JMH options are:
                                EXTRA] 
 ```
 To view all options run jmh with the -h flag. 
-
-

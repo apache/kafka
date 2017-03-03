@@ -27,7 +27,7 @@ buildscript {
     classpath "org.ajoberstar:grgit:1.7.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.3'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
   }
 }
 
@@ -836,10 +836,9 @@ project(':jmh-benchmarks') {
   dependencies {
       compile project(':clients')
       compile project(':streams')
-      compile 'org.openjdk.jmh:jmh-core:1.13'
-      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.13'
-      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.13'
-      compile 'com.github.jbellis:jamm:0.3.1'
+      compile 'org.openjdk.jmh:jmh-core:1.17.15'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.15'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.15'
   }
 
   jar {

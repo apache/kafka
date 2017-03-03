@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.jmh.streams;
+package org.apache.kafka.jmh.cache;
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.github.jamm.MemoryMeter;
+import org.apache.kafka.common.cache.LRUCache;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Scope;
@@ -29,13 +28,12 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import static org.github.jamm.MemoryMeter.Guess.FALLBACK_UNSAFE;
 
 @State(Scope.Thread)
-public class MemoryBytesCacheBenchmark {
+public class LRUCacheBenchmark {
 
-    private MockMemoryLRUCache<String, String> memoryCache;
-    private MockMemoryLRUCache<String, String> bytesCache;
+    private LRUCache<String, String> lruCache;
+
 
     private final String key = "the_key_to_use";
     private final String value = "the quick brown fox jumped over the lazy dog the olympics are about to start";
@@ -44,35 +42,21 @@ public class MemoryBytesCacheBenchmark {
 
     @Setup(Level.Trial)
     public void setUpCaches() {
-        MemoryMeter memoryMeter = new MemoryMeter().withGuessing(FALLBACK_UNSAFE);
-        int valueMemory = (int) memoryMeter.measureDeep(value);
-        int keyMemory = (int) memoryMeter.measureDeep(key);
-        memoryCache = new MockMemoryLRUCache<>("trackByMemory", 100000 * (valueMemory + keyMemory + 16), Serdes.String(), Serdes.String());
-        memoryCache.setIsMeasureDeep(true);
-        memoryCache.setMaxCacheByMemory(true);
-
-        bytesCache = new MockMemoryLRUCache<>("trackBySizeBytes", 100000, Serdes.String(), Serdes.String());
-        bytesCache.setIsCachingBytes(true);
+          lruCache = new LRUCache<>(100);
     }
 
     @Benchmark
-    public String testCacheByMemory() {
+    public String testCachePerformance() {
         counter++;
-        memoryCache.put(key + counter, value + counter);
-        return memoryCache.get(key + counter);
+        lruCache.put(key + counter, value + counter);
+        return lruCache.get(key + counter);
     }
 
-    @Benchmark
-    public String testCacheBySizeBytes() {
-        counter++;
-        bytesCache.put(key + counter, value + counter);
-        return  bytesCache.get(key + counter);
-    }
 
     public static void main(String[] args) throws RunnerException {
 
         Options opt = new OptionsBuilder()
-                .include(MemoryBytesCacheBenchmark.class.getSimpleName())
+                .include(LRUCacheBenchmark.class.getSimpleName())
                 .forks(2)
                 .build();
 
