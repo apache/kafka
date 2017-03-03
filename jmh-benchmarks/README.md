@@ -17,7 +17,8 @@ on what options are available. A good tutorial for using JMH can be found [here]
 
 ###Gradle Tasks / Running benchmarks in gradle
 
-If no benchmark mode is specified, the default is used which is throughput.
+If no benchmark mode is specified, the default is used which is throughput. It is assumed that users run
+the gradle tasks with './gradlew' from the root of the Kafka project.
 
 *  jmh-benchmarks:shadowJar - creates the uber jar required to run the benchmarks.
 
@@ -25,7 +26,8 @@ If no benchmark mode is specified, the default is used which is throughput.
  
 ### Using the jmh script
 If you want to set specific JMH flags or only run a certain test(s) passing arguments via
-gradle tasks is cumbersome.  Instead you can use the "jhm.sh" script
+gradle tasks is cumbersome.  Instead you can use the "jhm.sh" script.  NOTE: It is assumed users run
+the jmh.sh script from the jmh-benchmarks module.
 
 * Run a specific test setting fork-mode (number iterations) to 2 :`./jmh.sh -f 2 LRUCacheBenchmark`
 
@@ -35,7 +37,7 @@ NOTE: For now this script needs to be run from the jmh-benchmarks directory.
  
 ### Running JMH outside of gradle
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
-`java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-0.10.1.0-SNAPSHOT-all.jar -f2 LRUCacheBenchmark`
+`java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark`
 
 ### JMH Options
 Some common JMH options are:

@@ -836,9 +836,9 @@ project(':jmh-benchmarks') {
   dependencies {
       compile project(':clients')
       compile project(':streams')
-      compile 'org.openjdk.jmh:jmh-core:1.17.15'
-      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.15'
-      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.15'
+      compile 'org.openjdk.jmh:jmh-core:1.17.5'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.5'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.5'
   }
 
   jar {
