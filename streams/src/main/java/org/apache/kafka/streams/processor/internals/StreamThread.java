@@ -174,7 +174,6 @@ public class StreamThread extends Thread {
 
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
-    protected final StreamsKafkaClient streamsKafkaClient;
     public final String applicationId;
     public final String clientId;
     public final UUID processId;
@@ -204,6 +203,7 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
     private String originalReset;
     private StreamPartitionAssignor partitionAssignor = null;
+    private StreamsKafkaClient streamsKafkaClient;
     private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
@@ -286,7 +286,6 @@ public class StreamThread extends Thread {
                         Metrics metrics,
                         Time time,
                         StreamsMetadataState streamsMetadataState,
-                        StreamsKafkaClient streamsKafkaClient,
                         final long cacheSizeBytes) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
@@ -298,7 +297,6 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-        this.streamsKafkaClient = streamsKafkaClient;
         threadClientId = clientId + "-" + threadName;
         this.streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
@@ -1103,6 +1101,22 @@ public class StreamThread extends Thread {
         }
 
         return sb.toString();
+    }
+
+    /**
+     *
+     * @return
+     */
+    public StreamsKafkaClient getStreamsKafkaClient() {
+        return streamsKafkaClient;
+    }
+
+    /**
+     *
+     * @param streamsKafkaClient
+     */
+    public void setStreamsKafkaClient(StreamsKafkaClient streamsKafkaClient) {
+        this.streamsKafkaClient = streamsKafkaClient;
     }
 
     /**

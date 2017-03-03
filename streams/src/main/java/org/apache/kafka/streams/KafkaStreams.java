@@ -356,8 +356,8 @@ public class KafkaStreams {
                     metrics,
                     time,
                     streamsMetadataState,
-                    streamsKafkaClient,
                     cacheSizeBytes);
+            threads[i].setStreamsKafkaClient(streamsKafkaClient);
             threads[i].setStateListener(new StreamStateListener());
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
