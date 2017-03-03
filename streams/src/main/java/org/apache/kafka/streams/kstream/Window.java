@@ -86,9 +86,9 @@ public abstract class Window {
         if (obj == this) {
             return true;
         }
-        if (obj == null)
+        if (obj == null) {
             return false;
-
+        }
         if (getClass() != obj.getClass()) {
             return false;
         }
