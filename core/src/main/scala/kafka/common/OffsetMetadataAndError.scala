@@ -58,7 +58,7 @@ case class OffsetMetadataAndError(offsetMetadata: OffsetMetadata, error: Errors 
 
   def metadata = offsetMetadata.metadata
 
-  override def toString = "[%s,ErrorCode %d]".format(offsetMetadata, error)
+  override def toString = "[%s, Error='%s: %s']".format(offsetMetadata, error.exceptionName, error.message)
 }
 
 object OffsetMetadataAndError {
