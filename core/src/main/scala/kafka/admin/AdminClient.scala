@@ -81,7 +81,7 @@ class AdminClient(val time: Time,
       response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
     }
 
-    if (timeoutMs > 0 && time.milliseconds - startTime > timeoutMs)
+    if (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
       throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", response.error.exception)
 
     response.error.maybeThrow()
@@ -200,7 +200,7 @@ class AdminClient(val time: Time,
     var metadata = describeConsumerGroupHandler(coordinator, groupId)
 
     while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
-      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group may be initializing.")
+      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
       Thread.sleep(AdminClient.DefaultGroupQueryRetryIntervalMs)
       metadata = describeConsumerGroupHandler(coordinator, groupId)
     }
