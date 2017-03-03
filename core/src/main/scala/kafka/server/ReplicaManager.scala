@@ -74,7 +74,8 @@ case class LogReadResult(info: FetchDataInfo,
   }
 
   override def toString =
-    s"Fetch Data: [$info], HW: [$hw], leaderLogEndOffset: [$leaderLogEndOffset], readSize: [$readSize], error: [${error.exceptionName}]"
+    s"Fetch Data: [$info], HW: [$hw], leaderLogEndOffset: [$leaderLogEndOffset], readSize: [$readSize], error: [$error]"
+
 }
 
 case class FetchPartitionData(error: Errors = Errors.NONE, hw: Long = -1L, records: Records)
