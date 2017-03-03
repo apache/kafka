@@ -105,42 +105,42 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Serdes.String(), "store");
+        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, null, Serdes.String(), "store");
+        groupedStream.aggregate(MockInitializer.STRING_INIT, null, "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Serdes.String(), null);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (String) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), "store");
+        groupedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, null, TimeWindows.of(10), Serdes.String(), "store");
+        groupedStream.aggregate(MockInitializer.STRING_INIT, null, TimeWindows.of(10), "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Serdes.String(), "store");
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Windows) null, "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (String) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), null);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (StateStoreSupplier) null);
     }
 
     @Test
@@ -280,7 +280,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.with(10), Serdes.String(), "storeName");
+        }, SessionWindows.with(10), "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -290,7 +290,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.with(10), Serdes.String(), "storeName");
+        }, SessionWindows.with(10), "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -299,7 +299,6 @@ public class KGroupedStreamImplTest {
                                 MockAggregator.TOSTRING_ADDER,
                                 null,
                                 SessionWindows.with(10),
-                                Serdes.String(),
                                 "storeName");
     }
 
@@ -310,7 +309,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, null, Serdes.String(), "storeName");
+        }, null, "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -320,7 +319,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.with(10), Serdes.String(), (String) null);
+        }, SessionWindows.with(10), (String) null);
     }
 
     @Test(expected = NullPointerException.class)

@@ -103,6 +103,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> aggregator,
+                                      final String storeName) {
+        return aggregate(initializer, aggregator, (Serde) null, storeName);
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String storeName) {
         return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
@@ -119,6 +126,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator),
                 AGGREGATE_NAME,
                 storeSupplier);
+    }
+
+    @Override
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                                  final Aggregator<? super K, ? super V, T> aggregator,
+                                                                  final Windows<W> windows,
+                                                                  final String storeName) {
+        return aggregate(initializer, aggregator, windows, (Serde) null, storeName);
     }
 
     @SuppressWarnings("unchecked")
@@ -193,6 +208,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 storeSupplier);
     }
 
+    @Override
+    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                final Aggregator<? super K, ? super V, T> aggregator,
+                                                final Merger<? super K, T> sessionMerger,
+                                                final SessionWindows sessionWindows,
+                                                final String storeName) {
+        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, (Serde) null, storeName);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
@@ -209,8 +233,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                          aggValueSerde,
                          storeFactory(keySerde, aggValueSerde, storeName)
                           .sessionWindowed(sessionWindows.maintainMs()).build());
-
-
     }
 
     @SuppressWarnings("unchecked")
@@ -231,7 +253,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger),
                 AGGREGATE_NAME,
                 storeSupplier);
-
     }
 
     @SuppressWarnings("unchecked")
