@@ -179,15 +179,20 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testSocketsCloseOnShutdown() {
+    import java.util.concurrent.TimeUnit
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    plainSocket.setTcpNoDelay(true)
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
+    traceSocket.setTcpNoDelay(true)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
     sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
-
+    // Sleep for 200ms to not run into TCP SLOW_START behaviour potentially masking issues in
+    // sending data below
+    TimeUnit.MILLISECONDS.sleep(200L)
     // make sure the sockets are open
     server.acceptors.values.map(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
