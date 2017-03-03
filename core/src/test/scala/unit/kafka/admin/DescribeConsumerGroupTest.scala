@@ -23,6 +23,7 @@ import java.util.Collections
 import java.util.Properties
 
 import org.easymock.EasyMock
+import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
 
@@ -35,10 +36,11 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.clients.consumer.KafkaConsumer
 
 
 class DescribeConsumerGroupTest extends KafkaServerTestHarness {
@@ -179,21 +181,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
-    TestUtils.waitUntilTrue(() => {
-        try {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          println(state == Some("Dead") && assignments == Some(List()))
-          state == Some("Dead") && assignments == Some(List())
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            e.printStackTrace()
-            throw e
-        }
-      }, "Expected the state to be 'Dead' with no members in the group.")
-
+    val (state, assignments) = consumerGroupCommand.describeGroup()
+    assertTrue("Expected the state to be 'Dead' with no members in the group.", state == Some("Dead") && assignments == Some(List()))
     consumerGroupCommand.close()
   }
 
@@ -207,21 +196,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        try {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          state == Some("Stable") &&
-          assignments.isDefined &&
-          assignments.get.count(_.group == group) == 1 &&
-          assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-          assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-          assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            throw e
-        }
+        val (state, assignments) = consumerGroupCommand.describeGroup()
+        state == Some("Stable") &&
+        assignments.isDefined &&
+        assignments.get.count(_.group == group) == 1 &&
+        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
       }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
 
     consumerGroupCommand.close()
@@ -237,40 +218,24 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        try {
-          val (state, _) = consumerGroupCommand.describeGroup()
-          state == Some("Stable")
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            throw e
-        }
+        val (state, _) = consumerGroupCommand.describeGroup()
+        state == Some("Stable")
       }, "Expected the group to initially become stable.")
 
     // stop the consumer so the group has no active member anymore
     executor.shutdown()
 
     TestUtils.waitUntilTrue(() => {
-        try {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          state == Some("Empty") &&
-          assignments.isDefined &&
-          assignments.get.count(_.group == group) == 1 &&
-          assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
-          assignments.get.filter(_.group == group).head.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-          assignments.get.filter(_.group == group).head.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            throw e
-        } finally {
-          consumerGroupCommand.close()
-        }
+        val (state, assignments) = consumerGroupCommand.describeGroup()
+        state == Some("Empty") &&
+        assignments.isDefined &&
+        assignments.get.count(_.group == group) == 1 &&
+        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
+        assignments.get.filter(_.group == group).head.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignments.get.filter(_.group == group).head.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
       }, "Expected no active member in describe group results.")
+
+    consumerGroupCommand.close()
   }
 
   @Test
@@ -283,20 +248,12 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        try {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          state == Some("Stable") &&
-          assignments.isDefined &&
-          assignments.get.count(_.group == group) == 2 &&
-          assignments.get.count{ x => x.group == group && x.partition.isDefined} == 1 &&
-          assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 1
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            throw e
-        }
+        val (state, assignments) = consumerGroupCommand.describeGroup()
+        state == Some("Stable") &&
+        assignments.isDefined &&
+        assignments.get.count(_.group == group) == 2 &&
+        assignments.get.count{ x => x.group == group && x.partition.isDefined} == 1 &&
+        assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 1
       }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     consumerGroupCommand.close()
@@ -315,23 +272,39 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        try {
           val (state, assignments) = consumerGroupCommand.describeGroup()
           state == Some("Stable") &&
           assignments.isDefined &&
           assignments.get.count(_.group == group) == 2 &&
           assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
           assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
-        } catch {
-          case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-            // Do nothing while the group initializes
-            false
-          case e: Throwable =>
-            throw e
-        }
       }, "Expected two rows (one row per consumer) in describe group results.")
 
     consumerGroupCommand.close()
+  }
+
+  @Test
+  def testDescribeGroupWithNewConsumerWithShortInitializationTimeout() {
+    // run one consumer in the group consuming from a single-partition topic
+    val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic)
+
+    // set the group initialization timeout too low for the group to stabilize
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", "group", "--timeout", "10")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    try {
+      val (state, assignments) = consumerGroupCommand.describeGroup()
+      fail("The consumer group command should fail due to low initialization timeout")
+    } catch {
+      case e: TimeoutException =>
+        // OK
+      case e: Throwable =>
+        fail("An unexpected exception occurred: " + e.getMessage)
+        throw e
+    } finally {
+      consumerGroupCommand.close()
+    }
   }
 }
 
