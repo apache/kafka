@@ -113,7 +113,7 @@ object SimpleConsumerPerformance {
         config.dateFormat.format(reportTime), config.fetchSize, totalMBRead, totalMBRead/elapsed,
         totalMessagesRead, totalMessagesRead/elapsed))
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {

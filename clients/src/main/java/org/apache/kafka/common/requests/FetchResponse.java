@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -21,8 +21,8 @@ import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.Errors;
+
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.Records;
@@ -37,8 +37,7 @@ import java.util.Map;
  * This wrapper supports all versions of the Fetch API
  */
 public class FetchResponse extends AbstractResponse {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.FETCH.id);
+
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
@@ -70,36 +69,24 @@ public class FetchResponse extends AbstractResponse {
     public static final long INVALID_HIGHWATERMARK = -1L;
 
     private final LinkedHashMap<TopicPartition, PartitionData> responseData;
-    private final int throttleTime;
+    private final int throttleTimeMs;
 
     public static final class PartitionData {
-        public final short errorCode;
+        public final Errors error;
         public final long highWatermark;
         public final Records records;
 
-        public PartitionData(short errorCode, long highWatermark, Records records) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, long highWatermark, Records records) {
+            this.error = error;
             this.highWatermark = highWatermark;
             this.records = records;
         }
 
         @Override
         public String toString() {
-            return "(errorCode=" + errorCode + ", highWaterMark=" + highWatermark +
+            return "(error=" + error.toString() + ", highWaterMark=" + highWatermark +
                     ", records=" + records + ")";
         }
-    }
-
-    /**
-     * Constructor for version 3.
-     *
-     * The entries in `responseData` should be in the same order as the entries in `FetchRequest.fetchData`.
-     *
-     * @param responseData fetched data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
-     */
-    public FetchResponse(LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
-        this(3, responseData, throttleTime);
     }
 
     /**
@@ -109,17 +96,14 @@ public class FetchResponse extends AbstractResponse {
      * `FetchRequest.fetchData`.
      *
      * @param responseData fetched data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
+     * @param throttleTimeMs Time in milliseconds the response was throttled
      */
-    public FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
-        super(writeStruct(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)), version, responseData,
-                throttleTime));
+    public FetchResponse(LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTimeMs) {
         this.responseData = responseData;
-        this.throttleTime = throttleTime;
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     public FetchResponse(Struct struct) {
-        super(struct);
         LinkedHashMap<TopicPartition, PartitionData> responseData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -128,30 +112,39 @@ public class FetchResponse extends AbstractResponse {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 Struct partitionResponseHeader = partitionResponse.getStruct(PARTITION_HEADER_KEY_NAME);
                 int partition = partitionResponseHeader.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME);
+                Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-                PartitionData partitionData = new PartitionData(errorCode, highWatermark, records);
+                PartitionData partitionData = new PartitionData(error, highWatermark, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
         this.responseData = responseData;
-        this.throttleTime = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+    }
+
+    @Override
+    public Struct toStruct(short version) {
+        return toStruct(version, responseData, throttleTimeMs);
     }
 
     @Override
     public Send toSend(String dest, RequestHeader requestHeader) {
-        ResponseHeader responseHeader = new ResponseHeader(requestHeader.correlationId());
+        return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
+    }
+
+    public Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
+        Struct responseHeader = new ResponseHeader(requestHeader.correlationId()).toStruct();
 
         // write the total size and the response header
         ByteBuffer buffer = ByteBuffer.allocate(responseHeader.sizeOf() + 4);
-        buffer.putInt(responseHeader.sizeOf() + struct.sizeOf());
+        buffer.putInt(responseHeader.sizeOf() + responseStruct.sizeOf());
         responseHeader.writeTo(buffer);
         buffer.rewind();
 
         List<Send> sends = new ArrayList<>();
         sends.add(new ByteBufferSend(dest, buffer));
-        addResponseData(dest, sends);
+        addResponseData(responseStruct, throttleTimeMs, dest, sends);
         return new MultiSend(dest, sends);
     }
 
@@ -159,25 +152,20 @@ public class FetchResponse extends AbstractResponse {
         return responseData;
     }
 
-    public int getThrottleTime() {
-        return this.throttleTime;
+    public int throttleTimeMs() {
+        return this.throttleTimeMs;
     }
 
-    public static FetchResponse parse(ByteBuffer buffer) {
-        return new FetchResponse(CURRENT_SCHEMA.read(buffer));
+    public static FetchResponse parse(ByteBuffer buffer, short version) {
+        return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
-    public static FetchResponse parse(ByteBuffer buffer, int version) {
-        return new FetchResponse(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version).read(buffer));
-    }
-
-    private void addResponseData(String dest, List<Send> sends) {
+    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
         if (struct.hasField(THROTTLE_TIME_KEY_NAME)) {
-            int throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
             ByteBuffer buffer = ByteBuffer.allocate(8);
-            buffer.putInt(throttleTime);
+            buffer.putInt(throttleTimeMs);
             buffer.putInt(allTopicData.length);
             buffer.rewind();
             sends.add(new ByteBufferSend(dest, buffer));
@@ -192,7 +180,7 @@ public class FetchResponse extends AbstractResponse {
             addTopicData(dest, sends, (Struct) topicData);
     }
 
-    private void addTopicData(String dest, List<Send> sends, Struct topicData) {
+    private static void addTopicData(String dest, List<Send> sends, Struct topicData) {
         String topic = topicData.getString(TOPIC_KEY_NAME);
         Object[] allPartitionData = topicData.getArray(PARTITIONS_KEY_NAME);
 
@@ -207,7 +195,7 @@ public class FetchResponse extends AbstractResponse {
             addPartitionData(dest, sends, (Struct) partitionData);
     }
 
-    private void addPartitionData(String dest, List<Send> sends, Struct partitionData) {
+    private static void addPartitionData(String dest, List<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
         Records records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 
@@ -222,10 +210,8 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new RecordsSend(dest, records));
     }
 
-    private static Struct writeStruct(Struct struct,
-                                      int version,
-                                      LinkedHashMap<TopicPartition, PartitionData> responseData,
-                                      int throttleTime) {
+    private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
+        Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
         List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData = FetchRequest.TopicAndPartitionData.batchByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
@@ -237,7 +223,7 @@ public class FetchResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.errorCode);
+                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);
@@ -254,10 +240,8 @@ public class FetchResponse extends AbstractResponse {
         return struct;
     }
 
-    public static int sizeOf(int version, LinkedHashMap<TopicPartition, PartitionData> responseData) {
-        Struct struct = new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version));
-        writeStruct(struct, version, responseData, 0);
-        return 4 + struct.sizeOf();
+    public static int sizeOf(short version, LinkedHashMap<TopicPartition, PartitionData> responseData) {
+        return 4 + toStruct(version, responseData, 0).sizeOf();
     }
 
 }

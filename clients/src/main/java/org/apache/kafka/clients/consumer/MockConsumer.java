@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
@@ -152,17 +156,24 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             updateFetchPosition(tp);
 
         // update the consumed offset
-        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
-            if (!subscriptions.isPaused(entry.getKey())) {
-                List<ConsumerRecord<K, V>> recs = entry.getValue();
-                if (!recs.isEmpty())
-                    this.subscriptions.position(entry.getKey(), recs.get(recs.size() - 1).offset() + 1);
-            }
+        final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
+        for (final TopicPartition topicPartition : records.keySet()) {
+            results.put(topicPartition, new ArrayList<ConsumerRecord<K, V>>());
         }
 
-        ConsumerRecords<K, V> copy = new ConsumerRecords<K, V>(this.records);
-        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
-        return copy;
+        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
+            if (!subscriptions.isPaused(entry.getKey())) {
+                final List<ConsumerRecord<K, V>> recs = entry.getValue();
+                for (final ConsumerRecord<K, V> rec : recs) {
+                    if (assignment().contains(entry.getKey()) && rec.offset() >= subscriptions.position(entry.getKey())) {
+                        results.get(entry.getKey()).add(rec);
+                        subscriptions.position(entry.getKey(), rec.offset() + 1);
+                    }
+                }
+            }
+        }
+        this.records.clear();
+        return new ConsumerRecords<>(results);
     }
 
     public void addRecord(ConsumerRecord<K, V> record) {

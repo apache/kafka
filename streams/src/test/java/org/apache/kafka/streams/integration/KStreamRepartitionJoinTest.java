@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.integration;
 
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockValueJoiner;
@@ -143,7 +146,7 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(flatMapJoin);
         verifyCorrectOutput(mapRhs);
         verifyCorrectOutput(mapJoinJoin);
-        verifyLeftJoin(leftJoin);
+        verifyCorrectOutput(leftJoin);
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() throws InterruptedException {
@@ -232,6 +235,13 @@ public class KStreamRepartitionJoinTest {
             Serdes.Integer(),
             Serdes.Integer(),
             Serdes.String())
+            .filterNot(new Predicate<Integer, String>() {
+                @Override
+                public boolean test(Integer key, String value) {
+                    // filter not left-only join results
+                    return value.substring(2).equals("null");
+                }
+            })
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -268,7 +278,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     private JoinWindows getJoinWindow() {
-        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
+        return JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -282,23 +292,12 @@ public class KStreamRepartitionJoinTest {
         }
     }
 
-
     private void verifyCorrectOutput(final ExpectedOutputOnTopic expectedOutputOnTopic)
         throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(),
             expectedOutputOnTopic.expectedOutput.size(),
             expectedOutputOnTopic.outputTopic),
             is(expectedOutputOnTopic.expectedOutput));
-    }
-
-    private void verifyLeftJoin(final ExpectedOutputOnTopic expectedOutputOnTopic)
-        throws InterruptedException, ExecutionException {
-        final List<String> received = receiveMessages(new StringDeserializer(), expectedOutputOnTopic
-            .expectedOutput.size(), expectedOutputOnTopic.outputTopic);
-        if (!received.equals(expectedOutputOnTopic.expectedOutput)) {
-            produceToStreamOne();
-            verifyCorrectOutput(expectedOutputOnTopic.expectedOutput, expectedOutputOnTopic.outputTopic);
-        }
     }
 
     private void produceMessages()
@@ -380,13 +379,8 @@ public class KStreamRepartitionJoinTest {
             numMessages,
             60 * 1000);
         Collections.sort(received);
-        return received;
-    }
 
-    private void verifyCorrectOutput(final List<String> expectedMessages,
-                                     final String topic) throws InterruptedException {
-        assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size(), topic),
-            is(expectedMessages));
+        return received;
     }
 
     private void doJoin(final KStream<Integer, Integer> lhs,

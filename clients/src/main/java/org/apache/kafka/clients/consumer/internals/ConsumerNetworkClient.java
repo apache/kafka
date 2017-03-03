@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -90,8 +94,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node,
-                                              AbstractRequest.Builder<?> requestBuilder) {
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
@@ -157,6 +160,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void wakeup() {
         // wakeup should be safe without holding the client lock since it simply delegates to
         // Selector's wakeup, which is threadsafe
+        log.trace("Received user wakeup");
         this.wakeup.set(true);
         this.client.wakeup();
     }
@@ -343,8 +347,9 @@ public class ConsumerNetworkClient implements Closeable {
                 iterator.remove();
                 for (ClientRequest request : requestEntry.getValue()) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
-                            request.createdTimeMs(), now, true, null, null));
+                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }
@@ -406,6 +411,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void maybeTriggerWakeup() {
         if (wakeupDisabledCount == 0 && wakeup.get()) {
+            log.trace("Raising wakeup exception in response to user wakeup");
             wakeup.set(false);
             throw new WakeupException();
         }
@@ -446,7 +452,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, ApiKeys, AbstractRequest)} has been called.
+     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
      * @param node Node to connect to if possible
      */
     public boolean connectionFailed(Node node) {
@@ -457,7 +463,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Initiate a connection if currently possible. This is only really useful for resetting the failed
-     * status of a socket. If there is an actual request to send, then {@link #send(Node, ApiKeys, AbstractRequest)}
+     * status of a socket. If there is an actual request to send, then {@link #send(Node, AbstractRequest.Builder)}
      * should be used.
      * @param node The node to connect to
      */

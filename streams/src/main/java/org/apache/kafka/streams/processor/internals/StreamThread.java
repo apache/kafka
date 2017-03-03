@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -70,39 +69,39 @@ public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
      * The expected state transitions with the following defined states is:
      *
-     *                +-----------+
-     *                |Not Running|<---------------+
-     *                +-----+-----+                |
-     *                      |                      |
-     *                      v                      |
-     *                +-----+-----+                |
-     *          +-----| Running   |<------------+  |
-     *          |     +-----+-----+             |  |
-     *          |           |                   |  |
-     *          |           v                   |  |
-     *          |     +-----+------------+      |  |
-     *          <---- |Partitions        |      |  |
-     *          |     |Revoked           |      |  |
-     *          |     +-----+------------+      |  |
-     *          |           |                   |  |
-     *          |           v                   |  |
-     *          |     +-----+------------+      |  |
-     *          |     |Assigning         |      |  |
-     *          |     |Partitions        |------+  |
-     *          |     +-----+------------+         |
-     *          |           |                      |
-     *          |           |                      |
-     *          |    +------v---------+            |
-     *          +--->|Pending         |------------+
-     *               |Shutdown        |
-     *               +-----+----------+
-     *
+     * <pre>
+     *                +-------------+
+     *                | Not Running | <-------+
+     *                +-----+-------+         |
+     *                      |                 |
+     *                      v                 |
+     *                +-----+-------+         |
+     *          +<--- | Running     | <----+  |
+     *          |     +-----+-------+      |  |
+     *          |           |              |  |
+     *          |           v              |  |
+     *          |     +-----+-------+      |  |
+     *          +<--- | Partitions  |      |  |
+     *          |     | Revoked     |      |  |
+     *          |     +-----+-------+      |  |
+     *          |           |              |  |
+     *          |           v              |  |
+     *          |     +-----+-------+      |  |
+     *          |     | Assigning   |      |  |
+     *          |     | Partitions  | ---->+  |
+     *          |     +-----+-------+         |
+     *          |           |                 |
+     *          |           v                 |
+     *          |     +-----+-------+         |
+     *          +---> | Pending     | ------->+
+     *                | Shutdown    |
+     *                +-------------+
+     * </pre>
      */
     public enum State {
         NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
@@ -191,7 +190,7 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
     private final Map<TopicPartition, StandbyTask> standbyTasksByPartition;
-    private final Set<TaskId> prevTasks;
+    private final Set<TaskId> prevActiveTasks;
     private final Map<TaskId, StreamTask> suspendedTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
     private final Time time;
@@ -213,60 +212,11 @@ public class StreamThread extends Thread {
     private boolean processStandbyRecords = false;
 
     private ThreadCache cache;
+    private StoreChangelogReader storeChangelogReader;
 
     private final TaskCreator taskCreator = new TaskCreator();
 
-    final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
-
-            try {
-                if (state == State.PENDING_SHUTDOWN) {
-                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
-                        StreamThread.this.getName(), assignment);
-                }
-                log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
-                    StreamThread.this.getName(), assignment);
-
-                setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
-                // do this first as we may have suspended standby tasks that
-                // will become active or vice versa
-                closeNonAssignedSuspendedStandbyTasks();
-                closeNonAssignedSuspendedTasks();
-                addStreamTasks(assignment);
-                addStandbyTasks();
-                lastCleanMs = time.milliseconds(); // start the cleaning cycle
-                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-                setStateWhenNotInPendingShutdown(State.RUNNING);
-            } catch (Throwable t) {
-                rebalanceException = t;
-                throw t;
-            }
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
-            try {
-                if (state == State.PENDING_SHUTDOWN) {
-                    log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
-                             StreamThread.this.getName(), assignment);
-                }
-                log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
-                         StreamThread.this.getName(), assignment);
-                setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
-                lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
-                // suspend active tasks
-                suspendTasksAndState();
-            } catch (Throwable t) {
-                rebalanceException = t;
-                throw t;
-            } finally {
-                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
-                removeStreamTasks();
-                removeStandbyTasks();
-            }
-        }
-    };
+    final ConsumerRebalanceListener rebalanceListener;
 
     public synchronized boolean isInitialized() {
         return state == State.RUNNING;
@@ -323,7 +273,6 @@ public class StreamThread extends Thread {
         this.consumer = clientSupplier.getConsumer(consumerConfigs);
         log.info("{} Creating restore consumer client", logPrefix);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
-
         // initialize the task list
         // activeTasks needs to be concurrent as it can be accessed
         // by QueryableState
@@ -331,14 +280,14 @@ public class StreamThread extends Thread {
         this.standbyTasks = new HashMap<>();
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
-        this.prevTasks = new HashSet<>();
+        this.prevActiveTasks = new HashSet<>();
         this.suspendedTasks = new HashMap<>();
         this.suspendedStandbyTasks = new HashMap<>();
 
         // standby ktables
         this.standbyRecords = new HashMap<>();
 
-        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -347,7 +296,9 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
+        this.rebalanceListener = new RebalanceListener(time, config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
         setState(state.RUNNING);
+
     }
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
@@ -477,7 +428,9 @@ public class StreamThread extends Thread {
         firstException.compareAndSet(null, flushAllState());
         // only commit after all state has been flushed and there hasn't been an exception
         if (firstException.get() == null) {
-            firstException.set(commitOffsets());
+            // TODO: currently commit failures will not be thrown to users
+            // while suspending tasks; this need to be re-visit after KIP-98
+            commitOffsets();
         }
         // remove the changelog partitions from restore consumer
         firstException.compareAndSet(null, unAssignChangeLogPartitions());
@@ -626,7 +579,7 @@ public class StreamThread extends Thread {
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
-                    streamsMetrics.pollTimeSensor.record(computeLatency());
+                    streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 }
             }
 
@@ -642,7 +595,7 @@ public class StreamThread extends Thread {
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
-                        streamsMetrics.processTimeSensor.record(computeLatency());
+                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
 
                         maybePunctuate(task);
 
@@ -658,10 +611,10 @@ public class StreamThread extends Thread {
             } else {
                 requiresPoll = true;
             }
-            maybeCommit();
+            maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks();
 
-            maybeClean();
+            maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
     }
@@ -719,7 +672,7 @@ public class StreamThread extends Thread {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
-                streamsMetrics.punctuateTimeSensor.record(computeLatency());
+                streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
 
         } catch (KafkaException e) {
             log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
@@ -730,8 +683,7 @@ public class StreamThread extends Thread {
     /**
      * Commit all tasks owned by this thread if specified interval time has elapsed
      */
-    protected void maybeCommit() {
-        long now = time.milliseconds();
+    protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
             log.info("{} Committing all tasks because the commit interval {}ms has elapsed", logPrefix, commitTimeMs);
@@ -746,11 +698,10 @@ public class StreamThread extends Thread {
     /**
      * Cleanup any states of the tasks that have been removed from this thread
      */
-    protected void maybeClean() {
-        long now = time.milliseconds();
+    protected void maybeClean(final long now) {
 
         if (now > lastCleanMs + cleanTimeMs) {
-            stateDirectory.cleanRemovedTasks();
+            stateDirectory.cleanRemovedTasks(cleanTimeMs);
             lastCleanMs = now;
         }
     }
@@ -784,14 +735,14 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        streamsMetrics.commitTimeSensor.record(computeLatency());
+        streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
     }
 
     /**
      * Returns ids of tasks that were being executed before the rebalance.
      */
-    public Set<TaskId> prevTasks() {
-        return Collections.unmodifiableSet(prevTasks);
+    public Set<TaskId> prevActiveTasks() {
+        return Collections.unmodifiableSet(prevActiveTasks);
     }
 
     /**
@@ -831,8 +782,14 @@ public class StreamThread extends Thread {
 
         final ProcessorTopology topology = builder.build(id.topicGroupId);
         final RecordCollector recordCollector = new RecordCollectorImpl(producer, id.toString());
-        return new StreamTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
+        final long start = time.milliseconds();
+        try {
+            return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
+        } finally {
+            log.debug("{} creation of active task {} took {} ms", logPrefix, id, time.milliseconds() - start);
+        }
     }
+
 
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspendedTasks.containsKey(taskId)) {
@@ -945,7 +902,7 @@ public class StreamThread extends Thread {
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStores().isEmpty()) {
-            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, streamsMetrics, stateDirectory);
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
         } else {
             return null;
         }
@@ -1019,8 +976,8 @@ public class StreamThread extends Thread {
         log.info("{} Removing all active tasks [{}]", logPrefix, activeTasks.keySet());
 
         try {
-            prevTasks.clear();
-            prevTasks.addAll(activeTasks.keySet());
+            prevActiveTasks.clear();
+            prevActiveTasks.addAll(activeTasks.keySet());
 
             activeTasks.clear();
             activeTasksByPartition.clear();
@@ -1228,4 +1185,66 @@ public class StreamThread extends Thread {
         }
     }
 
+    private class RebalanceListener implements ConsumerRebalanceListener {
+        private final Time time;
+        private final int requestTimeOut;
+
+        RebalanceListener(final Time time, final int requestTimeOut) {
+            this.time = time;
+            this.requestTimeOut = requestTimeOut;
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+            final long start = time.milliseconds();
+            try {
+                if (state == State.PENDING_SHUTDOWN) {
+                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
+                        StreamThread.this.getName(), assignment);
+                }
+                log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
+                    StreamThread.this.getName(), assignment);
+                storeChangelogReader = new StoreChangelogReader(restoreConsumer, time, requestTimeOut);
+                setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
+                // do this first as we may have suspended standby tasks that
+                // will become active or vice versa
+                closeNonAssignedSuspendedStandbyTasks();
+                closeNonAssignedSuspendedTasks();
+                addStreamTasks(assignment);
+                storeChangelogReader.restore();
+                addStandbyTasks();
+                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
+                lastCleanMs = time.milliseconds(); // start the cleaning cycle
+                setStateWhenNotInPendingShutdown(State.RUNNING);
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            } finally {
+                log.debug("{} partition assignment took {} ms", logPrefix, time.milliseconds() - start);
+            }
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
+            try {
+                if (state == State.PENDING_SHUTDOWN) {
+                    log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
+                             StreamThread.this.getName(), assignment);
+                }
+                log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
+                         StreamThread.this.getName(), assignment);
+                setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
+                lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+                // suspend active tasks
+                suspendTasksAndState();
+            } catch (Throwable t) {
+                rebalanceException = t;
+                throw t;
+            } finally {
+                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
+                removeStreamTasks();
+                removeStandbyTasks();
+            }
+        }
+    }
 }

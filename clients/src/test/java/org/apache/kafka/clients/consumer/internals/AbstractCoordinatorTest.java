@@ -1,19 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
@@ -79,7 +79,7 @@ public class AbstractCoordinatorTest {
         Metrics metrics = new Metrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
-        metadata.update(cluster, mockTime.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), mockTime.milliseconds());
         this.node = cluster.nodes().get(0);
         mockClient.setNode(node);
 
@@ -467,20 +467,20 @@ public class AbstractCoordinatorTest {
     }
 
     private GroupCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new GroupCoordinatorResponse(error.code(), node);
+        return new GroupCoordinatorResponse(error, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {
-        return new HeartbeatResponse(error.code());
+        return new HeartbeatResponse(error);
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error.code(), generationId, "dummy-subprotocol", memberId, leaderId,
+        return new JoinGroupResponse(error, generationId, "dummy-subprotocol", memberId, leaderId,
                 Collections.<String, ByteBuffer>emptyMap());
     }
 
     private SyncGroupResponse syncGroupResponse(Errors error) {
-        return new SyncGroupResponse(error.code(), ByteBuffer.allocate(0));
+        return new SyncGroupResponse(error, ByteBuffer.allocate(0));
     }
 
     public class DummyCoordinator extends AbstractCoordinator {

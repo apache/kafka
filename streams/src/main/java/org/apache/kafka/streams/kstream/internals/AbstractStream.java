@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -37,7 +36,7 @@ public abstract class AbstractStream<K> {
     protected final String name;
     protected final Set<String> sourceNodes;
 
-    public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
+    AbstractStream(final KStreamBuilder topology, String name, final Set<String> sourceNodes) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
@@ -47,7 +46,7 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
-    protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
+    Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(other.sourceNodes);
@@ -57,7 +56,7 @@ public abstract class AbstractStream<K> {
         return allSourceNodes;
     }
 
-    public static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
+    static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override
             public R apply(T2 value2, T1 value1) {
@@ -67,27 +66,27 @@ public abstract class AbstractStream<K> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                  final Serde<T> aggValueSerde,
-                                                                  final String storeName) {
+    static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+                                                                   final Serde<T> aggValueSerde,
+                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
     @SuppressWarnings("unchecked")
-    public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                     final Serde<T> aggValSerde,
-                                                                                     final Windows<W> windows,
-                                                                                     final String storeName) {
+    static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+                                                                                   final Serde<T> aggValSerde,
+                                                                                   final Windows<W> windows,
+                                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValSerde, storeName)
                 .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
     }
-    @SuppressWarnings("unchecked")
-    public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                         final Serde<T> aggValueSerde,
-                                                                         final String storeName) {
+
+    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+                                                                       final Serde<T> aggValueSerde,
+                                                                       final String storeName) {
         return Stores.create(storeName)
                 .withKeys(keySerde)
                 .withValues(aggValueSerde)

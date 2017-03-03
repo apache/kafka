@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -46,19 +45,19 @@ import static org.junit.Assert.assertNull;
 public class CachingWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
+    private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10000L;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
     private ThreadCache cache;
     private String topic;
-    private static final long DEFAULT_TIMESTAMP = 10L;
-    private WindowStoreKeySchema keySchema;
+    private WindowKeySchema keySchema;
     private RocksDBWindowStore<Bytes, byte[]> windowStore;
 
     @Before
     public void setUp() throws Exception {
-        keySchema = new WindowStoreKeySchema();
+        keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
         windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
@@ -152,7 +151,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() throws Exception {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.INNER_SERDES)), "a".getBytes());
+        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.INNER_SERDES), "a".getBytes());
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());

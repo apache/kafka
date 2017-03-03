@@ -28,7 +28,9 @@ class FetchResponse(private val underlying: kafka.api.FetchResponse) {
 
   def hasError = underlying.hasError
 
-  def errorCode(topic: String, partition: Int) = underlying.errorCode(topic, partition)
+  def error(topic: String, partition: Int) = underlying.error(topic, partition)
+
+  def errorCode(topic: String, partition: Int) = error(topic, partition).code
 
   override def equals(other: Any) = canEqual(other) && {
     val otherFetchResponse = other.asInstanceOf[kafka.javaapi.FetchResponse]

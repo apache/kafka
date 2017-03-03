@@ -1,16 +1,19 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.ClientRequest;
@@ -47,7 +50,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,7 +98,7 @@ public class StreamsKafkaClient {
             streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG)
         );
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
+        metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
 
         final MetricConfig metricConfig = new MetricConfig().samples(streamsConfig.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(streamsConfig.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -137,7 +140,8 @@ public class StreamsKafkaClient {
     /**
      * Create a set of new topics using batch request.
      */
-    public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
+    public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor,
+                             final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
 
         final Map<String, CreateTopicsRequest.TopicDetails> topicRequestDetails = new HashMap<>();
         for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
@@ -155,7 +159,7 @@ public class StreamsKafkaClient {
         }
 
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
-            getBrokerId(),
+            getControllerReadyBrokerId(metadata),
             new CreateTopicsRequest.Builder(
                 topicRequestDetails,
                 streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG)),
@@ -180,15 +184,13 @@ public class StreamsKafkaClient {
         }
     }
 
-    private String getBrokerId() {
+    /**
+     *
+     * @param nodes List of nodes to pick from.
+     * @return The first node that is ready to accept requests.
+     */
+    private String ensureOneNodeIsReady(final List<Node> nodes) {
         String brokerId = null;
-        final Metadata metadata = new Metadata(
-            streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
-            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), Time.SYSTEM.milliseconds());
-
-        final List<Node> nodes = metadata.fetch().nodes();
         final long readyTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         boolean foundNode = false;
         while (!foundNode && (Time.SYSTEM.milliseconds() < readyTimeout)) {
@@ -205,6 +207,29 @@ public class StreamsKafkaClient {
             throw new StreamsException("Could not find any available broker.");
         }
         return brokerId;
+    }
+
+    /**
+     *
+     * @return if Id of the controller node, or an exception if no controller is found or
+     * controller is not ready
+     */
+    private String getControllerReadyBrokerId(final MetadataResponse metadata) {
+        return ensureOneNodeIsReady(Collections.singletonList(metadata.controller()));
+    }
+
+    /**
+     * @return the Id of any broker that is ready, or an exception if no broker is ready.
+     */
+    private String getAnyReadyBrokerId() {
+        final Metadata metadata = new Metadata(
+            streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), Time.SYSTEM.milliseconds());
+
+        final List<Node> nodes = metadata.fetch().nodes();
+        return ensureOneNodeIsReady(nodes);
     }
 
     private ClientResponse sendRequest(final ClientRequest clientRequest) {
@@ -234,10 +259,10 @@ public class StreamsKafkaClient {
     /**
      * Fetch the metadata for all topics
      */
-    public Collection<MetadataResponse.TopicMetadata> fetchTopicsMetadata() {
+    public MetadataResponse fetchMetadata() {
 
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
-            getBrokerId(),
+            getAnyReadyBrokerId(),
             new MetadataRequest.Builder(null),
             Time.SYSTEM.milliseconds(),
             true);
@@ -250,7 +275,7 @@ public class StreamsKafkaClient {
                 "Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
         }
         final MetadataResponse metadataResponse = (MetadataResponse) clientResponse.responseBody();
-        return metadataResponse.topicMetadata();
+        return metadataResponse;
     }
 
     /**
@@ -263,7 +288,7 @@ public class StreamsKafkaClient {
      */
     public void checkBrokerCompatibility() throws StreamsException {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
-            getBrokerId(),
+            getAnyReadyBrokerId(),
             new ApiVersionsRequest.Builder(),
             Time.SYSTEM.milliseconds(),
             true);

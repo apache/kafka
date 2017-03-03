@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,8 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -33,8 +32,7 @@ import java.util.Map;
 public class ListOffsetResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LIST_OFFSETS.id);
+
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
@@ -60,10 +58,8 @@ public class ListOffsetResponse extends AbstractResponse {
     private static final String TIMESTAMP_KEY_NAME = "timestamp";
     private static final String OFFSET_KEY_NAME = "offset";
 
-    private final Map<TopicPartition, PartitionData> responseData;
-
     public static final class PartitionData {
-        public final short errorCode;
+        public final Errors error;
         // The offsets list is only used in ListOffsetResponse v0.
         @Deprecated
         public final List<Long> offsets;
@@ -74,8 +70,8 @@ public class ListOffsetResponse extends AbstractResponse {
          * Constructor for ListOffsetResponse v0
          */
         @Deprecated
-        public PartitionData(short errorCode, List<Long> offsets) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, List<Long> offsets) {
+            this.error = error;
             this.offsets = offsets;
             this.timestamp = null;
             this.offset = null;
@@ -84,8 +80,8 @@ public class ListOffsetResponse extends AbstractResponse {
         /**
          * Constructor for ListOffsetResponse v1
          */
-        public PartitionData(short errorCode, long timestamp, long offset) {
-            this.errorCode = errorCode;
+        public PartitionData(Errors error, long timestamp, long offset) {
+            this.error = error;
             this.timestamp = timestamp;
             this.offset = offset;
             this.offsets = null;
@@ -95,7 +91,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData{").
-                append("errorCode: ").append((int) errorCode).
+                append("errorCode: ").append((int) error.code()).
                 append(", timestamp: ").append(timestamp).
                 append(", offset: ").append(offset).
                 append(", offsets: ");
@@ -109,28 +105,64 @@ public class ListOffsetResponse extends AbstractResponse {
         }
     }
 
+    private final Map<TopicPartition, PartitionData> responseData;
+
     /**
-     * Constructor for ListOffsetResponse v0.
+     * Constructor for all versions.
      */
-    @Deprecated
     public ListOffsetResponse(Map<TopicPartition, PartitionData> responseData) {
-        this(responseData, 0);
+        this.responseData = responseData;
     }
 
-    public ListOffsetResponse(Map<TopicPartition, PartitionData> responseData, int version) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.LIST_OFFSETS.id, version)));
+    public ListOffsetResponse(Struct struct) {
+        responseData = new HashMap<>();
+        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
+            Struct topicResponse = (Struct) topicResponseObj;
+            String topic = topicResponse.getString(TOPIC_KEY_NAME);
+            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+                Struct partitionResponse = (Struct) partitionResponseObj;
+                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
+                Errors error = Errors.forCode(partitionResponse.getShort(ERROR_CODE_KEY_NAME));
+                PartitionData partitionData;
+                if (partitionResponse.hasField(OFFSETS_KEY_NAME)) {
+                    Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
+                    List<Long> offsetsList = new ArrayList<Long>();
+                    for (Object offset : offsets)
+                        offsetsList.add((Long) offset);
+                    partitionData = new PartitionData(error, offsetsList);
+                } else {
+                    long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
+                    long offset = partitionResponse.getLong(OFFSET_KEY_NAME);
+                    partitionData = new PartitionData(error, timestamp, offset);
+                }
+                responseData.put(new TopicPartition(topic, partition), partitionData);
+            }
+        }
+    }
+
+    public Map<TopicPartition, PartitionData> responseData() {
+        return responseData;
+    }
+
+    public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
+        return new ListOffsetResponse(ApiKeys.LIST_OFFSETS.parseResponse(version, buffer));
+    }
+
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
 
-        List<Struct> topicArray = new ArrayList<Struct>();
+        List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData offsetPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(ERROR_CODE_KEY_NAME, offsetPartitionData.errorCode);
+                partitionData.set(ERROR_CODE_KEY_NAME, offsetPartitionData.error.code());
                 if (version == 0)
                     partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
                 else {
@@ -143,45 +175,7 @@ public class ListOffsetResponse extends AbstractResponse {
             topicArray.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
-        this.responseData = responseData;
-    }
 
-    public ListOffsetResponse(Struct struct) {
-        super(struct);
-        responseData = new HashMap<TopicPartition, PartitionData>();
-        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
-            Struct topicResponse = (Struct) topicResponseObj;
-            String topic = topicResponse.getString(TOPIC_KEY_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
-                Struct partitionResponse = (Struct) partitionResponseObj;
-                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
-                PartitionData partitionData;
-                if (partitionResponse.hasField(OFFSETS_KEY_NAME)) {
-                    Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
-                    List<Long> offsetsList = new ArrayList<Long>();
-                    for (Object offset : offsets)
-                        offsetsList.add((Long) offset);
-                    partitionData = new PartitionData(errorCode, offsetsList);
-                } else {
-                    long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
-                    long offset = partitionResponse.getLong(OFFSET_KEY_NAME);
-                    partitionData = new PartitionData(errorCode, timestamp, offset);
-                }
-                responseData.put(new TopicPartition(topic, partition), partitionData);
-            }
-        }
-    }
-
-    public Map<TopicPartition, PartitionData> responseData() {
-        return responseData;
-    }
-
-    public static ListOffsetResponse parse(ByteBuffer buffer) {
-        return new ListOffsetResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static ListOffsetResponse parse(ByteBuffer buffer, int version) {
-        return new ListOffsetResponse(ProtoUtils.responseSchema(ApiKeys.LIST_OFFSETS.id, version).read(buffer));
+        return struct;
     }
 }

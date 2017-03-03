@@ -20,7 +20,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.utils.{VerifiableProperties, Logging}
+import kafka.utils.{Exit, Logging, VerifiableProperties}
 
 object KafkaServerStartable {
   def fromProps(serverProps: Properties) = {
@@ -35,26 +35,22 @@ class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMe
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
   def startup() {
-    try {
-      server.startup()
-    }
+    try server.startup()
     catch {
-      case e: Throwable =>
-        fatal("Fatal error during KafkaServerStartable startup. Prepare to shutdown", e)
-        // KafkaServer already calls shutdown() internally, so this is purely for logging & the exit code
-        System.exit(1)
+      case _: Throwable =>
+        // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+        fatal("Exiting Kafka.")
+        Exit.exit(1)
     }
   }
 
   def shutdown() {
-    try {
-      server.shutdown()
-    }
+    try server.shutdown()
     catch {
-      case e: Throwable =>
-        fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
+      case _: Throwable =>
+        fatal("Halting Kafka.")
         // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
-        Runtime.getRuntime.halt(1)
+        Exit.halt(1)
     }
   }
 
@@ -66,8 +62,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMe
     server.brokerState.newState(newState)
   }
 
-  def awaitShutdown() = 
-    server.awaitShutdown
+  def awaitShutdown(): Unit = server.awaitShutdown()
 
 }
 

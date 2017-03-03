@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients;
 
@@ -20,7 +24,6 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -280,43 +283,46 @@ public class NetworkClient implements KafkaClient {
             if (!canSendRequest(nodeId))
                 throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
         }
-        AbstractRequest request = null;
         AbstractRequest.Builder<?> builder = clientRequest.requestBuilder();
         try {
             NodeApiVersions versionInfo = nodeApiVersions.get(nodeId);
+            short version;
             // Note: if versionInfo is null, we have no server version information. This would be
             // the case when sending the initial ApiVersionRequest which fetches the version
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
+                version = builder.desiredOrLatestVersion();
                 if (discoverBrokerVersions && log.isTraceEnabled())
                     log.trace("No version information found when sending message of type {} to node {}. " +
-                            "Assuming version {}.", clientRequest.apiKey(), nodeId, builder.version());
+                            "Assuming version {}.", clientRequest.apiKey(), nodeId, version);
             } else {
-                short version = versionInfo.usableVersion(clientRequest.apiKey());
-                builder.setVersion(version);
+                version = versionInfo.usableVersion(clientRequest.apiKey());
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
-            request = builder.build();
+            doSend(clientRequest, isInternalRequest, now, builder.build(version));
         } catch (UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
             log.debug("Version mismatch when attempting to send {} to {}",
                     clientRequest.toString(), clientRequest.destination(), e);
-            ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(),
+            ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.desiredOrLatestVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
                     false, e, null);
             abortedSends.add(clientResponse);
-            return;
         }
-        RequestHeader header = clientRequest.makeHeader();
+    }
+
+    private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now, AbstractRequest request) {
+        String nodeId = clientRequest.destination();
+        RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
-            int latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);
+            int latestClientVersion = clientRequest.apiKey().latestVersion();
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} to node {}.", request, nodeId);
+                log.trace("Sending {} {} to node {}.", clientRequest.apiKey(), request, nodeId);
             } else {
-                log.debug("Using older server API v{} to send {} to node {}.",
-                    header.apiVersion(), request, nodeId);
+                log.debug("Using older server API v{} to send {} {} to node {}.",
+                        header.apiVersion(), clientRequest.apiKey(), request, nodeId);
             }
         }
         Send send = request.toSend(nodeId, header);
@@ -327,6 +333,7 @@ public class NetworkClient implements KafkaClient {
                 clientRequest.callback(),
                 clientRequest.expectResponse(),
                 isInternalRequest,
+                request,
                 send,
                 now);
         this.inFlightRequests.add(inFlightRequest);
@@ -427,13 +434,22 @@ public class NetworkClient implements KafkaClient {
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
             if (currInflight == 0 && this.connectionStates.isReady(node.idString())) {
                 // if we find an established connection with no in-flight requests we can stop right away
+                log.trace("Found least loaded node {} connected with no in-flight requests", node);
                 return node;
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;
                 found = node;
+            } else if (log.isTraceEnabled()) {
+                log.trace("Removing node {} from least loaded node selection: is-blacked-out: {}, in-flight-requests: {}",
+                        node, this.connectionStates.isBlackedOut(node.idString(), now), currInflight);
             }
         }
+
+        if (found != null)
+            log.trace("Found least loaded node {}", found);
+        else
+            log.trace("Least loaded node selection failed to find an available node");
 
         return found;
     }
@@ -441,9 +457,8 @@ public class NetworkClient implements KafkaClient {
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
-        short apiKey = requestHeader.apiKey();
-        short apiVer = requestHeader.apiVersion();
-        Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer).read(responseBuffer);
+        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+        Struct responseBody = apiKey.responseSchema(requestHeader.apiVersion()).read(responseBuffer);
         correlate(requestHeader, responseHeader);
         return AbstractResponse.getResponse(apiKey, responseBody);
     }
@@ -460,7 +475,7 @@ public class NetworkClient implements KafkaClient {
         nodeApiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
-            log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
+            log.trace("Cancelled request {} due to node {} being disconnected", request.request, nodeId);
             if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
             else
@@ -535,9 +550,9 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.errorCode() != Errors.NONE.code()) {
+        if (apiVersionsResponse.error() != Errors.NONE) {
             log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
-                    node, Errors.forCode(apiVersionsResponse.errorCode()));
+                    node, apiVersionsResponse.error());
             this.selector.close(node);
             processDisconnection(responses, node, now);
             return;
@@ -700,7 +715,7 @@ public class NetworkClient implements KafkaClient {
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists
             if (cluster.nodes().size() > 0) {
-                this.metadata.update(cluster, now);
+                this.metadata.update(cluster, response.unavailableTopics(), now);
             } else {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
@@ -786,6 +801,7 @@ public class NetworkClient implements KafkaClient {
         final String destination;
         final RequestCompletionHandler callback;
         final boolean expectResponse;
+        final AbstractRequest request;
         final boolean isInternalRequest; // used to flag requests which are initiated internally by NetworkClient
         final Send send;
         final long sendTimeMs;
@@ -797,6 +813,7 @@ public class NetworkClient implements KafkaClient {
                                RequestCompletionHandler callback,
                                boolean expectResponse,
                                boolean isInternalRequest,
+                               AbstractRequest request,
                                Send send,
                                long sendTimeMs) {
             this.header = header;
@@ -804,6 +821,7 @@ public class NetworkClient implements KafkaClient {
             this.callback = callback;
             this.expectResponse = expectResponse;
             this.isInternalRequest = isInternalRequest;
+            this.request = request;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;

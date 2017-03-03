@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,7 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -43,7 +42,6 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -291,27 +289,17 @@ public class TestUtils {
     }
 
     /**
-     * Throw an exception if the two iterators are of differing lengths or contain
-     * different messages on their Nth element
-     */
-    public static <T> void checkEquals(Iterator<T> s1, Iterator<T> s2) {
-        while (s1.hasNext() && s2.hasNext())
-            assertEquals(s1.next(), s2.next());
-        assertFalse("Iterators have uneven length--first has more", s1.hasNext());
-        assertFalse("Iterators have uneven length--second has more", s2.hasNext());
-    }
-
-    /**
      * Checks the two iterables for equality by first converting both to a list.
      */
     public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
-        assertEquals(toList(it1.iterator()), toList(it2.iterator()));
+        assertEquals(toList(it1), toList(it2));
     }
 
-    public static <T> List<T> toList(Iterator<? extends T> iterator) {
-        List<T> res = new ArrayList<>();
-        while (iterator.hasNext())
-            res.add(iterator.next());
-        return res;
+    public static <T> List<T> toList(Iterable<? extends T> iterable) {
+        List<T> list = new ArrayList<>();
+        for (T item : iterable)
+            list.add(item);
+        return list;
     }
+
 }

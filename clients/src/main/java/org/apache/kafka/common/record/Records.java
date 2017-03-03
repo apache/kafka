@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -83,8 +83,9 @@ public interface Records {
      * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
+     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0
      * @return A Records (which may or may not be the same instance)
      */
-    Records toMessageFormat(byte toMagic);
+    Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType);
 
 }

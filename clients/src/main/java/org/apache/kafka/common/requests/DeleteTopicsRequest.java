@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -46,8 +45,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         }
 
         @Override
-        public DeleteTopicsRequest build() {
-            return new DeleteTopicsRequest(topics, timeout, version());
+        public DeleteTopicsRequest build(short version) {
+            return new DeleteTopicsRequest(topics, timeout, version);
         }
 
         @Override
@@ -62,17 +61,13 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     private DeleteTopicsRequest(Set<String> topics, Integer timeout, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.DELETE_TOPICS.id, version)), version);
-
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
-        struct.set(TIMEOUT_KEY_NAME, timeout);
-
+        super(version);
         this.topics = topics;
         this.timeout = timeout;
     }
 
     public DeleteTopicsRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         Object[] topicsArray = struct.getArray(TOPICS_KEY_NAME);
         Set<String> topics = new HashSet<>(topicsArray.length);
         for (Object topic : topicsArray)
@@ -80,6 +75,14 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
+    }
+
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ApiKeys.DELETE_TOPICS.requestSchema(version()));
+        struct.set(TOPICS_KEY_NAME, topics.toArray());
+        struct.set(TIMEOUT_KEY_NAME, timeout);
+        return struct;
     }
 
     @Override
@@ -93,7 +96,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
                 return new DeleteTopicsResponse(topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    version(), this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id)));
+                    version(), this.getClass().getSimpleName(), ApiKeys.DELETE_TOPICS.latestVersion()));
         }
     }
 
@@ -105,12 +108,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         return this.timeout;
     }
 
-    public static DeleteTopicsRequest parse(ByteBuffer buffer, int versionId) {
-        return new DeleteTopicsRequest(ProtoUtils.parseRequest(ApiKeys.DELETE_TOPICS.id, versionId, buffer),
-                (short) versionId);
+    public static DeleteTopicsRequest parse(ByteBuffer buffer, short version) {
+        return new DeleteTopicsRequest(ApiKeys.DELETE_TOPICS.parseRequest(version, buffer), version);
     }
 
-    public static DeleteTopicsRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.DELETE_TOPICS.id));
-    }
 }

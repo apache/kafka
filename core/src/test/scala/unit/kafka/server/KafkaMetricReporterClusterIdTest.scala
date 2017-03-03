@@ -28,6 +28,7 @@ import org.junit.{After, Before, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 object KafkaMetricReporterClusterIdTest {
+  val setupError = new AtomicReference[String]("")
 
   class MockKafkaMetricsReporter extends KafkaMetricsReporter with ClusterResourceListener {
 
@@ -52,8 +53,26 @@ object KafkaMetricReporterClusterIdTest {
     override def onUpdate(clusterMetadata: ClusterResource) {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
-  }
 
+    override def configure(configs: java.util.Map[String, _]): Unit = {
+      // Check that the configuration passed to the MetricsReporter includes the broker id as an Integer.
+      // This is a regression test for KAFKA-4756.
+      //
+      // Because this code is run during the test setUp phase, if we throw an exception here,
+      // it just results in the test itself being declared "not found" rather than failing.
+      // So we track an error message which we will check later in the test body.
+      val brokerId = configs.get(KafkaConfig.BrokerIdProp)
+      if (brokerId == null)
+        setupError.compareAndSet("", "No value was set for the broker id.")
+      else if (!brokerId.isInstanceOf[String])
+        setupError.compareAndSet("", "The value set for the broker id was not a string.")
+      try
+        Integer.parseInt(brokerId.asInstanceOf[String])
+      catch {
+        case e: Exception => setupError.compareAndSet("", "Error parsing broker id " + e.toString)
+      }
+    }
+  }
 }
 
 class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
@@ -66,6 +85,8 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
     props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
+    props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
     server = KafkaServerStartable.fromProps(props)
     server.startup()
@@ -73,6 +94,8 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testClusterIdPresent() {
+    assertEquals("", KafkaMetricReporterClusterIdTest.setupError.get())
+
     assertNotNull(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META)
     isValidClusterId(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId())
 

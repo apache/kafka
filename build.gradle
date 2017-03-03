@@ -32,7 +32,6 @@ buildscript {
 
 allprojects {
   apply plugin: 'idea'
-  apply plugin: 'eclipse'
   apply plugin: "jacoco"
 
   repositories {
@@ -110,16 +109,23 @@ if (new File('.git').exists()) {
         'gradlew.bat',
         '**/README.md',
         '**/id_rsa',
-        '**/id_rsa.pub'
+        '**/id_rsa.pub',
+        'checkstyle/suppressions.xml'
     ])
   }
 }
 
 subprojects {
   apply plugin: 'java'
+  // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
+  if (!project.name.equals('connect')) {
+    apply plugin: 'eclipse'
+    fineTuneEclipseClasspathFile(eclipse, project)
+  }
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
+  apply plugin: 'findbugs'
 
   sourceCompatibility = 1.7
 
@@ -177,21 +183,21 @@ subprojects {
   }
 
   jar {
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
   }
 
   task srcJar(type: Jar) {
     classifier = 'sources'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier 'javadoc'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from javadoc.destinationDir
   }
 
@@ -213,15 +219,15 @@ subprojects {
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
       classifier = 'test'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.output
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
       classifier = 'test-sources'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.allSource
     }
 
@@ -234,8 +240,8 @@ subprojects {
   plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from scaladoc.destinationDir
     }
 
@@ -268,8 +274,23 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+    // version 7.x requires Java 8
+    toolVersion = '6.19'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  findbugs {
+    toolVersion = "3.0.1"
+    excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+    ignoreFailures = true
+  }
+
+  tasks.withType(FindBugs) {
+    reports {
+      xml.enabled false
+      html.enabled true
+    }
+  }
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
@@ -284,6 +305,41 @@ subprojects {
         xml.enabled = true
         csv.enabled = false
       }
+    }
+  }
+
+  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+  task reportCoverage(dependsOn: [coverageGen])
+
+}
+
+def fineTuneEclipseClasspathFile(eclipse, project) {
+  eclipse.classpath.file {
+    beforeMerged { cp ->
+      cp.entries.clear()
+      // for the core project add the directories defined under test/scala as separate source directories
+      if (project.name.equals('core')) {
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/integration", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/other", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/unit", null))
+      }
+    }
+    whenMerged { cp ->
+      // for the core project exclude the separate sub-directories defined under test/scala. These are added as source dirs above
+      if (project.name.equals('core')) {
+        cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
+      }
+      /* 
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+       * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
+       * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
+       */
+      cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
+      /*
+       * Some projects have explicitly added test output dependencies. These are required for the gradle build but not required
+       * in Eclipse since the dependent projects are added as dependencies. So clean up these from the generated classpath.
+       */
+      cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
     }
   }
 }
@@ -312,7 +368,7 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
 for ( sv in ['2_10', '2_11', '2_12'] ) {
   String svInDot = sv.replaceAll( "_", ".")
@@ -511,7 +567,7 @@ project(':core') {
                                ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
-    from project.file("../docs")
+    from project.file("$rootDir/docs")
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -519,10 +575,10 @@ project(':core') {
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${versions.baseScala}-${version}"
     compression = Compression.GZIP
-    from(project.file("../bin")) { into "bin/" }
-    from(project.file("../config")) { into "config/" }
-    from '../LICENSE'
-    from '../NOTICE'
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
@@ -606,12 +662,12 @@ project(':clients') {
   task determineCommitId {
     ext.commitId = "unknown"
     def takeFromHash = 16
-    if (file("../.git/HEAD").exists()) {
-      def headRef = file("../.git/HEAD").text
+    if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("../.git/$headRef").exists()) {
-        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+        if (file("$rootDir/.git/$headRef").exists()) {
+        commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
         }
       } else {
         commitId = headRef.trim().take(takeFromHash)

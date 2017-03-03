@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -242,9 +242,9 @@ public final class Record {
     }
 
     /**
-     * The timestamp of the message.
-     * @return the timstamp type or {@link TimestampType#NO_TIMESTAMP_TYPE} if the magic is 0 or the message has
-     *   been up-converted.
+     * Get the timestamp type of the record.
+     *
+     * @return The timestamp type or {@link TimestampType#NO_TIMESTAMP_TYPE} if the magic is 0.
      */
     public TimestampType timestampType() {
         if (magic() == 0)
@@ -338,15 +338,25 @@ public final class Record {
      * Convert this record to another message format.
      *
      * @param toMagic The target magic version to convert to
+     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0, ignored if
+     *                               down-converting or if no conversion is needed
      * @return A new record instance with a freshly allocated ByteBuffer.
      */
-    public Record convert(byte toMagic) {
-        if (toMagic == magic())
+    public Record convert(byte toMagic, TimestampType upconvertTimestampType) {
+        byte magic = magic();
+        if (toMagic == magic)
             return this;
 
+        final TimestampType timestampType;
+        if (magic == Record.MAGIC_VALUE_V0) {
+            if (upconvertTimestampType == TimestampType.NO_TIMESTAMP_TYPE)
+                throw new IllegalArgumentException("Cannot up-convert using timestamp type " + upconvertTimestampType);
+            timestampType = upconvertTimestampType;
+        } else {
+            timestampType = timestampType();
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(convertedSize(toMagic));
-        TimestampType timestampType = wrapperRecordTimestampType != null ?
-                wrapperRecordTimestampType : TimestampType.forAttributes(attributes());
         convertTo(buffer, toMagic, timestamp(), timestampType);
         buffer.rewind();
         return new Record(buffer);
@@ -469,7 +479,7 @@ public final class Record {
                               CompressionType compressionType,
                               TimestampType timestampType) {
         try {
-            ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+            DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -511,7 +521,6 @@ public final class Record {
         write(out, magic, crc, attributes, timestamp, key, value);
         return crc;
     }
-
 
     /**
      * Write a record using raw fields (without validation). This should only be used in testing.

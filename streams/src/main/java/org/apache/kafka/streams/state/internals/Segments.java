@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,11 +35,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class Segments {
     static final long MIN_SEGMENT_INTERVAL = 60 * 1000L;
+
     private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
     private final String name;
     private final int numSegments;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
+
     private long currentSegmentId = -1L;
 
     Segments(final String name, final long retentionPeriod, final int numSegments) {
@@ -82,7 +84,6 @@ class Segments {
         }
     }
 
-
     void openExisting(final ProcessorContext context) {
         try {
             File dir = new File(context.stateDir(), name);
@@ -103,7 +104,7 @@ class Segments {
                 }
             } else {
                 if (!dir.mkdir()) {
-                    throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for store %s", dir, name));
+                    throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for segments %s", dir, name));
                 }
             }
         } catch (Exception ex) {

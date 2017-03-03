@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.tools;
-
-import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
@@ -39,6 +37,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -46,14 +45,16 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.concurrent.Future;
+
+import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 /**
  * ClientCompatibilityTest is invoked by the ducktape test client_compatibility_features_test.py to validate
@@ -127,10 +128,10 @@ public class ClientCompatibilityTest {
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
-                System.exit(0);
+                Exit.exit(0);
             } else {
                 parser.handleError(e);
-                System.exit(1);
+                Exit.exit(1);
             }
         }
         TestConfig testConfig = new TestConfig(res);
@@ -140,10 +141,10 @@ public class ClientCompatibilityTest {
         } catch (Throwable t) {
             System.out.printf("FAILED: Caught exception %s\n\n", t.getMessage());
             t.printStackTrace();
-            System.exit(1);
+            Exit.exit(1);
         }
         System.out.println("SUCCESS.");
-        System.exit(0);
+        Exit.exit(0);
     }
 
     private static String toHexString(byte[] buf) {
@@ -286,15 +287,15 @@ public class ClientCompatibilityTest {
         consumer.assign(topicPartitions);
         consumer.seekToBeginning(topicPartitions);
         final Iterator<byte[]> iter = new Iterator<byte[]>() {
-            private final int timeoutMs = 10000;
+            private static final int TIMEOUT_MS = 10000;
             private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
             private byte[] next = null;
 
             private byte[] fetchNext() {
                 while (true) {
                     long curTime = Time.SYSTEM.milliseconds();
-                    if (curTime - prodTimeMs > timeoutMs)
-                        throw new RuntimeException("Timed out after " + timeoutMs + " ms.");
+                    if (curTime - prodTimeMs > TIMEOUT_MS)
+                        throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                     if (recordIter == null) {
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
                         recordIter = records.iterator();
@@ -345,7 +346,7 @@ public class ClientCompatibilityTest {
             } catch (RuntimeException e) {
                 System.out.println("The second message in this topic was not ours. Please use a new " +
                     "topic when running this program.");
-                System.exit(1);
+                Exit.exit(1);
             }
         } catch (RecordTooLargeException e) {
             log.debug("Got RecordTooLargeException", e);

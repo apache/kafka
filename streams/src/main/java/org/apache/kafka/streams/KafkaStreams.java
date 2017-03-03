@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -143,30 +142,32 @@ public class KafkaStreams {
      * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
      * The expected state transition with the following defined states is:
      *
-     *                 +-----------+
-     *         +<------|Created    |
-     *         |       +-----+-----+
-     *         |             |   +--+
-     *         |             v   |  |
-     *         |       +-----+---v--+--+
-     *         +<----- | Rebalancing   |<--------+
-     *         |       +-----+---------+         ^
-     *         |                 +--+            |
-     *         |                 |  |            |
-     *         |       +-----+---v--+-----+      |
-     *         +------>|Running           |------+
-     *         |       +-----+------------+
+     * <pre>
+     *                 +--------------+
+     *         +<----- | Created      |
+     *         |       +-----+--------+
      *         |             |
      *         |             v
-     *         |     +-------+--------+
-     *         +---->|Pending         |
-     *               |Shutdown        |
-     *               +-------+--------+
+     *         |       +-----+--------+
+     *         +<----- | Rebalancing  | <----+
+     *         |       +--------------+      |
+     *         |                             |
+     *         |                             |
+     *         |       +--------------+      |
+     *         +-----> | Running      | ---->+
+     *         |       +-----+--------+
+     *         |             |
+     *         |             v
+     *         |       +-----+--------+
+     *         +-----> | Pending      |
+     *                 | Shutdown     |
+     *                 +-----+--------+
      *                       |
      *                       v
-     *                 +-----+-----+
-     *                 |Not Running|
-     *                 +-----------+
+     *                 +-----+--------+
+     *                 | Not Running  |
+     *                 +--------------+
+     * </pre>
      */
     public enum State {
         CREATED(1, 2, 3), RUNNING(2, 3), REBALANCING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;
@@ -339,7 +340,7 @@ public class KafkaStreams {
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
                                                         clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG)),
+                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
                                                         metrics,
                                                         time,
                                                         clientId);
@@ -559,8 +560,8 @@ public class KafkaStreams {
             localApplicationDir,
             appId);
 
-        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
-        stateDirectory.cleanRemovedTasks();
+        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir, Time.SYSTEM);
+        stateDirectory.cleanRemovedTasks(0);
     }
 
     /**
@@ -635,6 +636,8 @@ public class KafkaStreams {
      *   <li>this is a point in time view and it may change due to partition reassignment</li>
      *   <li>the key may not exist in the {@link StateStore}; this method provides a way of finding which host it
      *       <em>would</em> exist on</li>
+     *   <li>if this is for a window store the serializer should be the serializer for the record key,
+     *       not the window serializer</li>
      * </ul>
      *
      * @param storeName     the {@code storeName} to find metadata for

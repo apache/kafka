@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.api.PartitionStateInfo;
@@ -53,7 +52,6 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    public static final int UNLIMITED_MESSAGES = -1;
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
 
     /**
@@ -61,28 +59,17 @@ public class IntegrationTestUtils {
      *
      * @param topic          Kafka topic to read messages from
      * @param consumerConfig Kafka consumer configuration
+     * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    public static <V> List<V> readValues(final String topic, final Properties consumerConfig, final int maxMessages) {
+    public static <V> List<V> readValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final List<V> returnList = new ArrayList<>();
-        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
+        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, waitTime, maxMessages);
         for (final KeyValue<?, V> kv : kvs) {
             returnList.add(kv.value);
         }
         return returnList;
-    }
-
-    /**
-     * Returns as many messages as possible from the topic until a (currently hardcoded) timeout is
-     * reached.
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @return The KeyValue elements retrieved via the consumer.
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig) {
-        return readKeyValues(topic, consumerConfig, UNLIMITED_MESSAGES);
     }
 
     /**
@@ -91,17 +78,17 @@ public class IntegrationTestUtils {
      *
      * @param topic          Kafka topic to read messages from
      * @param consumerConfig Kafka consumer configuration
+     * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer
      * @return The KeyValue elements retrieved via the consumer
      */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final int maxMessages) {
+    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(consumerConfig);
         consumer.subscribe(Collections.singletonList(topic));
         final int pollIntervalMs = 100;
-        final int maxTotalPollTimeMs = 2000;
-        int totalPollTimeMs = 0;
         final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
-        while (totalPollTimeMs < maxTotalPollTimeMs && continueConsuming(consumedValues.size(), maxMessages)) {
+        int totalPollTimeMs = 0;
+        while (totalPollTimeMs < waitTime && continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
             for (final ConsumerRecord<K, V> record : records) {
@@ -208,7 +195,7 @@ public class IntegrationTestUtils {
         final TestCondition valuesRead = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig);
+                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
                 return accumData.size() >= expectedNumRecords;
             }
@@ -248,8 +235,9 @@ public class IntegrationTestUtils {
         final TestCondition valuesRead = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                final List<V> readData = readValues(topic, consumerConfig, expectedNumRecords);
+                final List<V> readData = readValues(topic, consumerConfig, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
+
                 return accumData.size() >= expectedNumRecords;
             }
         };

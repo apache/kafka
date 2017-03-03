@@ -97,13 +97,13 @@ case class OffsetFetchRequest(groupId: String,
     val responseMap =
       if (requestVersion < 2) {
         requestInfo.map {
-          topicAndPartition => (topicAndPartition, OffsetMetadataAndError(thrownError.code))
+          topicAndPartition => (topicAndPartition, OffsetMetadataAndError(thrownError))
         }.toMap
       } else {
         Map[kafka.common.TopicAndPartition, kafka.common.OffsetMetadataAndError]()
       }
 
-    val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId, errorCode=thrownError.code)
+    val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId, error=thrownError)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 

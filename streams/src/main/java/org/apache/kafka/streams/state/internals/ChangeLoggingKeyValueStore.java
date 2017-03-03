@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,11 +28,12 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<K, V> {
+class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
     private final ChangeLoggingKeyValueBytesStore innerBytes;
     private final Serde keySerde;
     private final Serde valueSerde;
     private StateSerdes<K, V> serdes;
+
 
     ChangeLoggingKeyValueStore(final KeyValueStore<Bytes, byte[]> bytesStore,
                                final Serde keySerde,
@@ -57,6 +58,11 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrapped
         this.serdes = new StateSerdes<>(innerBytes.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return innerBytes.approximateNumEntries();
     }
 
     @Override
@@ -106,17 +112,11 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractWrapped
     public KeyValueIterator<K, V> range(final K from, final K to) {
         return new SerializedKeyValueIterator<>(innerBytes.range(Bytes.wrap(serdes.rawKey(from)),
                                                                  Bytes.wrap(serdes.rawKey(to))),
-                                                serdes);
+                                                                 serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         return new SerializedKeyValueIterator<>(innerBytes.all(), serdes);
     }
-
-    @Override
-    public long approximateNumEntries() {
-        return innerBytes.approximateNumEntries();
-    }
-
 }

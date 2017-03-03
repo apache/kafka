@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.junit.Assert;
@@ -30,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class NodeApiVersionsTest {
 
@@ -48,6 +48,13 @@ public class NodeApiVersionsTest {
     }
 
     @Test
+    public void testUnknownApiVersionsToString() {
+        ApiVersion unknownApiVersion = new ApiVersion((short) 337, (short) 0, (short) 1);
+        NodeApiVersions versions = new NodeApiVersions(Collections.singleton(unknownApiVersion));
+        assertTrue(versions.toString().endsWith("UNKNOWN(337): 0 to 1)"));
+    }
+
+    @Test
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
@@ -56,8 +63,7 @@ public class NodeApiVersionsTest {
             } else if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
             } else {
-                versionList.add(new ApiVersion(apiKey.id,
-                        ProtoUtils.oldestVersion(apiKey.id), ProtoUtils.latestVersion(apiKey.id)));
+                versionList.add(new ApiVersion(apiKey));
             }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
@@ -72,15 +78,15 @@ public class NodeApiVersionsTest {
             } else {
                 bld.append(apiKey.name).append("(").
                         append(apiKey.id).append("): ");
-                if (ProtoUtils.oldestVersion(apiKey.id) ==
-                        ProtoUtils.latestVersion(apiKey.id)) {
-                    bld.append(ProtoUtils.oldestVersion(apiKey.id));
+                if (apiKey.oldestVersion() ==
+                        apiKey.latestVersion()) {
+                    bld.append(apiKey.oldestVersion());
                 } else {
-                    bld.append(ProtoUtils.oldestVersion(apiKey.id)).
+                    bld.append(apiKey.oldestVersion()).
                             append(" to ").
-                            append(ProtoUtils.latestVersion(apiKey.id));
+                            append(apiKey.latestVersion());
                 }
-                bld.append(" [usable: ").append(ProtoUtils.latestVersion(apiKey.id)).
+                bld.append(" [usable: ").append(apiKey.latestVersion()).
                         append("]");
             }
             prefix = ", ";
@@ -121,7 +127,7 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            assertEquals(ProtoUtils.latestVersion(apiKey.id), versions.usableVersion(apiKey));
+            assertEquals(apiKey.latestVersion(), versions.usableVersion(apiKey));
         }
     }
 }

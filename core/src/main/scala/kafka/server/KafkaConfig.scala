@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
@@ -105,7 +106,7 @@ object Defaults {
   // lazy val as `InterBrokerProtocolVersion` is defined later
   lazy val LogMessageFormatVersion = InterBrokerProtocolVersion
   val LogMessageTimestampType = "CreateTime"
-  val LogMessageTimestampDifferenceMaxMs = Long.MaxValue
+  val LogMessageTimestampDifferenceMaxMs = LogRetentionHours * 60 * 60 * 1000L
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
@@ -478,7 +479,9 @@ object KafkaConfig {
 
   val LogMessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
     "a message and the timestamp specified in the message. If log.message.timestamp.type=CreateTime, a message will be rejected " +
-    "if the difference in timestamp exceeds this threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
+    "if the difference in timestamp exceeds this threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime." +
+    "The maximum timestamp difference allowed should be no greater than log.retention.ms to avoid unnecessarily frequent log rolling. For " +
+    "this reason, the default is the value of log.retention.ms."
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
@@ -541,10 +544,7 @@ object KafkaConfig {
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit"
   val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache."
   val OffsetsTopicReplicationFactorDoc = "The replication factor for the offsets topic (set higher to ensure availability). " +
-  "To ensure that the effective replication factor of the offsets topic is the configured value, " +
-  "the number of alive brokers has to be at least the replication factor at the time of the " +
-  "first request for the offsets topic. If not, either the offsets topic creation will fail or " +
-  "it will get a replication factor of min(alive brokers, configured replication factor)"
+  "Internal topic creation will fail until the cluster size meets this replication factor requirement."
   val OffsetsTopicPartitionsDoc = "The number of partitions for the offset commit topic (should not change after deployment)"
   val OffsetsTopicSegmentBytesDoc = "The offsets topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
   val OffsetsTopicCompressionCodecDoc = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits"
@@ -692,7 +692,7 @@ object KafkaConfig {
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
       .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
-      .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
+      .define(LogMessageTimestampDifferenceMaxMsProp, LONG, null, MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
 
       /** ********* Replication configuration ***********/
@@ -824,6 +824,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
+
   val numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   val backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
   val queuedMaxRequests = getInt(KafkaConfig.QueuedMaxRequestsProp)
@@ -889,7 +890,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
   val logMessageFormatVersion = ApiVersion(logMessageFormatVersionString)
   val logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
-  val logMessageTimestampDifferenceMaxMs = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
+  val logMessageTimestampDifferenceMaxMs = getMessageTimestampDifferenceMaxMs
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
@@ -940,7 +941,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   /** ********* Metric Configuration **************/
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)
   val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
-  val metricReporterClasses: java.util.List[MetricsReporter] = getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter])
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
 
   /** ********* SSL Configuration **************/
@@ -998,6 +998,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
 
     if (millis < 0) return -1
     millis
+  }
+
+  private def getMessageTimestampDifferenceMaxMs: Long = {
+    Option(getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)) match {
+      case Some(value) => value
+      case None => getLogRetentionTimeMillis
+    }
   }
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {
