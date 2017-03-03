@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -35,13 +35,11 @@ public class ClientState {
         this(0);
     }
 
-    public ClientState(final int capacity) {
-        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
     ClientState(final int capacity) {
-        this(new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), new HashSet<T>(), capacity);
+        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
     }
 
-    private ClientState(Set<T> activeTasks, Set<T> standbyTasks, Set<T> assignedTasks, Set<T> prevActiveTasks, Set<T> prevAssignedTasks, int capacity) {
+    private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, int capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.assignedTasks = assignedTasks;
@@ -50,14 +48,12 @@ public class ClientState {
         this.capacity = capacity;
     }
 
-    public ClientState<T> copy() {
-        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
+    public ClientState copy() {
+        return new ClientState(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
                 new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
     }
 
     public void assign(final TaskId taskId, final boolean active) {
-        if (active) {
-    public void assign(final T taskId, final boolean active) {
         if (active) {
             activeTasks.add(taskId);
         } else {
@@ -67,11 +63,11 @@ public class ClientState {
         assignedTasks.add(taskId);
     }
 
-    public Set<T> activeTasks() {
+    public Set<TaskId> activeTasks() {
         return activeTasks;
     }
 
-    public Set<T> standbyTasks() {
+    public Set<TaskId> standbyTasks() {
         return standbyTasks;
     }
 
@@ -87,31 +83,31 @@ public class ClientState {
         return activeTasks.size();
     }
 
-    public void addPreviousActiveTasks(final Set<T> prevTasks) {
+    public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
     }
 
-    public void addPreviousStandbyTasks(final Set<T> standbyTasks) {
+    public void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
         prevAssignedTasks.addAll(standbyTasks);
     }
 
     @Override
     public String toString() {
         return "[activeTasks: (" + activeTasks +
-            ") standbyTasks: (" + standbyTasks +
-            ") assignedTasks: (" + assignedTasks +
-            ") prevActiveTasks: (" + prevActiveTasks +
-            ") prevAssignedTasks: (" + prevAssignedTasks +
-            ") capacity: " + capacity +
-            "]";
+                ") standbyTasks: (" + standbyTasks +
+                ") assignedTasks: (" + assignedTasks +
+                ") prevActiveTasks: (" + prevActiveTasks +
+                ") prevAssignedTasks: (" + prevAssignedTasks +
+                ") capacity: " + capacity +
+                "]";
     }
 
     boolean reachedCapacity() {
         return assignedTasks.size() >= capacity;
     }
 
-    boolean hasMoreAvailableCapacityThan(final ClientState<T> other) {
+    boolean hasMoreAvailableCapacityThan(final ClientState other) {
         if (this.capacity <= 0) {
             throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
         }
@@ -130,26 +126,26 @@ public class ClientState {
         return thisLoad < otherLoad;
     }
 
-    Set<T> previousStandbyTasks() {
-        final Set<T> standby = new HashSet<>(prevAssignedTasks);
+    Set<TaskId> previousStandbyTasks() {
+        final Set<TaskId> standby = new HashSet<>(prevAssignedTasks);
         standby.removeAll(prevActiveTasks);
         return standby;
     }
 
-    Set<T> previousActiveTasks() {
+    Set<TaskId> previousActiveTasks() {
         return prevActiveTasks;
     }
 
-    boolean hasAssignedTask(final T taskId) {
+    boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
     }
 
     // Visible for testing
-    Set<T> assignedTasks() {
+    Set<TaskId> assignedTasks() {
         return assignedTasks;
     }
 
-    Set<T> previousAssignedTasks() {
+    Set<TaskId> previousAssignedTasks() {
         return prevAssignedTasks;
     }
 
