@@ -139,6 +139,16 @@ public class KafkaLZ4Test {
             assertEquals(0, compressed[offset++]);
         }
 
+        // Check EndMark
+        // it should be all 0 at 4 bytes as data block as size of 0
+        if (this.close) {
+            offset = compressed.length - 4;
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+            assertEquals(compressed[offset++], 0);
+        }
+
         ByteArrayInputStream input = new ByteArrayInputStream(compressed);
         try {
             KafkaLZ4BlockInputStream decompressed = new KafkaLZ4BlockInputStream(input, this.ignoreFlagDescriptorChecksum);
