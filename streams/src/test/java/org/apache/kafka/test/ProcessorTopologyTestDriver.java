@@ -162,11 +162,8 @@ public class ProcessorTopologyTestDriver {
      * Create a new test driver instance.
      * @param config the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
-     * @param storeNames the optional names of the state stores that are used by the topology
-     *
-     * TODO: parameter storeNames can be removed now. It is not used.
      */
-    public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
+    public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder) {
         id = new TaskId(0, 0);
         topology = builder.setApplicationId(applicationId).build(null);
         globalTopology  = builder.buildGlobalStateTopology();
