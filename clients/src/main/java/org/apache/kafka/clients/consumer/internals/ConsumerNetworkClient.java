@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -610,7 +611,7 @@ public class ConsumerNetworkClient implements Closeable {
 
         public synchronized List<ClientRequest> remove(Node node) {
             List<ClientRequest> requests = unsent.remove(node);
-            return requests == null ? new ArrayList<ClientRequest>() : requests;
+            return requests == null ? Collections.<ClientRequest>emptyList() : requests;
         }
 
         public synchronized Set<Node> getNodes() {
