@@ -236,6 +236,17 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingForwardToSourceTopology() {
+        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology());
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key3", "value3");
+    }
+
+    @Test
     public void testDrivingInternalRepartitioningTopology() {
         driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology());
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -378,6 +389,13 @@ public class ProcessorTopologyTest {
                 .addSink("sink0", THROUGH_TOPIC_1, "processor")
                 .addSource("source1", THROUGH_TOPIC_1)
                 .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
+
+    private TopologyBuilder createForwardToSourceTopology() {
+        return builder.addSource("source-1", INPUT_TOPIC_1)
+                .addSink("sink-1", OUTPUT_TOPIC_1, "source-1")
+                .addSource("source-2", OUTPUT_TOPIC_1)
+                .addSink("sink-2", OUTPUT_TOPIC_2, "source-2");
     }
 
     private TopologyBuilder createSimpleMultiSourceTopology(int partition) {
