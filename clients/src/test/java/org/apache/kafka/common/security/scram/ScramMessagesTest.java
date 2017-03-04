@@ -252,7 +252,7 @@ public class ScramMessagesTest {
         checkServerFinalMessage(m, null, serverSignature);
 
         // Default format used by Kafka clients for final message with error
-        str = String.format("e=other-error", serverSignature);
+        str = "e=other-error";
         m = createScramMessage(ServerFinalMessage.class, str);
         checkServerFinalMessage(m, "other-error", null);
         m = new ServerFinalMessage(m.toBytes());

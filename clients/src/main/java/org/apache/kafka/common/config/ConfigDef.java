@@ -72,7 +72,10 @@ import java.util.Set;
  * functionality for accessing configs.
  */
 public class ConfigDef {
-
+    /**
+     * A unique Java object which represents the lack of a default value.<p>
+     * The 'new' here is intentional.
+     */
     public static final Object NO_DEFAULT_VALUE = new String("");
 
     private final Map<String, ConfigKey> configKeys;
@@ -816,7 +819,7 @@ public class ConfigDef {
 
         public void ensureValid(String name, Object o) {
             if (o == null)
-                throw new ConfigException(name, o, "Value must be non-null");
+                throw new ConfigException(name, null, "Value must be non-null");
             Number n = (Number) o;
             if (min != null && n.doubleValue() < min.doubleValue())
                 throw new ConfigException(name, o, "Value must be at least " + min);

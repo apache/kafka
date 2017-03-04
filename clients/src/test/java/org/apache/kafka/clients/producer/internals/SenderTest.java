@@ -151,7 +151,7 @@ public class SenderTest {
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
             String id = client.requests().peek().destination();
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
             client.disconnect(id);
@@ -210,7 +210,7 @@ public class SenderTest {
             sender.run(time.milliseconds()); // send produce request
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 

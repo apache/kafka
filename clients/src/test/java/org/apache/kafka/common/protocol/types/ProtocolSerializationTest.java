@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol.types;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
@@ -258,4 +259,15 @@ public class ProtocolSerializationTest {
         assertEquals("The object read back should be the same as what was written.", obj, result);
     }
 
+    @Test
+    public void testStructEquals() {
+        Schema schema = new Schema(new Field("field1", Type.NULLABLE_STRING), new Field("field2", Type.NULLABLE_STRING));
+        Struct emptyStruct1 = new Struct(schema);
+        Struct emptyStruct2 = new Struct(schema);
+        assertEquals(emptyStruct1, emptyStruct2);
+
+        Struct mostlyEmptyStruct = new Struct(schema).set("field1", "foo");
+        assertNotEquals(emptyStruct1, mostlyEmptyStruct);
+        assertNotEquals(mostlyEmptyStruct, emptyStruct1);
+    }
 }
