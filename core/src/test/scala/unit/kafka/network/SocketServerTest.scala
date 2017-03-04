@@ -181,13 +181,16 @@ class SocketServerTest extends JUnitSuite {
   def testSocketsCloseOnShutdown() {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    plainSocket.setTcpNoDelay(true)
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
+    traceSocket.setTcpNoDelay(true)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
     sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
-
+    // the following sleep is necessary to reliably detect the connection close when we send data below
+    Thread.sleep(200L)
     // make sure the sockets are open
     server.acceptors.values.map(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
