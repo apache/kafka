@@ -52,7 +52,7 @@ public class AbstractIteratorTest {
         iter.next();
     }
 
-    class ListIterator<T> extends AbstractIterator<T> {
+    static class ListIterator<T> extends AbstractIterator<T> {
         private List<T> list;
         private int position = 0;
 

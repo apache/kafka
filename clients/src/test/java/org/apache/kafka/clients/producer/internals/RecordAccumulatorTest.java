@@ -84,7 +84,7 @@ public class RecordAccumulatorTest {
     public void testFull() throws Exception {
         long now = time.milliseconds();
         int batchSize = 1024;
-        RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * batchSize, CompressionType.NONE, 10L, 100L, metrics, time);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 10L * batchSize, CompressionType.NONE, 10L, 100L, metrics, time);
         int appends = batchSize / msgSize;
         for (int i = 0; i < appends; i++) {
             // append to the first batch

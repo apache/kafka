@@ -103,16 +103,6 @@ public class Utils {
     }
 
     /**
-     * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
-     *
-     * @param buffer The buffer to read from
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer) {
-        return buffer.getInt() & 0xffffffffL;
-    }
-
-    /**
      * Read an unsigned integer from the given position without modifying the buffers position
      *
      * @param buffer the buffer to read from
@@ -130,26 +120,11 @@ public class Utils {
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8 * 0)
-             | (in.read() << 8 * 1)
-             | (in.read() << 8 * 2)
-             | (in.read() << 8 * 3);
+        return in.read()
+                | (in.read() << 8)
+                | (in.read() << 16)
+                | (in.read() << 24);
     }
-
-    /**
-     * Get the little-endian value of an integer as a byte array.
-     * @param val The value to convert to a little-endian array
-     * @return The little-endian encoded array of bytes for the value
-     */
-    public static byte[] toArrayLE(int val) {
-        return new byte[] {
-            (byte) (val >> 8 * 0),
-            (byte) (val >> 8 * 1),
-            (byte) (val >> 8 * 2),
-            (byte) (val >> 8 * 3)
-        };
-    }
-
 
     /**
      * Read an unsigned integer stored in little-endian format from a byte array
@@ -160,20 +135,10 @@ public class Utils {
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset++] << 8 * 0)
-             | (buffer[offset++] << 8 * 1)
-             | (buffer[offset++] << 8 * 2)
-             | (buffer[offset]   << 8 * 3);
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, long value) {
-        buffer.putInt((int) (value & 0xffffffffL));
+        return (buffer[offset] << 0 & 0xff)
+                | ((buffer[offset + 1] & 0xff) << 8)
+                | ((buffer[offset + 2] & 0xff) << 16)
+                | ((buffer[offset + 3] & 0xff) << 24);
     }
 
     /**
@@ -194,10 +159,10 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value >>> 8 * 0);
-        out.write(value >>> 8 * 1);
-        out.write(value >>> 8 * 2);
-        out.write(value >>> 8 * 3);
+        out.write(value);
+        out.write(value >>> 8);
+        out.write(value >>> 16);
+        out.write(value >>> 24);
     }
 
     /**
@@ -209,10 +174,10 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset++] = (byte) (value >>> 8 * 0);
-        buffer[offset++] = (byte) (value >>> 8 * 1);
-        buffer[offset++] = (byte) (value >>> 8 * 2);
-        buffer[offset]   = (byte) (value >>> 8 * 3);
+        buffer[offset] = (byte) value;
+        buffer[offset + 1] = (byte) (value >>> 8);
+        buffer[offset + 2] = (byte) (value >>> 16);
+        buffer[offset + 3]   = (byte) (value >>> 24);
     }
 
 

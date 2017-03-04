@@ -58,8 +58,8 @@ public class JaasContextTest {
     }
 
     @After
-    public void tearDown() {
-        jaasConfigFile.delete();
+    public void tearDown() throws Exception {
+        Files.delete(jaasConfigFile.toPath());
     }
 
     @Test
