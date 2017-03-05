@@ -142,10 +142,10 @@ public class ProcessorTopologyTestDriver {
 
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
 
-    private final String applicationId = "test-driver-application";
+    private final static String APPLICATION_ID = "test-driver-application";
+    private final static int PARTITION_ID = 0;
+    private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
 
-    private static final int partitionId = 0;
-    private static final TaskId taskId = new TaskId(0, partitionId);
     private final ProcessorTopology topology;
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
@@ -165,7 +165,7 @@ public class ProcessorTopologyTestDriver {
      * @param builder the topology builder that will be used to create the topology instance
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder) {
-        topology = builder.setApplicationId(applicationId).build(null);
+        topology = builder.setApplicationId(APPLICATION_ID).build(null);
         globalTopology  = builder.buildGlobalStateTopology();
 
         // Set up the consumer and producer ...
@@ -173,10 +173,10 @@ public class ProcessorTopologyTestDriver {
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(String topic) {
-                return Collections.singletonList(new PartitionInfo(topic, partitionId, null, null, null));
+                return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
-        restoreStateConsumer = createRestoreConsumer(taskId, topology.storeToChangelogTopic());
+        restoreStateConsumer = createRestoreConsumer(TASK_ID, topology.storeToChangelogTopic());
 
         // Identify internal topics for forwarding in process ...
         for (TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
@@ -185,14 +185,14 @@ public class ProcessorTopologyTestDriver {
 
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
-            TopicPartition tp = new TopicPartition(topic, partitionId);
+            TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
 
         consumer.assign(offsetsByTopicPartition.keySet());
 
-        final StateDirectory stateDirectory = new StateDirectory(applicationId, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
+        final StateDirectory stateDirectory = new StateDirectory(APPLICATION_ID, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final ThreadCache cache = new ThreadCache("mock", 1024 * 1024, streamsMetrics);
 
@@ -216,8 +216,8 @@ public class ProcessorTopologyTestDriver {
         }
 
         if (!partitionsByTopic.isEmpty()) {
-            task = new StreamTask(taskId,
-                                  applicationId,
+            task = new StreamTask(TASK_ID,
+                                  APPLICATION_ID,
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
@@ -419,9 +419,9 @@ public class ProcessorTopologyTestDriver {
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
             List<PartitionInfo> partitionInfos = new ArrayList<>();
-            partitionInfos.add(new PartitionInfo(topicName, partitionId, null, null, null));
+            partitionInfos.add(new PartitionInfo(topicName, PARTITION_ID, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
-            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, partitionId), 0L));
+            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
         }
         return consumer;
     }
