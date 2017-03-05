@@ -29,6 +29,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
   var servers: Seq[KafkaServer] = null
   val topicName = "my-topic"
+  val zkUpdateDelay =  new PostUpdateDelay(1000)
 
   @Before
   override def setUp() {
@@ -143,7 +144,6 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldExecuteThrottledReassignment() {
-    val zkUpdateDelay = 1000
 
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
@@ -171,7 +171,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Await completion
     waitForReassignmentToComplete()
-    val took = System.currentTimeMillis() - start - zkUpdateDelay
+    val took = System.currentTimeMillis() - start - zkUpdateDelay.delay
 
     //Check move occurred
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
@@ -336,5 +336,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def json(topic: String*): String = {
     val topicStr = topic.map { t => "{\"topic\": \"" + t + "\"}" }.mkString(",")
     s"""{"topics": [$topicStr],"version":1}"""
+  }
+
+  case class PostUpdateDelay(delay: Int) extends PostUpdateAction {
+    override def postUpdate() = {
+      Thread.sleep(delay)
+    }
   }
 }

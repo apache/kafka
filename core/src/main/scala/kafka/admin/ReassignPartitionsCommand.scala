@@ -24,14 +24,11 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.log.LogConfig
 import LogConfig._
-import kafka.admin.ReassignPartitionsCommand.Throttle
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 
 object ReassignPartitionsCommand extends Logging {
-
-  case class Throttle (value: Long, postUpdateDelay: Int = 0)
-  private[admin] val noThrottle = Throttle(-1, 0)
+  private[admin] val noThrottle = Throttle(-1)
 
   def main(args: Array[String]): Unit = {
 
@@ -317,8 +314,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
 
   private def maybeThrottle(throttle: Throttle): Unit = {
     if (throttle.value >= 0) {
-      maybeLimit(throttle)
       assignThrottledReplicas(existingAssignment(), proposedAssignment)
+      maybeLimit(throttle)
     }
   }
 
@@ -338,7 +335,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
         configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.value.toString)
         admin.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
-      Thread.sleep(throttle.postUpdateDelay)
+      throttle.action.postUpdate()
       println(s"The throttle limit was set to $throttle B/s")
     }
   }
