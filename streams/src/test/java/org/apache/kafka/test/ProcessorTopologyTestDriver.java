@@ -144,7 +144,8 @@ public class ProcessorTopologyTestDriver {
 
     private final String applicationId = "test-driver-application";
 
-    private final TaskId id;
+    private static final int partitionId = 0;
+    private static final TaskId taskId = new TaskId(0, partitionId);
     private final ProcessorTopology topology;
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
@@ -164,7 +165,6 @@ public class ProcessorTopologyTestDriver {
      * @param builder the topology builder that will be used to create the topology instance
      */
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder) {
-        id = new TaskId(0, 0);
         topology = builder.setApplicationId(applicationId).build(null);
         globalTopology  = builder.buildGlobalStateTopology();
 
@@ -173,10 +173,10 @@ public class ProcessorTopologyTestDriver {
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(String topic) {
-                return Collections.singletonList(new PartitionInfo(topic, 0, null, null, null));
+                return Collections.singletonList(new PartitionInfo(topic, partitionId, null, null, null));
             }
         };
-        restoreStateConsumer = createRestoreConsumer(id, topology.storeToChangelogTopic());
+        restoreStateConsumer = createRestoreConsumer(taskId, topology.storeToChangelogTopic());
 
         // Identify internal topics for forwarding in process ...
         for (TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
@@ -185,7 +185,7 @@ public class ProcessorTopologyTestDriver {
 
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
-            TopicPartition tp = new TopicPartition(topic, 0);
+            TopicPartition tp = new TopicPartition(topic, partitionId);
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
@@ -216,7 +216,7 @@ public class ProcessorTopologyTestDriver {
         }
 
         if (!partitionsByTopic.isEmpty()) {
-            task = new StreamTask(id,
+            task = new StreamTask(taskId,
                                   applicationId,
                                   partitionsByTopic.values(),
                                   topology,
@@ -419,9 +419,9 @@ public class ProcessorTopologyTestDriver {
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
             List<PartitionInfo> partitionInfos = new ArrayList<>();
-            partitionInfos.add(new PartitionInfo(topicName, id.partition, null, null, null));
+            partitionInfos.add(new PartitionInfo(topicName, partitionId, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
-            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, id.partition), 0L));
+            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, partitionId), 0L));
         }
         return consumer;
     }
