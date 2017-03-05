@@ -583,7 +583,7 @@ public class StreamThread extends Thread {
                 }
             }
 
-            // try to process one fetch record from each task via the topology, and also trigger punctuate
+            // try to process several records from each task via the topology, and also trigger punctuate
             // functions if necessary, which may result in more records going through the topology in this loop
             if (totalNumBuffered > 0 || polledRecords) {
                 totalNumBuffered = 0;
@@ -595,19 +595,18 @@ public class StreamThread extends Thread {
                         while (true) {
                             int numProcessed = task.process();
                             totalNumBuffered += numProcessed;
-
-                            requiresPoll = requiresPoll || task.requiresPoll();
-
-                            streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
-
-                            maybePunctuate(task);
-
-                            if (task.commitNeeded())
-                                commitOne(task);
-
                             if (numProcessed == 0)
                                 break;
                         }
+                        requiresPoll = requiresPoll || task.requiresPoll();
+
+                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
+
+                        maybePunctuate(task);
+
+                        if (task.commitNeeded())
+                            commitOne(task);
+
                     }
 
                 } else {
