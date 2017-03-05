@@ -337,7 +337,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link StateStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder, String...) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
@@ -353,7 +353,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link KeyValueStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder, String...) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
