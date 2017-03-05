@@ -155,7 +155,16 @@ final class ClusterConnectionStates {
     public ConnectionState connectionState(String id) {
         return nodeState(id).state;
     }
-    
+
+    /**
+     * Check if we have attempted to connect to this node.
+     * @param id node id
+     * @return true if we have attempted to connect to the node
+     */
+    public boolean connectionAttempted(String id) {
+        return this.nodeState.get(id) != null;
+    }
+
     /**
      * Get the state of a given node.
      * @param id the connection to fetch the state for
