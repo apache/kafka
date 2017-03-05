@@ -43,6 +43,8 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+//import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+//import org.apache.kafka.streams.processor.internals.StampedRecord;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
@@ -104,6 +106,7 @@ public class SimpleBenchmark {
     private static int processedRecords = 0;
     private static long processedBytes = 0;
     private static final int VALUE_SIZE = 100;
+    private static final long POLL_MS = 500L;
 
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
@@ -120,25 +123,25 @@ public class SimpleBenchmark {
         switch (testName) {
             case ALL_TESTS:
                 // producer performance
-                produce(SOURCE_TOPIC);
+                //produce(SOURCE_TOPIC);
                 // consumer performance
-                consume(SOURCE_TOPIC);
+                //consume(SOURCE_TOPIC);
                 // simple stream performance source->process
                 processStream(SOURCE_TOPIC);
                 // simple stream performance source->sink
-                processStreamWithSink(SOURCE_TOPIC);
+                //processStreamWithSink(SOURCE_TOPIC);
                 // simple stream performance source->store
-                processStreamWithStateStore(SOURCE_TOPIC);
+                //processStreamWithStateStore(SOURCE_TOPIC);
                 // simple stream performance source->cache->store
-                processStreamWithCachedStateStore(SOURCE_TOPIC);
+                //processStreamWithCachedStateStore(SOURCE_TOPIC);
                 // simple aggregation
-                count(COUNT_TOPIC);
+                //count(COUNT_TOPIC);
                 // simple streams performance KSTREAM-KTABLE join
-                kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
+                //kStreamKTableJoin(JOIN_TOPIC_1_PREFIX + "KStreamKTable", JOIN_TOPIC_2_PREFIX + "KStreamKTable");
                 // simple streams performance KSTREAM-KSTREAM join
-                kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
+                //kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
                 // simple streams performance KTABLE-KTABLE join
-                kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
+                //kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
                 break;
             case "produce":
                 produce(SOURCE_TOPIC);
@@ -177,10 +180,10 @@ public class SimpleBenchmark {
     }
 
     public static void main(String[] args) throws Exception {
-        String kafka = args.length > 0 ? args[0] : "localhost:9092";
+        String kafka = args.length > 0 ? args[0] : "localhost:9092"; //"ec2-54-194-190-111.eu-west-1.compute.amazonaws.com:9092";
         String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
-        numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
-        boolean loadPhase = args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
+        numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 40000000;
+        boolean loadPhase = false; //args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
         String testName = args.length > 4 ? args[4].toLowerCase(Locale.ROOT) : ALL_TESTS;
 
         final File stateDir = new File(stateDirStr);
@@ -202,25 +205,31 @@ public class SimpleBenchmark {
 
     private Properties setStreamProperties(final String applicationId) {
         Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + new Random().nextInt());
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1 * 1024 * 1024);
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1000);
+        props.put(StreamsConfig.POLL_MS_CONFIG, POLL_MS);
         return props;
     }
 
     private Properties setProduceConsumeProperties(final String clientId) {
         Properties props = new Properties();
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId + new Random().nextInt());
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        props.put(ProducerConfig.SEND_BUFFER_CONFIG, 1 * 1024 * 1024);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1 * 1024 * 1024);
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1000);
         return props;
     }
 
@@ -487,6 +496,7 @@ public class SimpleBenchmark {
             if (sequential) key++;
             else key = rand.nextInt(upperRange);
             processedRecords++;
+            //if (processedRecords % 100000 == 0) System.out.println("Produced #" + processedRecords);
             processedBytes += value.length + Integer.SIZE;
         }
         producer.close();
@@ -514,15 +524,17 @@ public class SimpleBenchmark {
         Integer key = null;
 
         long startTime = System.currentTimeMillis();
-
         while (true) {
-            ConsumerRecords<Integer, byte[]> records = consumer.poll(500);
+            ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+            //System.out.println("Got #records=" + records.count());
             if (records.isEmpty()) {
                 if (processedRecords == numRecords)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
+
                     processedRecords++;
+                    //if (processedRecords % 100000 == 0) System.out.println("Consumed #" + processedRecords);
                     processedBytes += record.value().length + Integer.SIZE;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
@@ -560,6 +572,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         processedRecords++;
+                        //if (processedRecords % 100000 == 0) System.out.println("Processed #" + processedRecords);
                         processedBytes += value.length + Integer.SIZE;
                         if (processedRecords == numRecords) {
                             latch.countDown();
@@ -627,6 +640,7 @@ public class SimpleBenchmark {
         @Override
         public void apply(Integer key, V value) {
             processedRecords++;
+
             if (value instanceof byte[]) {
                 processedBytes += ((byte[]) value).length + Integer.SIZE;
             } else if (value instanceof Long) {
