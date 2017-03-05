@@ -590,17 +590,24 @@ public class StreamThread extends Thread {
 
                 if (!activeTasks.isEmpty()) {
                     for (StreamTask task : activeTasks.values()) {
+                        // process this task's records to completion before
+                        // context switching to another task
+                        while (true) {
+                            int numProcessed = task.process();
+                            totalNumBuffered += numProcessed;
 
-                        totalNumBuffered += task.process();
+                            requiresPoll = requiresPoll || task.requiresPoll();
 
-                        requiresPoll = requiresPoll || task.requiresPoll();
+                            streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
 
-                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
+                            maybePunctuate(task);
 
-                        maybePunctuate(task);
+                            if (task.commitNeeded())
+                                commitOne(task);
 
-                        if (task.commitNeeded())
-                            commitOne(task);
+                            if (numProcessed == 0)
+                                break;
+                        }
                     }
 
                 } else {
