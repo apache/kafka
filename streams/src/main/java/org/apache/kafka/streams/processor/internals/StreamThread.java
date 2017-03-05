@@ -27,6 +27,8 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -196,6 +198,7 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StreamTask> suspendedTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
     private final Time time;
+    private final int rebalanceTimeoutMs;
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
@@ -240,7 +243,9 @@ public class StreamThread extends Thread {
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 setStateWhenNotInPendingShutdown(State.RUNNING);
             } catch (Throwable t) {
-                rebalanceException = t;
+                if(!(t instanceof CommitFailedException)) {
+                    rebalanceException = t;
+                }
                 throw t;
             }
         }
@@ -259,7 +264,9 @@ public class StreamThread extends Thread {
                 // suspend active tasks
                 suspendTasksAndState();
             } catch (Throwable t) {
-                rebalanceException = t;
+                if(!(t instanceof CommitFailedException)) {
+                    rebalanceException = t;
+                }
                 throw t;
             } finally {
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
@@ -340,6 +347,8 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        Object maxPollInterval = consumerConfigs.get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.rebalanceTimeoutMs =  maxPollInterval == null ? 300000 : (Integer) ConfigDef.parseType(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval, Type.INT);
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -1186,7 +1195,7 @@ public class StreamThread extends Thread {
                     }
                 }
 
-                if (tasksToBeCreated.isEmpty()) {
+                if (tasksToBeCreated.isEmpty() || backoffTimeMs > rebalanceTimeoutMs) {
                     break;
                 }
 
