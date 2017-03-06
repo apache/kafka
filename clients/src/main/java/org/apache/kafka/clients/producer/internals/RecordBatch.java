@@ -154,8 +154,8 @@ public final class RecordBatch {
     public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
             expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        else if (!this.inRetry() && requestTimeoutMs < (now - this.createdMs - lingerMs))
-            expiryErrorMessage = (now - this.createdMs - lingerMs) + " ms has passed since batch creation plus linger time";
+        else if (!this.inRetry() && requestTimeoutMs < (Math.max(0, now - this.createdMs) - lingerMs))
+            expiryErrorMessage = (Math.max(0, now - this.createdMs) - lingerMs) + " ms has passed since batch creation plus linger time";
         else if (this.inRetry() && requestTimeoutMs < (now - this.lastAttemptMs - retryBackoffMs))
             expiryErrorMessage = (now - this.lastAttemptMs - retryBackoffMs) + " ms has passed since last attempt plus backoff time";
 
