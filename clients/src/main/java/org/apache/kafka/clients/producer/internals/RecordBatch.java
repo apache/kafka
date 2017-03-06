@@ -47,12 +47,12 @@ public final class RecordBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
 
-    volatile int attempts;
+    private volatile int attempts;
     int recordCount;
     int maxRecordSize;
-    long drainedMs;
-    long lastAttemptMs;
-    long lastAppendTime;
+    private long lastAttemptMs;
+    private long lastAppendTime;
+    private long drainedMs;
     private String expiryErrorMessage;
     private AtomicBoolean completed;
     private boolean retry;
@@ -177,18 +177,34 @@ public final class RecordBatch {
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 
+    int attempts() {
+        return attempts;
+    }
+
+    void reenqueued(long now) {
+        attempts++;
+        lastAttemptMs = Math.max(lastAppendTime, now);
+        lastAppendTime = Math.max(lastAppendTime, now);
+        retry = true;
+    }
+
+    long queueTimeMs() {
+        return drainedMs - createdMs;
+    }
+
+    long waitedTimeMs(long nowMs) {
+        return Math.max(0, nowMs - lastAttemptMs);
+    }
+
+    void drained(long nowMs) {
+        this.drainedMs = Math.max(drainedMs, nowMs);
+    }
+
     /**
      * Returns if the batch is been retried for sending to kafka
      */
     private boolean inRetry() {
         return this.retry;
-    }
-
-    /**
-     * Set retry to true if the batch is being retried (for send)
-     */
-    public void setRetry() {
-        this.retry = true;
     }
 
     public MemoryRecords records() {

@@ -284,10 +284,7 @@ public final class RecordAccumulator {
      * Re-enqueue the given record batch in the accumulator to retry
      */
     public void reenqueue(RecordBatch batch, long now) {
-        batch.attempts++;
-        batch.lastAttemptMs = now;
-        batch.lastAppendTime = now;
-        batch.setRetry();
+        batch.reenqueued(now);
         Deque<RecordBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
@@ -334,16 +331,16 @@ public final class RecordAccumulator {
                 } else if (!readyNodes.contains(leader) && !muted.contains(part)) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {
-                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
-                        long waitedTimeMs = nowMs - batch.lastAttemptMs;
+                        long waitedTimeMs = batch.waitedTimeMs(nowMs);
+                        boolean backingOff = batch.attempts() > 0 && waitedTimeMs > retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
-                        long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                         boolean full = deque.size() > 1 || batch.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
                         } else {
+                            long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                             // Note that this results in a conservative estimate since an un-sendable partition may have
                             // a leader that will later be found to have sendable data. However, this is good enough
                             // since we'll just wake up and then sleep again for the remaining time.
@@ -405,7 +402,7 @@ public final class RecordAccumulator {
                         synchronized (deque) {
                             RecordBatch first = deque.peekFirst();
                             if (first != null) {
-                                boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
+                                boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) > retryBackoffMs;
                                 // Only drain the batch if it is not during backoff period.
                                 if (!backoff) {
                                     if (size + first.sizeInBytes() > maxSize && !ready.isEmpty()) {
@@ -418,7 +415,7 @@ public final class RecordAccumulator {
                                         batch.close();
                                         size += batch.sizeInBytes();
                                         ready.add(batch);
-                                        batch.drainedMs = now;
+                                        batch.drained(now);
                                     }
                                 }
                             }
