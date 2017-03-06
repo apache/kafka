@@ -31,7 +31,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
 import scala.collection.JavaConverters._
 
 /**
