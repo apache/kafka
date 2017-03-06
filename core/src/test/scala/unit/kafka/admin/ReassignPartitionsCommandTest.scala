@@ -18,6 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
+import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.log.LogConfig._

@@ -20,7 +20,8 @@ package other.kafka
 import java.io.{File, FileOutputStream, PrintWriter}
 import javax.imageio.ImageIO
 
-import kafka.admin.{ReassignPartitionsCommand, Throttle}
+import kafka.admin.ReassignPartitionsCommand
+import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}

@@ -17,17 +17,20 @@
 package kafka.admin
 
 import joptsimple.OptionParser
-import kafka.server.{DynamicConfig, ConfigType}
+import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils._
+
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.log.LogConfig
 import LogConfig._
+import kafka.admin.ReassignPartitionsCommand.Throttle
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 
 object ReassignPartitionsCommand extends Logging {
+  case class Throttle(value: Long, postUpdateAction: () => Unit = () => ())
   private[admin] val noThrottle = Throttle(-1)
 
   def main(args: Array[String]): Unit = {
@@ -335,7 +338,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
         configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.value.toString)
         admin.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
-      throttle.action.postUpdate()
+      throttle.postUpdateAction()
       println(s"The throttle limit was set to $throttle B/s")
     }
   }
