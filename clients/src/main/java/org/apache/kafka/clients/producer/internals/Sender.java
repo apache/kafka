@@ -300,7 +300,7 @@ public class Sender implements Runnable {
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                      correlationId,
                      batch.topicPartition,
-                     this.retries - batch.attempts - 1,
+                     this.retries - batch.attempts() - 1,
                      error);
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
@@ -332,7 +332,7 @@ public class Sender implements Runnable {
      * We can retry a send if the error is transient and the number of attempts taken is fewer than the maximum allowed
      */
     private boolean canRetry(RecordBatch batch, Errors error) {
-        return batch.attempts < this.retries && error.exception() instanceof RetriableException;
+        return batch.attempts() < this.retries && error.exception() instanceof RetriableException;
     }
 
     /**
@@ -519,7 +519,7 @@ public class Sender implements Runnable {
 
                     // global metrics
                     this.batchSizeSensor.record(batch.sizeInBytes(), now);
-                    this.queueTimeSensor.record(batch.drainedMs - batch.createdMs, now);
+                    this.queueTimeSensor.record(batch.queueTimeMs(), now);
                     this.compressionRateSensor.record(batch.compressionRate());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;

@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A batch of records that is or will be sent.
- * 
+ *
  * This class is not thread safe and external synchronization must be used when modifying it
  */
 public final class RecordBatch {
@@ -47,12 +47,12 @@ public final class RecordBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
 
-    volatile int attempts;
+    private volatile int attempts;
     int recordCount;
     int maxRecordSize;
-    long drainedMs;
-    long lastAttemptMs;
-    long lastAppendTime;
+    private long lastAttemptMs;
+    private long lastAppendTime;
+    private long drainedMs;
     private String expiryErrorMessage;
     private AtomicBoolean completed;
     private boolean retry;
@@ -69,7 +69,7 @@ public final class RecordBatch {
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
-     * 
+     *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
@@ -92,7 +92,7 @@ public final class RecordBatch {
 
     /**
      * Complete the request.
-     * 
+     *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param exception The exception that occurred (or null if the request was successful)
@@ -152,13 +152,12 @@ public final class RecordBatch {
      * {@link #expirationDone()} must be invoked to complete the produce future and invoke callbacks.
      */
     public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
-
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
             expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
-            expiryErrorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
-        else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
-            expiryErrorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
+        else if (!this.inRetry() && requestTimeoutMs < (createdTimeMs(now) - lingerMs))
+            expiryErrorMessage = (createdTimeMs(now) - lingerMs) + " ms has passed since batch creation plus linger time";
+        else if (this.inRetry() && requestTimeoutMs < (waitedTimeMs(now) - retryBackoffMs))
+            expiryErrorMessage = (waitedTimeMs(now) - retryBackoffMs) + " ms has passed since last attempt plus backoff time";
 
         boolean expired = expiryErrorMessage != null;
         if (expired)
@@ -178,18 +177,38 @@ public final class RecordBatch {
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 
+    int attempts() {
+        return attempts;
+    }
+
+    void reenqueued(long now) {
+        attempts++;
+        lastAttemptMs = Math.max(lastAppendTime, now);
+        lastAppendTime = Math.max(lastAppendTime, now);
+        retry = true;
+    }
+
+    long queueTimeMs() {
+        return drainedMs - createdMs;
+    }
+
+    long createdTimeMs(long nowMs) {
+        return Math.max(0, nowMs - createdMs);
+    }
+
+    long waitedTimeMs(long nowMs) {
+        return Math.max(0, nowMs - lastAttemptMs);
+    }
+
+    void drained(long nowMs) {
+        this.drainedMs = Math.max(drainedMs, nowMs);
+    }
+
     /**
      * Returns if the batch is been retried for sending to kafka
      */
     private boolean inRetry() {
         return this.retry;
-    }
-
-    /**
-     * Set retry to true if the batch is being retried (for send)
-     */
-    public void setRetry() {
-        this.retry = true;
     }
 
     public MemoryRecords records() {
