@@ -229,8 +229,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public boolean connectionFailed(Node node) {
-        return connectionStates.connectionAttempted(node.idString()) &&
-            connectionStates.connectionState(node.idString()).equals(ConnectionState.DISCONNECTED);
+        return connectionStates.isDisconnected(node.idString());
     }
 
     /**
