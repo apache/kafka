@@ -278,7 +278,7 @@ class ReplicaFetcherThread(name: String,
           partitionData.offset
         else
           partitionData.offsets.get(0)
-      case errorCode => throw errorCode.exception
+      case error => throw error.exception
     }
   }
 
