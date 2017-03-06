@@ -1243,9 +1243,7 @@ public class StreamThread extends Thread {
                 // suspend active tasks
                 suspendTasksAndState();
             } catch (Throwable t) {
-                if(!(t instanceof CommitFailedException)) {
-                    rebalanceException = t;
-                }
+                rebalanceException = t;
                 throw t;
             } finally {
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
