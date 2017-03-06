@@ -592,11 +592,9 @@ public class StreamThread extends Thread {
                     for (StreamTask task : activeTasks.values()) {
                         // process this task's records to completion before
                         // context switching to another task
-                        while (true) {
-                            int numProcessed = task.process();
+                        int numProcessed;
+                        while ((numProcessed = task.process()) != 0) {
                             totalNumBuffered += numProcessed;
-                            if (numProcessed == 0)
-                                break;
                         }
                         requiresPoll = requiresPoll || task.requiresPoll();
 
