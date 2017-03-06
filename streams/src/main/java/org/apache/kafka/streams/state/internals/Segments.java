@@ -41,7 +41,7 @@ class Segments {
     private final int numSegments;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
-
+    private long minSegmentId = Long.MAX_VALUE;
     private long currentSegmentId = -1L;
 
     Segments(final String name, final long retentionPeriod, final int numSegments) {
@@ -66,7 +66,7 @@ class Segments {
     }
 
     Segment getOrCreateSegment(final long segmentId, final ProcessorContext context) {
-        if (segmentId > currentSegmentId || segmentId > currentSegmentId - numSegments) {
+        if (segmentId > currentSegmentId - numSegments) {
             final long key = segmentId % numSegments;
             final Segment segment = segments.get(key);
             if (!isSegment(segment, segmentId)) {
@@ -77,6 +77,9 @@ class Segments {
                 newSegment.openDB(context);
                 segments.put(key, newSegment);
                 currentSegmentId = segmentId > currentSegmentId ? segmentId : currentSegmentId;
+                if (minSegmentId == Long.MAX_VALUE) {
+                    minSegmentId = currentSegmentId;
+                }
             }
             return segments.get(key);
         } else {
@@ -113,8 +116,8 @@ class Segments {
     }
 
     List<Segment> segments(final long timeFrom, final long timeTo) {
-        final long segFrom = segmentId(Math.max(0L, timeFrom));
-        final long segTo = segmentId(Math.min(currentSegmentId * segmentInterval, Math.max(0, timeTo)));
+        final long segFrom = Math.max(minSegmentId, segmentId(Math.max(0L, timeFrom)));
+        final long segTo = Math.min(currentSegmentId, segmentId(Math.min(currentSegmentId * segmentInterval, Math.max(0, timeTo))));
 
         final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
@@ -166,6 +169,9 @@ class Segments {
                 segment.close();
                 segment.destroy();
             }
+        }
+        if (oldestSegmentId > minSegmentId) {
+            minSegmentId = oldestSegmentId + 1;
         }
     }
 
