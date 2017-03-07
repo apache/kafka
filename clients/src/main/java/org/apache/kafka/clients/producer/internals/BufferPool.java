@@ -55,7 +55,7 @@ public class BufferPool {
 
     /**
      * Create a new buffer pool
-     * 
+     *
      * @param memory The maximum amount of memory that this buffer pool can allocate
      * @param poolableSize The buffer size to cache in the free list rather than deallocating
      * @param metrics instance of Metrics
@@ -81,7 +81,7 @@ public class BufferPool {
     /**
      * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool
      * is configured with blocking mode.
-     * 
+     *
      * @param size The buffer size to allocate in bytes
      * @param maxTimeToBlockMs The maximum time in milliseconds to block for buffer memory to be available
      * @return The buffer
@@ -122,24 +122,7 @@ public class BufferPool {
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
                 while (accumulated < size) {
-                    long startWaitNs = time.nanoseconds();
-                    long timeNs;
-                    boolean waitingTimeElapsed;
-                    try {
-                        waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
-                    } catch (InterruptedException e) {
-                        this.waiters.remove(moreMemory);
-                        throw e;
-                    } finally {
-                        long endWaitNs = time.nanoseconds();
-                        timeNs = Math.max(0L, endWaitNs - startWaitNs);
-                        this.waitTime.record(timeNs, time.milliseconds());
-                    }
-
-                    if (waitingTimeElapsed) {
-                        this.waiters.remove(moreMemory);
-                        throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
-                    }
+                    long timeNs = waitForMoreMemory(maxTimeToBlockMs, moreMemory, remainingTimeToBlockNs);
 
                     remainingTimeToBlockNs -= timeNs;
                     // check if we can satisfy this request from the free list,
@@ -184,6 +167,46 @@ public class BufferPool {
         }
     }
 
+    /**
+     * Wait for remainingTimeToBlockNs for more memory to be available.  On a throwable this removes the
+     * condition variable, moreMemory, from this.waiters.
+     *
+     * @param maxTimeToBlockMs This is used for error reporting only.
+     * @param moreMemory The blocking condition variable used to coordinate with threads that are freeing memory.
+     * @param remainingTimeToBlockNs The maximum amount of time to wait for the condition variable to be notified.
+     * @return the amount of time remaining
+     * @throws InterruptedException Waiting on the condition variable may produce this exception.
+     * @throws TimeoutException If the thread waits remainingTimeToBlock or longer.
+     */
+    private long waitForMoreMemory(long maxTimeToBlockMs, Condition moreMemory, long remainingTimeToBlockNs)
+        throws InterruptedException {
+        long startWaitNs = time.nanoseconds();
+        long timeNs;
+        boolean waitingTimeElapsed = false;
+        boolean success = false;
+        try {
+            waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
+            success = true;
+        } finally {
+            long endWaitNs = time.nanoseconds();
+            timeNs = Math.max(0L, endWaitNs - startWaitNs);
+            boolean recordSuccess = false;
+            try {
+                this.waitTime.record(timeNs, time.milliseconds());
+                recordSuccess = true;
+            } finally {
+                if (!success || !recordSuccess || waitingTimeElapsed)
+                    this.waiters.remove(moreMemory);
+            }
+        }
+
+        if (waitingTimeElapsed) {
+            throw new TimeoutException("Failed to allocate memory within the configured max blocking time "
+              + maxTimeToBlockMs + " ms.");
+        }
+        return timeNs;
+    }
+
     // Protected for testing.
     protected ByteBuffer allocateByteBuffer(int size) {
         return ByteBuffer.allocate(size);
@@ -201,7 +224,7 @@ public class BufferPool {
     /**
      * Return buffers to the pool. If they are of the poolable size add them to the free list, otherwise just mark the
      * memory as free.
-     * 
+     *
      * @param buffer The buffer to return
      * @param size The size of the buffer to mark as deallocated, note that this may be smaller than buffer.capacity
      *             since the buffer may re-allocate itself during in-place compression
