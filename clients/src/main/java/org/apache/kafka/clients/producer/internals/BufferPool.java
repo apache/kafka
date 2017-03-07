@@ -43,6 +43,8 @@ import org.apache.kafka.common.utils.Time;
  */
 public class BufferPool {
 
+    static final String BUFFERPOOL_WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
+
     private final long totalMemory;
     private final int poolableSize;
     private final ReentrantLock lock;
@@ -71,7 +73,7 @@ public class BufferPool {
         this.availableMemory = memory;
         this.metrics = metrics;
         this.time = time;
-        this.waitTime = this.metrics.sensor("bufferpool-wait-time");
+        this.waitTime = this.metrics.sensor(BUFFERPOOL_WAIT_TIME_SENSOR_NAME);
         MetricName metricName = metrics.metricName("bufferpool-wait-ratio",
                                                    metricGrpName,
                                                    "The fraction of time an appender waits for space allocation.");
