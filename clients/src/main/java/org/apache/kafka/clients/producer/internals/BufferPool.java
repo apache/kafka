@@ -173,7 +173,7 @@ public class BufferPool {
      * Wait for remainingTimeToBlockNs for more memory to be available.  On a throwable this removes the
      * condition variable, moreMemory, from this.waiters.
      *
-     * @param maxTimeToBlockMs This is used for error reporting only.
+     * @param maxTimeToBlockMs Used for error reporting only.
      * @param moreMemory The blocking condition variable used to coordinate with threads that are freeing memory.
      * @param remainingTimeToBlockNs The maximum amount of time to wait for the condition variable to be notified.
      * @return the amount of time remaining
@@ -185,10 +185,10 @@ public class BufferPool {
         long startWaitNs = time.nanoseconds();
         long timeNs;
         boolean waitingTimeElapsed = false;
-        boolean success = false;
+        boolean awaitSuccess = false;
         try {
             waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
-            success = true;
+            awaitSuccess = true;
         } finally {
             long endWaitNs = time.nanoseconds();
             timeNs = Math.max(0L, endWaitNs - startWaitNs);
@@ -197,7 +197,7 @@ public class BufferPool {
                 this.waitTime.record(timeNs, time.milliseconds());
                 recordSuccess = true;
             } finally {
-                if (!success || !recordSuccess || waitingTimeElapsed)
+                if (!awaitSuccess || !recordSuccess || waitingTimeElapsed)
                     this.waiters.remove(moreMemory);
             }
         }

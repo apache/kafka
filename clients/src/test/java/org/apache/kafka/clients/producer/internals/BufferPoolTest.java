@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
 
@@ -41,7 +40,15 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import static org.easymock.EasyMock.*;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyDouble;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.anyString;
+
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
