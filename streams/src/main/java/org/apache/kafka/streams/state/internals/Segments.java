@@ -41,8 +41,8 @@ class Segments {
     private final int numSegments;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
-
-    private long currentSegmentId = -1L;
+    private long minSegmentId = Long.MAX_VALUE;
+    private long maxSegmentId = -1L;
 
     Segments(final String name, final long retentionPeriod, final int numSegments) {
         this.name = name;
@@ -66,7 +66,7 @@ class Segments {
     }
 
     Segment getOrCreateSegment(final long segmentId, final ProcessorContext context) {
-        if (segmentId > currentSegmentId || segmentId > currentSegmentId - numSegments) {
+        if (segmentId > maxSegmentId - numSegments) {
             final long key = segmentId % numSegments;
             final Segment segment = segments.get(key);
             if (!isSegment(segment, segmentId)) {
@@ -76,7 +76,10 @@ class Segments {
                 Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
                 newSegment.openDB(context);
                 segments.put(key, newSegment);
-                currentSegmentId = segmentId > currentSegmentId ? segmentId : currentSegmentId;
+                maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
+                if (minSegmentId == Long.MAX_VALUE) {
+                    minSegmentId = maxSegmentId;
+                }
             }
             return segments.get(key);
         } else {
@@ -113,8 +116,8 @@ class Segments {
     }
 
     List<Segment> segments(final long timeFrom, final long timeTo) {
-        final long segFrom = segmentId(Math.max(0L, timeFrom));
-        final long segTo = segmentId(Math.min(currentSegmentId * segmentInterval, Math.max(0, timeTo)));
+        final long segFrom = Math.max(minSegmentId, segmentId(Math.max(0L, timeFrom)));
+        final long segTo = Math.min(maxSegmentId, segmentId(Math.min(maxSegmentId * segmentInterval, Math.max(0, timeTo))));
 
         final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
@@ -155,9 +158,9 @@ class Segments {
     }
 
     private void cleanup(final long segmentId) {
-        final long oldestSegmentId = currentSegmentId < segmentId
+        final long oldestSegmentId = maxSegmentId < segmentId
                 ? segmentId - numSegments
-                : currentSegmentId - numSegments;
+                : maxSegmentId - numSegments;
 
         for (Map.Entry<Long, Segment> segmentEntry : segments.entrySet()) {
             final Segment segment = segmentEntry.getValue();
@@ -166,6 +169,9 @@ class Segments {
                 segment.close();
                 segment.destroy();
             }
+        }
+        if (oldestSegmentId > minSegmentId) {
+            minSegmentId = oldestSegmentId + 1;
         }
     }
 
