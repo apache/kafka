@@ -231,8 +231,16 @@ public class StreamsConfig extends AbstractConfig {
             .define(ZOOKEEPER_CONNECT_CONFIG,
                     Type.STRING,
                     "",
+                    null,
                     Importance.HIGH,
-                    ZOOKEEPER_CONNECT_DOC)
+                    ZOOKEEPER_CONNECT_DOC,
+                    null,
+                    -1,
+                    ConfigDef.Width.NONE,
+                    ZOOKEEPER_CONNECT_CONFIG,
+                    Collections.<String>emptyList(),
+                    null,
+                    true)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     "/tmp/kafka-streams",

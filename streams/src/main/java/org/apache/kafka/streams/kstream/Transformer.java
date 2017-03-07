@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * each record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object, Object)} (cf. {@link KeyValueMapper} for stateless record transformation).
  * Additionally, the interface can be called in regular intervals based on the processing progress
- * (cf. {@link #punctuate(long)}.
+ * (cf. {@link #punctuate(long)}).
  * <p>
  * Use {@link TransformerSupplier} to provide new instances of {@code Transformer} to Kafka Stream's runtime.
  * <p>
