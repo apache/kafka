@@ -219,8 +219,7 @@ class LogCleaner(val config: CleanerConfig,
     override def doWork() {
       cleanOrSleep()
     }
-    
-    
+
     override def shutdown() = {
     	 initiateShutdown()
     	 backOffWaitLatch.countDown()
@@ -402,7 +401,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicPartition, old, cleaned, map, retainDeletes, log.config.maxMessageSize, stats)
+        cleanInto(log.topicPartition, old, cleaned, map, retainDeletes, log.config.maxMessageSize, log.activePids, stats)
       }
 
       // trim excess index
@@ -449,9 +448,15 @@ private[log] class Cleaner(val id: Int,
                              map: OffsetMap,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
+                             activePids: Map[Long, PidEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      def shouldRetain(record: Record): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats)
+      def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = {
+        // retain the entry if it is the last one produced by an active idempotent producer to ensure that
+        // the PID is not removed from the log before it has been expired
+        val isLastEntryForPid = recordBatch.pid != RecordBatch.NO_PID && activePids.get(recordBatch.pid).exists(_.offset == record.offset)
+        record.isControlRecord || isLastEntryForPid || shouldRetainMessage(source, map, retainDeletes, record, stats)
+      }
     }
 
     var position = 0

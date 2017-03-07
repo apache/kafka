@@ -147,7 +147,7 @@ public class MemoryRecords extends AbstractRecords {
 
                 messagesRead += 1;
 
-                if (filter.shouldRetain(record)) {
+                if (filter.shouldRetain(batch, record)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
@@ -245,7 +245,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public interface RecordFilter {
-        boolean shouldRetain(Record record);
+        boolean shouldRetain(RecordBatch recordBatch, Record record);
     }
 
     public static class FilterResult {
@@ -338,13 +338,26 @@ public class MemoryRecords extends AbstractRecords {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME, records);
     }
 
+    public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, Long pid,
+                                            short epoch, int baseSequence, KafkaRecord ... records) {
+        return withRecords(LogEntry.CURRENT_MAGIC_VALUE, initialOffset, compressionType, pid, epoch, baseSequence,
+                records);
+    }
+
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             TimestampType timestampType, SimpleRecord... records) {
+        return withRecords(magic, initialOffset, compressionType, LogEntry.NO_PID, LogEntry.NO_EPOCH,
+                LogEntry.NO_SEQUENCE, records);
+    }
+
+    private static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                             long pid, short epoch, int baseSequence, SimpleRecord ... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
-        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset);
+        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, TimestampType.CREATE_TIME, initialOffset,
+                System.currentTimeMillis(), pid, epoch, baseSequence);
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();

@@ -385,6 +385,12 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private[log] def activePids: Map[Long, PidEntry] = {
+    lock synchronized {
+      pidMap.activePids
+    }
+  }
+
   /**
    * Check if we have the "clean shutdown" file
    */
