@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.nio.ByteBuffer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -24,9 +23,11 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 import static org.junit.Assert.assertFalse;
 
-public class RecordBatchTest {
+public class ProducerBatchTest {
 
     private final long now = 1488748346917L;
 
@@ -34,25 +35,25 @@ public class RecordBatchTest {
             Record.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME, 0L, Record.NO_TIMESTAMP, 0);
 
     /**
-     * A RecordBatch configured using a very large linger value and a timestamp preceding its create
+     * A {@link ProducerBatch} configured using a very large linger value and a timestamp preceding its create
      * time is interpreted correctly as not expired when the linger time is larger than the difference
-     * between now and create time by RecordBatch#maybeExpire.
+     * between now and create time by {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)}.
      */
     @Test
     public void testLargeLingerOldNowExpire() {
-        RecordBatch batch = new RecordBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set `now` to 2ms before the create time.
         assertFalse(batch.maybeExpire(10240, 100L, now - 2L, Long.MAX_VALUE, false));
     }
 
     /**
-     * A RecordBatch configured using a very large retryBackoff value with retry = true and a timestamp preceding its
-     * create time is interpreted correctly as not expired when the retryBackoff time is larger than the difference
-     * between now and create time by RecordBatch#maybeExpire.
+     * A {@link ProducerBatch} configured using a very large retryBackoff value with retry = true and a timestamp
+     * preceding its create time is interpreted correctly as not expired when the retryBackoff time is larger than the
+     * difference between now and create time by {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)}.
      */
     @Test
     public void testLargeRetryBackoffOldNowExpire() {
-        RecordBatch batch = new RecordBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set batch.retry = true
         batch.reenqueued(now);
         // Set `now` to 2ms before the create time.
@@ -60,12 +61,12 @@ public class RecordBatchTest {
     }
 
     /**
-     * A RecordBatch#maybeExpire call with a now value before the create time of the RecordBatch is correctly recognized
-     * as not expired when invoked with parameter isFull = true.
+     * A {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)} call with a now value before the create
+     * time of the ProducerBatch is correctly recognized as not expired when invoked with parameter isFull = true.
      */
     @Test
     public void testLargeFullOldNowExpire() {
-        RecordBatch batch = new RecordBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set `now` to 2ms before the create time.
         assertFalse(batch.maybeExpire(10240, 10240L, now - 2L, 10240L, true));
     }

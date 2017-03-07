@@ -36,9 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * This class is not thread safe and external synchronization must be used when modifying it
  */
-public final class RecordBatch {
+public final class ProducerBatch {
 
-    private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
+    private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
     final long createdMs;
     final TopicPartition topicPartition;
@@ -57,7 +57,7 @@ public final class RecordBatch {
     private AtomicBoolean completed;
     private boolean retry;
 
-    public RecordBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
         this.lastAttemptMs = now;
         this.recordsBuilder = recordsBuilder;
@@ -139,7 +139,7 @@ public final class RecordBatch {
 
     @Override
     public String toString() {
-        return "RecordBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
+        return "ProducerBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
     }
 
     /**
