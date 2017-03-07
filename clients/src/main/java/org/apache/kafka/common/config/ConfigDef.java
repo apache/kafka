@@ -1018,6 +1018,9 @@ public class ConfigDef {
     public String toRst() {
         StringBuilder b = new StringBuilder();
         for (ConfigKey key : sortedConfigs()) {
+            if (key.deprecated) {
+                continue;
+            }
             getConfigKeyRst(key, b);
             b.append("\n");
         }
@@ -1033,6 +1036,9 @@ public class ConfigDef {
 
         String lastKeyGroupName = "";
         for (ConfigKey key : sortedConfigs()) {
+            if (key.deprecated) {
+                continue;
+            }
             if (key.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(key.group)) {
                     b.append(key.group).append("\n");
