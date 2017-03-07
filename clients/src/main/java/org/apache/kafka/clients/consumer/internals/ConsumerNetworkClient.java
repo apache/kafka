@@ -395,8 +395,6 @@ public class ConsumerNetworkClient implements Closeable {
 
         for (Node node : unsent.nodes()) {
             Iterator<ClientRequest> iterator = unsent.requestIterator(node);
-            if (iterator == null)
-                continue;
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
                 if (client.ready(node, now)) {
