@@ -35,13 +35,12 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.errors.InterruptException;
@@ -356,7 +355,7 @@ public class ConsumerNetworkClient implements Closeable {
             if (client.connectionFailed(node)) {
                 // Remove entry before invoking request callback to avoid callbacks handling
                 // coordinator failures traversing the unsent list again.
-                ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
+                Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
@@ -369,7 +368,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        ConcurrentLinkedQueue<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
+        List<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
         for (ClientRequest request : expiredRequests) {
             RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
             handler.onFailure(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
@@ -379,7 +378,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
         synchronized (this) {
-            ConcurrentLinkedQueue<ClientRequest> unsentRequests = unsent.remove(node);
+            Collection<ClientRequest> unsentRequests = unsent.remove(node);
             for (ClientRequest unsentRequest : unsentRequests) {
                 RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                 handler.onFailure(e);
@@ -572,8 +571,8 @@ public class ConsumerNetworkClient implements Closeable {
             return false;
         }
 
-        public synchronized ConcurrentLinkedQueue<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
-            ConcurrentLinkedQueue<ClientRequest> expiredRequests = new ConcurrentLinkedQueue<>();
+        public synchronized List<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+            List<ClientRequest> expiredRequests = new ArrayList<>();
             Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
             while (iterator.hasNext()) {
                 ConcurrentLinkedQueue<ClientRequest> requests = iterator.next();
@@ -592,9 +591,9 @@ public class ConsumerNetworkClient implements Closeable {
             return expiredRequests;
         }
 
-        public synchronized ConcurrentLinkedQueue<ClientRequest> remove(Node node) {
+        public synchronized Collection<ClientRequest> remove(Node node) {
             ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
-            return requests == null ? new ConcurrentLinkedQueue<ClientRequest>() : requests;
+            return requests == null ? Collections.<ClientRequest>emptyList() : requests;
         }
 
         public synchronized Iterator<ClientRequest> requestIterator(Node node) {
