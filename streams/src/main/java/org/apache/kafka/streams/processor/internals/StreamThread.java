@@ -527,12 +527,10 @@ public class StreamThread extends Thread {
             if (requiresPoll) {
                 requiresPoll = false;
 
-                boolean longPoll = totalNumBuffered == 0;
-
                 ConsumerRecords<byte[], byte[]> records = null;
 
                 try {
-                    records = consumer.poll(longPoll ? this.pollTimeMs : 0);
+                    records = consumer.poll(this.pollTimeMs);
                 } catch (NoOffsetForPartitionException ex) {
                     TopicPartition partition = ex.partition();
                     if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
@@ -577,34 +575,37 @@ public class StreamThread extends Thread {
                     polledRecords = false;
                 }
 
-                // only record poll latency is long poll is required
-                if (longPoll) {
-                    streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
-                }
+                streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
             }
 
             // try to process several records from each task via the topology, and also trigger punctuate
             // functions if necessary, which may result in more records going through the topology in this loop
-            if (totalNumBuffered > 0 || polledRecords) {
-                totalNumBuffered = 0;
-
+            if (polledRecords) {
                 if (!activeTasks.isEmpty()) {
-                    for (StreamTask task : activeTasks.values()) {
-                        // process this task's records to completion before
-                        // context switching to another task
-                        int numProcessed;
-                        while ((numProcessed = task.process()) != 0) {
-                            totalNumBuffered += numProcessed;
+                    long totalProcessedEachRound = Long.MAX_VALUE;
+                    long totalProcessed = 0;
+                    // Round-robin scheduling by taking one record from each task repeatedly
+                    // until no task has any records left
+                    while (totalProcessedEachRound != 0) {
+                        totalProcessedEachRound = 0;
+                        for (StreamTask task : activeTasks.values()) {
+                            int numBuffered = task.process();
+                            // we processed one record,
+                            // and more are buffered waiting for the next round
+                            if (numBuffered > 0) {
+                                totalProcessedEachRound++;
+                                totalProcessed++;
+                            }
                         }
+                    }
+                    // go over the tasks again to punctuate or commit
+                    for (StreamTask task : activeTasks.values()) {
                         requiresPoll = requiresPoll || task.requiresPoll();
-
-                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
-
+                        streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
+                            timerStartedMs);
                         maybePunctuate(task);
-
                         if (task.commitNeeded())
                             commitOne(task);
-
                     }
 
                 } else {
