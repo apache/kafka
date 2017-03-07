@@ -54,7 +54,7 @@ public class InitPidRequest extends AbstractRequest {
         }
     }
 
-    private InitPidRequest(Struct struct, short version) {
+    public InitPidRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
         this.transactionTimeoutMs = struct.getInt(TRANSACTION_TIMEOUT_KEY_NAME);

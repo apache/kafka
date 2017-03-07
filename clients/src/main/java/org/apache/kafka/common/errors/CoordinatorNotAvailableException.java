@@ -17,26 +17,27 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for any coordinator request if it is still loading the metadata (after a leader change
- * for that offsets topic partition) for this group.
+ * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
+ * not yet been created.
  */
-public class GroupLoadInProgressException extends RetriableException {
+public class CoordinatorNotAvailableException extends RetriableException {
+    public static final CoordinatorNotAvailableException INSTANCE = new CoordinatorNotAvailableException();
 
     private static final long serialVersionUID = 1L;
 
-    public GroupLoadInProgressException() {
+    public CoordinatorNotAvailableException() {
         super();
     }
 
-    public GroupLoadInProgressException(String message) {
+    public CoordinatorNotAvailableException(String message) {
         super(message);
     }
 
-    public GroupLoadInProgressException(String message, Throwable cause) {
+    public CoordinatorNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public GroupLoadInProgressException(Throwable cause) {
+    public CoordinatorNotAvailableException(Throwable cause) {
         super(cause);
     }
 

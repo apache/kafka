@@ -61,8 +61,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new OffsetCommitResponse(struct);
             case OFFSET_FETCH:
                 return new OffsetFetchResponse(struct);
-            case GROUP_COORDINATOR:
-                return new GroupCoordinatorResponse(struct);
+            case FIND_COORDINATOR:
+                return new FindCoordinatorResponse(struct);
             case JOIN_GROUP:
                 return new JoinGroupResponse(struct);
             case HEARTBEAT:

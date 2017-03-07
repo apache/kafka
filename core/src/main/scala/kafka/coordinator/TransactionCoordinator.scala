@@ -44,7 +44,6 @@ object TransactionCoordinator {
 class TransactionCoordinator(val brokerId: Int,
                              val pidManager: ProducerIdManager,
                              val logManager: TransactionLogManager) extends Logging {
-
   this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
   type InitPidCallback = InitPidResult => Unit
@@ -54,6 +53,8 @@ class TransactionCoordinator(val brokerId: Int,
 
   /* TransactionalId to pid metadata map cache */
   private val pidMetadataCache = new Pool[String, PidMetadata]
+
+  def partitionFor(transactionalId: String): Int = logManager.partitionFor(transactionalId)
 
   def handleInitPid(transactionalId: String,
                     transactionTimeoutMs: Int,
@@ -65,7 +66,7 @@ class TransactionCoordinator(val brokerId: Int,
       responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
     } else if (!logManager.isCoordinatorFor(transactionalId)) {
       // check if it is the assigned coordinator for the transactional id
-      responseCallback(initPidError(Errors.NOT_COORDINATOR_FOR_GROUP))
+      responseCallback(initPidError(Errors.NOT_COORDINATOR))
     } else {
       // only try to get a new pid and update the cache if the transactional id is unknown
       getPidMetadata(transactionalId) match {

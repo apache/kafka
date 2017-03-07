@@ -370,8 +370,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                       (error != Errors.NONE && error != Errors.OFFSET_METADATA_TOO_LARGE),
 
                     folded._3 || // update shouldRefreshCoordinator
-                      error == Errors.NOT_COORDINATOR_FOR_GROUP ||
-                      error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE,
+                      error == Errors.NOT_COORDINATOR ||
+                      error == Errors.COORDINATOR_NOT_AVAILABLE,
 
                     // update error count
                     folded._4 + (if (error != Errors.NONE) 1 else 0))
@@ -444,8 +444,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
             val (leaderChanged, loadInProgress) =
               offsetFetchResponse.requestInfo.values.foldLeft(false, false) { case (folded, offsetMetadataAndError) =>
-                (folded._1 || (offsetMetadataAndError.error == Errors.NOT_COORDINATOR_FOR_GROUP),
-                 folded._2 || (offsetMetadataAndError.error == Errors.GROUP_LOAD_IN_PROGRESS))
+                (folded._1 || (offsetMetadataAndError.error == Errors.NOT_COORDINATOR),
+                 folded._2 || (offsetMetadataAndError.error == Errors.COORDINATOR_LOAD_IN_PROGRESS))
               }
 
             if (leaderChanged) {

@@ -26,8 +26,8 @@ import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.GroupLoadInProgressException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.CoordinatorLoadingInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
@@ -49,7 +49,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
@@ -107,12 +107,12 @@ public enum Errors {
             new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13,
             new NetworkException("The server disconnected before a response was received.")),
-    GROUP_LOAD_IN_PROGRESS(14,
-            new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
-    GROUP_COORDINATOR_NOT_AVAILABLE(15,
-            new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
-    NOT_COORDINATOR_FOR_GROUP(16,
-            new NotCoordinatorForGroupException("This is not the correct coordinator for this group.")),
+    COORDINATOR_LOAD_IN_PROGRESS(14,
+            new CoordinatorLoadingInProgressException("The coordinator is loading and hence can't process requests for this group.")),
+    COORDINATOR_NOT_AVAILABLE(15,
+            new CoordinatorNotAvailableException("The coordinator is not available.")),
+    NOT_COORDINATOR(16,
+            new NotCoordinatorException("This is not the correct coordinator.")),
     INVALID_TOPIC_EXCEPTION(17,
             new InvalidTopicException("The request attempted to perform an operation on an invalid topic.")),
     RECORD_LIST_TOO_LARGE(18,
@@ -168,11 +168,15 @@ public enum Errors {
         new InvalidRequestException("This most likely occurs because of a request being malformed by the client library or" +
             " the message was sent to an incompatible broker. See the broker logs for more details.")),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
-        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
-    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy.")),
-    OUT_OF_ORDER_SEQUENCE_NUMBER(45, new OutOfOrderSequenceException("The broker received an out of order sequence number")),
-    DUPLICATE_SEQUENCE_NUMBER(46, new DuplicateSequenceNumberException("The broker received a duplicate sequence number")),
-    PRODUCER_FENCED(47, new ProducerFencedException("Producer attempted an operation with an old epoch"));
+            new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
+    POLICY_VIOLATION(44,
+            new PolicyViolationException("Request parameters do not satisfy the configured policy.")),
+    INVALID_SEQUENCE_NUMBER(45,
+            new InvalidSequenceNumberException("The broker received an out of order sequence number")),
+    DUPLICATE_SEQUENCE_NUMBER(46,
+            new DuplicateSequenceNumberException("The broker received a duplicate sequence number")),
+    PRODUCER_FENCED(47,
+            new ProducerFencedException("Producer attempted an operation with an old epoch"));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
