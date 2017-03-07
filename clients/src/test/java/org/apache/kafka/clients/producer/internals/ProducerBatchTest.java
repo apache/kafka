@@ -62,7 +62,7 @@ public class ProducerBatchTest {
 
     /**
      * A {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)} call with a now value before the create
-     * time of the RecordBatch is correctly recognized as not expired when invoked with parameter isFull = true.
+     * time of the ProducerBatch is correctly recognized as not expired when invoked with parameter isFull = true.
      */
     @Test
     public void testLargeFullOldNowExpire() {

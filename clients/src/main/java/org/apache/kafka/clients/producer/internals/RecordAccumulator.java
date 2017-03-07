@@ -74,7 +74,7 @@ public final class RecordAccumulator {
     private final BufferPool free;
     private final Time time;
     private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
-    private final IncompleteRecordBatches incomplete;
+    private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
     private int drainIndex;
@@ -111,7 +111,7 @@ public final class RecordAccumulator {
         this.batches = new CopyOnWriteMap<>();
         String metricGrpName = "producer-metrics";
         this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
-        this.incomplete = new IncompleteRecordBatches();
+        this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
         registerMetrics(metrics, metricGrpName);
@@ -577,13 +577,13 @@ public final class RecordAccumulator {
     }
 
     /*
-     * A threadsafe helper class to hold RecordBatches that haven't been ack'd yet
+     * A threadsafe helper class to hold batches that haven't been ack'd yet
      */
-    private final static class IncompleteRecordBatches {
+    private final static class IncompleteBatches {
         private final Set<ProducerBatch> incomplete;
 
-        public IncompleteRecordBatches() {
-            this.incomplete = new HashSet<ProducerBatch>();
+        public IncompleteBatches() {
+            this.incomplete = new HashSet<>();
         }
 
         public void add(ProducerBatch batch) {
