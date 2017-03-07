@@ -1,4 +1,4 @@
-@echo off
+
 rem Licensed to the Apache Software Foundation (ASF) under one or more
 rem contributor license agreements.  See the NOTICE file distributed with
 rem this work for additional information regarding copyright ownership.
@@ -34,5 +34,5 @@ IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
         set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
     )
 )
-%~dp0kafka-run-class.bat kafka.Kafka %*
+"%~dp0kafka-run-class.bat" kafka.Kafka %*
 EndLocal

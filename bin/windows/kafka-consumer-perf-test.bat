@@ -14,7 +14,11 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
+REM ***
+REM This is a modified version of script that works correctly with paths containing spaces.
+REM ***
+
 SetLocal
 set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
-%~dp0kafka-run-class.bat kafka.tools.ConsumerPerformance %*
+"%~dp0kafka-run-class.bat" kafka.tools.ConsumerPerformance %*
 EndLocal
