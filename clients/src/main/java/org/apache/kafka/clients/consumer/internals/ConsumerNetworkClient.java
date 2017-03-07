@@ -598,7 +598,7 @@ public class ConsumerNetworkClient implements Closeable {
 
         public synchronized Iterator<ClientRequest> requestIterator(Node node) {
             ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
-            return requests == null ? null : requests.iterator();
+            return requests == null ? Collections.<ClientRequest>emptyIterator() : requests.iterator();
         }
 
         public synchronized List<Node> nodes() {
