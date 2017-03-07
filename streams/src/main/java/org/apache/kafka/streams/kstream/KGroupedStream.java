@@ -289,7 +289,16 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, String)} can be used to compute aggregate functions like sum, min, or max.
@@ -337,7 +346,16 @@ public interface KGroupedStream<K, V> {
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
@@ -385,7 +403,16 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Windows, String)} can be used to compute aggregate functions like sum, min, or max.
@@ -441,7 +468,16 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Windows, StateStoreSupplier)} can be used to compute aggregate functions like sum,
@@ -491,7 +527,16 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, SessionWindows, String)} can be used to compute aggregate functions like sum, min,
@@ -543,7 +588,16 @@ public interface KGroupedStream<K, V> {
      * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
-     * aggregate and the record's value.
+     * aggregate (first argument) and the record's value (second argument):
+     * <pre>{@code
+     * // At the example of a Reducer<Long>
+     * new Reducer<Long>() {
+     *   @Override
+     *   public Long apply(Long aggValue, Long currValue) {
+     *     return aggValue + currValue;
+     *   }
+     * }</pre>
+     * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, SessionWindows, StateStoreSupplier)} can be used to compute aggregate functions like
