@@ -776,6 +776,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def createGroupMetadataTopic(): MetadataResponse.TopicMetadata = {
     val aliveBrokers = metadataCache.getAliveBrokers
     if (aliveBrokers.size < config.offsetsTopicReplicationFactor) {
+      warn("Number of alive brokers %d does not meet the replication requirement %d for offsets topic "
+        .format(aliveBrokers.size, config.offsetsTopicReplicationFactor))
       new MetadataResponse.TopicMetadata(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Topic.GroupMetadataTopicName, true,
         java.util.Collections.emptyList())
     } else {
