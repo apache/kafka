@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.record.ByteBufferInputStream;
+import org.apache.kafka.common.record.ByteBufferOutputStream;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -90,57 +94,119 @@ public class ByteUtilsTest {
     }
 
     @Test
-    public void testVarIntSerde() {
-        assertVarIntSerde(0, 1);
-        assertVarIntSerde(-1, 1);
-        assertVarIntSerde(1, 1);
-        assertVarIntSerde(Integer.MAX_VALUE, 5);
-        assertVarIntSerde(Integer.MIN_VALUE, 5);
+    public void testVarintSerde() throws Exception {
+        assertVarintSerde(0, new byte[] {0});
+        assertVarintSerde(-1, new byte[] {1});
+        assertVarintSerde(1, new byte[] {2});
+        assertVarintSerde(63, new byte[] {126});
+        assertVarintSerde(-64, new byte[] {127});
+        assertVarintSerde(64, new byte[] {-128, 1});
+        assertVarintSerde(-65, new byte[] {-127, 1});
+        assertVarintSerde(8191, new byte[] {-2, 127});
+        assertVarintSerde(-8192, new byte[] {-1, 127});
+        assertVarintSerde(8192, new byte[] {-128, -128, 1});
+        assertVarintSerde(-8193, new byte[] {-127, -128, 1});
+        assertVarintSerde(1048575, new byte[] {-2, -1, 127});
+        assertVarintSerde(1048576, new byte[] {-128, -128, -128, 1});
+        assertVarintSerde(-1048576, new byte[] {-1, -1, 127});
+        assertVarintSerde(-1048577, new byte[] {-127, -128, -128, 1});
+        assertVarintSerde(134217727, new byte[] {-2, -1, -1, 127});
+        assertVarintSerde(134217728, new byte[] {-128, -128, -128, -128, 1});
+        assertVarintSerde(-134217728, new byte[] {-1, -1, -1, 127});
+        assertVarintSerde(-134217729, new byte[] {-127, -128, -128, -128, 1});
+        assertVarintSerde(Integer.MAX_VALUE, new byte[] {-2, -1, -1, -1, 15});
+        assertVarintSerde(Integer.MIN_VALUE, new byte[] {-1, -1, -1, -1, 15});
     }
 
     @Test
-    public void testVarUnsignedIntSerde() {
-        assertVarUnsignedIntSerde(0, 1);
-        assertVarUnsignedIntSerde(1, 1);
-        assertVarUnsignedIntSerde(Integer.MAX_VALUE * 2L, 5);
+    public void testVarlongSerde() throws Exception {
+        assertVarlongSerde(0, new byte[] {0});
+        assertVarlongSerde(-1, new byte[] {1});
+        assertVarlongSerde(1, new byte[] {2});
+        assertVarlongSerde(63, new byte[] {126});
+        assertVarlongSerde(-64, new byte[] {127});
+        assertVarlongSerde(64, new byte[] {-128, 1});
+        assertVarlongSerde(-65, new byte[] {-127, 1});
+        assertVarlongSerde(8191, new byte[] {-2, 127});
+        assertVarlongSerde(-8192, new byte[] {-1, 127});
+        assertVarlongSerde(8192, new byte[] {-128, -128, 1});
+        assertVarlongSerde(-8193, new byte[] {-127, -128, 1});
+        assertVarlongSerde(1048575, new byte[] {-2, -1, 127});
+        assertVarlongSerde(1048576, new byte[] {-128, -128, -128, 1});
+        assertVarlongSerde(-1048576, new byte[] {-1, -1, 127});
+        assertVarlongSerde(-1048577, new byte[] {-127, -128, -128, 1});
+        assertVarlongSerde(134217727, new byte[] {-2, -1, -1, 127});
+        assertVarlongSerde(134217728, new byte[] {-128, -128, -128, -128, 1});
+        assertVarlongSerde(-134217728, new byte[] {-1, -1, -1, 127});
+        assertVarlongSerde(-134217729, new byte[] {-127, -128, -128, -128, 1});
+        assertVarlongSerde(17179869183L, new byte[] {-2, -1, -1, -1, 127});
+        assertVarlongSerde(17179869184L, new byte[] {-128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(-17179869184L, new byte[] {-1, -1, -1, -1, 127});
+        assertVarlongSerde(-17179869185L, new byte[] {-127, -128, -128, -128, -128, 1});
+        assertVarlongSerde(2199023255551L, new byte[] {-2, -1, -1, -1, -1, 127});
+        assertVarlongSerde(2199023255552L, new byte[] {-128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(-2199023255552L, new byte[] {-1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(-2199023255553L, new byte[] {-127, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(281474976710655L, new byte[] {-2, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(281474976710656L, new byte[] {-128, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(-281474976710656L, new byte[] {-1, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(-281474976710657L, new byte[] {-127, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(36028797018963967L, new byte[] {-2, -1, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(36028797018963968L, new byte[] {-128, -128, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(-36028797018963968L, new byte[] {-1, -1, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(-36028797018963969L, new byte[] {-127, -128, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(4611686018427387903L, new byte[] {-2, -1, -1, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(4611686018427387904L, new byte[] {-128, -128, -128, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(-4611686018427387904L, new byte[] {-1, -1, -1, -1, -1, -1, -1, -1, 127});
+        assertVarlongSerde(-4611686018427387905L, new byte[] {-127, -128, -128, -128, -128, -128, -128, -128, -128, 1});
+        assertVarlongSerde(Long.MAX_VALUE, new byte[] {-2, -1, -1, -1, -1, -1, -1, -1, -1, 1});
+        assertVarlongSerde(Long.MIN_VALUE, new byte[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, 1});
     }
 
-    @Test
-    public void testVarLongSerde() {
-        assertVarLongSerde(0L, 1);
-        assertVarLongSerde(-1L, 1);
-        assertVarLongSerde(1L, 1);
-        assertVarLongSerde(Integer.MAX_VALUE, 5);
-        assertVarLongSerde(Integer.MIN_VALUE, 5);
-        assertVarLongSerde(Long.MAX_VALUE, 10);
-        assertVarLongSerde(Long.MIN_VALUE, 10);
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidVarint() {
+        // varint encoding has one overflow byte
+        ByteBuffer buf = ByteBuffer.wrap(new byte[] {-128, -128, -128, -128, -128, 1});
+        ByteUtils.readVarint(buf);
     }
 
-    private void assertVarIntSerde(int value, int expectedLength) {
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidVarlong() {
+        // varlong encoding has one overflow byte
+        ByteBuffer buf = ByteBuffer.wrap(new byte[] {-127, -128, -128, -128, -128, -128, -128, -128, -128, -128, 1});
+        ByteUtils.readVarlong(buf);
+    }
+
+    private void assertVarintSerde(int value, byte[] expectedEncoding) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(32);
-        ByteUtils.writeVarInt(value, buf);
+        ByteUtils.writeVarint(value, buf);
         buf.flip();
-        assertEquals(expectedLength, buf.remaining());
-        assertEquals(expectedLength, ByteUtils.bytesForVarIntEncoding(value));
-        assertEquals(value, ByteUtils.readVarInt(buf));
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        assertEquals(value, ByteUtils.readVarint(buf.duplicate()));
+
+        buf.rewind();
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        ByteUtils.writeVarint(value, out);
+        buf.flip();
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        assertEquals(value, ByteUtils.readVarint(in));
     }
 
-    private void assertVarUnsignedIntSerde(long value, int expectedLength) {
+    private void assertVarlongSerde(long value, byte[] expectedEncoding) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(32);
-        ByteUtils.writeVarUnsignedInt(value, buf);
+        ByteUtils.writeVarlong(value, buf);
         buf.flip();
-        assertEquals(expectedLength, buf.remaining());
-        assertEquals(expectedLength, ByteUtils.bytesForVarUnsignedIntEncoding(value));
-        assertEquals(value, ByteUtils.readVarUnsignedInt(buf));
-    }
+        assertEquals(value, ByteUtils.readVarlong(buf.duplicate()));
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
 
-    private void assertVarLongSerde(long value, int expectedLength) {
-        ByteBuffer buf = ByteBuffer.allocate(32);
-        ByteUtils.writeVarLong(value, buf);
+        buf.rewind();
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        ByteUtils.writeVarlong(value, out);
         buf.flip();
-        assertEquals(expectedLength, buf.remaining());
-        assertEquals(expectedLength, ByteUtils.bytesForVarLongEncoding(value));
-        assertEquals(value, ByteUtils.readVarLong(buf));
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        assertEquals(value, ByteUtils.readVarlong(in));
     }
 
 }

@@ -24,7 +24,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * This classes exposes low-level methods for reading/writing
+ * This classes exposes low-level methods for reading/writing from byte streams or buffers.
  */
 public final class ByteUtils {
 
@@ -119,307 +119,188 @@ public final class ByteUtils {
     }
 
     /**
-     * Read an unsigned integer stored in variable-length format from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this integer.
+     * Read an integer stored in variable-length format using zig-zag decoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
+     * Google Protocol Buffers</a>.
      *
-     * @param in The input to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
+     * @param buffer The buffer to read from
+     * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate
      *                                  after 5 bytes have been read
-     * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    public static long readUnsignedVarInt(DataInput in) throws IOException {
-        return readRawUnsignedVarInt(in) & 0xffffffffL;
-    }
-
-    private static int readRawUnsignedVarInt(DataInput in) throws IOException {
-        int value = 0;
-        int i = 0;
-        int b;
-        while (((b = in.readByte()) & 0x80) != 0) {
-            value |= (b & 0x7f) << i;
-            i += 7;
-            if (i > 35) {
-                throw new IllegalArgumentException("Variable length quantity is too long");
-            }
-        }
-        return value | (b << i);
-    }
-
-    /**
-     * Read an unsigned integer stored in variable-length format from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this integer.
-     *
-     * @param buffer The buffer to read from
-     * @return The integer treated as a long
-     */
-    public static long readVarUnsignedInt(ByteBuffer buffer) {
-        return readRawVarUnsignedInt(buffer) & 0xffffffffL;
-    }
-
-    private static int readRawVarUnsignedInt(ByteBuffer buffer) {
+    public static int readVarint(ByteBuffer buffer) {
         int value = 0;
         int i = 0;
         int b;
         while (((b = buffer.get()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
-            if (i > 35) {
+            if (i > 28) {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        return value | (b << i);
+        value |= (b << i);
+        return (value >>> 1) ^ -(value & 1);
     }
 
     /**
-     * Read an unsigned long stored in variable-length format from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this long.
+     * Read an integer stored in variable-length format using zig-zag decoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
+     * Google Protocol Buffers</a>.
      *
      * @param in The input to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
+     * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate
      *                                  after 5 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
-    private static long readRawVarUnsignedLong(DataInput in) throws IOException {
+    public static int readVarint(DataInput in) throws IOException {
+        int value = 0;
+        int i = 0;
+        int b;
+        while (((b = in.readByte()) & 0x80) != 0) {
+            value |= (b & 0x7f) << i;
+            i += 7;
+            if (i > 28) {
+                throw new IllegalArgumentException("Variable length quantity is too long");
+            }
+        }
+        value |= (b << i);
+        return (value >>> 1) ^ -(value & 1);
+    }
+
+    /**
+     * Read a long stored in variable-length format using zig-zag decoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
+     * Google Protocol Buffers</a>.
+     *
+     * @param in The input to read from
+     * @return The integer read
+     *
+     * @throws IllegalArgumentException if variable-length value does not terminate
+     *                                  after 5 bytes have been read
+     * @throws IOException              if {@link DataInput} throws {@link IOException}
+     */
+    public static long readVarlong(DataInput in) throws IOException {
         long value = 0L;
         int i = 0;
         long b;
-        while (((b = in.readByte()) & 0x80L) != 0) {
+        while (((b = in.readByte()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
             if (i > 63) {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        return value | (b << i);
+        value |= (b << i);
+        return (value >>> 1) ^ -(value & 1);
     }
 
     /**
-     * Read an unsigned long stored in variable-length format from
+     * Read a long stored in variable-length format using zig-zag decoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this long.
+     * Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
+     * @return The integer read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate
      *                                  after 5 bytes have been read
      */
-    private static long readRawVarUnsignedLong(ByteBuffer buffer) {
+    public static long readVarlong(ByteBuffer buffer)  {
         long value = 0L;
         int i = 0;
         long b;
-        while (((b = buffer.get()) & 0x80L) != 0) {
+        while (((b = buffer.get()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
             if (i > 63) {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        return value | (b << i);
+        value |= (b << i);
+        return (value >>> 1) ^ -(value & 1);
     }
 
     /**
-     * Read an integer stored in variable-length format using Zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this integer.
-     *
-     * @param buffer The buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
-     */
-    public static int readVarInt(ByteBuffer buffer) {
-        int raw = readRawVarUnsignedInt(buffer);
-        // This undoes the trick in writeSignedVarInt()
-        int temp = (((raw << 31) >> 31) ^ raw) >> 1;
-        // This extra step lets us deal with the largest signed values by treating
-        // negative results from read unsigned methods as like unsigned values.
-        // Must re-flip the top bit if the original read value had it set.
-        return temp ^ (raw & (1 << 31));
-    }
-
-    /**
-     * Read an integer stored in variable-length format using Zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this integer.
-     *
-     * @param in The input to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
-     * @throws IOException              if {@link DataInput} throws {@link IOException}
-     */
-    public static int readVarInt(DataInput in) throws IOException {
-        int raw = readRawUnsignedVarInt(in);
-        // This undoes the trick in writeSignedVarInt()
-        int temp = (((raw << 31) >> 31) ^ raw) >> 1;
-        // This extra step lets us deal with the largest signed values by treating
-        // negative results from read unsigned methods as like unsigned values.
-        // Must re-flip the top bit if the original read value had it set.
-        return temp ^ (raw & (1 << 31));
-    }
-
-    /**
-     * Read a long stored in variable-length format using Zig-zag decoding from
+     * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this long.
+     * Google Protocol Buffers</a> into the output.
      *
-     * @param in The input to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
-     * @throws IOException              if {@link DataInput} throws {@link IOException}
-     */
-    public static long readVarLong(DataInput in) throws IOException {
-        long raw = readRawVarUnsignedLong(in);
-        // This undoes the trick in writeSignedVarLong()
-        long temp = (((raw << 63) >> 63) ^ raw) >> 1;
-        // This extra step lets us deal with the largest signed values by treating
-        // negative results from read unsigned methods as like unsigned values
-        // Must re-flip the top bit if the original read value had it set.
-        return temp ^ (raw & (1L << 63));
-    }
-
-    /**
-     * Read a long stored in variable-length format using Zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>. Also update the index to indicate how many bytes
-     * were used to encode this long.
-     *
-     * @param buffer The buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
-     */
-    public static long readVarLong(ByteBuffer buffer)  {
-        long raw = readRawVarUnsignedLong(buffer);
-        // This undoes the trick in writeSignedVarLong()
-        long temp = (((raw << 63) >> 63) ^ raw) >> 1;
-        // This extra step lets us deal with the largest signed values by treating
-        // negative results from read unsigned methods as like unsigned values
-        // Must re-flip the top bit if the original read value had it set.
-        return temp ^ (raw & (1L << 63));
-    }
-
-    /**
-     * Write the given unsigned integer following the variable-length from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Since it the value is not negative Zig-zag is not used.
-     *
-     * @param longValue The value to write
+     * @param value The value to write
      * @param out The output to write to
      */
-    public static void writeVarUnsignedInt(long longValue, DataOutput out) throws IOException {
-        int value = (int) longValue;
+    public static void writeVarint(int value, DataOutput out) throws IOException {
+        value = (value << 1) ^ (value >> 31);
         while ((value & 0xffffff80) != 0L) {
             out.writeByte((value & 0x7f) | 0x80);
             value >>>= 7;
         }
-        out.writeByte(value & 0x7f);
+        out.writeByte((byte) value);
     }
 
     /**
-     * Write the given unsigned integer following the variable-length from
+     * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Since the value is not negative, Zig-zag is not used.
+     * Google Protocol Buffers</a> into the output.
      *
-     * @param longValue The value to write
-     * @param buffer The buffer to write to
+     * @param value The value to write
+     * @param buffer The output to write to
      */
-    public static void writeVarUnsignedInt(long longValue, ByteBuffer buffer) {
-        int value = (int) longValue;
+    public static void writeVarint(int value, ByteBuffer buffer) {
+        value = (value << 1) ^ (value >> 31);
         while ((value & 0xffffff80) != 0L) {
             byte b = (byte) ((value & 0x7f) | 0x80);
             buffer.put(b);
             value >>>= 7;
         }
-        buffer.put((byte) (value & 0x7f));
+        buffer.put((byte) value);
     }
 
     /**
-     * Write the given integer following the variable-length from
+     * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Zig-zag encoding is not used.
+     * Google Protocol Buffers</a> into the output.
      *
      * @param value The value to write
      * @param out The output to write to
      */
-    public static void writeVarInt(int value, DataOutput out) throws IOException {
-        writeVarUnsignedInt((value << 1) ^ (value >> 31), out);
-    }
-
-    /**
-     * Write the given integer following the variable-length from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Zig-zag encoding is not used.
-     *
-     * @param value The value to write
-     * @param buffer The output to write to
-     */
-    public static void writeVarInt(int value, ByteBuffer buffer) {
-        writeVarUnsignedInt((value << 1) ^ (value >> 31), buffer);
-    }
-
-    /**
-     * Write the given integer following the variable-length from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Zig-zag encoding is not used.
-     *
-     * @param value The value to write
-     * @param out The output to write to
-     */
-    public static void writeVarLong(long value, DataOutput out) throws IOException {
+    public static void writeVarlong(long value, DataOutput out) throws IOException {
         value = (value << 1) ^ (value >> 63);
         while ((value & 0xffffffffffffff80L) != 0L) {
             out.writeByte(((int) value & 0x7f) | 0x80);
             value >>>= 7;
         }
-        out.writeByte((int) value & 0x7f);
+        out.writeByte((byte) value);
     }
 
     /**
-     * Write the given integer following the variable-length from
+     * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output. Zig-zag encoding is not used.
+     * Google Protocol Buffers</a> into the output.
      *
      * @param value The value to write
      * @param buffer The buffer to write to
      */
-    public static void writeVarLong(long value, ByteBuffer buffer) {
+    public static void writeVarlong(long value, ByteBuffer buffer) {
         value = (value << 1) ^ (value >> 63);
         while ((value & 0xffffffffffffff80L) != 0L) {
             byte b = (byte) (((int) value & 0x7f) | 0x80);
             buffer.put(b);
             value >>>= 7;
         }
-        buffer.put((byte) ((int) value & 0x7f));
+        buffer.put((byte) value);
     }
 
     /**
-     * Number of bytes needed to encode an unsigned integer in variable-length format.
+     * Number of bytes needed to encode an integer in variable-length format.
      *
-     * @param longValue The unsigned integer represented as a long
+     * @param value The signed value to get number of bytes
      */
-    public static int bytesForVarUnsignedIntEncoding(long longValue) {
-        int value = (int) longValue;
+    public static int bytesForVarintEncoding(int value) {
+        value = (value << 1) ^ (value >> 31);
         int bytes = 1;
         while ((value & 0xffffff80) != 0L) {
             bytes += 1;
@@ -431,18 +312,9 @@ public final class ByteUtils {
     /**
      * Number of bytes needed to encode an integer in variable-length format.
      *
-     * @param value The unsigned integer
+     * @param value The signed value
      */
-    public static int bytesForVarIntEncoding(int value) {
-        return bytesForVarUnsignedIntEncoding((value << 1) ^ (value >> 31));
-    }
-
-    /**
-     * Number of bytes needed to encode an integer in variable-length format.
-     *
-     * @param value The unsigned integer
-     */
-    public static int bytesForVarLongEncoding(long value) {
+    public static int bytesForVarlongEncoding(long value) {
         value = (value << 1) ^ (value >> 63);
         int bytes = 1;
         while ((value & 0xffffffffffffff80L) != 0L) {
@@ -451,4 +323,5 @@ public final class ByteUtils {
         }
         return bytes;
     }
+
 }
