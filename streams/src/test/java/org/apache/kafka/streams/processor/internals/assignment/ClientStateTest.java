@@ -45,50 +45,65 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddActiveTasksToBothAssignedAndActive() throws Exception {
-        client.assign(new TaskId(0, 1), true);
-        assertThat(client.activeTasks(), equalTo(Collections.singleton(new TaskId(0, 1))));
-        assertThat(client.assignedTasks(), equalTo(Collections.singleton(new TaskId(0, 1))));
+        final TaskId tid = new TaskId(0, 1);
+
+        client.assign(tid, true);
+        assertThat(client.activeTasks(), equalTo(Collections.singleton(tid)));
+        assertThat(client.assignedTasks(), equalTo(Collections.singleton(tid)));
         assertThat(client.assignedTaskCount(), equalTo(1));
         assertThat(client.standbyTasks().size(), equalTo(0));
     }
 
     @Test
     public void shouldAddStandbyTasksToBothStandbyAndActive() throws Exception {
-        client.assign(new TaskId(0, 1), false);
-        assertThat(client.assignedTasks(), equalTo(Collections.singleton(new TaskId(0, 1))));
-        assertThat(client.standbyTasks(), equalTo(Collections.singleton(new TaskId(0, 1))));
+        final TaskId tid = new TaskId(0, 1);
+
+        client.assign(tid, false);
+        assertThat(client.assignedTasks(), equalTo(Collections.singleton(tid)));
+        assertThat(client.standbyTasks(), equalTo(Collections.singleton(tid)));
         assertThat(client.assignedTaskCount(), equalTo(1));
         assertThat(client.activeTasks().size(), equalTo(0));
     }
 
     @Test
     public void shouldAddPreviousActiveTasksToPreviousAssignedAndPreviousActive() throws Exception {
-        client.addPreviousActiveTasks(Utils.mkSet(new TaskId(0, 1), new TaskId(0, 2)));
-        assertThat(client.previousActiveTasks(), equalTo(Utils.mkSet(new TaskId(0, 1), new TaskId(0, 2))));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(new TaskId(0, 1), new TaskId(0, 2))));
+        final TaskId tid1 = new TaskId(0, 1);
+        final TaskId tid2 = new TaskId(0, 2);
+
+        client.addPreviousActiveTasks(Utils.mkSet(tid1, tid2));
+        assertThat(client.previousActiveTasks(), equalTo(Utils.mkSet(tid1, tid2)));
+        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(tid1, tid2)));
     }
 
     @Test
     public void shouldAddPreviousStandbyTasksToPreviousAssigned() throws Exception {
-        client.addPreviousStandbyTasks(Utils.mkSet(new TaskId(0, 1), new TaskId(0, 2)));
+        final TaskId tid1 = new TaskId(0, 1);
+        final TaskId tid2 = new TaskId(0, 2);
+
+        client.addPreviousStandbyTasks(Utils.mkSet(tid1, tid2));
         assertThat(client.previousActiveTasks().size(), equalTo(0));
-        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(new TaskId(0, 1), new TaskId(0, 2))));
+        assertThat(client.previousAssignedTasks(), equalTo(Utils.mkSet(tid1, tid2)));
     }
 
     @Test
     public void shouldHaveAssignedTaskIfActiveTaskAssigned() throws Exception {
-        client.assign(new TaskId(0, 2), true);
-        assertTrue(client.hasAssignedTask(new TaskId(0, 2)));
+        final TaskId tid = new TaskId(0, 2);
+
+        client.assign(tid, true);
+        assertTrue(client.hasAssignedTask(tid));
     }
 
     @Test
     public void shouldHaveAssignedTaskIfStandbyTaskAssigned() throws Exception {
-        client.assign(new TaskId(0, 2), false);
-        assertTrue(client.hasAssignedTask(new TaskId(0, 2)));
+        final TaskId tid = new TaskId(0, 2);
+
+        client.assign(tid, false);
+        assertTrue(client.hasAssignedTask(tid));
     }
 
     @Test
     public void shouldNotHaveAssignedTaskIfTaskNotAssigned() throws Exception {
+
         client.assign(new TaskId(0, 2), true);
         assertFalse(client.hasAssignedTask(new TaskId(0, 3)));
     }

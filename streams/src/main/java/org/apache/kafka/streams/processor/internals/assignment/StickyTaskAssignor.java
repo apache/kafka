@@ -137,8 +137,8 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     }
 
 
-    private ClientState findClient(final TaskId taskId,
-                                           final Set<ID> clientsWithin) {
+    private ClientState findClient(final TaskId taskId, final Set<ID> clientsWithin) {
+
         // optimize the case where there is only 1 id to search within.
         if (clientsWithin.size() == 1) {
             return clients.get(clientsWithin.iterator().next());
