@@ -40,6 +40,8 @@ public class ProtocolSerializationTest {
                                  new Field("int16", Type.INT16),
                                  new Field("int32", Type.INT32),
                                  new Field("int64", Type.INT64),
+                                 new Field("varint", Type.VARINT),
+                                 new Field("varlong", Type.VARLONG),
                                  new Field("string", Type.STRING),
                                  new Field("nullable_string", Type.NULLABLE_STRING),
                                  new Field("bytes", Type.BYTES),
@@ -52,6 +54,8 @@ public class ProtocolSerializationTest {
                                              .set("int16", (short) 1)
                                              .set("int32", 1)
                                              .set("int64", 1L)
+                                             .set("varint", 300)
+                                             .set("varlong", 500L)
                                              .set("string", "1")
                                              .set("nullable_string", null)
                                              .set("bytes", ByteBuffer.wrap("1".getBytes()))
@@ -80,6 +84,10 @@ public class ProtocolSerializationTest {
         check(Type.NULLABLE_BYTES, null);
         check(Type.NULLABLE_BYTES, ByteBuffer.allocate(0));
         check(Type.NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()));
+        check(Type.VARINT, Integer.MAX_VALUE);
+        check(Type.VARINT, Integer.MIN_VALUE);
+        check(Type.VARLONG, Long.MAX_VALUE);
+        check(Type.VARLONG, Long.MIN_VALUE);
         check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});

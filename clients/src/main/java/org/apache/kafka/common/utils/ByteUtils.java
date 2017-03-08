@@ -120,14 +120,12 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
-     * Google Protocol Buffers</a>.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
      * @return The integer read
      *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
+     * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      */
     public static int readVarint(ByteBuffer buffer) {
         int value = 0;
@@ -136,9 +134,8 @@ public final class ByteUtils {
         while (((b = buffer.get()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
-            if (i > 28) {
-                throw new IllegalArgumentException("Variable length quantity is too long");
-            }
+            if (i > 28)
+                throw illegalVarintException(value);
         }
         value |= b << i;
         return (value >>> 1) ^ -(value & 1);
@@ -146,14 +143,12 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">.
-     * Google Protocol Buffers</a>.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
      * @param in The input to read from
      * @return The integer read
      *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
+     * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
     public static int readVarint(DataInput in) throws IOException {
@@ -163,9 +158,8 @@ public final class ByteUtils {
         while (((b = in.readByte()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
-            if (i > 28) {
-                throw new IllegalArgumentException("Variable length quantity is too long");
-            }
+            if (i > 28)
+                throw illegalVarintException(value);
         }
         value |= b << i;
         return (value >>> 1) ^ -(value & 1);
@@ -173,14 +167,12 @@ public final class ByteUtils {
 
     /**
      * Read a long stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
      * @param in The input to read from
      * @return The long value read
      *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 10 bytes have been read
+     * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
     public static long readVarlong(DataInput in) throws IOException {
@@ -190,9 +182,8 @@ public final class ByteUtils {
         while (((b = in.readByte()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
-            if (i > 63) {
-                throw new IllegalArgumentException("Variable length quantity is too long");
-            }
+            if (i > 63)
+                throw illegalVarlongException(value);
         }
         value |= b << i;
         return (value >>> 1) ^ -(value & 1);
@@ -200,14 +191,12 @@ public final class ByteUtils {
 
     /**
      * Read a long stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a>.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
      * @return The long value read
      *
-     * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 10 bytes have been read
+     * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      */
     public static long readVarlong(ByteBuffer buffer)  {
         long value = 0L;
@@ -216,9 +205,8 @@ public final class ByteUtils {
         while (((b = buffer.get()) & 0x80) != 0) {
             value |= (b & 0x7f) << i;
             i += 7;
-            if (i > 63) {
-                throw new IllegalArgumentException("Variable length quantity is too long");
-            }
+            if (i > 63)
+                throw illegalVarlongException(value);
         }
         value |= b << i;
         return (value >>> 1) ^ -(value & 1);
@@ -226,72 +214,72 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the output.
      *
      * @param value The value to write
      * @param out The output to write to
      */
     public static void writeVarint(int value, DataOutput out) throws IOException {
-        value = (value << 1) ^ (value >> 31);
-        while ((value & 0xffffff80) != 0L) {
-            out.writeByte((value & 0x7f) | 0x80);
-            value >>>= 7;
+        int v = (value << 1) ^ (value >> 31);
+        while ((v & 0xffffff80) != 0L) {
+            out.writeByte((v & 0x7f) | 0x80);
+            v >>>= 7;
         }
-        out.writeByte((byte) value);
+        out.writeByte((byte) v);
     }
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the buffer.
      *
      * @param value The value to write
      * @param buffer The output to write to
      */
     public static void writeVarint(int value, ByteBuffer buffer) {
-        value = (value << 1) ^ (value >> 31);
-        while ((value & 0xffffff80) != 0L) {
-            byte b = (byte) ((value & 0x7f) | 0x80);
+        int v = (value << 1) ^ (value >> 31);
+        while ((v & 0xffffff80) != 0L) {
+            byte b = (byte) ((v & 0x7f) | 0x80);
             buffer.put(b);
-            value >>>= 7;
+            v >>>= 7;
         }
-        buffer.put((byte) value);
+        buffer.put((byte) v);
     }
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the output.
      *
      * @param value The value to write
      * @param out The output to write to
      */
     public static void writeVarlong(long value, DataOutput out) throws IOException {
-        value = (value << 1) ^ (value >> 63);
-        while ((value & 0xffffffffffffff80L) != 0L) {
-            out.writeByte(((int) value & 0x7f) | 0x80);
-            value >>>= 7;
+        long v = (value << 1) ^ (value >> 63);
+        while ((v & 0xffffffffffffff80L) != 0L) {
+            out.writeByte(((int) v & 0x7f) | 0x80);
+            v >>>= 7;
         }
-        out.writeByte((byte) value);
+        out.writeByte((byte) v);
     }
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html">
-     * Google Protocol Buffers</a> into the output.
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the buffer.
      *
      * @param value The value to write
      * @param buffer The buffer to write to
      */
     public static void writeVarlong(long value, ByteBuffer buffer) {
-        value = (value << 1) ^ (value >> 63);
-        while ((value & 0xffffffffffffff80L) != 0L) {
-            byte b = (byte) (((int) value & 0x7f) | 0x80);
+        long v = (value << 1) ^ (value >> 63);
+        while ((v & 0xffffffffffffff80L) != 0L) {
+            byte b = (byte) (((int) v & 0x7f) | 0x80);
             buffer.put(b);
-            value >>>= 7;
+            v >>>= 7;
         }
-        buffer.put((byte) value);
+        buffer.put((byte) v);
     }
 
     /**
@@ -300,11 +288,11 @@ public final class ByteUtils {
      * @param value The signed value
      */
     public static int sizeOfVarint(int value) {
-        value = (value << 1) ^ (value >> 31);
+        int v = (value << 1) ^ (value >> 31);
         int bytes = 1;
-        while ((value & 0xffffff80) != 0L) {
+        while ((v & 0xffffff80) != 0L) {
             bytes += 1;
-            value >>>= 7;
+            v >>>= 7;
         }
         return bytes;
     }
@@ -315,13 +303,22 @@ public final class ByteUtils {
      * @param value The signed value
      */
     public static int sizeOfVarlong(long value) {
-        value = (value << 1) ^ (value >> 63);
+        long v = (value << 1) ^ (value >> 63);
         int bytes = 1;
-        while ((value & 0xffffffffffffff80L) != 0L) {
+        while ((v & 0xffffffffffffff80L) != 0L) {
             bytes += 1;
-            value >>>= 7;
+            v >>>= 7;
         }
         return bytes;
     }
 
+    private static IllegalArgumentException illegalVarintException(int value) {
+        throw new IllegalArgumentException("Varint is too long, the most significant bit in the 5th byte is set, " +
+                "converted value: " + Integer.toHexString(value));
+    }
+
+    private static IllegalArgumentException illegalVarlongException(long value) {
+        throw new IllegalArgumentException("Varlong is too long, most significant bit in the 10th byte is set, " +
+                "converted value: " + Long.toHexString(value));
+    }
 }

@@ -509,8 +509,8 @@ public abstract class Type {
         }
 
         @Override
-        public Integer read(ByteBuffer buffer) {
-            return ByteUtils.readVarint(buffer);
+        public Long read(ByteBuffer buffer) {
+            return ByteUtils.readVarlong(buffer);
         }
 
         @Override
