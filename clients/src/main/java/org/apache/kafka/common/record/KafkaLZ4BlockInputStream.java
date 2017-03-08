@@ -26,7 +26,7 @@ import java.io.InputStream;
 
 import org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.BD;
 import org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.FLG;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
@@ -112,7 +112,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
             throw new IOException(PREMATURE_EOS);
         }
 
-        if (MAGIC != Utils.readUnsignedIntLE(header, headerOffset - 6)) {
+        if (MAGIC != ByteUtils.readUnsignedIntLE(header, headerOffset - 6)) {
             throw new IOException(NOT_SUPPORTED);
         }
         flg = FLG.fromByte(header[headerOffset - 2]);
@@ -145,13 +145,13 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
      * @throws IOException
      */
     private void readBlock() throws IOException {
-        int blockSize = Utils.readUnsignedIntLE(in);
+        int blockSize = ByteUtils.readUnsignedIntLE(in);
 
         // Check for EndMark
         if (blockSize == 0) {
             finished = true;
             if (flg.isContentChecksumSet())
-                Utils.readUnsignedIntLE(in); // TODO: verify this content checksum
+                ByteUtils.readUnsignedIntLE(in); // TODO: verify this content checksum
             return;
         } else if (blockSize > maxBlockSize) {
             throw new IOException(String.format("Block size %s exceeded max: %s", blockSize, maxBlockSize));
@@ -172,7 +172,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
         }
 
         // verify checksum
-        if (flg.isBlockChecksumSet() && Utils.readUnsignedIntLE(in) != checksum.hash(bufferToRead, 0, blockSize, 0)) {
+        if (flg.isBlockChecksumSet() && ByteUtils.readUnsignedIntLE(in) != checksum.hash(bufferToRead, 0, blockSize, 0)) {
             throw new IOException(BLOCK_HASH_MISMATCH);
         }
 
