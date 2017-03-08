@@ -575,7 +575,7 @@ public class StreamThread extends Thread {
     /**
      * Schedule the records processing by selecting which record is processed next
      */
-    private void scheduleAndPunctuate() {
+    private long scheduleAndPunctuate(final Map<TaskId, StreamTask> tasks) {
 
         long totalProcessedEachRound;
         long totalProcessed = 0;
@@ -583,7 +583,7 @@ public class StreamThread extends Thread {
         // until no task has any records left
         do {
             totalProcessedEachRound = 0;
-            for (StreamTask task : activeTasks.values()) {
+            for (StreamTask task : tasks.values()) {
                 int numBuffered = task.process();
                 // we processed one record,
                 // and more are buffered waiting for the next round
@@ -595,13 +595,13 @@ public class StreamThread extends Thread {
         } while (totalProcessedEachRound != 0);
 
         // go over the tasks again to punctuate or commit
-        for (StreamTask task : activeTasks.values()) {
+        for (StreamTask task : tasks.values()) {
             maybePunctuate(task);
             if (task.commitNeeded())
                 commitOne(task);
         }
-        streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
-            timerStartedMs);
+
+        return totalProcessed;
     }
 
     /**
@@ -619,7 +619,9 @@ public class StreamThread extends Thread {
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
-                scheduleAndPunctuate();
+                long totalProcessed = scheduleAndPunctuate(activeTasks);
+                streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
+                    timerStartedMs);
             }
 
             maybeCommit(timerStartedMs);
