@@ -140,7 +140,7 @@ public final class ByteUtils {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        value |= (b << i);
+        value |= b << i;
         return (value >>> 1) ^ -(value & 1);
     }
 
@@ -167,7 +167,7 @@ public final class ByteUtils {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        value |= (b << i);
+        value |= b << i;
         return (value >>> 1) ^ -(value & 1);
     }
 
@@ -194,7 +194,7 @@ public final class ByteUtils {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        value |= (b << i);
+        value |= b << i;
         return (value >>> 1) ^ -(value & 1);
     }
 
@@ -220,7 +220,7 @@ public final class ByteUtils {
                 throw new IllegalArgumentException("Variable length quantity is too long");
             }
         }
-        value |= (b << i);
+        value |= b << i;
         return (value >>> 1) ^ -(value & 1);
     }
 

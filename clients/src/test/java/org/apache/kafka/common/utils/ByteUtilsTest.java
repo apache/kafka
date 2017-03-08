@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.record.ByteBufferInputStream;
-import org.apache.kafka.common.record.ByteBufferOutputStream;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
