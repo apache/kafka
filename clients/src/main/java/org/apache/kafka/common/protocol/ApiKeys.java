@@ -47,7 +47,12 @@ public enum ApiKeys {
     CREATE_TOPICS(19, "CreateTopics"),
     DELETE_TOPICS(20, "DeleteTopics"),
     DELETE_RECORDS(21, "DeleteRecords"),
-    INIT_PRODUCER_ID(22, "InitProducerId");
+    INIT_PRODUCER_ID(21, "InitProducerId"),
+    ADD_PARTITIONS_TO_TXN(22, "AddPartitionsToTxn"),
+    ADD_OFFSETS_TO_TXN(23, "AddOffsetsToTxn"),
+    END_TXN(24, "EndTxn"),
+    WRITE_TXN_MARKER(25, "WriteTxnMarker"),
+    TXN_OFFSET_COMMIT(26, "TxnOffsetCommit");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

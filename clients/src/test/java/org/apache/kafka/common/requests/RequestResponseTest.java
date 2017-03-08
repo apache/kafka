@@ -165,6 +165,21 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0));
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException());
         checkResponse(createListOffsetResponse(0), 0);
+        checkRequest(createAddPartitionsToTxnRequest());
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddPartitionsToTxnResponse(), 0);
+        checkRequest(createAddOffsetsToTxnRequest());
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddOffsetsToTxnResponse(), 0);
+        checkRequest(createEndTxnRequest());
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
+        checkResponse(createEndTxnResponse(), 0);
+        checkRequest(createWriteTxnMarkerRequest());
+        checkErrorResponse(createWriteTxnMarkerRequest(), new UnknownServerException());
+        checkResponse(createWriteTxnMarkerResponse(), 0);
+        checkRequest(createTxnOffsetCommitRequest());
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
+        checkResponse(createTxnOffsetCommitResponse(), 0);
     }
 
     @Test
@@ -465,6 +480,63 @@ public class RequestResponseTest {
 
     private ResponseHeader createResponseHeader() {
         return new ResponseHeader(10);
+    }
+
+    private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
+        return new AddOffsetsToTxnRequest.Builder("transactionalId", 23437L, (short) 99, "consumerGroupId").build();
+    }
+
+    private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest() {
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
+                new TopicPartition("foo", 2));
+        return new AddPartitionsToTxnRequest.Builder("id", 23437L, (short) 99, partitions).build();
+    }
+
+    private EndTxnRequest createEndTxnRequest() {
+        return new EndTxnRequest.Builder("transactionalId", 23437L, (short) 99, TransactionResult.ABORT).build();
+    }
+
+    private WriteTxnMarkerRequest createWriteTxnMarkerRequest() {
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
+                new TopicPartition("foo", 2));
+        return new WriteTxnMarkerRequest.Builder(23437L, (short) 99, 437, TransactionResult.COMMIT, partitions).build();
+    }
+
+    private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
+        Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("foo", 0), new TxnOffsetCommitRequest.CommittedOffset(15L, null));
+        offsets.put(new TopicPartition("bar", 5), new TxnOffsetCommitRequest.CommittedOffset(29L, "metadata"));
+        offsets.put(new TopicPartition("foo", 3), new TxnOffsetCommitRequest.CommittedOffset(23L, null));
+        return new TxnOffsetCommitRequest.Builder("consumerGroup", 23437L, (short) 99,
+                OffsetCommitRequest.DEFAULT_RETENTION_TIME, offsets).build();
+    }
+
+    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
+        return new AddPartitionsToTxnResponse(Errors.NONE);
+    }
+
+    private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
+        return new AddOffsetsToTxnResponse(Errors.NONE);
+    }
+
+    private EndTxnResponse createEndTxnResponse() {
+        return new EndTxnResponse(Errors.NONE);
+    }
+
+    private WriteTxnMarkerResponse createWriteTxnMarkerResponse() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 2), Errors.NONE);
+        errors.put(new TopicPartition("bar", 1), Errors.DUPLICATE_SEQUENCE_NUMBER);
+        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
+        return new WriteTxnMarkerResponse(errors);
+    }
+
+    private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 2), Errors.NONE);
+        errors.put(new TopicPartition("bar", 1), Errors.NOT_COORDINATOR);
+        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
+        return new TxnOffsetCommitResponse(errors);
     }
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {

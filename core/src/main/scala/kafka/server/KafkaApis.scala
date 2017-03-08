@@ -31,7 +31,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, InitPidResult, JoinGroupResult, TransactionCoordinator}
 import kafka.log._
 import kafka.network._
-import kafka.network.RequestChannel.{Response, Session}
+import kafka.network.RequestChannel.{Request, Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
@@ -103,6 +103,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTransactionRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTransactionRequest(request)
+        case ApiKeys.END_TXN => handleEndTransactionRequest(request)
+        case ApiKeys.WRITE_TXN_MARKER => handleWriteTxnMarkerRequest(request)
+        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1344,6 +1349,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
     txnCoordinator.handleInitPid(initPidRequest.transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+  }
+
+  def handleEndTransactionRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  def handleAbortTransactionRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  def handleAddPartitionToTransactionRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  def handleAddOffsetsToTransactionRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  def handleWriteTxnMarkerRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  def handleTxnOffsetCommitRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
