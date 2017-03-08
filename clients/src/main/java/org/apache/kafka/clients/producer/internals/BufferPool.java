@@ -206,7 +206,7 @@ public class BufferPool {
                 // of waiters and potentally signal other threads waiting for more memory.
                 if (!awaitSuccess || !recordSuccess || waitingTimeElapsed) {
                     this.waiters.remove(moreMemory);
-                    if (!this.waiters.isEmpty() && !this.free.isEmpty())
+                    if (!this.waiters.isEmpty())
                         this.waiters.peekFirst().signal();
                 }
             }
