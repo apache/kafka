@@ -538,7 +538,7 @@ public class ConsumerNetworkClient implements Closeable {
         }
 
         public void put(Node node, ClientRequest request) {
-            // the lock protects the put from a concurrent attempt to clean the queue
+            // the lock protects the put from a concurrent removal of the queue for the node
             synchronized (unsent) {
                 ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
                 if (requests == null) {
@@ -590,7 +590,8 @@ public class ConsumerNetworkClient implements Closeable {
         }
 
         public void clean() {
-            // the lock protects deletion from a concurrent put
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
             synchronized (unsent) {
                 Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
                 while (iterator.hasNext()) {
@@ -602,8 +603,12 @@ public class ConsumerNetworkClient implements Closeable {
         }
 
         public Collection<ClientRequest> remove(Node node) {
-            ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
-            return requests == null ? Collections.<ClientRequest>emptyList() : requests;
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
+            synchronized (unsent) {
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
+                return requests == null ? Collections.<ClientRequest>emptyList() : requests;
+            }
         }
 
         public Iterator<ClientRequest> requestIterator(Node node) {
