@@ -56,6 +56,8 @@ object ZkUtils {
   val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
 
+  val zkPathsRoot = Seq("/admin", "/brokers", "/cluster", "/config", "/controller", "/controller_epoch", "/isr_change_notification", "/kafka-acl", "/kafka-acl-changes")
+
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
     new ZkUtils(zkClient, zkConnection, isZkSecurityEnabled)
@@ -197,14 +199,7 @@ class ZkUtils(val zkClient: ZkClient,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
 
-  val securePersistentZkPaths = Seq(BrokerIdsPath,
-                                    BrokerTopicsPath,
-                                    EntityConfigChangesPath,
-                                    getEntityConfigRootPath(ConfigType.Topic),
-                                    getEntityConfigRootPath(ConfigType.Client),
-                                    DeleteTopicsPath,
-                                    BrokerSequenceIdPath,
-                                    IsrChangeNotificationPath)
+  val securePersistentZkPaths = zkPathsRoot
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
 
