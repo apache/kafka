@@ -513,10 +513,101 @@ public class StreamThread extends Thread {
         return Math.max(this.timerStartedMs - previousTimeMs, 0);
     }
 
+    /**
+     * Get the next batch of records by polling.
+     * @return Next batch of records or null if no records available.
+     */
+    private ConsumerRecords<byte[], byte[]> pollRequests() {
+        ConsumerRecords<byte[], byte[]> records = null;
+
+        try {
+            records = consumer.poll(this.pollTimeMs);
+        } catch (NoOffsetForPartitionException ex) {
+            TopicPartition partition = ex.partition();
+            if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
+                consumer.seekToBeginning(ex.partitions());
+            } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                consumer.seekToEnd(ex.partitions());
+                log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
+            } else {
+
+                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                    setState(State.PENDING_SHUTDOWN);
+                    String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
+                }
+
+                if (originalReset.equals("earliest")) {
+                    consumer.seekToBeginning(ex.partitions());
+                } else if (originalReset.equals("latest")) {
+                    consumer.seekToEnd(ex.partitions());
+                }
+                log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
+            }
+
+        }
+
+        if (rebalanceException != null)
+            throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
+
+        return records;
+    }
+
+    /**
+     * Take records and add them to each respective task
+     * @param records Records, can be null
+     */
+    private void addRecordsToTasks(ConsumerRecords<byte[], byte[]> records) {
+        if (records != null && !records.isEmpty()) {
+            int numAddedRecords = 0;
+
+            for (TopicPartition partition : records.partitions()) {
+                StreamTask task = activeTasksByPartition.get(partition);
+                numAddedRecords += task.addRecords(partition, records.records(partition));
+            }
+            streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
+        }
+    }
+
+    /**
+     * Schedule the records processing by selecting which record is processed next
+     */
+    private void scheduleAndPunctuate() {
+
+        long totalProcessedEachRound;
+        long totalProcessed = 0;
+        // Round-robin scheduling by taking one record from each task repeatedly
+        // until no task has any records left
+        do {
+            totalProcessedEachRound = 0;
+            for (StreamTask task : activeTasks.values()) {
+                int numBuffered = task.process();
+                // we processed one record,
+                // and more are buffered waiting for the next round
+                if (numBuffered > 0) {
+                    totalProcessedEachRound++;
+                    totalProcessed++;
+                }
+            }
+        } while (totalProcessedEachRound != 0);
+
+        // go over the tasks again to punctuate or commit
+        for (StreamTask task : activeTasks.values()) {
+            maybePunctuate(task);
+            if (task.commitNeeded())
+                commitOne(task);
+        }
+        streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
+            timerStartedMs);
+    }
+
+    /**
+     * Main event loop for polling, and processing records through topologies.
+     */
     private void runLoop() {
-        int totalNumBuffered = 0;
-        boolean requiresPoll = true;
-        boolean polledRecords = false;
 
         consumer.subscribe(sourceTopicPattern, rebalanceListener);
 
@@ -524,101 +615,15 @@ public class StreamThread extends Thread {
             this.timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
-            if (requiresPoll) {
-                requiresPoll = false;
-
-                ConsumerRecords<byte[], byte[]> records = null;
-
-                try {
-                    records = consumer.poll(this.pollTimeMs);
-                } catch (NoOffsetForPartitionException ex) {
-                    TopicPartition partition = ex.partition();
-                    if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
-                        consumer.seekToBeginning(ex.partitions());
-                    } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        consumer.seekToEnd(ex.partitions());
-                        log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
-                    } else {
-
-                        if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                            setState(State.PENDING_SHUTDOWN);
-                            String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
-                            throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
-                        }
-
-                        if (originalReset.equals("earliest")) {
-                            consumer.seekToBeginning(ex.partitions());
-                        } else if (originalReset.equals("latest")) {
-                            consumer.seekToEnd(ex.partitions());
-                        }
-                        log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
-                    }
-
-                }
-
-                if (rebalanceException != null)
-                    throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
-
-                if (records != null && !records.isEmpty()) {
-                    int numAddedRecords = 0;
-
-                    for (TopicPartition partition : records.partitions()) {
-                        StreamTask task = activeTasksByPartition.get(partition);
-                        numAddedRecords += task.addRecords(partition, records.records(partition));
-                    }
-                    streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
-                    polledRecords = true;
-                } else {
-                    polledRecords = false;
-                }
-
+            ConsumerRecords<byte[], byte[]> records = pollRequests();
+            if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
+                addRecordsToTasks(records);
+                scheduleAndPunctuate();
             }
 
-            // try to process several records from each task via the topology, and also trigger punctuate
-            // functions if necessary, which may result in more records going through the topology in this loop
-            if (polledRecords) {
-                if (!activeTasks.isEmpty()) {
-                    long totalProcessedEachRound = Long.MAX_VALUE;
-                    long totalProcessed = 0;
-                    // Round-robin scheduling by taking one record from each task repeatedly
-                    // until no task has any records left
-                    while (totalProcessedEachRound != 0) {
-                        totalProcessedEachRound = 0;
-                        for (StreamTask task : activeTasks.values()) {
-                            int numBuffered = task.process();
-                            // we processed one record,
-                            // and more are buffered waiting for the next round
-                            if (numBuffered > 0) {
-                                totalProcessedEachRound++;
-                                totalProcessed++;
-                            }
-                        }
-                    }
-                    // go over the tasks again to punctuate or commit
-                    for (StreamTask task : activeTasks.values()) {
-                        requiresPoll = requiresPoll || task.requiresPoll();
-                        streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
-                            timerStartedMs);
-                        maybePunctuate(task);
-                        if (task.commitNeeded())
-                            commitOne(task);
-                    }
-
-                } else {
-                    // even when no task is assigned, we must poll to get a task.
-                    requiresPoll = true;
-                }
-
-            } else {
-                requiresPoll = true;
-            }
             maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks();
-
             maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
