@@ -286,7 +286,7 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState,
                         final long cacheSizeBytes) {
-        super("StreamThread-" + applicationId + "-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
+        super(clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
         final String threadName = getName();
         this.config = config;
@@ -296,8 +296,7 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-        //clientId may already contain application id, removing it from threadname to avoid duplication
-        threadClientId = clientId + threadName.replace(applicationId + "-", "");
+        threadClientId = threadName;
         this.streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
