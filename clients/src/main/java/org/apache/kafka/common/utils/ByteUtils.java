@@ -275,7 +275,7 @@ public final class ByteUtils {
     public static void writeVarlong(long value, ByteBuffer buffer) {
         long v = (value << 1) ^ (value >> 63);
         while ((v & 0xffffffffffffff80L) != 0L) {
-            byte b = (byte) (((int) v & 0x7f) | 0x80);
+            byte b = (byte) ((v & 0x7f) | 0x80);
             buffer.put(b);
             v >>>= 7;
         }
