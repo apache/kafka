@@ -176,6 +176,14 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case OFFSET_FOR_LEADER_EPOCH:
                 request = new OffsetsForLeaderEpochRequest(struct, version);
+            case ADD_PARTITIONS_TO_TXN:
+                request = new AddPartitionsToTxnRequest(struct, version);
+                break;
+            case ADD_OFFSETS_TO_TXN:
+                request = new AddOffsetsToTxnRequest(struct, version);
+                break;
+            case END_TXN:
+                request = new EndTxnRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

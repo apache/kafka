@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -173,6 +175,9 @@ public enum Errors {
     OUT_OF_ORDER_SEQUENCE_NUMBER(45, new OutOfOrderSequenceException("The broker received an out of order sequence number")),
     DUPLICATE_SEQUENCE_NUMBER(46, new DuplicateSequenceNumberException("The broker received a duplicate sequence number")),
     PRODUCER_FENCED(47, new ProducerFencedException("Producer attempted an operation with an old epoch"));
+    PRODUCER_FENCED(47, new ProducerFencedException("Producer attempted an operation with an old epoch")),
+    INVALID_TXN_STATE(48, new InvalidTxnStateException("The producer attempted a transactional operation in an invalid state")),
+    INVALID_PID_MAPPING(49, new InvalidPidMappingException("The PID mapping is invalid"));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

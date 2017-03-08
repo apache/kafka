@@ -97,6 +97,12 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new InitPidResponse(struct);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
+            case ADD_PARTITIONS_TO_TXN:
+                return new AddPartitionsToTxnResponse(struct);
+            case ADD_OFFSETS_TO_TXN:
+                return new AddOffsetsToTxnResponse(struct);
+            case END_TXN:
+                return new EndTxnResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
                         "code should be updated to do so.", apiKey));
