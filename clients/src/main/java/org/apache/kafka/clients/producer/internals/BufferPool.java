@@ -118,50 +118,55 @@ public class BufferPool {
                 // we are out of memory and will have to block
                 int accumulated = 0;
                 ByteBuffer buffer = null;
-                Condition moreMemory = this.lock.newCondition();
-                long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
-                this.waiters.addLast(moreMemory);
-                // loop over and over until we have a buffer or have reserved
-                // enough memory to allocate one
-                while (accumulated < size) {
-                    long timeNs = waitForMoreMemory(maxTimeToBlockMs, moreMemory, remainingTimeToBlockNs);
+                boolean restoreAvailableMemoryOnFailure = true;
+                try {
+                    Condition moreMemory = this.lock.newCondition();
+                    long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
+                    this.waiters.addLast(moreMemory);
+                    // loop over and over until we have a buffer or have reserved
+                    // enough memory to allocate one
+                    while (accumulated < size) {
+                        long timeNs = waitForMoreMemory(maxTimeToBlockMs, moreMemory, remainingTimeToBlockNs);
 
-                    remainingTimeToBlockNs -= timeNs;
-                    // check if we can satisfy this request from the free list,
-                    // otherwise allocate memory
-                    if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
-                        // just grab a buffer from the free list
-                        buffer = this.free.pollFirst();
-                        accumulated = size;
-                    } else {
-                        // we'll need to allocate memory, but we may only get
-                        // part of what we need on this iteration
-                        freeUp(size - accumulated);
-                        int got = (int) Math.min(size - accumulated, this.availableMemory);
-                        this.availableMemory -= got;
-                        accumulated += got;
+                        remainingTimeToBlockNs -= timeNs;
+                        // check if we can satisfy this request from the free list,
+                        // otherwise allocate memory
+                        if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
+                            // just grab a buffer from the free list
+                            buffer = this.free.pollFirst();
+                            accumulated = size;
+                            restoreAvailableMemoryOnFailure = false;
+                        } else {
+                            // we'll need to allocate memory, but we may only get
+                            // part of what we need on this iteration
+                            freeUp(size - accumulated);
+                            int got = (int) Math.min(size - accumulated, this.availableMemory);
+                            this.availableMemory -= got;
+                            accumulated += got;
+                        }
+                    }
+
+                    // remove the condition for this thread to let the next thread
+                    // in line start getting memory
+                    Condition removed = this.waiters.removeFirst();
+                    if (removed != moreMemory)
+                        throw new IllegalStateException("Wrong condition: this shouldn't happen.");
+
+                    // signal any additional waiters if there is more memory left
+                    // over for them
+                    if (this.availableMemory > 0 || !this.free.isEmpty()) {
+                        if (!this.waiters.isEmpty()) this.waiters.peekFirst().signal();
+                    }
+                    if (buffer == null)
+                        buffer = allocateByteBuffer(size);
+                    restoreAvailableMemoryOnFailure = false;
+                    //unlock happens in top-level, enclosing finally
+                    return buffer;
+                } finally {
+                    if (restoreAvailableMemoryOnFailure) {
+                        this.availableMemory += accumulated;
                     }
                 }
-
-                // remove the condition for this thread to let the next thread
-                // in line start getting memory
-                Condition removed = this.waiters.removeFirst();
-                if (removed != moreMemory)
-                    throw new IllegalStateException("Wrong condition: this shouldn't happen.");
-
-                // signal any additional waiters if there is more memory left
-                // over for them
-                if (this.availableMemory > 0 || !this.free.isEmpty()) {
-                    if (!this.waiters.isEmpty())
-                        this.waiters.peekFirst().signal();
-                }
-
-                // unlock and return the buffer
-                lock.unlock();
-                if (buffer == null)
-                    return allocateByteBuffer(size);
-                else
-                    return buffer;
             }
         } finally {
             if (lock.isHeldByCurrentThread())
@@ -197,8 +202,13 @@ public class BufferPool {
                 this.waitTime.record(timeNs, time.milliseconds());
                 recordSuccess = true;
             } finally {
-                if (!awaitSuccess || !recordSuccess || waitingTimeElapsed)
+                // If some kind of error condition occurred then remove this thread's condition variable from the list
+                // of waiters and potentally signal other threads waiting for more memory.
+                if (!awaitSuccess || !recordSuccess || waitingTimeElapsed) {
                     this.waiters.remove(moreMemory);
+                    if (!this.waiters.isEmpty() && !this.free.isEmpty())
+                        this.waiters.peekFirst().signal();
+                }
             }
         }
 

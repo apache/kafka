@@ -188,6 +188,7 @@ public class BufferPoolTest {
         } catch (TimeoutException e) {
             // this is good
         }
+        assertTrue("available memory" + pool.availableMemory(), pool.availableMemory() >= 9 && pool.availableMemory() <= 10);
         long endTimeMs = Time.SYSTEM.milliseconds();
         assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
@@ -259,13 +260,16 @@ public class BufferPoolTest {
         replay(mockedMetrics, mockedSensor, metricName);
 
         BufferPool bufferPool = new BufferPool(2, 1, mockedMetrics, time,  metricGroup);
-        bufferPool.allocate(2, 0);
+        bufferPool.allocate(1, 0);
         try {
             bufferPool.allocate(2, 1000);
             assertTrue("Expected oom.", false);
         } catch (OutOfMemoryError expected) {
         }
+        assertEquals(1, bufferPool.availableMemory());
         assertEquals(0, bufferPool.queued());
+        //This shouldn't timeout
+        bufferPool.allocate(1, 0);
     }
 
     private static class BufferPoolAllocator implements Runnable {
