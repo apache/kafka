@@ -498,7 +498,7 @@ public abstract class Type {
 
         @Override
         public int sizeOf(Object o) {
-            return ByteUtils.bytesForVarintEncoding((Integer) o);
+            return ByteUtils.sizeOfVarint((Integer) o);
         }
     };
 
@@ -526,7 +526,7 @@ public abstract class Type {
 
         @Override
         public int sizeOf(Object o) {
-            return ByteUtils.bytesForVarlongEncoding((Long) o);
+            return ByteUtils.sizeOfVarlong((Long) o);
         }
     };
 

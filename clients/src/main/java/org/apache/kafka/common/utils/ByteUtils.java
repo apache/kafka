@@ -177,10 +177,10 @@ public final class ByteUtils {
      * Google Protocol Buffers</a>.
      *
      * @param in The input to read from
-     * @return The integer read
+     * @return The long value read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
+     *                                  after 10 bytes have been read
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
     public static long readVarlong(DataInput in) throws IOException {
@@ -204,10 +204,10 @@ public final class ByteUtils {
      * Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
-     * @return The integer read
+     * @return The long value read
      *
      * @throws IllegalArgumentException if variable-length value does not terminate
-     *                                  after 5 bytes have been read
+     *                                  after 10 bytes have been read
      */
     public static long readVarlong(ByteBuffer buffer)  {
         long value = 0L;
@@ -297,9 +297,9 @@ public final class ByteUtils {
     /**
      * Number of bytes needed to encode an integer in variable-length format.
      *
-     * @param value The signed value to get number of bytes
+     * @param value The signed value
      */
-    public static int bytesForVarintEncoding(int value) {
+    public static int sizeOfVarint(int value) {
         value = (value << 1) ^ (value >> 31);
         int bytes = 1;
         while ((value & 0xffffff80) != 0L) {
@@ -310,11 +310,11 @@ public final class ByteUtils {
     }
 
     /**
-     * Number of bytes needed to encode an integer in variable-length format.
+     * Number of bytes needed to encode a long in variable-length format.
      *
      * @param value The signed value
      */
-    public static int bytesForVarlongEncoding(long value) {
+    public static int sizeOfVarlong(long value) {
         value = (value << 1) ^ (value >> 63);
         int bytes = 1;
         while ((value & 0xffffffffffffff80L) != 0L) {
