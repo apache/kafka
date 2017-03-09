@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -106,7 +106,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
             buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
             buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
-            Utils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
+            ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
         }
 
         public ByteBuffer buffer() {

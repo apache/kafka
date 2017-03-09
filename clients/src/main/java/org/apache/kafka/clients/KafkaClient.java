@@ -108,11 +108,21 @@ public interface KafkaClient extends Closeable {
     int inFlightRequestCount();
 
     /**
+     * Return true if there is at least one in-flight request and false otherwise.
+     */
+    boolean hasInFlightRequests();
+
+    /**
      * Get the total in-flight requests for a particular node
      * 
      * @param nodeId The id of the node
      */
     int inFlightRequestCount(String nodeId);
+
+    /**
+     * Return true if there is at least one in-flight request for a particular node and false otherwise.
+     */
+    boolean hasInFlightRequests(String nodeId);
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O
@@ -139,7 +149,7 @@ public interface KafkaClient extends Closeable {
      * @param expectResponse true iff we expect a response
      * @param callback the callback to invoke when we get a response
      */
-    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
-                                          long createdTimeMs, boolean expectResponse,
-                                          RequestCompletionHandler callback);
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                   boolean expectResponse, RequestCompletionHandler callback);
+
 }

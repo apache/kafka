@@ -17,6 +17,8 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
@@ -118,7 +120,7 @@ public final class Record {
      * Retrieve the previously computed CRC for this record
      */
     public long checksum() {
-        return Utils.readUnsignedInt(buffer, CRC_OFFSET);
+        return ByteUtils.readUnsignedInt(buffer, CRC_OFFSET);
     }
 
     /**
@@ -468,7 +470,7 @@ public final class Record {
 
         // compute and fill the crc from the beginning of the message
         long crc = Utils.computeChecksum(buffer, recordPosition + MAGIC_OFFSET, recordSize - MAGIC_OFFSET);
-        Utils.writeUnsignedInt(buffer, recordPosition + CRC_OFFSET, crc);
+        ByteUtils.writeUnsignedInt(buffer, recordPosition + CRC_OFFSET, crc);
     }
 
     private static void write(ByteBuffer buffer,
