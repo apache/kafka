@@ -46,25 +46,33 @@ object ZkUtils {
   val ClusterIdPath = "/cluster/id"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
-  val ControllerPath = "/controller"
-  val ControllerEpochPath = "/controller_epoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
   val DeleteTopicsPath = "/admin/delete_topics"
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
   val BrokerSequenceIdPath = "/brokers/seqid"
-  val IsrChangeNotificationPath = "/isr_change_notification"
-  val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
 
-  val zkPathsRoot = Seq("/admin",
-                        "/brokers",
-                        "/cluster",
-                        "/config",
-                        "/controller",
-                        "/controller_epoch",
-                        "/isr_change_notification",
-                        "/kafka-acl",
-                        "/kafka-acl-changes")
+  // Important: it is necessary to add any new persistent Zookeeper path here
+  val AdminPath = "/admin"
+  val BrokersPath = "/brokers"
+  val ClusterPath = "/cluster"
+  val EntityConfigPath = "/config"
+  val ControllerPath = "/controller"
+  val ControllerEpochPath = "/controller_epoch"
+  val IsrChangeNotificationPath = "/isr_change_notification"
+  val KafkaAclPath = "/kafka-acl"
+  val KafkaAclChangesPath = "/kafka-acl-changes"
+
+  // Important: it is necessary to add any new persistent Zookeeper path to the Seq
+  val SecurePersistentZkRootPaths = Seq(AdminPath,
+                                        BrokersPath,
+                                        ClusterPath,
+                                        EntityConfigPath,
+                                        ControllerPath,
+                                        ControllerEpochPath,
+                                        IsrChangeNotificationPath,
+                                        KafkaAclPath,
+                                        KafkaAclChangesPath)
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -206,8 +214,6 @@ class ZkUtils(val zkClient: ZkClient,
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
-
-  val securePersistentZkPaths = zkPathsRoot
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
 
