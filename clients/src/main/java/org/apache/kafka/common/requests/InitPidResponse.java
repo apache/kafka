@@ -22,8 +22,9 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.record.LogEntry.NO_PID;
+
 public class InitPidResponse extends AbstractResponse {
-    public static final long INVALID_PID = -1;
     private static final String PRODUCER_ID_KEY_NAME = "pid";
     private static final String EPOCH_KEY_NAME = "epoch";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -44,7 +45,7 @@ public class InitPidResponse extends AbstractResponse {
     }
 
     public InitPidResponse(Errors errors) {
-        this(errors, INVALID_PID, (short) 0);
+        this(errors, NO_PID, (short) 0);
     }
 
     public long producerId() {

@@ -29,9 +29,8 @@ public class InitPidRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<InitPidRequest> {
         private final String transactionalId;
-
         public Builder(String transactionalId) {
-            super(ApiKeys.API_VERSIONS);
+            super(ApiKeys.INIT_PRODUCER_ID);
             this.transactionalId = transactionalId;
         }
 

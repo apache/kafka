@@ -159,6 +159,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final int requestTimeoutMs;
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
+    private final TransactionState transactionState;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -185,7 +186,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer, valueSerializer)),
-             keySerializer, valueSerializer);
+                keySerializer, valueSerializer);
     }
 
     /**
@@ -208,7 +209,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer)),
-             keySerializer, valueSerializer);
+                keySerializer, valueSerializer);
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
@@ -218,7 +219,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = Time.SYSTEM;
-
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
@@ -255,48 +255,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs, false)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
-
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG), true, clusterResourceListeners);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-            /* check for user defined settings.
-             * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
-             * This should be removed with release 0.9 when the deprecated configs are removed.
-             */
-            if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
-                log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
-                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                boolean blockOnBufferFull = config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG);
-                if (blockOnBufferFull) {
-                    this.maxBlockTimeMs = Long.MAX_VALUE;
-                } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
-                    log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
-                            "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                    this.maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
-                } else {
-                    this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                }
-            } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
-                log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
-                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                this.maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
-            } else {
-                this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            }
 
-            /* check for user defined settings.
-             * If the TIME_OUT config is set use that for request timeout.
-             * This should be removed with release 0.9
-             */
-            if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
-                log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
-                        ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-                this.requestTimeoutMs = config.getInt(ProducerConfig.TIMEOUT_CONFIG);
-            } else {
-                this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-            }
+            this.maxBlockTimeMs = getMaxBlockTime(config, userProvidedConfigs);
+            this.requestTimeoutMs = getRequestTimeout(config, userProvidedConfigs);
+            this.transactionState = getTransactionState(config);
 
             this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -306,8 +273,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     retryBackoffMs,
                     metrics,
                     time,
-                    apiVersions);
-
+                    apiVersions,
+                    transactionState);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
@@ -334,24 +301,89 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.metrics,
                     Time.SYSTEM,
                     this.requestTimeoutMs,
+                    config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
+                    this.transactionState,
                     apiVersions);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
-
             this.errors = this.metrics.sensor("errors");
-
-
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
             log.debug("Kafka producer started");
         } catch (Throwable t) {
-            // call close methods if internal objects are already constructed
-            // this is to prevent resource leak. see KAFKA-2121
+            // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
             close(0, TimeUnit.MILLISECONDS, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
+    }
+
+    private long getMaxBlockTime(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
+        /* check for user defined settings.
+         * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
+         * This should be removed with release 0.9 when the deprecated configs are removed.
+         */
+        long maxBlockTimeMs;
+        if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
+            log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
+                    "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            boolean blockOnBufferFull = config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG);
+            if (blockOnBufferFull) {
+                maxBlockTimeMs = Long.MAX_VALUE;
+            } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
+                log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
+                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+            } else {
+                maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            }
+        } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
+            log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
+                    "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+        } else {
+            maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+        }
+        return maxBlockTimeMs;
+
+    }
+
+    private int getRequestTimeout(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
+        /* check for user defined settings.
+         * If the TIME_OUT config is set use that for request timeout.
+         * This should be removed with release 0.9
+         */
+        int requestTimeoutMs;
+        if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
+            log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
+                    ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            requestTimeoutMs = config.getInt(ProducerConfig.TIMEOUT_CONFIG);
+        } else {
+            requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        }
+        return requestTimeoutMs;
+    }
+
+    private TransactionState getTransactionState(ProducerConfig config) {
+        boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        TransactionState transactionState;
+        if (idempotenceEnabled) {
+            transactionState = new TransactionState(time);
+            if (config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
+                throw new ConfigException("Need to set '" + ProducerConfig.RETRIES_CONFIG
+                        + "' to greater than zero in order to use the idempotent producer. With idempotence " +
+                        "enabled, the producer tracks additional metadata to ensure that messages are deduplicated " +
+                        "on the broker. Without retries, there will never be duplicates to begin with.");
+            }
+            if (config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
+                throw new ConfigException("Must set '" + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
+                        + "' to 1 inorder to use the idempotent producer, otherwise we cannot guarantee idempotence.");
+            }
+        } else {
+            transactionState = null;
+        }
+        return transactionState;
     }
 
     private static int parseAcks(String acksString) {
@@ -460,6 +492,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // first make sure the metadata for the topic is available
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            remainingWaitMs = maybeWaitOnPid(remainingWaitMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
@@ -581,20 +614,32 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
+    private long maybeWaitOnPid(long maxWaitMs) throws InterruptedException {
+        if (transactionState == null) {
+            return maxWaitMs;
+        }
+        long start = time.milliseconds();
+        TransactionState.PidAndEpoch pidAndEpoch = transactionState.pidAndEpoch(maxWaitMs);
+        if (!pidAndEpoch.isValid()) {
+            throw new TimeoutException("Could not retrieve a pid within " + maxWaitMs + " ms");
+        }
+        return Math.max(0, maxWaitMs - (time.milliseconds() - start));
+    }
+
     /**
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
         if (size > this.maxRequestSize)
             throw new RecordTooLargeException("The message is " + size +
-                                              " bytes when serialized which is larger than the maximum request size you have configured with the " +
-                                              ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
-                                              " configuration.");
+                    " bytes when serialized which is larger than the maximum request size you have configured with the " +
+                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
+                    " configuration.");
         if (size > this.totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
-                                              " bytes when serialized which is larger than the total memory buffer you have configured with the " +
-                                              ProducerConfig.BUFFER_MEMORY_CONFIG +
-                                              " configuration.");
+                    " bytes when serialized which is larger than the total memory buffer you have configured with the " +
+                    ProducerConfig.BUFFER_MEMORY_CONFIG +
+                    " configuration.");
     }
 
     /**
@@ -706,7 +751,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (timeout > 0) {
             if (invokedFromCallback) {
                 log.warn("Overriding close timeout {} ms to 0 ms in order to prevent useless blocking due to self-join. " +
-                    "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.", timeout);
+                        "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.", timeout);
             } else {
                 // Try to close gracefully.
                 if (this.sender != null)
@@ -724,7 +769,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (this.sender != null && this.ioThread != null && this.ioThread.isAlive()) {
             log.info("Proceeding to force close the producer since pending requests could not be completed " +
-                "within timeout {} ms.", timeout);
+                    "within timeout {} ms.", timeout);
             this.sender.forceClose();
             // Only join the sender thread when not calling from callback.
             if (!invokedFromCallback) {

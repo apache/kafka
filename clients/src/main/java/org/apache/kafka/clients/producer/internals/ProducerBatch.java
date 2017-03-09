@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -57,6 +58,7 @@ public final class ProducerBatch {
     private String expiryErrorMessage;
     private AtomicBoolean completed;
     private boolean retry;
+    private boolean isWritable;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
@@ -66,6 +68,8 @@ public final class ProducerBatch {
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
+        this.retry = false;
+        this.isWritable = true;
     }
 
     /**
@@ -74,7 +78,8 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+        if (!isWritable || !recordsBuilder.hasRoomFor(timestamp, key, value)) {
+            this.isWritable = false;
             return null;
         } else {
             long checksum = this.recordsBuilder.append(timestamp, key, value);
@@ -208,7 +213,7 @@ public final class ProducerBatch {
     /**
      * Returns if the batch is been retried for sending to kafka
      */
-    private boolean inRetry() {
+    public boolean inRetry() {
         return this.retry;
     }
 
@@ -225,11 +230,20 @@ public final class ProducerBatch {
     }
 
     public boolean isFull() {
-        return recordsBuilder.isFull();
+        return !isWritable || recordsBuilder.isFull();
+    }
+
+    public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
+        recordsBuilder.setProducerState(pidAndEpoch, baseSequence);
     }
 
     public void close() {
         recordsBuilder.close();
+        isWritable = false;
+    }
+
+    public boolean isClosed() {
+        return recordsBuilder.isClosed();
     }
 
     public ByteBuffer buffer() {
@@ -241,10 +255,17 @@ public final class ProducerBatch {
     }
 
     public boolean isWritable() {
-        return !recordsBuilder.isClosed();
+        return isWritable && !recordsBuilder.isClosed();
     }
 
     public byte magic() {
         return recordsBuilder.magic();
+    }
+
+    /**
+     * Return the ProducerId (Pid) of the current batch.
+     */
+    public long pid() {
+        return recordsBuilder.producerId();
     }
 }

@@ -78,6 +78,7 @@ class PidManager(val brokerId: Int,
   this synchronized {
     getNewPidBlock()
     nextPID = currentPIDBlock.blockStartPid
+
   }
 
   private def getNewPidBlock(): Unit = {

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidSequenceNumberException extends ApiException {
+public class OutOfOrderSequenceException extends ApiException {
 
-    public InvalidSequenceNumberException(String msg) {
+    public OutOfOrderSequenceException(String msg) {
         super(msg);
     }
 }

@@ -120,7 +120,7 @@ class LogTest extends JUnitSuite {
     assertEquals("Appending an empty message set should not roll log even if sufficient time has passed.", numSegments, log.numberOfSegments)
   }
 
-  @Test(expected = classOf[InvalidSequenceNumberException])
+  @Test(expected = classOf[OutOfOrderSequenceException])
   def testNonSequentialAppend(): Unit = {
     val logProps = new Properties()
 
@@ -141,8 +141,8 @@ class LogTest extends JUnitSuite {
     log.append(nextRecords, assignOffsets = true)
   }
 
-  @Test(expected = classOf[DuplicateSequenceNumberException])
-  def testDuplicateAppend(): Unit = {
+  @Test
+  def testDuplicateAppends(): Unit = {
     val logProps = new Properties()
 
     // create a log
@@ -155,12 +155,163 @@ class LogTest extends JUnitSuite {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 0)
-    log.append(records, assignOffsets = true)
+    var seq = 0
+    // Pad the beginning of the log.
+    for (i <- 0 to 5) {
+      val record = TestUtils.records(List((s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds)),
+        pid = pid, epoch = epoch, sequence = seq)
+      log.append(record, assignOffsets = true)
+      seq = seq + 1
+    }
+    // Append an entry with multiple log records.
+    var record = TestUtils.records(List(
+      (s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds),
+      (s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds),
+      (s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds)
+    ), pid = pid, epoch = epoch, sequence = seq)
+    val multiEntryAppendInfo = log.append(record, assignOffsets = true)
+    assertEquals("should have appended 3 entries", multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1, 3)
+    seq = seq + 3
 
-    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)), pid = pid, epoch = epoch, sequence = 0)
-    log.append(nextRecords, assignOffsets = true)
+    // Append a Duplicate of the tail, when the entry at the tail has multiple records.
+    val dupMultiEntryAppendInfo = log.append(record, assignOffsets = true)
+    assertEquals("Somehow appended a duplicate entry with multiple log records to the tail",
+      multiEntryAppendInfo.firstOffset, dupMultiEntryAppendInfo.firstOffset)
+    assertEquals("Somehow appended a duplicate entry with multiple log records to the tail",
+      multiEntryAppendInfo.lastOffset, dupMultiEntryAppendInfo.lastOffset)
+
+    // Append a partial duplicate of the tail. This is not allowed.
+    try {
+      record = TestUtils.records(
+        List((s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds),
+          (s"key-${seq}".getBytes, s"value-${seq}".getBytes, time.milliseconds)),
+        pid = pid, epoch = epoch, sequence = seq - 2)
+      log.append(record, assignOffsets = true)
+      fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a record " +
+        "in the middle of the log.")
+    } catch {
+      case e: OutOfOrderSequenceException => // Good!
+    }
+
+    // Append a Duplicate of an entry in the middle of the log. This is not allowed.
+     try {
+      record = TestUtils.records(
+        List((s"key-1".getBytes, s"value-1".getBytes, time.milliseconds)),
+        pid = pid, epoch = epoch, sequence = 1)
+      log.append(record, assignOffsets = true)
+      fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a record " +
+        "in the middle of the log.")
+    } catch {
+      case e: OutOfOrderSequenceException => // Good!
+    }
+
+    // Append a duplicate entry with a single record at the tail of the log. This should return the appendInfo of the original entry.
+    record = TestUtils.records(List(("key".getBytes, "value".getBytes, time.milliseconds)),
+      pid = pid, epoch = epoch, sequence = seq)
+    val origAppendInfo = log.append(record, assignOffsets = true)
+    val newAppendInfo = log.append(record, assignOffsets = true)
+    assertEquals("Inserted a duplicate record into the log", origAppendInfo.firstOffset, newAppendInfo.firstOffset)
+    assertEquals("Inserted a duplicate record into the log", origAppendInfo.lastOffset, newAppendInfo.lastOffset)
   }
+
+
+  @Test
+  def testMulitplePidsPerMemoryRecord() : Unit = {
+    val logProps = new Properties()
+
+    // create a log
+    val log = new Log(logDir,
+      LogConfig(logProps),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+
+    val epoch: Short = 0
+
+    val buffer = ByteBuffer.allocate(512)
+
+    var builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 0L, time.milliseconds(), 1L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    // Append a record with other pids.
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 1L, time.milliseconds(), 2L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    // Append a record with other pids.
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 2L, time.milliseconds(), 3L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    // Append a record with other pids.
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 3L, time.milliseconds(), 4L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    buffer.flip()
+    val memoryRecords = MemoryRecords.readableRecords(buffer)
+
+    log.append(MemoryRecords.readableRecords(buffer), false)
+    log.flush()
+
+    val fetchedData = log.read(0, Int.MaxValue)
+
+    val origIterator = memoryRecords.entries().iterator()
+    for (entry <- fetchedData.records.entries().asScala) {
+      assertTrue(origIterator.hasNext)
+      val origEntry = origIterator.next()
+      assertEquals(origEntry.pid(), entry.pid())
+      assertEquals(origEntry.baseOffset(), entry.baseOffset())
+      assertEquals(origEntry.baseSequence(), entry.baseSequence())
+    }
+  }
+
+  @Test(expected = classOf[DuplicateSequenceNumberException])
+  def testMultiplePidsWithDuplicates() : Unit = {
+    val logProps = new Properties()
+
+    // create a log
+    val log = new Log(logDir,
+      LogConfig(logProps),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+
+    val epoch: Short = 0
+
+    val buffer = ByteBuffer.allocate(512)
+
+    var builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 0L, time.milliseconds(), 1L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    // Append a record with other pids.
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 1L, time.milliseconds(), 2L, epoch, 0)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    // Append a record with other pids.
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 2L, time.milliseconds(), 1L, epoch, 1)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 3L, time.milliseconds(), 2L, epoch, 1)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 4L, time.milliseconds(), 1L, epoch, 1)
+    builder.append(new KafkaRecord("key".getBytes, "value".getBytes))
+    builder.close()
+
+    buffer.flip()
+    val memoryRecords = MemoryRecords.readableRecords(buffer)
+
+    log.append(MemoryRecords.readableRecords(buffer), false)
+    // Should throw a duplicate seqeuence exception here.
+    assertFalse("should have thrown a DuplicateSequenceNumberException.", true)
+  }
+
 
   @Test(expected = classOf[ProducerFencedException])
   def testOldProducerEpoch(): Unit = {
