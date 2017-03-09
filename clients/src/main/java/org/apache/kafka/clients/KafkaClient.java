@@ -149,8 +149,7 @@ public interface KafkaClient extends Closeable {
      * @param expectResponse true iff we expect a response
      * @param callback the callback to invoke when we get a response
      */
-    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
-                                          long createdTimeMs, boolean expectResponse,
-                                          RequestCompletionHandler callback);
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                   boolean expectResponse, RequestCompletionHandler callback);
 
 }
