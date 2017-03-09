@@ -87,7 +87,7 @@ public class RecordAccumulatorTest {
         int batchSize = 1024;
         RecordAccumulator accum = new RecordAccumulator(batchSize + EosLogEntry.LOG_ENTRY_OVERHEAD, 10L * batchSize,
                 CompressionType.NONE, 10L, 100L, metrics, time, new ApiVersions());
-        int appends = batchSize / msgSize;
+        int appends = expectedNumAppends(batchSize);
         for (int i = 0; i < appends; i++) {
             // append to the first batch
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
@@ -215,7 +215,7 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = new RecordAccumulator(1024 + EosLogEntry.LOG_ENTRY_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         // Just short of going over the limit so we trigger linger time
-        int appends = 1024 / msgSize;
+        int appends = expectedNumAppends(1024);
 
         // Partition on node1 only
         for (int i = 0; i < appends; i++)
@@ -367,7 +367,7 @@ public class RecordAccumulatorTest {
 
         RecordAccumulator accum = new RecordAccumulator(1024 + EosLogEntry.LOG_ENTRY_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
-        int appends = 1024 / msgSize;
+        int appends = expectedNumAppends(1024);
 
         // Test batches not in retry
         for (int i = 0; i < appends; i++) {
@@ -434,7 +434,7 @@ public class RecordAccumulatorTest {
         long retryBackoffMs = 100L;
         long lingerMs = 3000L;
         int requestTimeout = 60;
-        int messagesPerBatch = 1024 / msgSize;
+        int messagesPerBatch = expectedNumAppends(1024);
 
         final RecordAccumulator accum = new RecordAccumulator(1024 + EosLogEntry.LOG_ENTRY_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
@@ -476,7 +476,7 @@ public class RecordAccumulatorTest {
         long now = time.milliseconds();
         RecordAccumulator accum = new RecordAccumulator(1024 + EosLogEntry.LOG_ENTRY_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, 10, 100L, metrics, time, new ApiVersions());
-        int appends = 1024 / msgSize;
+        int appends = expectedNumAppends(1024);
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
@@ -502,5 +502,17 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
+    }
+
+    private int expectedNumAppends(int batchSize) {
+        int size = 0;
+        int offsetDelta = 0;
+        while (true) {
+            int recordSize = EosLogRecord.sizeInBytes(offsetDelta, 0, key, value);
+            if (size + recordSize > batchSize)
+                return offsetDelta;
+            offsetDelta += 1;
+            size += recordSize;
+        }
     }
 }
