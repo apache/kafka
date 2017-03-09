@@ -100,7 +100,7 @@ final class InFlightRequests {
      * @param node The node
      * @return The request count.
      */
-    public int nodeCount(String node) {
+    public int count(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
         return queue == null ? 0 : queue.size();
     }
@@ -108,7 +108,7 @@ final class InFlightRequests {
     /**
      * Return true if there is no in-flight request directed at the given node and false otherwise
      */
-    public boolean isNodeEmpty(String node) {
+    public boolean isEmpty(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
         return queue != null && !queue.isEmpty();
     }

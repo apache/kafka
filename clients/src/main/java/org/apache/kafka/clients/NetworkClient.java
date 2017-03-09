@@ -399,12 +399,12 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public int inFlightRequestCount(String node) {
-        return this.inFlightRequests.nodeCount(node);
+        return this.inFlightRequests.count(node);
     }
 
     @Override
     public boolean hasInFlightRequests(String node) {
-        return this.inFlightRequests.isNodeEmpty(node);
+        return this.inFlightRequests.isEmpty(node);
     }
 
     /**
@@ -441,7 +441,7 @@ public class NetworkClient implements KafkaClient {
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
-            int currInflight = this.inFlightRequests.nodeCount(node.idString());
+            int currInflight = this.inFlightRequests.count(node.idString());
             if (currInflight == 0 && this.connectionStates.isReady(node.idString())) {
                 // if we find an established connection with no in-flight requests we can stop right away
                 log.trace("Found least loaded node {} connected with no in-flight requests", node);
