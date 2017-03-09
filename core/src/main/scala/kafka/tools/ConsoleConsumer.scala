@@ -411,6 +411,7 @@ object ConsoleConsumer extends Logging {
 
 class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
+  var printValue = true
   var printTimestamp = false
   var keySeparator = "\t".getBytes
   var lineSeparator = "\n".getBytes
@@ -423,6 +424,8 @@ class DefaultMessageFormatter extends MessageFormatter {
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
+    if (props.containsKey("print.value"))
+      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes
     if (props.containsKey("line.separator"))
@@ -455,7 +458,11 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     if (printKey) write(keyDeserializer, key, keySeparator)
-    write(valueDeserializer, value, lineSeparator)
+    if (printValue) {
+      write(valueDeserializer, value, lineSeparator)
+    } else {
+      write(None, "".getBytes(), lineSeparator)
+    }
   }
 }
 
