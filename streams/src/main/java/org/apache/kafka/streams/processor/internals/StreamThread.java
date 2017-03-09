@@ -217,7 +217,7 @@ public class StreamThread extends Thread {
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener;
-    final static int UNLIMITED_RECORDS = -1;
+    private final static int UNLIMITED_RECORDS = -1;
 
     public synchronized boolean isInitialized() {
         return state == State.RUNNING;
@@ -574,13 +574,15 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Schedule the records processing by selecting which record is processed next
+     * Schedule the records processing by selecting which record is processed next. Commits may
+     * happen as records are processed.
      * @tasks The tasks that have records.
      * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
      *                                     if UNLIMITED_RECORDS, then commit is never called
+     * @return Number of records processed since last commit.
      */
-    private long scheduleAndPunctuate(final Map<TaskId, StreamTask> tasks,
-                                      final long recordsProcessedBeforeCommit) {
+    private long processAndPunctuate(final Map<TaskId, StreamTask> tasks,
+                                     final long recordsProcessedBeforeCommit) {
 
         long totalProcessedEachRound;
         long totalProcessedSinceLastCommit = 0;
@@ -663,13 +665,14 @@ public class StreamThread extends Thread {
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
-                long totalProcessed = scheduleAndPunctuate(activeTasks, recordsProcessedBeforeCommit);
-                long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
-                    timerStartedMs);
-
-                recordsProcessedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
-                    processLatency, commitTimeMs);
+                final long totalProcessed = processAndPunctuate(activeTasks, recordsProcessedBeforeCommit);
+                if (totalProcessed > 0) {
+                    final long processLatency = computeLatency();
+                    streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
+                        timerStartedMs);
+                    recordsProcessedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
+                        processLatency, commitTimeMs);
+                }
             }
 
             maybeCommit(timerStartedMs);
