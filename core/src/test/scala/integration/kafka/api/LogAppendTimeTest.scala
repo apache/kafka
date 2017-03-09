@@ -58,7 +58,11 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     val createTime = now - TimeUnit.DAYS.toMillis(1)
     val producerRecords = (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes,
       s"value$i".getBytes))
-    producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
+    val recordMetadatas = producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
+    recordMetadatas.foreach { recordMetadata =>
+      assertTrue(recordMetadata.timestamp >= now)
+      assertTrue(recordMetadata.timestamp < now + TimeUnit.SECONDS.toMillis(60))
+    }
 
     val consumer = consumers.head
     consumer.subscribe(Collections.singleton(topic))
@@ -68,12 +72,14 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       consumerRecords.size == producerRecords.size
     }, s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records")
 
-    producerRecords.zip(consumerRecords).foreach { case (producerRecord, consumerRecord) =>
+    consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
+      val producerRecord = producerRecords(index)
+      val recordMetadata = recordMetadatas(index)
       assertEquals(new String(producerRecord.key), new String(consumerRecord.key))
       assertEquals(new String(producerRecord.value), new String(consumerRecord.value))
       assertNotEquals(producerRecord.timestamp, consumerRecord.timestamp)
-      assertTrue(consumerRecord.timestamp >= now)
-      assertTrue(consumerRecord.timestamp < now + TimeUnit.SECONDS.toMillis(60))
+      assertEquals(recordMetadata.timestamp, consumerRecord.timestamp)
+      assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType)
     }
   }
 
