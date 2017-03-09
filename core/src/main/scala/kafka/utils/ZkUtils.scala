@@ -42,37 +42,40 @@ import scala.collection._
 import scala.collection.JavaConverters._
 
 object ZkUtils {
-  val ConsumersPath = "/consumers"
-  val ClusterIdPath = "/cluster/id"
-  val BrokerIdsPath = "/brokers/ids"
-  val BrokerTopicsPath = "/brokers/topics"
-  val ReassignPartitionsPath = "/admin/reassign_partitions"
-  val DeleteTopicsPath = "/admin/delete_topics"
-  val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
-  val BrokerSequenceIdPath = "/brokers/seqid"
-  val EntityConfigChangesPath = "/config/changes"
 
-  // Important: it is necessary to add any new persistent Zookeeper path here
+
+  // Important: it is necessary to add any new top level Zookeeper path here
   val AdminPath = "/admin"
   val BrokersPath = "/brokers"
   val ClusterPath = "/cluster"
-  val EntityConfigPath = "/config"
+  val ConfigPath = "/config"
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
   val IsrChangeNotificationPath = "/isr_change_notification"
   val KafkaAclPath = "/kafka-acl"
   val KafkaAclChangesPath = "/kafka-acl-changes"
 
-  // Important: it is necessary to add any new persistent Zookeeper path to the Seq
-  val SecurePersistentZkRootPaths = Seq(AdminPath,
-                                        BrokersPath,
-                                        ClusterPath,
-                                        EntityConfigPath,
-                                        ControllerPath,
-                                        ControllerEpochPath,
-                                        IsrChangeNotificationPath,
-                                        KafkaAclPath,
-                                        KafkaAclChangesPath)
+  val ConsumersPath = "/consumers"
+  val ClusterIdPath = s"$ClusterPath/id"
+  val BrokerIdsPath = s"$BrokersPath/ids"
+  val BrokerTopicsPath = s"$BrokersPath/topics"
+  val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
+  val DeleteTopicsPath = s"$AdminPath/delete_topics"
+  val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
+  val BrokerSequenceIdPath = s"$BrokersPath/seqid"
+  val ConfigChangesPath = s"$ConfigPath/changes"
+
+
+  // Important: it is necessary to add any new top level Zookeeper path to the Seq
+  val SecureZkRootPaths = Seq(AdminPath,
+                              BrokersPath,
+                              ClusterPath,
+                              ConfigPath,
+                              ControllerPath,
+                              ControllerEpochPath,
+                              IsrChangeNotificationPath,
+                              KafkaAclPath,
+                              KafkaAclChangesPath)
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -134,13 +137,13 @@ object ZkUtils {
     getTopicPartitionPath(topic, partitionId) + "/" + "state"
 
   def getEntityConfigRootPath(entityType: String): String =
-    ZkUtils.EntityConfigPath + "/" + entityType
+    ZkUtils.ConfigPath + "/" + entityType
 
   def getEntityConfigPath(entityType: String, entity: String): String =
     getEntityConfigRootPath(entityType) + "/" + entity
 
   def getEntityConfigPath(entityPath: String): String =
-    ZkUtils.EntityConfigPath + "/" + entityPath
+    ZkUtils.ConfigPath + "/" + entityPath
 
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
@@ -208,7 +211,7 @@ class ZkUtils(val zkClient: ZkClient,
   val persistentZkPaths = Seq(ConsumersPath,
                               BrokerIdsPath,
                               BrokerTopicsPath,
-                              EntityConfigChangesPath,
+                              ConfigChangesPath,
                               getEntityConfigRootPath(ConfigType.Topic),
                               getEntityConfigRootPath(ConfigType.Client),
                               DeleteTopicsPath,
