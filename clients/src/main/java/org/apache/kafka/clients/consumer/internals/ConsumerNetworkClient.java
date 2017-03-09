@@ -304,7 +304,7 @@ public class ConsumerNetworkClient implements Closeable {
         if (unsent.hasRequests(node))
             return true;
         synchronized (this) {
-            return client.inFlightRequestCount(node.idString()) > 0;
+            return client.hasInFlightRequests(node.idString());
         }
     }
 
@@ -328,7 +328,7 @@ public class ConsumerNetworkClient implements Closeable {
         if (unsent.hasRequests())
             return true;
         synchronized (this) {
-            return client.inFlightRequestCount() > 0;
+            return client.hasInFlightRequests();
         }
     }
 
