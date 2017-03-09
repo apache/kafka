@@ -217,6 +217,7 @@ public class StreamThread extends Thread {
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener;
+    final static int UNLIMITED_RECORDS = -1;
 
     public synchronized boolean isInitialized() {
         return state == State.RUNNING;
@@ -517,11 +518,11 @@ public class StreamThread extends Thread {
      * Get the next batch of records by polling.
      * @return Next batch of records or null if no records available.
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests() {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
-            records = consumer.poll(this.pollTimeMs);
+            records = consumer.poll(pollTimeMs);
         } catch (NoOffsetForPartitionException ex) {
             TopicPartition partition = ex.partition();
             if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
@@ -574,11 +575,15 @@ public class StreamThread extends Thread {
 
     /**
      * Schedule the records processing by selecting which record is processed next
+     * @tasks The tasks that have records.
+     * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
+     *                                     if UNLIMITED_RECORDS, then commit is never called
      */
-    private long scheduleAndPunctuate(final Map<TaskId, StreamTask> tasks) {
+    private long scheduleAndPunctuate(final Map<TaskId, StreamTask> tasks,
+                                      final long recordsProcessedBeforeCommit) {
 
         long totalProcessedEachRound;
-        long totalProcessed = 0;
+        long totalProcessedSinceLastCommit = 0;
         // Round-robin scheduling by taking one record from each task repeatedly
         // until no task has any records left
         do {
@@ -589,8 +594,16 @@ public class StreamThread extends Thread {
                 // and more are buffered waiting for the next round
                 if (numBuffered > 0) {
                     totalProcessedEachRound++;
-                    totalProcessed++;
+                    totalProcessedSinceLastCommit++;
                 }
+            }
+            if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
+                totalProcessedSinceLastCommit >= recordsProcessedBeforeCommit) {
+                totalProcessedSinceLastCommit = 0;
+                long processLatency = computeLatency();
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastCommit,
+                    timerStartedMs);
+                maybeCommit(this.timerStartedMs);
             }
         } while (totalProcessedEachRound != 0);
 
@@ -601,27 +614,62 @@ public class StreamThread extends Thread {
                 commitOne(task);
         }
 
-        return totalProcessed;
+        return totalProcessedSinceLastCommit;
+    }
+
+    /**
+     * Adjust the number of records that should be processed by scheduler. This avoids
+     * scenarios where the processing time is higher than the commit time.
+     * @param prevRecordsProcessedBeforeCommit Previous number of records processed by scheduler.
+     * @param totalProcessed Total number of records processed in this last round.
+     * @param processLatency Total processing latency in ms processed in this last round.
+     * @param commitTime Desired commit time in ms.
+     * @return An adjusted number of records to be processed in the next round.
+     */
+    private long adjustRecordsProcessedBeforeCommit(final long prevRecordsProcessedBeforeCommit, final long totalProcessed,
+                                                    final long processLatency, final long commitTime) {
+        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
+        // check if process latency larger than commit latency
+        // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
+        // we will never process all records again. This might be an issue if the initial measurement
+        // was off due to a slow start.
+        if (processLatency > commitTime) {
+            // push down
+            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
+            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
+                logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
+        } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
+            // push up
+            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
+            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
+                logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
+        }
+
+        return recordsProcessedBeforeCommit;
     }
 
     /**
      * Main event loop for polling, and processing records through topologies.
      */
     private void runLoop() {
-
+        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(sourceTopicPattern, rebalanceListener);
 
         while (stillRunning()) {
             this.timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
-            ConsumerRecords<byte[], byte[]> records = pollRequests();
+            ConsumerRecords<byte[], byte[]> records = pollRequests(this.pollTimeMs);
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
-                long totalProcessed = scheduleAndPunctuate(activeTasks);
-                streamsMetrics.processTimeSensor.record(computeLatency() / (double) totalProcessed,
+                long totalProcessed = scheduleAndPunctuate(activeTasks, recordsProcessedBeforeCommit);
+                long processLatency = computeLatency();
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
                     timerStartedMs);
+
+                recordsProcessedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
+                    processLatency, commitTimeMs);
             }
 
             maybeCommit(timerStartedMs);
@@ -698,7 +746,8 @@ public class StreamThread extends Thread {
     protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.info("{} Committing all tasks because the commit interval {}ms has elapsed", logPrefix, commitTimeMs);
+            log.info("{} Committing all tasks because the commit interval {}ms has elapsed {}ms",
+                logPrefix, commitTimeMs, now - lastCommitMs);
 
             commitAll();
             lastCommitMs = now;
