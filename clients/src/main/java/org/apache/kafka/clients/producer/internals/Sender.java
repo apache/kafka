@@ -229,11 +229,11 @@ public class Sender implements Runnable {
         }
 
         List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
-        // update sensors
+
         boolean needsTransactionStateReset = false;
         // Reset the PID if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches.
-        for (ProducerBatch expiredBatch : expiredBatches)
+        for (ProducerBatch expiredBatch : expiredBatches) {
             if (transactionState != null && expiredBatch.inRetry()) {
                 needsTransactionStateReset = true;
             }
@@ -378,7 +378,7 @@ public class Sender implements Runnable {
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                     correlationId,
                     batch.topicPartition,
-                    this.retries - batch.attempts - 1,
+                    this.retries - batch.attempts() - 1,
                     error);
             if (transactionState == null || (transactionState.pidAndEpoch().pid == batch.pid())) {
                 // If idempotence is enabled only retry the request if the current PID is the same as the pid of the
@@ -430,7 +430,7 @@ public class Sender implements Runnable {
             this.accumulator.unmutePartition(batch.topicPartition);
     }
 
-    private void failProducerBatch(RecordBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
+    private void failProducerBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }

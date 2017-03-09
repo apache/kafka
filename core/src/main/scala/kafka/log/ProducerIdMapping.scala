@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.LogEntry
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 import scala.collection.{immutable, mutable}
 
@@ -142,7 +142,7 @@ object ProducerIdMapping {
 
     // now fill in the CRC
     val crc = Utils.computeChecksum(buffer, PidEntriesOffset, buffer.limit - PidEntriesOffset)
-    Utils.writeUnsignedInt(buffer, CrcOffset, crc)
+    ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fos = new FileOutputStream(file)
     try {

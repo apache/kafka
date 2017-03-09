@@ -197,12 +197,12 @@ public abstract class Type {
     public static final Type UNSIGNED_INT32 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            Utils.writeUnsignedInt(buffer, (long) o);
+            ByteUtils.writeUnsignedInt(buffer, (long) o);
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            return Utils.readUnsignedInt(buffer);
+            return ByteUtils.readUnsignedInt(buffer);
         }
 
         @Override
