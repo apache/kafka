@@ -310,6 +310,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     mirrorMakerThreads.foreach(_.awaitShutdown())
   }
 
+  private[tools] def getClientId(consumerConfigProps: Properties) : String = {
+    return consumerConfigProps.getProperty("client.id", consumerConfigProps.getProperty("group.id"))
+  }
+
   private def createOldConsumers(numStreams: Int,
                                  consumerConfigProps: Properties,
                                  customRebalanceListener: Option[ConsumerRebalanceListener],
@@ -320,10 +324,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     // Set the consumer timeout so we will not block for low volume pipeline. The timeout is necessary to make sure
     // Offsets are still committed for those low volume pipelines.
     maybeSetDefaultProperty(consumerConfigProps, "consumer.timeout.ms", "10000")
-    // The default client id is group id, we manually set client id to groupId-index to avoid metric collision
-    val groupIdString = consumerConfigProps.getProperty("group.id")
+    // Check the consumerConfigProps for a provided client.id
+    // The default client id is group id, we manually set client id to clientId-index to avoid metric collision
+    val clientIdString = getClientId(consumerConfigProps)
     val connectors = (0 until numStreams) map { i =>
-      consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
+      consumerConfigProps.setProperty("client.id", clientIdString + "-" + i.toString)
       val consumerConfig = new OldConsumerConfig(consumerConfigProps)
       new ZookeeperConsumerConnector(consumerConfig)
     }
@@ -352,10 +357,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     // Hardcode the deserializer to ByteArrayDeserializer
     consumerConfigProps.setProperty("key.deserializer", classOf[ByteArrayDeserializer].getName)
     consumerConfigProps.setProperty("value.deserializer", classOf[ByteArrayDeserializer].getName)
-    // The default client id is group id, we manually set client id to groupId-index to avoid metric collision
-    val groupIdString = consumerConfigProps.getProperty("group.id")
+    // Check the consumerConfigProps for a provided client.id
+    // The default client id is group id, we manually set client id to clientId-index to avoid metric collision
+    val clientIdString = getClientId(consumerConfigProps)
     val consumers = (0 until numStreams) map { i =>
-      consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
+      consumerConfigProps.setProperty("client.id", clientIdString + "-" + i.toString)
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
     whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty for new consumer"))
@@ -617,7 +623,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def notifyCommit() {
       // Do nothing
     }
-    
+
     override def commitRequested(): Boolean = {
       false
     }

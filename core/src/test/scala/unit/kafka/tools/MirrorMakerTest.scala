@@ -17,6 +17,8 @@
 
 package kafka.tools
 
+import java.util.Properties
+
 import kafka.consumer.BaseConsumerRecord
 import org.apache.kafka.common.record.{Record, TimestampType}
 import org.junit.Assert._
@@ -53,6 +55,21 @@ class MirrorMakerTest {
     assertNull(producerRecord.partition)
     assertEquals("key", new String(producerRecord.key))
     assertEquals("value", new String(producerRecord.value))
+  }
+
+  @Test
+  def testGetClientIdFromConsumerConfig() {
+    val properties = new Properties()
+    properties.setProperty("group.id", "consumer_group")
+    properties.setProperty("client.id", "custom_client_id")
+    assertEquals("custom_client_id", MirrorMaker.getClientId(properties))
+  }
+
+  @Test
+  def testGetClientIdDefaultToGroupId() {
+    val properties = new Properties()
+    properties.setProperty("group.id", "consumer_group")
+    assertEquals("consumer_group", MirrorMaker.getClientId(properties))
   }
 
 }
