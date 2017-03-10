@@ -95,24 +95,7 @@ public class Rate implements MeasurableStat {
     }
 
     private double convert(long timeMs) {
-        switch (unit) {
-            case NANOSECONDS:
-                return timeMs * 1000.0 * 1000.0;
-            case MICROSECONDS:
-                return timeMs * 1000.0;
-            case MILLISECONDS:
-                return timeMs;
-            case SECONDS:
-                return timeMs / 1000.0;
-            case MINUTES:
-                return timeMs / (60.0 * 1000.0);
-            case HOURS:
-                return timeMs / (60.0 * 60.0 * 1000.0);
-            case DAYS:
-                return timeMs / (24.0 * 60.0 * 60.0 * 1000.0);
-            default:
-                throw new IllegalStateException("Unknown unit: " + unit);
-        }
+        return unit.convert(timeMs, TimeUnit.MILLISECONDS);
     }
 
     public static class SampledTotal extends SampledStat {
