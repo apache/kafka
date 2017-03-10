@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
-import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
+import kafka.common.{KafkaException, NoEpochForPartitionException, Topic, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.server.ConfigType
@@ -830,7 +830,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getAllTopics(): Seq[String] = {
-    val topics = getChildrenParentMayNotExist(BrokerTopicsPath)
+    val topics = getChildrenParentMayNotExist(BrokerTopicsPath).filter(Topic.isNameValid(_))
     if(topics == null)
       Seq.empty[String]
     else

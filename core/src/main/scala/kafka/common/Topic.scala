@@ -35,7 +35,7 @@ object Topic {
       throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be empty")
     else if (topic.equals(".") || topic.equals(".."))
       throw new org.apache.kafka.common.errors.InvalidTopicException("topic name cannot be \".\" or \"..\"")
-    else if (topic.length > maxNameLength)
+    else if (!isNameValid(topic, false))
       throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be longer than " + maxNameLength + " characters")
 
     rgx.findFirstIn(topic) match {
@@ -70,4 +70,12 @@ object Topic {
   def isInternal(topic: String): Boolean =
     InternalTopics.contains(topic)
 
+  def isNameValid(topic: String, alreadyCreated: Boolean = true): Boolean = {
+    val validTopicName = topic.length <= maxNameLength
+    if (alreadyCreated && !validTopicName)
+      println(s"The name of the topic '$topic' exceeds the allowed length (${Topic.getMaxNameLength}); so it will be ignored.")
+    validTopicName
+  }
+
+  def getMaxNameLength = maxNameLength
 }

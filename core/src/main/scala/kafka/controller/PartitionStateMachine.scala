@@ -19,7 +19,7 @@ package kafka.controller
 import collection._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
-import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
+import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, StateChangeFailedException, Topic, TopicAndPartition}
 import kafka.utils.{Logging, ReplicationUtils}
 import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -414,7 +414,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           try {
             val currentChildren = {
               debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
-              children.toSet
+              children.filter(Topic.isNameValid(_)).toSet
             }
             val newTopics = currentChildren -- controllerContext.allTopics
             val deletedTopics = controllerContext.allTopics -- currentChildren
