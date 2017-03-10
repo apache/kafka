@@ -47,7 +47,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
    * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
    */
-  def generateConfigs(): Seq[KafkaConfig]
+  def generateConfigs: Seq[KafkaConfig]
 
   /**
    * Override this in case ACLs or security credentials must be set before `servers` are started.
@@ -64,7 +64,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
-      instanceConfigs = generateConfigs()
+      instanceConfigs = generateConfigs
     instanceConfigs
   }
 
