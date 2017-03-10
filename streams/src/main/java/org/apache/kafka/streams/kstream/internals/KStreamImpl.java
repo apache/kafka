@@ -190,11 +190,42 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
-        String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde, streamName), this.name);
+        print(keySerde, valSerde, streamName, null);
     }
 
+    @Override
+    public void print(final Serde<K> keySerde, final Serde<V> valSerde, String streamName, final KeyValueMapper<K, V, String> mapper){
+        String name = topology.newName(PRINTING_NAME);
+        streamName = (streamName == null) ? this.name : streamName;
+        topology.addProcessor(name, new KStreamPeek<>(printAction(System.out, keySerde, valSerde, streamName, mapper)), this.name);
+    }
+
+    private static <K, V> ForeachAction<K, V> printAction(final PrintStream printStream, final Serde<?> keySerde, final Serde<?> valueSerde, final String streamName, final KeyValueMapper<K, V, String> mapper) {
+        return new ForeachAction<K, V>() {
+            @Override
+            public void apply(final K key, final V value) {
+                K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
+                V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
+                if(mapper == null) {
+                    printStream.println("[" + streamName + "]: " + keyToPrint + " , " + valueToPrint);
+                } else {
+                    printStream.println("[" + streamName + "]: " + mapper.apply(keyToPrint, valueToPrint));
+                }
+            }
+
+            private Object maybeDeserialize(Object receivedElement, Deserializer<?> deserializer) {
+                if (receivedElement == null) {
+                    return null;
+                }
+
+                if (receivedElement instanceof byte[]) {
+                    return deserializer.deserialize("Topic", (byte[]) receivedElement);
+                }
+
+                return receivedElement;
+            }
+        };
+    }
 
     @Override
     public void writeAsText(String filePath) {
@@ -226,7 +257,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         try {
 
             PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde, streamName), this.name);
+            topology.addProcessor(name, new KStreamPeek<>(printAction(printStream, keySerde, valSerde, streamName, null)), this.name);
 
         } catch (FileNotFoundException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
