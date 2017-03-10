@@ -322,7 +322,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       val dir = new File(logDir, "log-" + i)
       dir.mkdirs()
 
-      val log = new Log(dir = dir,
+      val log = new Log(dir,
                         LogConfig(logConfigProperties(propertyOverrides, maxMessageSize, minCleanableDirtyRatio)),
                         logStartOffset = 0L,
                         recoveryPoint = 0L,

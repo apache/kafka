@@ -19,7 +19,6 @@ package kafka.log
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
-import java.util.concurrent.TimeUnit
 
 import kafka.common.KafkaException
 import kafka.utils.{Logging, nonthreadsafe}
@@ -31,21 +30,16 @@ import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 import scala.collection.{immutable, mutable}
 
-private[log] case class PidEntry(lastSeq: Int,
-                    epoch: Short,
-                    lastOffset: Long,
-                    numRecords: Int,
-                    timestamp: Long
-                   ) {
-  def firstSeq(): Int = {
+private[log] case class PidEntry(lastSeq: Int, epoch: Short, lastOffset: Long, numRecords: Int, timestamp: Long) {
+  def firstSeq: Int = {
     lastSeq - numRecords + 1
   }
 
-  def firstOffset(): Long = {
+  def firstOffset: Long = {
     lastOffset - numRecords + 1
   }
 }
-private[log] case class PidEntryRange(firstEntry: PidEntry, lastEntry: PidEntry)
+private[log] case class PidEntryRange(first: PidEntry, last: PidEntry)
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 object ProducerIdMapping {
@@ -74,7 +68,7 @@ object ProducerIdMapping {
     new Field(SequenceField, Type.INT32, "Last written sequence of the producer"),
     new Field(OffsetField, Type.INT64, "Last written offset of the producer"),
     new Field(NumRecordsField, Type.INT32, "The number of records written in the last log entry"),
-    new Field(TimestampField, Type.INT64, "Timestamp of the last written entry"));
+    new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"));
   val PidSnapshotMapSchema = new Schema(
     new Field(VersionField, Type.INT16, "Version of the snapshot file"),
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
@@ -181,9 +175,10 @@ object ProducerIdMapping {
  * @param snapParentDir
  */
 @nonthreadsafe
-class ProducerIdMapping(val topicPartition: TopicPartition,
-                        val config: LogConfig,
-                        val snapParentDir: File) extends Logging {
+class ProducerIdMapping(val config: LogConfig,
+                        val topicPartition: TopicPartition,
+                        val snapParentDir: File,
+                        val maxPidExpirationMs: Int) extends Logging {
   import ProducerIdMapping._
 
   val snapDir: File = new File(snapParentDir, formatDirName(topicPartition))
@@ -228,6 +223,12 @@ class ProducerIdMapping(val topicPartition: TopicPartition,
     }
   }
 
+  def checkForExpiredPids(currentTimeMs: Long) {
+    pidMap.retain { case (pid, lastEntry) =>
+      currentTimeMs - lastEntry.timestamp < maxPidExpirationMs
+    }
+  }
+
   def truncateAndReload(logEndOffset: Long) = {
     truncateSnapshotFiles(logEndOffset)
     loadFromSnapshot(logEndOffset)
@@ -237,10 +238,20 @@ class ProducerIdMapping(val topicPartition: TopicPartition,
    * Update the mapping to the given epoch and sequence number.
    */
   def update(pid: Long, pidEntry: PidEntry): Unit = {
-    if (pid != LogEntry.NO_PID) {
+    if (pid >= LogEntry.NO_PID) {
       pidMap.put(pid, pidEntry)
       lastMapOffset = pidEntry.lastOffset
     }
+  }
+
+  /**
+   * Load a previously stored PID entry into the cache. Ignore the entry if the timestamp is older
+   * than the current time minus the PID expiration time (i.e. if the PID has expired).
+   */
+  def load(pid: Long, pidEntry: PidEntry, currentTimeMs: Long) {
+    // TODO: Is it safe to depend on CREATE_TIME for this. I guess so because we also use it for retention
+    if (currentTimeMs - pidEntry.timestamp < maxPidExpirationMs)
+      update(pid, pidEntry)
   }
 
   /**
@@ -327,10 +338,8 @@ class ProducerIdMapping(val topicPartition: TopicPartition,
   }
 
   /**
-   * Returns the last valid snapshot with offset smaller than the
-   * base offset provided as a constructor parameter for loading
-   *
-   * @return
+   * Returns the last valid snapshot with offset smaller than the base offset provided as
+   * a constructor parameter for loading.
    */
   private def lastSnapshotFile(maxOffset: Long): Option[File] = {
     val files = listSnapshotFiles()

@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
+import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -33,6 +34,8 @@ class ProducerIdMappingTest extends JUnitSuite {
   var idMapping: ProducerIdMapping = null
   val partition = new TopicPartition("test", 0)
   val pid = 1L
+  val maxPidExpirationMs = 60 * 1000
+  val time = new MockTime
 
   @Before
   def setUp(): Unit = {
@@ -45,7 +48,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     idMappingDir = TestUtils.tempDir()
 
     // Instantiate IdMapping
-    idMapping = new ProducerIdMapping(partition, config, idMappingDir)
+    idMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
   }
 
   @After
@@ -56,35 +59,38 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Test
   def testBasicIdMapping(): Unit = {
+    val epoch = 0.toShort
+
     // First entry for id 0 added
-    checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 0L)
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)
 
     // Second entry for id 0 added
-    checkAndUpdate(idMapping, pid, 1, 0, 0L, 1, 1L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 0L, 1L)
 
     // Duplicate sequence number (matches previous sequence number)
     assertThrows[DuplicateSequenceNumberException] {
-      checkAndUpdate(idMapping, pid, 1, 0, 0L, 1, 1L)
+      checkAndUpdate(idMapping, pid, 1, epoch, 0L, 1L)
     }
 
     // Invalid sequence number (greater than next expected sequence number)
     assertThrows[OutOfOrderSequenceException] {
-      checkAndUpdate(idMapping, pid, 5, 0, 0L, 1, 2L)
+      checkAndUpdate(idMapping, pid, 5, epoch, 0L, 2L)
     }
 
     // Change epoch
-    checkAndUpdate(idMapping, pid, 0, 1, 0L, 1, 3L)
+    checkAndUpdate(idMapping, pid, 0, (epoch + 1).toShort, 0L, 3L)
 
     // Incorrect epoch
     assertThrows[ProducerFencedException] {
-      checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 4L)
+      checkAndUpdate(idMapping, pid, 0, epoch, 0L, 4L)
     }
   }
 
   @Test
   def testTakeSnapshot(): Unit = {
-    checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 0L)
-    checkAndUpdate(idMapping, pid, 1, 0, 1L, 1, 1L)
+    val epoch = 0.toShort
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 1L)
 
     // Take snapshot
     idMapping.maybeTakeSnapshot()
@@ -96,25 +102,27 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Test
   def testRecoverFromSnapshot(): Unit = {
-    checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 1L)
-    checkAndUpdate(idMapping, pid, 1, 0, 1L, 1, 2L)
+    val epoch = 0.toShort
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 1L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 2L)
 
     idMapping.maybeTakeSnapshot()
-    val recoveredMapping = new ProducerIdMapping(partition, config, idMappingDir)
+    val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
     recoveredMapping.truncateAndReload(1L)
 
     // entry added after recovery
-    checkAndUpdate(recoveredMapping, pid, 2, 0, 2L, 1, 3L)
+    checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, 3L)
   }
 
   @Test
   def testRemoveOldSnapshot(): Unit = {
-    checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 1L)
-    checkAndUpdate(idMapping, pid, 1, 0, 1L, 1, 2L)
+    val epoch = 0.toShort
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 1L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 2L)
 
     idMapping.maybeTakeSnapshot()
 
-    checkAndUpdate(idMapping, pid, 2, 0, 2L, 1, 3L)
+    checkAndUpdate(idMapping, pid, 2, epoch, 2L, 3L)
 
     idMapping.maybeTakeSnapshot()
 
@@ -124,7 +132,8 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Test
   def testSkipSnapshotIfOffsetUnchanged(): Unit = {
-    checkAndUpdate(idMapping, pid, 0, 0, 0L, 1, 0L)
+    val epoch = 0.toShort
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)
 
     idMapping.maybeTakeSnapshot()
 
@@ -137,18 +146,52 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Test
   def testStartOffset(): Unit = {
+    val epoch = 0.toShort
     val pid2 = 2L
-    checkAndUpdate(idMapping, pid2, 0, 0, 0L, 1, 1L)
-    checkAndUpdate(idMapping, pid, 0, 0, 1L, 1, 2L)
-    checkAndUpdate(idMapping, pid, 1, 0, 2L, 1, 3L)
-    checkAndUpdate(idMapping, pid, 2, 0, 3L, 1, 4L)
+    checkAndUpdate(idMapping, pid2, 0, epoch, 0L, 1L)
+    checkAndUpdate(idMapping, pid, 0, epoch, 1L, 2L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 2L, 3L)
+    checkAndUpdate(idMapping, pid, 2, epoch, 3L, 4L)
     idMapping.maybeTakeSnapshot()
 
     intercept[OutOfOrderSequenceException] {
-      val recoveredMapping = new ProducerIdMapping(partition, config, idMappingDir)
+      val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
       recoveredMapping.truncateAndReload(1L)
-      checkAndUpdate(recoveredMapping, pid2, 1, 0, 4L, 1, 5L)
+      checkAndUpdate(recoveredMapping, pid2, 1, epoch, 4L, 5L)
     }
+  }
+
+  @Test(expected = classOf[OutOfOrderSequenceException])
+  def testPidExpirationTimeout() {
+    val epoch = 5.toShort
+    val sequence = 37
+    checkAndUpdate(idMapping, pid, sequence, epoch, 1L)
+    time.sleep(maxPidExpirationMs + 1)
+    idMapping.checkForExpiredPids(time.milliseconds)
+    checkAndUpdate(idMapping, pid, sequence + 1, epoch, 1L)
+  }
+
+  @Test
+  def testLoadPid() {
+    val epoch = 5.toShort
+    val sequence = 37
+    val createTimeMs = time.milliseconds
+    idMapping.load(pid, PidEntry(sequence, epoch, 0L, 1, createTimeMs), time.milliseconds)
+    checkAndUpdate(idMapping, pid, sequence + 1, epoch, 2L)
+  }
+
+  @Test(expected = classOf[OutOfOrderSequenceException])
+  def testLoadIgnoresExpiredPids() {
+    val epoch = 5.toShort
+    val sequence = 37
+
+    val createTimeMs = time.milliseconds
+    time.sleep(maxPidExpirationMs + 1)
+    val loadTimeMs = time.milliseconds
+    idMapping.load(pid, PidEntry(sequence, epoch, 0L, 1, createTimeMs), loadTimeMs)
+
+    // entry wasn't loaded, so this should fail
+    checkAndUpdate(idMapping, pid, sequence + 1, epoch, 2L)
   }
 
   private def checkAndUpdate(mapping: ProducerIdMapping,
@@ -156,21 +199,11 @@ class ProducerIdMappingTest extends JUnitSuite {
                              seq: Int,
                              epoch: Short,
                              lastOffset: Long,
-                             numRecords: Int,
-                             timestamp: Long): Unit = {
-    checkAndUpdate(mapping, pid, seq, seq, epoch, lastOffset, numRecords, timestamp)
-  }
-
-  private def checkAndUpdate(mapping: ProducerIdMapping,
-                             pid: Long,
-                             firstSeq: Int,
-                             lastSeq: Int,
-                             epoch: Short,
-                             lastOffset: Long,
-                             numRecords: Int,
-                             timestamp: Long): Unit = {
-    val incomingPidEntry = PidEntry(lastSeq, epoch, lastOffset, numRecords, timestamp)
+                             timestamp: Long = time.milliseconds()): Unit = {
+    val numRecords = 1
+    val incomingPidEntry = PidEntry(seq, epoch, lastOffset, numRecords, timestamp)
     mapping.checkSeqAndEpoch(pid, incomingPidEntry)
     mapping.update(pid, incomingPidEntry)
   }
+
 }

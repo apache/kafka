@@ -185,8 +185,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
-      time.scheduler,
-      time)
+      scheduler = time.scheduler,
+      time = time)
     log
   }
 

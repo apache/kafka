@@ -20,7 +20,7 @@ package kafka.log
 import java.io.{File, IOException}
 import java.text.NumberFormat
 import java.util.concurrent.atomic._
-import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
+import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 
 import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common._
@@ -98,7 +98,8 @@ case class LogAppendInfo(var firstOffset: Long,
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
  * @param time The time instance used for checking the clock
- *
+ * @param maxPidExpirationMs The maximum amount of time to wait before a PID is considered expired
+ * @param pidExpirationCheckIntervalMs How often to check for PIDs which need to be expired
  */
 @threadsafe
 class Log(@volatile var dir: File,
@@ -106,7 +107,9 @@ class Log(@volatile var dir: File,
           @volatile var logStartOffset: Long = 0L,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
-          time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
+          time: Time = Time.SYSTEM,
+          val maxPidExpirationMs: Int = 60 * 60 * 1000,
+          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -123,12 +126,12 @@ class Log(@volatile var dir: File,
       0
   }
 
-  val topicAndPartition: TopicPartition = Log.parseTopicPartitionName(dir)
+  val topicPartition: TopicPartition = Log.parseTopicPartitionName(dir)
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
   /* Construct and load PID map */
-  private val pidMap = new ProducerIdMapping(topicAndPartition, config, dir)
+  private val pidMap = new ProducerIdMapping(config, topicPartition, dir, maxPidExpirationMs)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -147,8 +150,6 @@ class Log(@volatile var dir: File,
     info("Completed load of log %s with %d log segments, log start offset %d and log end offset %d in %d ms"
       .format(name, segments.size(), logStartOffset, logEndOffset, time.milliseconds - startMs))
   }
-
-  val topicPartition: TopicPartition = Log.parseTopicPartitionName(dir)
 
   private val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
 
@@ -175,6 +176,13 @@ class Log(@volatile var dir: File,
       def value = size
     },
     tags)
+
+  scheduler.schedule(name = "PeriodicPidExpirationCheck", fun = () => {
+    lock synchronized {
+      pidMap.checkForExpiredPids(time.milliseconds)
+    }
+  }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+
 
   /** The name of this log */
   def name  = dir.getName()
@@ -360,9 +368,11 @@ class Log(@volatile var dir: File,
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
         val logEntries = segment.read(startOffset, Some(lastOffset), Int.MaxValue).records
+        val currentTimeMs = time.milliseconds
         logEntries.entries.asScala.foreach { entry =>
-          pidMap.update(entry.pid, PidEntry(entry.lastSequence, entry.epoch, entry.lastOffset,
-            (entry.lastOffset - entry.baseOffset + 1).toInt, entry.maxTimestamp))
+          val pidEntry = PidEntry(entry.lastSequence, entry.epoch, entry.lastOffset,
+            (entry.lastOffset - entry.baseOffset + 1).toInt, entry.maxTimestamp)
+          pidMap.load(entry.pid, pidEntry, currentTimeMs)
         }
       }
       logStartOffset.foreach(pidMap.cleanFrom)
@@ -507,13 +517,13 @@ class Log(@volatile var dir: File,
             records = validRecords)
 
           // update the PID sequence mapping
-          for ((pid, incomingRecord) <- appendInfo.pidEntryMap) {
-            trace(s"Updating pid with sequence: $pid -> ${incomingRecord.lastEntry.lastSeq}")
+          for ((pid, incomingEntries) <- appendInfo.pidEntryMap) {
+            trace(s"Updating pid with sequence: $pid -> ${incomingEntries.last.lastSeq}")
             val newPidEntry =  if (assignOffsets) {
-              PidEntry(incomingRecord.lastEntry.lastSeq, incomingRecord.lastEntry.epoch, appendInfo.lastOffset,
-                incomingRecord.lastEntry.numRecords, incomingRecord.lastEntry.timestamp)
+              PidEntry(incomingEntries.last.lastSeq, incomingEntries.last.epoch, appendInfo.lastOffset,
+                incomingEntries.last.numRecords, incomingEntries.last.timestamp)
             } else {
-              incomingRecord.lastEntry
+              incomingEntries.last
             }
             pidMap.update(pid, newPidEntry)
           }
@@ -555,8 +565,8 @@ class Log(@volatile var dir: File,
       try {
         // verify that the epoch and sequence are correct before appending. Note that for requests coming from
         // producer, there will be exactly one LogEntry per Record, and hence one Pid per Record.
-        trace(s"checking sequence for pid: $pid, seq: ${incomingEntries.firstEntry.lastSeq}, end seq: ${incomingEntries.lastEntry.lastSeq}")
-        pidMap.checkSeqAndEpoch(pid, incomingEntries.firstEntry)
+        trace(s"checking sequence for pid: $pid, seq: ${incomingEntries.first.lastSeq}, end seq: ${incomingEntries.last.lastSeq}")
+        pidMap.checkSeqAndEpoch(pid, incomingEntries.first)
       } catch {
         case e: DuplicateSequenceNumberException =>
           isDuplicate = true
@@ -564,10 +574,10 @@ class Log(@volatile var dir: File,
             case Some(lastAppendedEntry) =>
               if (assignOffsets) {
                 // This request is coming straight from the client.
-                if (incomingEntries.firstEntry != incomingEntries.lastEntry) {
+                if (incomingEntries.first != incomingEntries.last) {
                   throw new InvalidRecordException("Got multiple LogEntries in a single ProduceRequest. This indicates a bad client.")
                 }
-                val incomingEntryInfo = incomingEntries.firstEntry
+                val incomingEntryInfo = incomingEntries.first
                 if (!(incomingEntryInfo.firstSeq == lastAppendedEntry.firstSeq
                   && incomingEntryInfo.lastSeq == lastAppendedEntry.lastSeq)) {
                   // the duplicate is not at the tail of the log. This should never happen, with a properly written client.
@@ -642,10 +652,10 @@ class Log(@volatile var dir: File,
       val currentPidEntry = PidEntry(entry.lastSequence, entry.epoch, entry.lastOffset, numRecordsInEntry, entry.maxTimestamp)
       if (entry.pid != LogEntry.NO_PID) {
         pidEntryMap.get(entry.pid) match {
-          case Some(tuple) =>
-            ProducerIdMapping.validatePidEntries(entry.pid, tuple.lastEntry, currentPidEntry)
+          case Some(entryRange) =>
+            ProducerIdMapping.validatePidEntries(entry.pid, entryRange.last, currentPidEntry)
            // If we have seen this pid before, replace the last PidEntry with information from the current LogEntry
-            pidEntryMap.put(entry.pid, PidEntryRange(tuple.firstEntry, currentPidEntry))
+            pidEntryMap.put(entry.pid, PidEntryRange(entryRange.first, currentPidEntry))
           case None =>
             // If this is the first time we are seeing a particular pid, set both the first and the last PidEntry for
             // this pid to span the first and last offset/sequence of the the current LogEntry.
