@@ -618,10 +618,8 @@ class ReplicaManager(val config: KafkaConfig,
     quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
   }
 
-  def getMagicAndTimestampType(topicPartition: TopicPartition): Option[(Byte, TimestampType)] =
-    getReplica(topicPartition).flatMap { replica =>
-      replica.log.map(log => (log.config.messageFormatVersion.messageFormatVersion, log.config.messageTimestampType))
-    }
+  def getMagic(topicPartition: TopicPartition): Option[Byte] =
+    getReplica(topicPartition).flatMap(_.log.map(_.config.messageFormatVersion.messageFormatVersion))
 
   def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) : Seq[TopicPartition] =  {
     replicaStateChangeLock synchronized {
