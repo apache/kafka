@@ -18,6 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
+import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
@@ -248,7 +249,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then
     for (actual <- propsCapture.getValues) {
@@ -282,7 +283,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then
     for (actual <- propsCapture.getValues) {
@@ -312,7 +313,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then other property remains
     for (actual <- propsCapture.getValues) {

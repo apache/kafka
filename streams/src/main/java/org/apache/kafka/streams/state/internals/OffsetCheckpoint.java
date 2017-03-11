@@ -28,6 +28,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -168,7 +169,7 @@ public class OffsetCheckpoint {
      * @throws IOException if there is any IO exception during delete
      */
     public void delete() throws IOException {
-        file.delete();
+        Files.delete(file.toPath());
     }
 
     @Override

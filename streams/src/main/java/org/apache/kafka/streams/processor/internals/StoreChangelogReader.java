@@ -102,9 +102,11 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // remove any partitions where we already have all of the data
             final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
-            for (final TopicPartition topicPartition : endOffsets.keySet()) {
+            for (final Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
+                TopicPartition topicPartition = entry.getKey();
+                Long offset = entry.getValue();
                 final StateRestorer restorer = stateRestorers.get(topicPartition);
-                if (restorer.checkpoint() >= endOffsets.get(topicPartition)) {
+                if (restorer.checkpoint() >= offset) {
                     restorer.setRestoredOffset(restorer.checkpoint());
                 } else {
                     needsRestoring.put(topicPartition, restorer);

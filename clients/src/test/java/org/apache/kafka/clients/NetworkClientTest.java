@@ -116,9 +116,11 @@ public class NetworkClientTest {
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1,
                 client.inFlightRequestCount(node.idString()));
+        assertTrue(client.hasInFlightRequests(node.idString()));
 
         client.close(node.idString());
         assertEquals("There should be no in-flight request after close", 0, client.inFlightRequestCount(node.idString()));
+        assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
     }
 
@@ -247,6 +249,7 @@ public class NetworkClientTest {
         client.send(request, now);
         client.poll(requestTimeoutMs, now);
         assertEquals(1, client.inFlightRequestCount(node.idString()));
+        assertTrue(client.hasInFlightRequests(node.idString()));
 
         selector.close(node.idString());
         List<ClientResponse> responses = client.poll(requestTimeoutMs, time.milliseconds());

@@ -67,6 +67,11 @@ public class WindowTest {
     }
 
     @Test
+    public void shouldNotBeEqualIfNull() {
+        assertNotEquals(window, null);
+    }
+
+    @Test
     public void shouldNotBeEqualIfStartOrEndIsDifferent() {
         assertNotEquals(window, new TestWindow(0, window.endMs));
         assertNotEquals(window, new TestWindow(7, window.endMs));

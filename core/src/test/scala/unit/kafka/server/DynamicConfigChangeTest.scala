@@ -148,7 +148,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "ANONYMOUS/clients/overriddenUserClientId", userClientIdProps)
 
     // Remove config change znodes to force quota initialization only through loading of user/client quotas
-    zkUtils.getChildren(ZkUtils.EntityConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.EntityConfigChangesPath + "/" + p) }
+    zkUtils.getChildren(ZkUtils.ConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.ConfigChangesPath + "/" + p) }
     server.startup()
     val quotaManagers = server.apis.quotas
 
