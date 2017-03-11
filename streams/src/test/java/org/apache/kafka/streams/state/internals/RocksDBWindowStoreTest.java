@@ -183,8 +183,6 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
         assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
-
-        windowStore.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -591,6 +589,7 @@ public class RocksDBWindowStoreTest {
         );
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() throws Exception {
         windowStore = createWindowStore(context, false, true);

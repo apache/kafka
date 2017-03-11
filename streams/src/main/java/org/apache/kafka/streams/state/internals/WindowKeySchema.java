@@ -49,7 +49,11 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
                 if (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
                     final Bytes keyBytes = WindowStoreUtils.bytesKeyFromBinaryKey(bytes.get());
-                    return keyBytes.equals(binaryKey);
+                    if (!keyBytes.equals(binaryKey)) {
+                        return false;
+                    }
+                    final long time = WindowStoreUtils.timestampFromBinaryKey(bytes.get());
+                    return time >= from && time <= to;
                 }
                 return false;
             }
