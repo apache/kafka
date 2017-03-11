@@ -56,7 +56,7 @@ public interface Records {
     /**
      * Get the shallow log entries in this log buffer. Note that the signature allows subclasses
      * to return a more specific log entry type. This enables optimizations such as in-place offset
-     * assignment (see {@link ByteBufferLogInputStream.ByteBufferLogEntry}), and partial reading of
+     * assignment (see for example {@link EosLogEntry}), and partial reading of
      * record data (see {@link FileLogInputStream.FileChannelLogEntry#magic()}.
      * @return An iterator over the shallow entries of the log
      */

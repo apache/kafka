@@ -451,7 +451,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
     val logCleanerFilter = new LogRecordFilter {
-      def shouldRetain(record: LogRecord): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats)
+      def shouldRetain(record: LogRecord): Boolean =
+        record.isControlRecord || shouldRetainMessage(source, map, retainDeletes, record, stats)
     }
 
     var position = 0
@@ -474,7 +475,7 @@ private[log] class Cleaner(val id: Int,
       if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = MemoryRecords.readableRecords(writeBuffer)
-        dest.append(firstOffset = retained.entries().iterator().next().baseOffset,
+        dest.append(firstOffset = retained.entries.iterator.next().baseOffset,
           largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
@@ -497,7 +498,6 @@ private[log] class Cleaner(val id: Int,
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
-
 
     if (record.hasKey) {
       val key = record.key
@@ -630,7 +630,7 @@ private[log] class Cleaner(val id: Int,
 
       val startPosition = position
       for (record <- records.records.asScala) {
-        if (record.hasKey && record.offset >= start) {
+        if (!record.isControlRecord && record.hasKey && record.offset >= start) {
           if (map.size < maxDesiredMapSize)
             map.put(record.key, record.offset)
           else

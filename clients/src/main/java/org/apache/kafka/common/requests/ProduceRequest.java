@@ -150,7 +150,7 @@ public class ProduceRequest extends AbstractRequest {
 
             if (iterator.hasNext())
                 throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
-                        "contain more than one log entry");
+                        "contain exactly one log entry");
         }
     }
 
