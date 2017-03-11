@@ -97,7 +97,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * <p>
  * A simple example might look like this:
  * <pre>{@code
- * Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
+ * Map<String, Object> props = new HashMap<>();
  * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -105,7 +105,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * StreamsConfig config = new StreamsConfig(props);
  *
  * KStreamBuilder builder = new KStreamBuilder();
- * builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
+ * builder.stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
  * KafkaStreams streams = new KafkaStreams(builder, config);
  * streams.start();
