@@ -467,7 +467,8 @@ public class MemoryRecordsBuilder {
             recordSize = Records.LOG_OVERHEAD + Record.recordSize(magic, key, value);
         } else {
             int nextOffsetDelta = (int) (lastOffset + 1 - baseOffset);
-            recordSize = EosLogRecord.sizeInBytes(nextOffsetDelta, timestamp, key, value);
+            long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
+            recordSize = EosLogRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
         }
 
         return numRecords == 0 ?

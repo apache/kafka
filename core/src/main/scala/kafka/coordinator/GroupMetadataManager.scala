@@ -448,7 +448,7 @@ class GroupMetadataManager(val brokerId: Int,
                 case offsetKey: OffsetKey =>
                   // load offset
                   val key = offsetKey.key
-                  if (record.hasNullValue) {
+                  if (!record.hasValue) {
                     loadedOffsets.remove(key)
                     removedOffsets.add(key)
                   } else {

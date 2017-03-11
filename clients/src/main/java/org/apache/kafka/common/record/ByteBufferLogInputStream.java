@@ -60,7 +60,7 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
         if (magic > LogEntry.MAGIC_VALUE_V1)
             return new EosLogEntry(entrySlice);
         else
-            return new OldLogEntry.ByteBufferLogEntry(entrySlice);
+            return new OldLogEntry.ByteBufferOldLogEntry(entrySlice);
     }
 
 }

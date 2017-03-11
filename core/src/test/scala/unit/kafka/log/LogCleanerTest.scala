@@ -326,14 +326,14 @@ class LogCleanerTest extends JUnitSuite {
 
   /* extract all the keys from a log */
   def keysInLog(log: Log): Iterable[Int] =
-    log.logSegments.flatMap(s => s.log.records.asScala.filter(!_.hasNullValue).filter(_.hasKey).map(record => TestUtils.readString(record.key).toInt))
+    log.logSegments.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(record => TestUtils.readString(record.key).toInt))
 
   /* extract all the offsets from a log */
   def offsetsInLog(log: Log): Iterable[Long] =
-    log.logSegments.flatMap(s => s.log.records.asScala.filter(!_.hasNullValue).filter(_.hasKey).map(m => m.offset))
+    log.logSegments.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
 
   def unkeyedMessageCountInLog(log: Log) =
-    log.logSegments.map(s => s.log.records.asScala.filter(!_.hasNullValue).count(m => !m.hasKey)).sum
+    log.logSegments.map(s => s.log.records.asScala.filter(_.hasValue).count(m => !m.hasKey)).sum
 
   def abortCheckDone(topicPartition: TopicPartition): Unit = {
     throw new LogCleaningAbortedException()

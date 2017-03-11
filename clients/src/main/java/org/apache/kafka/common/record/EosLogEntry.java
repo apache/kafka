@@ -53,7 +53,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  The current attributes are given below:
  *
  *  -----------------------------------------------------------------------------------
- *  | Unused (5-16) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
  *  -----------------------------------------------------------------------------------
  */
 public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
@@ -67,13 +67,13 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     static final int MAGIC_LENGTH = 1;
     static final int ATTRIBUTES_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
     static final int ATTRIBUTE_LENGTH = 2;
-    static final int BASE_TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    static final int LAST_OFFSET_DELTA_LENGTH = 4;
+    static final int BASE_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
     static final int BASE_TIMESTAMP_LENGTH = 8;
     static final int MAX_TIMESTAMP_OFFSET = BASE_TIMESTAMP_OFFSET + BASE_TIMESTAMP_LENGTH;
     static final int MAX_TIMESTAMP_LENGTH = 8;
-    static final int LAST_OFFSET_DELTA_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
-    static final int LAST_OFFSET_DELTA_LENGTH = 4;
-    static final int PID_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
+    static final int PID_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
     static final int PID_LENGTH = 8;
     static final int EPOCH_OFFSET = PID_OFFSET + PID_LENGTH;
     static final int EPOCH_LENGTH = 2;
@@ -149,8 +149,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
     @Override
     public int lastSequence() {
-        // FIXME: cast to int
-        return baseSequence() + (int) ByteUtils.readUnsignedInt(buffer, LAST_OFFSET_DELTA_OFFSET);
+        return baseSequence() + buffer.getInt(LAST_OFFSET_DELTA_OFFSET);
     }
 
     @Override
@@ -360,10 +359,14 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
             return 0;
 
         int size = LOG_ENTRY_OVERHEAD;
+        Long baseTimestamp = null;
         while (iterator.hasNext()) {
             LogRecord record = iterator.next();
             int offsetDelta = (int) (record.offset() - baseOffset);
-            size += EosLogRecord.sizeInBytes(offsetDelta, record.timestamp(), record.key(), record.value());
+            if (baseTimestamp == null)
+                baseTimestamp = record.timestamp();
+            long timestampDelta = record.timestamp() - baseTimestamp;
+            size += EosLogRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
         }
         return size;
     }
@@ -375,9 +378,13 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
         int size = LOG_ENTRY_OVERHEAD;
         int offsetDelta = 0;
+        Long baseTimestamp = null;
         while (iterator.hasNext()) {
             KafkaRecord record = iterator.next();
-            size += EosLogRecord.sizeInBytes(offsetDelta++, record.timestamp(), record.key(), record.value());
+            if (baseTimestamp == null)
+                baseTimestamp = record.timestamp();
+            long timestampDelta = record.timestamp() - baseTimestamp;
+            size += EosLogRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
         }
         return size;
     }

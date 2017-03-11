@@ -67,7 +67,7 @@ public interface LogRecord {
 
     /**
      * Get the size in bytes of the key.
-     * @return the size of the key, or 0 if there is no key
+     * @return the size of the key, or -1 if there is no key
      */
     int keySize();
 
@@ -85,15 +85,15 @@ public interface LogRecord {
 
     /**
      * Get the size in bytes of the value.
-     * @return the size of the value, or 0 if the value is null
+     * @return the size of the value, or -1 if the value is null
      */
     int valueSize();
 
     /**
-     * Check whether the value is null
+     * Check whether a value is present (i.e. if the value is not null)
      * @return true if so, false otherwise
      */
-    boolean hasNullValue();
+    boolean hasValue();
 
     /**
      * Get the record's value
@@ -102,12 +102,12 @@ public interface LogRecord {
     ByteBuffer value();
 
     /**
-     * For versions prior to 2, the record contains its own magic, so this function can be
-     * used to check whether it matches a particular value. For version 2 and above, this method
-     * returns true if the passed magic is greater than or equal to 2.
+     * Check whether the record has a particular magic. For versions prior to 2, the record contains its own magic,
+     * so this function can be used to check whether it matches a particular value. For version 2 and above, this
+     * method returns true if the passed magic is greater than or equal to 2.
+     *
      * @param magic the magic value to check
      * @return true if the record has a magic field (versions prior to 2) and the value matches
-     * FIXME: maybe this should be hasCompatibleMagic or something
      */
     boolean hasMagic(byte magic);
 

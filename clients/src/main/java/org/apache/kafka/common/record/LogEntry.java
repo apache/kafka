@@ -44,7 +44,7 @@ public interface LogEntry extends Iterable<LogRecord> {
     long NO_TIMESTAMP = -1L;
 
     /**
-     * Values used in the new message format by non-idempotent/transactional producers or when
+     * Values used in the new message format by non-idempotent/non-transactional producers or when
      * up-converting from an older message format.
      */
     long NO_PID = -1L;
@@ -84,8 +84,9 @@ public interface LogEntry extends Iterable<LogRecord> {
     long maxTimestamp();
 
     /**
-     * Get the timestamp type of this entry. This will be {@link TimestampType#CREATE_TIME}
-     * if the message has been up-converted from magic 0.
+     * Get the timestamp type of this entry. This will be {@link TimestampType#NO_TIMESTAMP_TYPE}
+     * if the message has magic 0.
+     *
      * @return The timestamp type
      */
     TimestampType timestampType();
@@ -105,19 +106,22 @@ public interface LogEntry extends Iterable<LogRecord> {
     long baseOffset();
 
     /**
-     * Get the offset following this entry (i.e. the last offset contained in this entry plus one).
-     * @return the next consecutive offset following this entry
+     * Get the last offset in this record set (inclusive).
+     *
+     * @return The offset of the last record in this entry
      */
     long lastOffset();
 
     /**
-     * Get the next consecutive offset following the records in this log entry.
-     * @return
+     * Get the offset following this entry (i.e. the last offset contained in this entry plus one).
+     *
+     * @return the next consecutive offset following this entry
      */
     long nextOffset();
 
     /**
      * Get the message format version of this entry (i.e its magic value).
+     *
      * @return the magic byte
      */
     byte magic();

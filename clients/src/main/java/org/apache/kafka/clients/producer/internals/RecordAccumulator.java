@@ -28,8 +28,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.EosLogEntry;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -187,7 +187,8 @@ public final class RecordAccumulator {
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
-            int size = Math.max(this.batchSize, EosLogEntry.entrySizeUpperBound(key, value));
+            int size = Math.max(this.batchSize, AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
             buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {

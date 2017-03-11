@@ -507,7 +507,7 @@ private[log] class Cleaner(val id: Int,
        *   2) if the message is a delete "tombstone" marker and enough time has passed
        */
       val redundant = foundOffset >= 0 && entry.offset < foundOffset
-      val obsoleteDelete = !retainDeletes && entry.hasNullValue
+      val obsoleteDelete = !retainDeletes && !entry.hasValue
       !redundant && !obsoleteDelete
     } else {
       stats.invalidMessage()

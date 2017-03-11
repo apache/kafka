@@ -221,7 +221,7 @@ object DumpLogSegments {
 
   private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
     override def parse(record: LogRecord): (Option[K], Option[V]) = {
-      if (record.hasNullValue) {
+      if (!record.hasValue) {
         (None, None)
       } else {
         val key = if (record.hasKey)
@@ -284,7 +284,7 @@ object DumpLogSegments {
     }
 
     override def parse(record: LogRecord): (Option[String], Option[String]) = {
-      if (record.hasNullValue)
+      if (!record.hasValue)
         (None, None)
       else if (!record.hasKey) {
         throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")

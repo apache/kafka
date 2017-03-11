@@ -44,8 +44,8 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.EosLogEntry;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -158,6 +158,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
     private final ProducerInterceptors<K, V> interceptors;
+    private final ApiVersions apiVersions;
+
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -297,8 +299,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             }
 
-            ApiVersions apiVersions = new ApiVersions();
-
+            this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.totalMemorySize,
                     this.compressionType,
@@ -479,7 +480,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             int partition = partition(record, serializedKey, serializedValue, cluster);
-            int serializedSize = EosLogEntry.entrySizeUpperBound(serializedKey, serializedValue);
+            int serializedSize = AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();

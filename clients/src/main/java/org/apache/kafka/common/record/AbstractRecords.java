@@ -173,6 +173,13 @@ public abstract class AbstractRecords implements Records {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 
+    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
+        if (magic >= LogEntry.MAGIC_VALUE_V2)
+            return EosLogEntry.entrySizeUpperBound(key, value);
+        else
+            return Records.LOG_OVERHEAD + Record.recordSize(magic, key, value);
+    }
+
     private static class LogEntryAndRecords {
         private final LogEntry entry;
         private final List<LogRecord> records;

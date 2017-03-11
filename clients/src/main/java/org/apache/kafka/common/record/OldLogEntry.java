@@ -75,8 +75,8 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
     }
 
     @Override
-    public boolean hasNullValue() {
-        return record().hasNullValue();
+    public boolean hasValue() {
+        return !record().hasNullValue();
     }
 
     @Override
@@ -130,11 +130,6 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
     }
 
     @Override
-    public long sequence() {
-        return 0;
-    }
-
-    @Override
     public int sizeInBytes() {
         return record().sizeInBytes() + LOG_OVERHEAD;
     }
@@ -158,6 +153,11 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
     @Override
     public short epoch() {
         return LogEntry.NO_EPOCH;
+    }
+
+    @Override
+    public long sequence() {
+        return LogEntry.NO_SEQUENCE;
     }
 
     @Override
@@ -259,7 +259,8 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
             CompressionType compressionType = wrapperRecord.compressionType();
             ByteBuffer wrapperValue = wrapperRecord.value();
             if (wrapperValue == null)
-                throw new InvalidRecordException("Found invalid compressed record set with null value");
+                throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
+                        wrapperMagic + ")");
 
             DataInputStream stream = new DataInputStream(compressionType.wrapForInput(
                     new ByteBufferInputStream(wrapperValue), wrapperRecord.magic()));
@@ -282,7 +283,8 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
                     byte magic = record.magic();
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
-                        throw new InvalidRecordException("Compressed message magic does not match wrapper magic");
+                        throw new InvalidRecordException("Compressed message magic " + magic +
+                                " does not match wrapper magic " + wrapperMagic);
 
                     if (magic > LogEntry.MAGIC_VALUE_V0) {
                         Record recordWithTimestamp = new Record(
@@ -368,11 +370,11 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
         }
     }
 
-    static class ByteBufferLogEntry extends OldLogEntry implements LogEntry.MutableLogEntry {
+    static class ByteBufferOldLogEntry extends OldLogEntry implements LogEntry.MutableLogEntry {
         private final ByteBuffer buffer;
         private final Record record;
 
-        ByteBufferLogEntry(ByteBuffer buffer) {
+        ByteBufferOldLogEntry(ByteBuffer buffer) {
             this.buffer = buffer;
             buffer.position(LOG_OVERHEAD);
             this.record = new Record(buffer.slice());
@@ -429,7 +431,7 @@ public abstract class OldLogEntry extends AbstractLogEntry implements LogRecord 
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            ByteBufferLogEntry that = (ByteBufferLogEntry) o;
+            ByteBufferOldLogEntry that = (ByteBufferOldLogEntry) o;
 
             return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
         }

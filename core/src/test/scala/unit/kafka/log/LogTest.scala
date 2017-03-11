@@ -974,7 +974,7 @@ class LogTest extends JUnitSuite {
     log.append(TestUtils.singletonRecords(value = null))
     val head = log.read(0, 4096, None).records.records.iterator.next()
     assertEquals(0, head.offset)
-    assertTrue("Message payload should be null.", head.hasNullValue)
+    assertTrue("Message payload should be null.", !head.hasValue)
   }
 
   @Test(expected = classOf[IllegalArgumentException])

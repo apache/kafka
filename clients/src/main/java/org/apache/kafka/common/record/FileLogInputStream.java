@@ -207,7 +207,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 if (magic > LogEntry.MAGIC_VALUE_V1)
                     underlying = new EosLogEntry(entryBuffer);
                 else
-                    underlying = new OldLogEntry.ByteBufferLogEntry(entryBuffer);
+                    underlying = new OldLogEntry.ByteBufferOldLogEntry(entryBuffer);
             } catch (IOException e) {
                 throw new KafkaException("Failed to load log entry at position " + position + " from file channel " + channel);
             }

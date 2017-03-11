@@ -41,8 +41,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  *   ValueLen => Varint
  *   Value => data
  *
- * The record attributes indicate whether the key and value fields are present. The current attributes
- * are depicted below:
+ * The current record attributes are depicted below:
  *
  *  -----------------------------------
  *  | Unused (1-7) | Control Flag (0) |
@@ -54,7 +53,10 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * base timestamp of the log entry that this record is contained in.
  */
 public class EosLogRecord implements LogRecord {
-    private static final int MAX_RECORD_OVERHEAD = 21;
+
+    // 5 bytes length + 10 bytes timestamp + 5 bytes offset + 5 bytes keylen + 5 bytes valuelen + 1 byte attributes
+    private static final int MAX_RECORD_OVERHEAD = 26;
+
     private static final int CONTROL_FLAG_MASK = 0x01;
     private static final int NULL_VALUE_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
 
@@ -126,12 +128,12 @@ public class EosLogRecord implements LogRecord {
 
     @Override
     public int keySize() {
-        return key == null ? 0 : key.remaining();
+        return key == null ? -1 : key.remaining();
     }
 
     @Override
     public int valueSize() {
-        return value == null ? 0 : value.remaining();
+        return value == null ? -1 : value.remaining();
     }
 
     @Override
@@ -145,8 +147,8 @@ public class EosLogRecord implements LogRecord {
     }
 
     @Override
-    public boolean hasNullValue() {
-        return value == null;
+    public boolean hasValue() {
+        return value != null;
     }
 
     @Override
@@ -204,7 +206,7 @@ public class EosLogRecord implements LogRecord {
     }
 
     /**
-     * Compute the checksum of the record from the attributes, key and value payloads
+     * Compute the checksum of the record from the timestamp, key and value payloads
      */
     private static long computeChecksum(long timestamp,
                                         ByteBuffer key,
@@ -311,27 +313,27 @@ public class EosLogRecord implements LogRecord {
     }
 
     public static int sizeInBytes(int offsetDelta,
-                                  long timestamp,
+                                  long timestampDelta,
                                   byte[] key,
                                   byte[] value) {
-        return sizeInBytes(offsetDelta, timestamp, wrapNullable(key), wrapNullable(value));
+        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value));
     }
 
     public static int sizeInBytes(int offsetDelta,
-                                  long timestamp,
+                                  long timestampDelta,
                                   ByteBuffer key,
                                   ByteBuffer value) {
-        int bodySize = sizeOfBodyInBytes(offsetDelta, timestamp, key, value);
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value);
         return bodySize + ByteUtils.sizeOfVarint(bodySize);
     }
 
     private static int sizeOfBodyInBytes(int offsetDelta,
-                                         long timestamp,
+                                         long timestampDelta,
                                          ByteBuffer key,
                                          ByteBuffer value) {
         int size = 1; // always one byte for attributes
         size += ByteUtils.sizeOfVarint(offsetDelta);
-        size += ByteUtils.sizeOfVarlong(timestamp);
+        size += ByteUtils.sizeOfVarlong(timestampDelta);
 
         if (key == null) {
             size += NULL_VALUE_SIZE_BYTES;

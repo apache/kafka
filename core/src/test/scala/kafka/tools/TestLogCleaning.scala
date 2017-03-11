@@ -143,7 +143,7 @@ object TestLogCleaning {
       for (entry <- fileRecords.records.asScala) {
         val key = TestUtils.readString(entry.key)
         val content =
-          if(entry.hasNullValue)
+          if (!entry.hasValue)
             null
           else
             TestUtils.readString(entry.value)

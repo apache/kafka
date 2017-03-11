@@ -560,7 +560,7 @@ class GroupMetadataManagerTest {
 
     val metadataTombstone = records.head
     assertTrue(metadataTombstone.hasKey)
-    assertTrue(metadataTombstone.hasNullValue)
+    assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
     val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
@@ -608,7 +608,7 @@ class GroupMetadataManagerTest {
 
     val metadataTombstone = records.head
     assertTrue(metadataTombstone.hasKey)
-    assertTrue(metadataTombstone.hasNullValue)
+    assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
     val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
@@ -679,7 +679,7 @@ class GroupMetadataManagerTest {
     assertEquals(2, records.size)
     records.foreach { message =>
       assertTrue(message.hasKey)
-      assertTrue(message.hasNullValue)
+      assertFalse(message.hasValue)
       val offsetKey = GroupMetadataManager.readMessageKey(message.key).asInstanceOf[OffsetKey]
       assertEquals(groupId, offsetKey.key.group)
       assertEquals("foo", offsetKey.key.topicPartition.topic)
