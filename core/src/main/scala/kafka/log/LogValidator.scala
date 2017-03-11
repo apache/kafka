@@ -77,18 +77,11 @@ private[kafka] object LogValidator extends Logging {
                                                    timestampType: TimestampType,
                                                    messageTimestampDiffMaxMs: Long,
                                                    toMagicValue: Byte): ValidationAndOffsetAssignResult = {
-    val sizeInBytesAfterConversion = if (toMagicValue > 1)
-      EosLogEntry.sizeInBytes(offsetCounter.value, records.records)
-    else
-      records.entries.asScala.map { logEntry =>
-      if (logEntry.magic > 1)
-        logEntry.sizeInBytes() // FIXME: Can we get a better estimate?
-      else
-        logEntry.sizeInBytes() + Message.headerSizeDiff(logEntry.magic(), toMagicValue)
-      }.sum
+    val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
+      CompressionType.NONE, records.records)
 
     val (pid, epoch, sequence) = {
-      val first = records.entries().asScala.head
+      val first = records.entries.asScala.head
       (first.pid, first.epoch, first.baseSequence)
     }
 
@@ -97,7 +90,7 @@ private[kafka] object LogValidator extends Logging {
       offsetCounter.value, now, pid, epoch, sequence)
 
     for (entry <- records.entries.asScala) {
-      ensureNotTransactional(entry)
+      ensureNonTransactional(entry)
 
       for (record <- entry.asScala) {
         ensureNotControlRecord(record)
@@ -127,7 +120,7 @@ private[kafka] object LogValidator extends Logging {
     val initialOffset = offsetCounter.value
 
     for (entry <- records.entries.asScala) {
-      ensureNotTransactional(entry)
+      ensureNonTransactional(entry)
 
       val baseOffset = offsetCounter.value
       for (record <- entry.asScala) {
@@ -201,7 +194,7 @@ private[kafka] object LogValidator extends Logging {
       val validatedRecords = new mutable.ArrayBuffer[LogRecord]
 
       for (entry <- records.entries.asScala) {
-        ensureNotTransactional(entry)
+        ensureNonTransactional(entry)
 
         for (record <- entry.asScala) {
           if (!record.hasMagic(entry.magic))
@@ -285,7 +278,7 @@ private[kafka] object LogValidator extends Logging {
       messageSizeMaybeChanged = true)
   }
 
-  private def ensureNotTransactional(entry: LogEntry) {
+  private def ensureNonTransactional(entry: LogEntry) {
     if (entry.isTransactional)
       throw new InvalidRecordException("Transactional messages are not currently supported")
   }

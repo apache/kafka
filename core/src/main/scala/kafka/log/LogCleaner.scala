@@ -492,22 +492,22 @@ private[log] class Cleaner(val id: Int,
   private def shouldRetainMessage(source: kafka.log.LogSegment,
                                   map: kafka.log.OffsetMap,
                                   retainDeletes: Boolean,
-                                  entry: LogRecord,
+                                  record: LogRecord,
                                   stats: CleanerStats): Boolean = {
-    val pastLatestOffset = entry.offset > map.latestOffset
+    val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
 
 
-    if (entry.hasKey) {
-      val key = entry.key
+    if (record.hasKey) {
+      val key = record.key
       val foundOffset = map.get(key)
       /* two cases in which we can get rid of a message:
        *   1) if there exists a message with the same key but higher offset
        *   2) if the message is a delete "tombstone" marker and enough time has passed
        */
-      val redundant = foundOffset >= 0 && entry.offset < foundOffset
-      val obsoleteDelete = !retainDeletes && !entry.hasValue
+      val redundant = foundOffset >= 0 && record.offset < foundOffset
+      val obsoleteDelete = !retainDeletes && !record.hasValue
       !redundant && !obsoleteDelete
     } else {
       stats.invalidMessage()

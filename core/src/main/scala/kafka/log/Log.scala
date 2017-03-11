@@ -471,7 +471,8 @@ class Log(@volatile var dir: File,
     var offsetOfMaxTimestamp = -1L
 
     for (entry <- records.entries.asScala) {
-      // update the first offset if on the first message
+      // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+      // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message.
       if (firstOffset < 0)
         firstOffset = if (entry.magic >= LogEntry.MAGIC_VALUE_V2) entry.baseOffset else entry.lastOffset
 
