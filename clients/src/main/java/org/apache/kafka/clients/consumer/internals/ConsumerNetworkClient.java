@@ -35,14 +35,13 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.errors.InterruptException;
 
@@ -243,6 +242,9 @@ public class ConsumerNetworkClient implements Closeable {
 
             // fail requests that couldn't be sent if they have expired
             failExpiredRequests(now);
+
+            // clean unsent requests collection to keep the map from growing indefinitely
+            unsent.clean();
         }
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
@@ -272,12 +274,12 @@ public class ConsumerNetworkClient implements Closeable {
         long startMs = time.milliseconds();
         long remainingMs = timeoutMs;
 
-        while (hasPendingRequest(node) && remainingMs > 0) {
+        while (hasPendingRequests(node) && remainingMs > 0) {
             poll(remainingMs);
             remainingMs = timeoutMs - (time.milliseconds() - startMs);
         }
 
-        return !hasPendingRequest(node);
+        return !hasPendingRequests(node);
     }
 
     /**
@@ -288,7 +290,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public int pendingRequestCount(Node node) {
         synchronized (this) {
-            return unsent.getRequestCount(node) + client.inFlightRequestCount(node.idString());
+            return unsent.requestCount(node) + client.inFlightRequestCount(node.idString());
         }
     }
 
@@ -298,11 +300,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node The node in question
      * @return A boolean indicating whether there is pending request
      */
-    public boolean hasPendingRequest(Node node) {
-        if (unsent.hasRequest(node))
+    public boolean hasPendingRequests(Node node) {
+        if (unsent.hasRequests(node))
             return true;
         synchronized (this) {
-            return client.inFlightRequestCount(node.idString()) > 0;
+            return client.hasInFlightRequests(node.idString());
         }
     }
 
@@ -313,7 +315,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public int pendingRequestCount() {
         synchronized (this) {
-            return unsent.getRequestCount() + client.inFlightRequestCount();
+            return unsent.requestCount() + client.inFlightRequestCount();
         }
     }
 
@@ -322,11 +324,11 @@ public class ConsumerNetworkClient implements Closeable {
      * have been transmitted (i.e. in-flight requests) and those which are awaiting transmission.
      * @return A boolean indicating whether there is pending request
      */
-    public boolean hasPendingRequest() {
-        if (unsent.hasRequest())
+    public boolean hasPendingRequests() {
+        if (unsent.hasRequests())
             return true;
         synchronized (this) {
-            return client.inFlightRequestCount() > 0;
+            return client.hasInFlightRequests();
         }
     }
 
@@ -351,12 +353,11 @@ public class ConsumerNetworkClient implements Closeable {
         // by NetworkClient, so we just need to check whether connections for any of the unsent
         // requests have been disconnected; if they have, then we complete the corresponding future
         // and set the disconnect flag in the ClientResponse
-        Set<Node> nodes = unsent.getNodes();
-        for (Node node: nodes) {
+        for (Node node : unsent.nodes()) {
             if (client.connectionFailed(node)) {
                 // Remove entry before invoking request callback to avoid callbacks handling
                 // coordinator failures traversing the unsent list again.
-                List<ClientRequest> requests = unsent.remove(node);
+                Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
@@ -369,8 +370,8 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        List<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
-        for (ClientRequest request: expiredRequests) {
+        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
+        for (ClientRequest request : expiredRequests) {
             RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
             handler.onFailure(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
         }
@@ -379,7 +380,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
         synchronized (this) {
-            List<ClientRequest> unsentRequests = unsent.remove(node);
+            Collection<ClientRequest> unsentRequests = unsent.remove(node);
             for (ClientRequest unsentRequest : unsentRequests) {
                 RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                 handler.onFailure(e);
@@ -393,25 +394,15 @@ public class ConsumerNetworkClient implements Closeable {
     private boolean trySend(long now) {
         // send any requests that can be sent now
         boolean requestsSent = false;
-        Set<Node> nodes = unsent.getNodes();
-        for (Node node: nodes) {
-            if (client.ready(node, now)) {
-                // Remove entry before invoking request callback to avoid callbacks handling
-                // coordinator failures traversing the unsent list again.
-                List<ClientRequest> requests = unsent.remove(node);
-                try {
-                    Iterator<ClientRequest> iterator = requests.iterator();
-                    while (iterator.hasNext()) {
-                        ClientRequest request = iterator.next();
-                        if (!client.ready(node, now))
-                            break;
-                        client.send(request, now);
-                        requestsSent = true;
-                        iterator.remove();
-                    }
-                } finally {
-                    if (!requests.isEmpty())
-                        unsent.put(node, requests);
+
+        for (Node node : unsent.nodes()) {
+            Iterator<ClientRequest> iterator = unsent.requestIterator(node);
+            while (iterator.hasNext()) {
+                ClientRequest request = iterator.next();
+                if (client.ready(node, now)) {
+                    client.send(request, now);
+                    iterator.remove();
+                    requestsSent = true;
                 }
             }
         }
@@ -482,12 +473,12 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    public class RequestFutureCompletionHandler implements RequestCompletionHandler {
+    private class RequestFutureCompletionHandler implements RequestCompletionHandler {
         private final RequestFuture<ClientResponse> future;
         private ClientResponse response;
         private RuntimeException e;
 
-        public RequestFutureCompletionHandler() {
+        private RequestFutureCompletionHandler() {
             this.future = new RequestFuture<>();
         }
 
@@ -536,65 +527,56 @@ public class ConsumerNetworkClient implements Closeable {
         boolean shouldBlock();
     }
 
-
     /*
-     * A threadsafe helper class to hold requests per node that has not been sent yet
+     * A threadsafe helper class to hold requests per node that have not been sent yet
      */
     private final static class UnsentRequests {
-        private final Map<Node, List<ClientRequest>> unsent;
+        private final ConcurrentMap<Node, ConcurrentLinkedQueue<ClientRequest>> unsent;
 
-        public UnsentRequests() {
-            unsent = new HashMap<>();
+        private UnsentRequests() {
+            unsent = new ConcurrentHashMap<>();
         }
 
-        public synchronized void put(Node node, List<ClientRequest> requests) {
-            List<ClientRequest> nodeUnsent = unsent.get(node);
-            if (nodeUnsent == null) {
-                nodeUnsent = new ArrayList<>();
-                unsent.put(node, nodeUnsent);
+        public void put(Node node, ClientRequest request) {
+            // the lock protects the put from a concurrent removal of the queue for the node
+            synchronized (unsent) {
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+                if (requests == null) {
+                    requests = new ConcurrentLinkedQueue<>();
+                    unsent.put(node, requests);
+                }
+                requests.add(request);
             }
-            nodeUnsent.addAll(requests);
         }
 
-        public synchronized void put(Node node, ClientRequest request) {
-            List<ClientRequest> nodeUnsent = unsent.get(node);
-            if (nodeUnsent == null) {
-                nodeUnsent = new ArrayList<>();
-                unsent.put(node, nodeUnsent);
-            }
-            nodeUnsent.add(request);
-        }
-
-        public synchronized int getRequestCount(Node node) {
-            List<ClientRequest> requests = unsent.get(node);
+        public int requestCount(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
             return requests == null ? 0 : requests.size();
         }
 
-        public synchronized int getRequestCount() {
+        public int requestCount() {
             int total = 0;
-            for (List<ClientRequest> requests : unsent.values())
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values())
                 total += requests.size();
             return total;
         }
 
-        public synchronized boolean hasRequest(Node node) {
-            List<ClientRequest> requests = unsent.get(node);
+        public boolean hasRequests(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
             return requests != null && !requests.isEmpty();
         }
 
-        public synchronized boolean hasRequest() {
-            for (List<ClientRequest> requests : unsent.values())
+        public boolean hasRequests() {
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values())
                 if (!requests.isEmpty())
                     return true;
             return false;
         }
 
-        public synchronized List<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+        public Collection<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
             List<ClientRequest> expiredRequests = new ArrayList<>();
-            Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
-                Iterator<ClientRequest> requestIterator = requestEntry.getValue().iterator();
+            for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values()) {
+                Iterator<ClientRequest> requestIterator = requests.iterator();
                 while (requestIterator.hasNext()) {
                     ClientRequest request = requestIterator.next();
                     if (request.createdTimeMs() < now - unsentExpiryMs) {
@@ -603,19 +585,39 @@ public class ConsumerNetworkClient implements Closeable {
                     } else
                         break;
                 }
-                if (requestEntry.getValue().isEmpty())
-                    iterator.remove();
             }
             return expiredRequests;
         }
 
-        public synchronized List<ClientRequest> remove(Node node) {
-            List<ClientRequest> requests = unsent.remove(node);
-            return requests == null ? Collections.<ClientRequest>emptyList() : requests;
+        public void clean() {
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
+            synchronized (unsent) {
+                Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
+                while (iterator.hasNext()) {
+                    ConcurrentLinkedQueue<ClientRequest> requests = iterator.next();
+                    if (requests.isEmpty())
+                        iterator.remove();
+                }
+            }
         }
 
-        public synchronized Set<Node> getNodes() {
-            return new HashSet<>(unsent.keySet());
+        public Collection<ClientRequest> remove(Node node) {
+            // the lock protects removal from a concurrent put which could otherwise mutate the
+            // queue after it has been removed from the map
+            synchronized (unsent) {
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
+                return requests == null ? Collections.<ClientRequest>emptyList() : requests;
+            }
+        }
+
+        public Iterator<ClientRequest> requestIterator(Node node) {
+            ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
+            return requests == null ? Collections.<ClientRequest>emptyIterator() : requests.iterator();
+        }
+
+        public Collection<Node> nodes() {
+            return unsent.keySet();
         }
     }
 

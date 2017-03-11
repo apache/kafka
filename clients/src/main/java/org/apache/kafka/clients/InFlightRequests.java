@@ -55,7 +55,7 @@ final class InFlightRequests {
     private Deque<NetworkClient.InFlightRequest> requestQueue(String node) {
         Deque<NetworkClient.InFlightRequest> reqs = requests.get(node);
         if (reqs == null || reqs.isEmpty())
-            throw new IllegalStateException("Response from server for which there are no in-flight requests.");
+            throw new IllegalStateException("There are no in-flight requests for node " + node);
         return reqs;
     }
 
@@ -96,23 +96,42 @@ final class InFlightRequests {
     }
 
     /**
-     * Return the number of inflight requests directed at the given node
+     * Return the number of in-flight requests directed at the given node
      * @param node The node
      * @return The request count.
      */
-    public int inFlightRequestCount(String node) {
+    public int count(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
         return queue == null ? 0 : queue.size();
     }
 
     /**
+     * Return true if there is no in-flight request directed at the given node and false otherwise
+     */
+    public boolean isEmpty(String node) {
+        Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
+        return queue != null && !queue.isEmpty();
+    }
+
+    /**
      * Count all in-flight requests for all nodes
      */
-    public int inFlightRequestCount() {
+    public int count() {
         int total = 0;
         for (Deque<NetworkClient.InFlightRequest> deque : this.requests.values())
             total += deque.size();
         return total;
+    }
+
+    /**
+     * Return true if there is no in-flight request and false otherwise
+     */
+    public boolean isEmpty() {
+        for (Deque<NetworkClient.InFlightRequest> deque : this.requests.values()) {
+            if (!deque.isEmpty())
+                return false;
+        }
+        return false;
     }
 
     /**

@@ -32,7 +32,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   override def configureSecurityBeforeServersStart() {
     super.configureSecurityBeforeServersStart()
-    zkUtils.makeSurePersistentPathExists(ZkUtils.EntityConfigChangesPath)
+    zkUtils.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
 
     def configCommandArgs(username: String, password: String) : Array[String] = {
       val credentials = kafkaServerSaslMechanisms.map(m => s"$m=[iterations=4096,password=$password]")

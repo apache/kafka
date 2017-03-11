@@ -16,19 +16,24 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
+import org.apache.kafka.common.KafkaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.io.FileNotFoundException;
-import java.io.StringWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -41,16 +46,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.Properties;
-import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.KafkaException;
 
 public class Utils {
 
@@ -101,85 +100,6 @@ public class Utils {
             throw new RuntimeException("This shouldn't happen.", e);
         }
     }
-
-    /**
-     * Read an unsigned integer from the given position without modifying the buffers position
-     *
-     * @param buffer the buffer to read from
-     * @param index the index from which to read the integer
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer, int index) {
-        return buffer.getInt(index) & 0xffffffffL;
-    }
-
-    /**
-     * Read an unsigned integer stored in little-endian format from the {@link InputStream}.
-     *
-     * @param in The stream to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return in.read()
-                | (in.read() << 8)
-                | (in.read() << 16)
-                | (in.read() << 24);
-    }
-
-    /**
-     * Read an unsigned integer stored in little-endian format from a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to read from
-     * @param offset The position in buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset] << 0 & 0xff)
-                | ((buffer[offset + 1] & 0xff) << 8)
-                | ((buffer[offset + 2] & 0xff) << 16)
-                | ((buffer[offset + 3] & 0xff) << 24);
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param index The position in the buffer at which to begin writing
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, int index, long value) {
-        buffer.putInt(index, (int) (value & 0xffffffffL));
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to the {@link OutputStream}.
-     *
-     * @param out The stream to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value);
-        out.write(value >>> 8);
-        out.write(value >>> 16);
-        out.write(value >>> 24);
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to write to
-     * @param offset The position in buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset] = (byte) value;
-        buffer[offset + 1] = (byte) (value >>> 8);
-        buffer[offset + 2] = (byte) (value >>> 16);
-        buffer[offset + 3]   = (byte) (value >>> 24);
-    }
-
 
     /**
      * Get the absolute value of the given number. If the number is Int.MinValue return 0. This is different from
@@ -824,4 +744,5 @@ public class Utils {
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
+
 }

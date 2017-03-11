@@ -103,9 +103,11 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
+        assertTrue(client.hasInFlightRequests());
         client.respond(produceResponse(tp, offset, Errors.NONE, 0));
         sender.run(time.milliseconds());
-        assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
+        assertEquals("All requests completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
         assertEquals(offset, future.get().offset());
@@ -153,14 +155,17 @@ public class SenderTest {
             String id = client.requests().peek().destination();
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
             client.disconnect(id);
             assertEquals(0, client.inFlightRequestCount());
+            assertFalse(client.hasInFlightRequests());
             assertFalse("Client ready status should be false", client.isReady(node, 0L));
             sender.run(time.milliseconds()); // receive error
             sender.run(time.milliseconds()); // reconnect
             sender.run(time.milliseconds()); // resend
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             long offset = 0;
             client.respond(produceResponse(tp, offset, Errors.NONE, 0));
             sender.run(time.milliseconds());
@@ -212,6 +217,7 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
             time.sleep(900);
@@ -224,6 +230,7 @@ public class SenderTest {
             // Sender should not send the second message to node 0.
             sender.run(time.milliseconds());
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
         } finally {
             m.close();
         }
@@ -246,6 +253,7 @@ public class SenderTest {
         client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
 
@@ -261,6 +269,7 @@ public class SenderTest {
         client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
     }

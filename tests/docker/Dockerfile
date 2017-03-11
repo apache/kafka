@@ -21,7 +21,7 @@ ENV MIRROR="http://apache.cs.utah.edu/"
 
 ADD ssh /root/.ssh
 RUN chmod 600 /root/.ssh/id_rsa
-RUN apt update && apt install -y unzip wget curl jq coreutils openssh-server net-tools vim openjdk-8-jdk python-pip python-dev libffi-dev libssl-dev
+RUN apt update && apt install -y unzip wget curl jq coreutils openssh-server net-tools vim python-pip python-dev libffi-dev libssl-dev
 RUN pip install -U pip && pip install --upgrade cffi ducktape==0.6.0
 RUN mkdir -p "/opt/kafka-0.8.2.2" && curl -s "${MIRROR}kafka/0.8.2.2/kafka_2.10-0.8.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.8.2.2"
 RUN mkdir -p "/opt/kafka-0.9.0.1" && curl -s "${MIRROR}kafka/0.9.0.1/kafka_2.10-0.9.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.9.0.1"
