@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.internals;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,19 +23,20 @@ public class Topic {
 
     private static final String INVALID_CHARS = "[^a-zA-Z0-9._\\-]";
     private static final int MAX_NAME_LENGTH = 249;
+    private static final Pattern PATTERN = Pattern.compile(INVALID_CHARS);
 
     public static void validate(String topic) {
         if (isEmpty(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be empty");
+            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name is illegal, can't be empty");
         else if (containsOnlyPeriods(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("topic name cannot be \".\" or \"..\"");
+            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name cannot be \".\" or \"..\"");
         else if (exceedsMaxLength(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("topic name is illegal, can't be longer than " + MAX_NAME_LENGTH + " characters");
-        else if (containsInvalidCharacters(topic)) throw new org.apache.kafka.common.errors.InvalidTopicException("topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'");
+            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name is illegal, can't be longer than " + MAX_NAME_LENGTH + " characters");
+        else if (containsInvalidCharacters(topic)) throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'");
     }
 
     public static boolean isEmpty(String topic) {
-        return topic.length() <= 0;
+        return topic.isEmpty();
     }
 
     public static boolean containsOnlyPeriods(String topic) {
@@ -50,8 +51,7 @@ public class Topic {
      * Valid characters for Kafka topics are the ASCII alphanumerics, '.', '_', and '-'
      */
     public static boolean containsInvalidCharacters(String topic) {
-        Pattern pattern = Pattern.compile(INVALID_CHARS);
-        Matcher matcher = pattern.matcher(topic);
+        Matcher matcher = PATTERN.matcher(topic);
         return matcher.find();
     }
 
