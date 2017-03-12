@@ -44,6 +44,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
     OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
     OPERATIONAL_LOG_DEBUG_DIR = os.path.join(OPERATIONAL_LOG_DIR, "debug")
+    OPERATIONAL_LOG_TRACE_DIR = os.path.join(OPERATIONAL_LOG_DIR, "trace")
     # Kafka log segments etc go here
     DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
@@ -59,6 +60,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": True},
         "kafka_operational_logs_debug": {
             "path": OPERATIONAL_LOG_DEBUG_DIR,
+            "collect_default": False},
+        "kafka_operational_logs_trace": {
+            "path": OPERATIONAL_LOG_TRACE_DIR,
             "collect_default": False},
         "kafka_data": {
             "path": DATA_LOG_DIR,
