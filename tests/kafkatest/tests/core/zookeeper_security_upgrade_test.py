@@ -38,7 +38,8 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
         self.acls = ACLs(self.test_context)
-        self.log_level = "TRACE"
+        self.controller_log_level = "TRACE"
+        self.state_change_log_level = "TRACE"
 
         self.zk = ZookeeperService(self.test_context, num_nodes=3)
 
