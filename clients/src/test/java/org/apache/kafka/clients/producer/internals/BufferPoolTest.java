@@ -250,7 +250,7 @@ public class BufferPoolTest {
         Sensor mockedSensor = createNiceMock(Sensor.class);
         MetricName metricName = createNiceMock(MetricName.class);
 
-        expect(mockedMetrics.sensor(BufferPool.BUFFERPOOL_WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
+        expect(mockedMetrics.sensor(BufferPool.WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
 
         mockedSensor.record(anyDouble(), anyLong());
         expectLastCall().andThrow(new OutOfMemoryError());

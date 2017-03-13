@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.Time;
  */
 public class BufferPool {
 
-    static final String BUFFERPOOL_WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
+    static final String WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
 
     private final long totalMemory;
     private final int poolableSize;
@@ -73,7 +73,7 @@ public class BufferPool {
         this.availableMemory = memory;
         this.metrics = metrics;
         this.time = time;
-        this.waitTime = this.metrics.sensor(BUFFERPOOL_WAIT_TIME_SENSOR_NAME);
+        this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
         MetricName metricName = metrics.metricName("bufferpool-wait-ratio",
                                                    metricGrpName,
                                                    "The fraction of time an appender waits for space allocation.");
@@ -112,7 +112,6 @@ public class BufferPool {
                 // satisfy the request
                 freeUp(size);
                 this.availableMemory -= size;
-                lock.unlock();
                 return allocateByteBuffer(size);
             } else {
                 // we are out of memory and will have to block
@@ -152,25 +151,24 @@ public class BufferPool {
                     if (removed != moreMemory)
                         throw new IllegalStateException("Wrong condition: this shouldn't happen.");
 
-                    // signal any additional waiters if there is more memory left
-                    // over for them
-                    if (this.availableMemory > 0 || !this.free.isEmpty()) {
-                        if (!this.waiters.isEmpty()) this.waiters.peekFirst().signal();
-                    }
                     if (buffer == null)
                         buffer = allocateByteBuffer(size);
                     restoreAvailableMemoryOnFailure = false;
                     //unlock happens in top-level, enclosing finally
                     return buffer;
                 } finally {
-                    if (restoreAvailableMemoryOnFailure) {
+                    if (restoreAvailableMemoryOnFailure)
                         this.availableMemory += accumulated;
-                    }
                 }
             }
         } finally {
-            if (lock.isHeldByCurrentThread())
+            if (lock.isHeldByCurrentThread()) {
+                // signal any additional waiters if there is more memory left
+                // over for them
+                if (this.availableMemory > 0 && !this.waiters.isEmpty())
+                    this.waiters.peekFirst().signal();
                 lock.unlock();
+            }
         }
     }
 
@@ -206,8 +204,6 @@ public class BufferPool {
                 // of waiters and potentally signal other threads waiting for more memory.
                 if (!awaitSuccess || !recordSuccess || waitingTimeElapsed) {
                     this.waiters.remove(moreMemory);
-                    if (!this.waiters.isEmpty())
-                        this.waiters.peekFirst().signal();
                 }
             }
         }
