@@ -35,7 +35,7 @@ import java.util.TreeMap;
  * An internal class which represents the API versions supported by a particular node.
  */
 public class NodeApiVersions {
-    // An map of the usable versions of each API, indexed by the ApiKeys instance
+    // A map of the usable versions of each API, keyed by the ApiKeys instance
     private final Map<ApiKeys, UsableVersion> usableVersions = new EnumMap<>(ApiKeys.class);
 
     // List of APIs which the broker supports, but which are unknown to the client

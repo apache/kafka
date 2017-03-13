@@ -282,8 +282,14 @@ public class ProduceRequest extends AbstractRequest {
                 return LogEntry.MAGIC_VALUE_V1;
 
             case 3:
-            default:
                 return LogEntry.MAGIC_VALUE_V2;
+
+            default:
+                // raise an exception if the version has not been explicitly added to this method.
+                // this ensures that we cannot accidentally use the wrong magic value if we forget
+                // to update this method on a bump to the produce request version.
+                throw new IllegalArgumentException("Magic value to use for produce request version " +
+                        produceRequestVersion + " is not known");
         }
     }
 
