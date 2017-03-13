@@ -298,11 +298,8 @@ public class NetworkClient implements KafkaClient {
                 if (discoverBrokerVersions && log.isTraceEnabled())
                     log.trace("No version information found when sending message of type {} to node {}. " +
                             "Assuming version {}.", clientRequest.apiKey(), nodeId, version);
-            } else if (builder.desiredVersion() == null) {
-                version = versionInfo.usableVersion(clientRequest.apiKey());
             } else {
-                versionInfo.ensureUsable(clientRequest.apiKey(), builder.desiredVersion());
-                version = builder.desiredVersion();
+                version = versionInfo.usableVersion(clientRequest.apiKey(), builder.desiredVersion());
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
