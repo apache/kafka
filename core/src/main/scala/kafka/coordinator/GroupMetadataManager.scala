@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.collection.mutable.ListBuffer
 
 class GroupMetadataManager(val brokerId: Int,
                            val interBrokerProtocolVersion: ApiVersion,
@@ -604,14 +605,11 @@ class GroupMetadataManager(val brokerId: Int,
 
           val partitionOpt = replicaManager.getPartition(appendPartition)
           partitionOpt.foreach { partition =>
-            var offset = 0L
-            val builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magicValue, compressionType,
-              timestampType, offset)
+            val tombstones = ListBuffer.empty[KafkaRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
-              builder.appendWithOffset(offset, timestamp, commitKey, null)
-              offset += 1
+              tombstones += new KafkaRecord(timestamp, commitKey, null)
             }
             trace(s"Marked ${removedOffsets.size} offsets in $appendPartition for deletion.")
 
@@ -621,21 +619,24 @@ class GroupMetadataManager(val brokerId: Int,
               // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
               // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
               // retry removing this group.
-              builder.appendWithOffset(offset, timestamp, GroupMetadataManager.groupMetadataKey(group.groupId), null)
+              val groupMetadataKey = GroupMetadataManager.groupMetadataKey(group.groupId)
+              tombstones += new KafkaRecord(timestamp, groupMetadataKey, null)
               trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
-              offset += 1
             }
 
-            if (offset > 0) {
+            if (tombstones.nonEmpty) {
               try {
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
-                partition.appendRecordsToLeader(builder.build())
+                val records = MemoryRecords.withRecords(magicValue, compressionType, timestampType, tombstones: _*)
+                partition.appendRecordsToLeader(records)
                 offsetsRemoved += removedOffsets.size
-                trace(s"Successfully appended $offset tombstones to $appendPartition for expired/deleted offsets and/or metadata for group $groupId")
+                trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +
+                  s"offsets and/or metadata for group $groupId")
               } catch {
                 case t: Throwable =>
-                  error(s"Failed to append $offset tombstones to $appendPartition for expired/deleted offsets and/or metadata for group $groupId.", t)
+                  error(s"Failed to append ${tombstones.size} tombstones to $appendPartition for expired/deleted " +
+                    s"offsets and/or metadata for group $groupId.", t)
                 // ignore and continue
               }
             }

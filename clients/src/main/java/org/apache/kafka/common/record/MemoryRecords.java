@@ -324,20 +324,25 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withRecords(byte magic, CompressionType compressionType, KafkaRecord ... records) {
-        return withRecords(magic, 0L, compressionType, records);
+        return withRecords(magic, 0L, compressionType, TimestampType.CREATE_TIME, records);
+    }
+
+    public static MemoryRecords withRecords(byte magic, CompressionType compressionType, TimestampType timestampType,
+                                            KafkaRecord ... records) {
+        return withRecords(magic, 0L, compressionType, timestampType, records);
     }
 
     public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, KafkaRecord ... records) {
-        return withRecords(LogEntry.CURRENT_MAGIC_VALUE, initialOffset, compressionType, records);
+        return withRecords(LogEntry.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
-                                            KafkaRecord ... records) {
+                                            TimestampType timestampType, KafkaRecord ... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
-        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, TimestampType.CREATE_TIME, initialOffset);
+        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset);
         for (KafkaRecord record : records)
             builder.append(record);
         return builder.build();

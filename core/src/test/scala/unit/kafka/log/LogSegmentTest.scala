@@ -47,9 +47,8 @@ class LogSegmentTest {
   
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
-    MemoryRecords.withRecords(LogEntry.MAGIC_VALUE_V1, offset, CompressionType.NONE, records.map { s =>
-      new KafkaRecord(offset * 10, s.getBytes)
-    }: _*)
+    MemoryRecords.withRecords(LogEntry.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      records.map { s => new KafkaRecord(offset * 10, s.getBytes) }: _*)
   }
 
   @After
