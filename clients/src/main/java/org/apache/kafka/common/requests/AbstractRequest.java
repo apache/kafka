@@ -79,6 +79,11 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     protected abstract Struct toStruct();
 
+    @Override
+    public String toString() {
+        return toStruct().toString();
+    }
+
     /**
      * Get an error response for a request
      */
