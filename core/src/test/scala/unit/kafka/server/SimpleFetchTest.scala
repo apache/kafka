@@ -19,7 +19,6 @@ package kafka.server
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
-import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
@@ -29,7 +28,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords}
 import org.easymock.EasyMock
 import org.junit.Assert._
 

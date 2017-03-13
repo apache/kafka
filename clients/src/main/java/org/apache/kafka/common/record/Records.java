@@ -20,13 +20,22 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries.
- * Each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow" {@link Record record}.
- * If the entry is not compressed, then each entry will have only the shallow record contained inside it. If it is
- * compressed, the entry contains "deep" records, which are packed into the value field of the shallow record. To iterate
- * over the shallow entries, use {@link #entries()}; for the deep records, use {@link #records()}. Note
- * that the deep iterator handles both compressed and non-compressed entries: if the entry is not compressed, the
- * shallow record is returned; otherwise, the shallow record is decompressed and the deep entries are returned.
+ * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries
+ * (see {@link LogEntry}).
+ *
+ * For magic versions 1 and below, each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow"
+ * {@link LogRecord record}. If the entry is not compressed, then each entry will have only the shallow record contained
+ * inside it. If it is compressed, the entry contains "deep" records, which are packed into the value field of the
+ * shallow record. To iterate over the shallow entries, use {@link #entries()}; for the deep records, use
+ * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed entries: if the entry is
+ * not compressed, the shallow record is returned; otherwise, the shallow record is decompressed and the deep entries
+ * are returned.
+ *
+ * For magic version 2, every log entry contains 1 or more log record, regardless of compression. You can iterate
+ * over the entries directly using {@link #entries()}. Records can be iterated either directly from an individual
+ * entry or through {@link #records()}. Just as in previous versions, iterating over the records typically involves
+ * decompression and should therefore be used with caution.
+ *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
 public interface Records {

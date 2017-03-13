@@ -24,8 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 

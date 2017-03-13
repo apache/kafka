@@ -998,7 +998,7 @@ class LogTest extends JUnitSuite {
       time.scheduler,
       time)
     log.append(MemoryRecords.withRecords(CompressionType.NONE,
-      new KafkaRecord(Record.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
+      new KafkaRecord(LogEntry.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
   }
 
   @Test

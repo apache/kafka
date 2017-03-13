@@ -22,8 +22,6 @@ import java.nio._
 import org.apache.kafka.common.record.{Record, TimestampType}
 
 import scala.math._
-import kafka.utils._
-import org.apache.kafka.common.utils.ByteUtils.{readUnsignedInt, writeUnsignedInt}
 import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 /**

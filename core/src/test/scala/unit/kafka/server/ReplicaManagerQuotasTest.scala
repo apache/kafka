@@ -24,7 +24,7 @@ import kafka.log.Log
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._

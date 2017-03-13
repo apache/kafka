@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.LongRef
-import kafka.message.{CompressionCodec, InvalidMessageException, Message, NoCompressionCodec}
+import kafka.message.{CompressionCodec, InvalidMessageException, NoCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record._
@@ -304,7 +304,7 @@ private[kafka] object LogValidator extends Logging {
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {
     if (timestampType == TimestampType.CREATE_TIME
-      && record.timestamp != Record.NO_TIMESTAMP
+      && record.timestamp != LogEntry.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]")

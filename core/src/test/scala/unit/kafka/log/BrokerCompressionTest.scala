@@ -25,7 +25,7 @@ import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Utils
 import java.util.{Collection, Properties}
 

@@ -21,7 +21,7 @@ import kafka.api.FetchResponsePartitionData
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords}
 import org.junit.Test
 import org.junit.Assert.assertTrue
 
