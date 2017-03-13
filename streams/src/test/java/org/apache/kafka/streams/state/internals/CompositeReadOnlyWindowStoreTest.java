@@ -134,7 +134,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-        public void testWindowStoreIteratorHasNext() throws Exception {
+    public void emptyIteratorAlwaysReturnsFalse() throws Exception {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
@@ -143,7 +143,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void testWindowStoreIteratorPeekNextKey() throws Exception {
+    public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() throws Exception {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
@@ -153,7 +153,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void testWindowStoreIteratorNext() throws Exception {
+    public void emptyIteratorNextShouldThrowNoSuchElementException() throws Exception {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
