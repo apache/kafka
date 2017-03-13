@@ -27,7 +27,7 @@ import kafka.common.{BrokerEndPointNotAvailableException, Topic, TopicAndPartiti
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, PartitionState, UpdateMetadataRequest}
@@ -155,7 +155,8 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
 
   def getControllerId: Option[Int] = controllerId
 
-  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) {
+  // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
+  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
       controllerId = updateMetadataRequest.controllerId match {
           case id if id < 0 => None
@@ -177,6 +178,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
         aliveNodes(broker.id) = nodes.asScala
       }
 
+      val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
         val controllerId = updateMetadataRequest.controllerId
         val controllerEpoch = updateMetadataRequest.controllerEpoch
@@ -184,6 +186,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
           removePartitionInfo(tp.topic, tp.partition)
           stateChangeLogger.trace(s"Broker $brokerId deleted partition $tp from metadata cache in response to UpdateMetadata " +
             s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+          deletedPartitions += tp
         } else {
           val partitionInfo = partitionStateToPartitionStateInfo(info)
           addOrUpdatePartitionInfo(tp.topic, tp.partition, partitionInfo)
@@ -191,6 +194,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
             s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
         }
       }
+      deletedPartitions
     }
   }
 

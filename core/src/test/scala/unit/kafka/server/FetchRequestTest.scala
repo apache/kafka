@@ -56,7 +56,7 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): FetchRequest =
-    new FetchRequest.Builder(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+    FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
@@ -69,8 +69,8 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    val response = send(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
+    FetchResponse.parse(response, ApiKeys.FETCH.latestVersion)
   }
 
   @Test
@@ -125,7 +125,7 @@ class FetchRequestTest extends BaseRequestTest {
     }.sum
     assertTrue(responseSize3 <= maxResponseBytes)
     val partitionData3 = fetchResponse3.responseData.get(partitionWithLargeMessage1)
-    assertEquals(Errors.NONE.code, partitionData3.errorCode)
+    assertEquals(Errors.NONE, partitionData3.error)
     assertTrue(partitionData3.highWatermark > 0)
     val size3 = logEntries(partitionData3).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size3 to be smaller than $maxResponseBytes", size3 <= maxResponseBytes)
@@ -143,7 +143,7 @@ class FetchRequestTest extends BaseRequestTest {
     }
     assertEquals(Seq(partitionWithLargeMessage2), nonEmptyPartitions4)
     val partitionData4 = fetchResponse4.responseData.get(partitionWithLargeMessage2)
-    assertEquals(Errors.NONE.code, partitionData4.errorCode)
+    assertEquals(Errors.NONE, partitionData4.error)
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = logEntries(partitionData4).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size4 to be larger than $maxResponseBytes", size4 > maxResponseBytes)
@@ -156,12 +156,11 @@ class FetchRequestTest extends BaseRequestTest {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    val fetchRequestBuilder = new FetchRequest.Builder(
-      Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, Seq(topicPartition))).
-      setVersion(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequestBuilder.build())
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+      createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(2)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
-    assertEquals(Errors.NONE.code, partitionData.errorCode)
+    assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
     assertEquals(0, logEntries(partitionData).map(_.sizeInBytes).sum)
@@ -180,7 +179,7 @@ class FetchRequestTest extends BaseRequestTest {
 
     expectedPartitions.foreach { tp =>
       val partitionData = fetchResponse.responseData.get(tp)
-      assertEquals(Errors.NONE.code, partitionData.errorCode)
+      assertEquals(Errors.NONE, partitionData.error)
       assertTrue(partitionData.highWatermark > 0)
 
       val records = partitionData.records

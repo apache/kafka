@@ -56,6 +56,8 @@
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
+    The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exeption is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.
+
     The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).
 
     Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
@@ -99,6 +101,22 @@
     </ul>
 
     For any other options, you should consult the documentation for the connector.
+
+    <h4><a id="connect_transforms" href="#connect_transforms">Transformations</a></h4>
+
+    Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for minor data massaging and routing changes.
+
+    A transformation chain can be specified in the connector configuration.
+
+    <ul>
+        <li><code>transforms</code> - List of aliases for the transformation, specifying the order in which the transformations will be applied.</li>
+        <li><code>transforms.$alias.type</code> - Fully qualified class name for the transformation.</li>
+        <li><code>transforms.$alias.$transformationSpecificConfig</code> Configuration properties for the transformation</li>
+    </ul>
+
+    Several widely-applicable data and routing transformations are included with Kafka Connect:
+
+    <!--#include virtual="generated/connect_transforms.html" -->
 
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 

@@ -19,23 +19,28 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.common.KafkaException
 import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
+
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
+import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
+                  val retryBackoffMs: Int,
                   val client: ConsumerNetworkClient,
                   val bootstrapBrokers: List[Node]) extends Logging {
 
@@ -65,40 +70,67 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  def findCoordinator(groupId: String): Node = {
+  def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
+    val startTime = time.milliseconds
     val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
-    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.node()
+    var response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+
+    while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
+      Thread.sleep(retryBackoffMs)
+      response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+    }
+
+    if (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", response.error.exception)
+
+    response.error.maybeThrow()
+    response.node
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
     val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
+    response.error.maybeThrow()
+    response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
   }
 
-  private def findAllBrokers(): List[Node] = {
+  def getApiVersions(node: Node): List[ApiVersion] = {
+    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    response.error.maybeThrow()
+    response.apiVersions.asScala.toList
+  }
+
+  /**
+   * Wait until there is a non-empty list of brokers in the cluster.
+   */
+  def awaitBrokers() {
+    var nodes = List[Node]()
+    do {
+      nodes = findAllBrokers()
+      if (nodes.isEmpty)
+        Thread.sleep(50)
+    } while (nodes.isEmpty)
+  }
+
+  def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
-    val errors = response.errors()
+    val errors = response.errors
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
-    response.cluster().nodes().asScala.toList
+    response.cluster.nodes.asScala.toList
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map {
-      case broker =>
-        broker -> {
-          try {
-            listGroups(broker)
-          } catch {
-            case e: Exception =>
-              debug(s"Failed to find groups from broker $broker", e)
-              List[GroupOverview]()
-          }
+    findAllBrokers.map { broker =>
+      broker -> {
+        try {
+          listGroups(broker)
+        } catch {
+          case e: Exception =>
+            debug(s"Failed to find groups from broker $broker", e)
+            List[GroupOverview]()
         }
+      }
     }.toMap
   }
 
@@ -123,8 +155,13 @@ class AdminClient(val time: Time,
     if (response.hasError)
       throw response.error.exception
     response.maybeThrowFirstPartitionError
-    response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
+    response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
+
+  def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
+    findAllBrokers.map { broker =>
+      broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+    }.toMap
 
   /**
    * Case class used to represent a consumer of a consumer group
@@ -142,18 +179,34 @@ class AdminClient(val time: Time,
                                   consumers: Option[List[ConsumerSummary]],
                                   coordinator: Node)
 
-  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
-    val coordinator = findCoordinator(groupId)
+  def describeConsumerGroupHandler(coordinator: Node, groupId: String): GroupMetadata = {
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
         new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)
     if (metadata == null)
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
-    if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
+    metadata
+  }
 
-    Errors.forCode(metadata.errorCode()).maybeThrow()
+  def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
+
+    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
+      metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+
+    val startTime = time.milliseconds
+    val coordinator = findCoordinator(groupId, timeoutMs)
+    var metadata = describeConsumerGroupHandler(coordinator, groupId)
+
+    while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
+      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
+      Thread.sleep(retryBackoffMs)
+      metadata = describeConsumerGroupHandler(coordinator, groupId)
+    }
+
+    if (!isValidConsumerGroupResponse(metadata))
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
+
     val consumers = metadata.members.asScala.map { consumer =>
       ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
         case "Stable" =>
@@ -181,6 +234,7 @@ object AdminClient {
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
+
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
     val config = new ConfigDef()
@@ -215,12 +269,12 @@ object AdminClient {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata
-    val channelBuilder = ClientUtils.createChannelBuilder(config.values())
+    val channelBuilder = ClientUtils.createChannelBuilder(config)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, 0)
+    metadata.update(bootstrapCluster, Collections.emptySet(), 0)
 
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
@@ -251,7 +305,8 @@ object AdminClient {
     new AdminClient(
       time,
       DefaultRequestTimeoutMs,
+      DefaultRetryBackoffMs,
       highLevelClient,
-      bootstrapCluster.nodes().asScala.toList)
+      bootstrapCluster.nodes.asScala.toList)
   }
 }

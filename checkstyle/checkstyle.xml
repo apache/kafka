@@ -24,8 +24,8 @@
   <module name="FileTabCharacter"/>
 
   <!-- header -->
-  <module name="RegexpHeader">
-    <property name="header" value="/\*\*\nLicensed to the Apache.*"/>
+  <module name="Header">
+    <property name="headerFile" value="checkstyle/java.header" />
   </module>
 
   <module name="TreeWalker">
@@ -93,5 +93,41 @@
       <property name="illegalPattern" value="true"/>
       <property name="ignoreComments" value="true"/>
     </module>
+
+    <!-- code quality -->
+    <module name="MethodLength"/>
+    <module name="ParameterNumber">
+      <!-- default is 8 -->
+      <property name="max" value="10"/>
+    </module>
+    <module name="ClassDataAbstractionCoupling">
+      <!-- default is 7 -->
+      <property name="max" value="15"/>
+    </module>
+    <module name="BooleanExpressionComplexity">
+      <!-- default is 3 -->
+      <property name="max" value="4"/>
+    </module>
+
+    <module name="ClassFanOutComplexity">
+      <!-- default is 20 -->
+      <property name="max" value="35"/>
+    </module>
+    <module name="CyclomaticComplexity">
+      <!-- default is 10-->
+      <property name="max" value="15"/>
+    </module>
+    <module name="JavaNCSS">
+      <!-- default is 50 -->
+      <property name="methodMaximum" value="100"/>
+    </module>
+    <module name="NPathComplexity">
+      <!-- default is 200 -->
+      <property name="max" value="500"/>
+    </module>
+  </module>
+
+  <module name="SuppressionFilter">
+    <property name="file" value="checkstyle/suppressions.xml"/>
   </module>
 </module>

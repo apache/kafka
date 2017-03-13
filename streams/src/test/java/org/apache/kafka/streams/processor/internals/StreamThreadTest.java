@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import java.io.File;
@@ -76,6 +75,7 @@ public class StreamThreadTest {
 
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
+    private final MockTime time = new MockTime();
     private UUID processId = UUID.randomUUID();
 
     @Before
@@ -158,8 +158,8 @@ public class StreamThreadTest {
                               StreamsConfig config,
                               StreamsMetrics metrics,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, metrics,
-                stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
+            super(id, applicationId, partitions, topology, consumer, new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000), config, metrics,
+                  stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
         }
 
         @Override
@@ -407,8 +407,8 @@ public class StreamThreadTest {
 
         assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
         assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread1.prevTasks(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread2.prevTasks(), equalTo(originalTaskAssignmentThread2));
+        assertThat(thread1.prevActiveTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevActiveTasks(), equalTo(originalTaskAssignmentThread2));
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
@@ -438,29 +438,29 @@ public class StreamThreadTest {
         String defaultPrefix = "thread." + thread.threadClientId();
         Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.threadClientId());
 
-        assertNotNull(metrics.getSensor(defaultPrefix + ".commit-time"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".poll-time"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".process-time"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".punctuate-time"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-creation"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-destruction"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".commit-latency"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".poll-latency"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".process-latency"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".punctuate-latency"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".task-created"));
+        assertNotNull(metrics.getSensor(defaultPrefix + ".task-closed"));
         assertNotNull(metrics.getSensor(defaultPrefix + ".skipped-records"));
 
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-time-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-time-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-calls-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-time-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-time-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-calls-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-time-avg", defaultGroupName, "The average process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-time-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-calls-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-time-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-time-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-calls-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-creation-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-destruction-rate", defaultGroupName, "The average per-second number of destructed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-count", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
     }
 
     @Test
@@ -485,7 +485,7 @@ public class StreamThreadTest {
             stateDir3.mkdir();
             extraDir.mkdir();
 
-            MockTime mockTime = new MockTime();
+            final MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
@@ -495,8 +495,8 @@ public class StreamThreadTest {
                                                    0) {
 
                 @Override
-                public void maybeClean() {
-                    super.maybeClean();
+                public void maybeClean(long now) {
+                    super.maybeClean(now);
                 }
 
                 @Override
@@ -547,7 +547,7 @@ public class StreamThreadTest {
 
             // all directories should still exit before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertTrue(stateDir3.exists());
@@ -555,7 +555,7 @@ public class StreamThreadTest {
 
             // all state directories except for task task2 & task3 will be removed. the extra directory should still exists
             mockTime.sleep(11L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -585,7 +585,7 @@ public class StreamThreadTest {
 
             // all state directories for task task1 & task2 still exist before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -593,7 +593,7 @@ public class StreamThreadTest {
 
             // all state directories for task task1 & task2 are removed
             mockTime.sleep(11L);
-            thread.maybeClean();
+            thread.maybeClean(mockTime.milliseconds());
             assertFalse(stateDir1.exists());
             assertFalse(stateDir2.exists());
             assertFalse(stateDir3.exists());
@@ -615,7 +615,7 @@ public class StreamThreadTest {
 
             StreamsConfig config = new StreamsConfig(props);
 
-            MockTime mockTime = new MockTime();
+            final MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
@@ -625,8 +625,8 @@ public class StreamThreadTest {
                                                    0) {
 
                 @Override
-                public void maybeCommit() {
-                    super.maybeCommit();
+                public void maybeCommit(long now) {
+                    super.maybeCommit(now);
                 }
 
                 @Override
@@ -657,14 +657,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
@@ -672,14 +672,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval, again
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval, again
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
@@ -913,7 +913,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void close() {
                 throw new RuntimeException("KABOOM!");
@@ -965,7 +965,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void flushState() {
                 throw new RuntimeException("KABOOM!");
@@ -1017,7 +1017,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void closeTopology() {
                 throw new RuntimeException("KABOOM!");
@@ -1068,7 +1068,7 @@ public class StreamThreadTest {
                                                                  clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
-                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG))) {
+                                                                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
             @Override
             public void flushState() {
                 throw new RuntimeException("KABOOM!");

@@ -23,7 +23,8 @@ import org.apache.kafka.common.record.{Record, TimestampType}
 
 import scala.math._
 import kafka.utils._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.ByteUtils.{readUnsignedInt, writeUnsignedInt}
+import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 /**
  * Constants related to messages
@@ -201,7 +202,7 @@ class Message(val buffer: ByteBuffer,
     buffer.rewind()
 
     // now compute the checksum and fill it in
-    Utils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
+    ByteUtils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
   }
   
   def this(bytes: Array[Byte], key: Array[Byte], timestamp: Long, codec: CompressionCodec, magicValue: Byte) =
@@ -228,7 +229,7 @@ class Message(val buffer: ByteBuffer,
   /**
    * Retrieve the previously computed CRC for this message
    */
-  def checksum: Long = Utils.readUnsignedInt(buffer, CrcOffset)
+  def checksum: Long = ByteUtils.readUnsignedInt(buffer, CrcOffset)
   
     /**
    * Returns true if the crc stored with the message matches the crc computed off the message contents

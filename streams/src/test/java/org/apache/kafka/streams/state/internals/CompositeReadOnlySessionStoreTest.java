@@ -1,26 +1,25 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.ReadOnlySessionStoreStub;
@@ -58,12 +57,12 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldFetchResulstFromUnderlyingSessionStore() throws Exception {
-        underlyingSessionStore.put(new Windowed<>("a", new TimeWindow(0, 0)), 1L);
-        underlyingSessionStore.put(new Windowed<>("a", new TimeWindow(10, 10)), 2L);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(10, 10)), 2L);
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(sessionStore.fetch("a"));
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new TimeWindow(0, 0)), 1L),
-                                   KeyValue.pair(new Windowed<>("a", new TimeWindow(10, 10)), 2L)),
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+                                   KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L)),
                      results);
     }
 
@@ -79,8 +78,8 @@ public class CompositeReadOnlySessionStoreTest {
                 ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
 
-        final Windowed<String> keyOne = new Windowed<>("key-one", new TimeWindow(0, 0));
-        final Windowed<String> keyTwo = new Windowed<>("key-two", new TimeWindow(0, 0));
+        final Windowed<String> keyOne = new Windowed<>("key-one", new SessionWindow(0, 0));
+        final Windowed<String> keyTwo = new Windowed<>("key-two", new SessionWindow(0, 0));
         underlyingSessionStore.put(keyOne, 0L);
         secondUnderlying.put(keyTwo, 10L);
 
@@ -93,8 +92,8 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldNotGetValueFromOtherStores() throws Exception {
-        final Windowed<String> expectedKey = new Windowed<>("foo", new TimeWindow(0, 0));
-        otherUnderlyingStore.put(new Windowed<>("foo", new TimeWindow(10, 10)), 10L);
+        final Windowed<String> expectedKey = new Windowed<>("foo", new SessionWindow(0, 0));
+        otherUnderlyingStore.put(new Windowed<>("foo", new SessionWindow(10, 10)), 10L);
         underlyingSessionStore.put(expectedKey, 1L);
 
         final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo");

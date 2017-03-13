@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.producer.Callback;
@@ -41,6 +40,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.utils.Exit;
 
 /**
  * Primarily intended for use with system testing, this producer prints metadata
@@ -160,7 +160,7 @@ public class VerifiableProducer {
      *                 
      * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate 
      * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests, 
-     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
     public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
@@ -207,10 +207,10 @@ public class VerifiableProducer {
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
-                System.exit(0);
+                Exit.exit(0);
             } else {
                 parser.handleError(e);
-                System.exit(1);
+                Exit.exit(1);
             }
         }
 
@@ -234,7 +234,7 @@ public class VerifiableProducer {
     /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' **/
     public String getValue(long val) {
         if (this.valuePrefix != null) {
-            return String.format("%d.%d", this.valuePrefix.intValue(), val);
+            return String.format("%d.%d", this.valuePrefix, val);
         }
         return String.format("%d", val);
     }

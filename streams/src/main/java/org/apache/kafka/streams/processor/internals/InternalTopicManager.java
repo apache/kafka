@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -26,6 +25,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
@@ -48,28 +48,36 @@ public class InternalTopicManager {
     }
 
     /**
-     * Prepares the set of given internal topics. If the topic with the correct number of partitions exists ignores it. For the ones with different number of
-     * partitions delete them and create new ones with correct number of partitons along with the non existing topics.
-     * @param topic
+     * Prepares a set of given internal topics.
+     *
+     * If a topic does not exist creates a new topic.
+     * If a topic with the correct number of partitions exists ignores it.
+     * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
      */
-    public void makeReady(final InternalTopicConfig topic, int numPartitions) {
-
-        Map<InternalTopicConfig, Integer> topics = new HashMap<>();
-        topics.put(topic, numPartitions);
+    public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
-                Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
-                Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
-                Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
-                topicsToBeCreated.putAll(topicsToBeDeleted);
-                streamsKafkaClient.deleteTopics(topicsToBeDeleted);
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
+                final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+                final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
+                final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
+                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
-                log.warn("Could not create internal topics: " + ex.getMessage() + ". Retry #" + i);
+                log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
             }
         }
         throw new StreamsException("Could not create internal topics.");
+    }
+
+    /**
+     * Get the number of partitions for the given topics
+     */
+    public Map<String, Integer> getNumPartitions(final Set<String> topics) {
+        final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+        final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
+        existingTopicPartitions.keySet().retainAll(topics);
+
+        return existingTopicPartitions;
     }
 
     public void close() {
@@ -81,51 +89,37 @@ public class InternalTopicManager {
     }
 
     /**
-     * Return the non existing topics.
-     *
-     * @param topicsPartitionsMap
-     * @param topicsMetadata
-     * @return
+     * Check the existing topics to have correct number of partitions; and return the non existing topics to be created
      */
-    private Map<InternalTopicConfig, Integer> filterExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
-        Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
-        Map<InternalTopicConfig, Integer> nonExistingTopics = new HashMap<>();
-        // Add the topics that don't exist to the nonExistingTopics.
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
-            if (existingTopicNamesPartitions.get(topic.name()) == null) {
-                nonExistingTopics.put(topic, topicsPartitionsMap.get(topic));
-            }
-        }
-        return nonExistingTopics;
-    }
-
-    /**
-     * Return the topics that exist but have different partiton number to be deleted.
-     * @param topicsPartitionsMap
-     * @param topicsMetadata
-     * @return
-     */
-    private Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
-        Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
-        Map<InternalTopicConfig, Integer> deleteTopics = new HashMap<>();
-        // Add the topics that don't exist to the nonExistingTopics.
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
-            if (existingTopicNamesPartitions.get(topic.name()) != null) {
-                if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
-                    deleteTopics.put(topic, topicsPartitionsMap.get(topic));
+    private Map<InternalTopicConfig, Integer> validateTopicPartitions(final Map<InternalTopicConfig, Integer> topicsPartitionsMap,
+                                                                      final Map<String, Integer> existingTopicNamesPartitions) {
+        final Map<InternalTopicConfig, Integer> topicsToBeCreated = new HashMap<>();
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsPartitionsMap.entrySet()) {
+            InternalTopicConfig topic = entry.getKey();
+            Integer partition = entry.getValue();
+            if (existingTopicNamesPartitions.containsKey(topic.name())) {
+                if (!existingTopicNamesPartitions.get(topic.name()).equals(partition)) {
+                    throw new StreamsException("Existing internal topic " + topic.name() + " has invalid partitions." +
+                            " Expected: " + partition + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
+                            ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
+            } else {
+                topicsToBeCreated.put(topic, partition);
             }
         }
-        return deleteTopics;
+
+        return topicsToBeCreated;
     }
 
-    private Map<String, Integer> getExistingTopicNamesPartitions(Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
-        // The names of existing topics
-        Map<String, Integer> existingTopicNamesPartitions = new HashMap<>();
+    private Map<String, Integer> fetchExistingPartitionCountByTopic(final MetadataResponse metadata) {
+        // The names of existing topics and corresponding partition counts
+        final Map<String, Integer> existingPartitionCountByTopic = new HashMap<>();
+        final Collection<MetadataResponse.TopicMetadata> topicsMetadata = metadata.topicMetadata();
+
         for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
-            existingTopicNamesPartitions.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
+            existingPartitionCountByTopic.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
         }
-        return existingTopicNamesPartitions;
-    }
 
+        return existingPartitionCountByTopic;
+    }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 package org.apache.kafka.common.protocol;
+
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
 
 /**
  * Identifiers for all the Kafka APIs
@@ -64,6 +69,8 @@ public enum ApiKeys {
     public final String name;
 
     ApiKeys(int id, String name) {
+        if (id < 0)
+            throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
     }
@@ -79,6 +86,46 @@ public enum ApiKeys {
         return id >= MIN_API_KEY && id <= MAX_API_KEY;
     }
 
+    public short latestVersion() {
+        if (id >= Protocol.CURR_VERSION.length)
+            throw new IllegalArgumentException("Latest version for API key " + this + " is not defined");
+        return Protocol.CURR_VERSION[id];
+    }
+
+    public short oldestVersion() {
+        if (id >= Protocol.MIN_VERSIONS.length)
+            throw new IllegalArgumentException("Oldest version for API key " + this + " is not defined");
+        return Protocol.MIN_VERSIONS[id];
+    }
+
+    public Schema requestSchema(short version) {
+        return schemaFor(Protocol.REQUESTS, version);
+    }
+
+    public Schema responseSchema(short version) {
+        return schemaFor(Protocol.RESPONSES, version);
+    }
+
+    public Struct parseRequest(short version, ByteBuffer buffer) {
+        return requestSchema(version).read(buffer);
+    }
+
+    public Struct parseResponse(short version, ByteBuffer buffer) {
+        return responseSchema(version).read(buffer);
+    }
+
+    private Schema schemaFor(Schema[][] schemas, short version) {
+        if (id > schemas.length)
+            throw new IllegalArgumentException("No schema available for API key " + this);
+        if (version < 0 || version > latestVersion())
+            throw new IllegalArgumentException("Invalid version for API key " + this + ": " + version);
+
+        Schema[] versions = schemas[id];
+        if (versions[version] == null)
+            throw new IllegalArgumentException("Unsupported version for API key " + this + ": " + version);
+        return versions[version];
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -89,7 +136,7 @@ public enum ApiKeys {
         for (ApiKeys key : ApiKeys.values()) {
             b.append("<tr>\n");
             b.append("<td>");
-            b.append(key.name);
+            b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
             b.append("</td>");
             b.append("<td>");
             b.append(key.id);

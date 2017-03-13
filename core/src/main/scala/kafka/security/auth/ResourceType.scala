@@ -24,21 +24,21 @@ import org.apache.kafka.common.protocol.Errors
  */
 
 
-sealed trait ResourceType extends BaseEnum { def errorCode: Short }
+sealed trait ResourceType extends BaseEnum { def error: Errors }
 
 case object Cluster extends ResourceType {
   val name = "Cluster"
-  val errorCode = Errors.CLUSTER_AUTHORIZATION_FAILED.code
+  val error = Errors.CLUSTER_AUTHORIZATION_FAILED
 }
 
 case object Topic extends ResourceType {
   val name = "Topic"
-  val errorCode = Errors.TOPIC_AUTHORIZATION_FAILED.code
+  val error = Errors.TOPIC_AUTHORIZATION_FAILED
 }
 
 case object Group extends ResourceType {
   val name = "Group"
-  val errorCode = Errors.GROUP_AUTHORIZATION_FAILED.code
+  val error = Errors.GROUP_AUTHORIZATION_FAILED
 }
 
 

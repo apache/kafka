@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,18 +16,26 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.io.Closeable;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
+import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Test;
 
+import java.io.Closeable;
+import java.io.EOFException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
+
+import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
-import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -158,6 +166,135 @@ public class UtilsTest {
         }
     }
 
+    @Test
+    public void testReadFullyOrFailWithRealFile() throws IOException {
+        try (FileChannel channel = FileChannel.open(TestUtils.tempFile().toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+            // prepare channel
+            String msg = "hello, world";
+            channel.write(ByteBuffer.wrap(msg.getBytes()), 0);
+            channel.force(true);
+            assertEquals("Message should be written to the file channel", channel.size(), msg.length());
+
+            ByteBuffer perfectBuffer = ByteBuffer.allocate(msg.length());
+            ByteBuffer smallBuffer = ByteBuffer.allocate(5);
+            ByteBuffer largeBuffer = ByteBuffer.allocate(msg.length() + 1);
+            // Scenario 1: test reading into a perfectly-sized buffer
+            Utils.readFullyOrFail(channel, perfectBuffer, 0, "perfect");
+            assertFalse("Buffer should be filled up", perfectBuffer.hasRemaining());
+            assertEquals("Buffer should be populated correctly", msg, new String(perfectBuffer.array()));
+            // Scenario 2: test reading into a smaller buffer
+            Utils.readFullyOrFail(channel, smallBuffer, 0, "small");
+            assertFalse("Buffer should be filled", smallBuffer.hasRemaining());
+            assertEquals("Buffer should be populated correctly", "hello", new String(smallBuffer.array()));
+            // Scenario 3: test reading starting from a non-zero position
+            smallBuffer.clear();
+            Utils.readFullyOrFail(channel, smallBuffer, 7, "small");
+            assertFalse("Buffer should be filled", smallBuffer.hasRemaining());
+            assertEquals("Buffer should be populated correctly", "world", new String(smallBuffer.array()));
+            // Scenario 4: test end of stream is reached before buffer is filled up
+            try {
+                Utils.readFullyOrFail(channel, largeBuffer, 0, "large");
+                fail("Expected EOFException to be raised");
+            } catch (EOFException e) {
+                // expected
+            }
+        }
+    }
+
+    /**
+     * Tests that `readFullyOrFail` behaves correctly if multiple `FileChannel.read` operations are required to fill
+     * the destination buffer.
+     */
+    @Test
+    public void testReadFullyOrFailWithPartialFileChannelReads() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        StringBuilder expectedBufferContent = new StringBuilder();
+        fileChannelMockExpectReadWithRandomBytes(channelMock, expectedBufferContent, bufferSize);
+        EasyMock.replay(channelMock);
+        Utils.readFullyOrFail(channelMock, buffer, 0L, "test");
+        assertEquals("The buffer should be populated correctly", expectedBufferContent.toString(),
+                new String(buffer.array()));
+        assertFalse("The buffer should be filled", buffer.hasRemaining());
+        EasyMock.verify(channelMock);
+    }
+
+    /**
+     * Tests that `readFullyOrFail` behaves correctly if multiple `FileChannel.read` operations are required to fill
+     * the destination buffer.
+     */
+    @Test
+    public void testReadFullyWithPartialFileChannelReads() throws IOException {
+        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        StringBuilder expectedBufferContent = new StringBuilder();
+        fileChannelMockExpectReadWithRandomBytes(channelMock, expectedBufferContent, bufferSize);
+        EasyMock.replay(channelMock);
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        Utils.readFully(channelMock, buffer, 0L);
+        assertEquals("The buffer should be populated correctly.", expectedBufferContent.toString(),
+                new String(buffer.array()));
+        assertFalse("The buffer should be filled", buffer.hasRemaining());
+        EasyMock.verify(channelMock);
+    }
+
+    @Test
+    public void testReadFullyIfEofIsReached() throws IOException {
+        final FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        final int bufferSize = 100;
+        final String fileChannelContent = "abcdefghkl";
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        EasyMock.expect(channelMock.size()).andReturn((long) fileChannelContent.length());
+        EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {
+            @Override
+            public Integer answer() throws Throwable {
+                ByteBuffer buffer = (ByteBuffer) EasyMock.getCurrentArguments()[0];
+                buffer.put(fileChannelContent.getBytes());
+                return -1;
+            }
+        });
+        EasyMock.replay(channelMock);
+        Utils.readFully(channelMock, buffer, 0L);
+        assertEquals("abcdefghkl", new String(buffer.array(), 0, buffer.position()));
+        assertEquals(buffer.position(), channelMock.size());
+        assertTrue(buffer.hasRemaining());
+        EasyMock.verify(channelMock);
+    }
+
+    /**
+     * Expectation setter for multiple reads where each one reads random bytes to the buffer.
+     *
+     * @param channelMock           The mocked FileChannel object
+     * @param expectedBufferContent buffer that will be updated to contain the expected buffer content after each
+     *                              `FileChannel.read` invocation
+     * @param bufferSize            The buffer size
+     * @throws IOException          If an I/O error occurs
+     */
+    private void fileChannelMockExpectReadWithRandomBytes(final FileChannel channelMock,
+                                                          final StringBuilder expectedBufferContent,
+                                                          final int bufferSize) throws IOException {
+        final int step = 20;
+        final Random random = new Random();
+        int remainingBytes = bufferSize;
+        while (remainingBytes > 0) {
+            final int mockedBytesRead = remainingBytes < step ? remainingBytes : random.nextInt(step);
+            final StringBuilder sb = new StringBuilder();
+            EasyMock.expect(channelMock.read(EasyMock.anyObject(ByteBuffer.class), EasyMock.anyInt())).andAnswer(new IAnswer<Integer>() {
+                @Override
+                public Integer answer() throws Throwable {
+                    ByteBuffer buffer = (ByteBuffer) EasyMock.getCurrentArguments()[0];
+                    for (int i = 0; i < mockedBytesRead; i++)
+                        sb.append("a");
+                    buffer.put(sb.toString().getBytes());
+                    expectedBufferContent.append(sb);
+                    return mockedBytesRead;
+                }
+            });
+            remainingBytes -= mockedBytesRead;
+        }
+    }
+
     private static class TestCloseable implements Closeable {
         private final int id;
         private final IOException closeException;
@@ -195,4 +332,5 @@ public class UtilsTest {
                 assertEquals(closeablesWithException[i].closeException, suppressed[i - 1]);
         }
     }
+
 }

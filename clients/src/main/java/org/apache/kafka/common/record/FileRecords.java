@@ -1,19 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
@@ -108,14 +108,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read log entries into a given buffer.
+     * Read log entries into the given buffer until there are no bytes remaining in the buffer or the end of the file
+     * is reached.
+     *
      * @param buffer The buffer to write the entries to
      * @param position Position in the buffer to read from
      * @return The same buffer
-     * @throws IOException
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
      */
     public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
-        channel.read(buffer, position + this.start);
+        Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
         return buffer;
     }

@@ -1,19 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
@@ -299,7 +299,7 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0);
+        Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
         assertTrue("No message should be there", shallowEntries(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
@@ -316,7 +316,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
         }
     }
@@ -332,7 +332,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
         }
     }
@@ -348,7 +348,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
         }
     }
@@ -364,7 +364,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(records);
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
             verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
         }
     }
@@ -381,11 +381,11 @@ public class FileRecordsTest {
     }
 
     private static List<LogEntry> shallowEntries(Records buffer) {
-        return TestUtils.toList(buffer.shallowEntries().iterator());
+        return TestUtils.toList(buffer.shallowEntries());
     }
 
     private static List<LogEntry> deepEntries(Records buffer) {
-        return TestUtils.toList(buffer.deepEntries().iterator());
+        return TestUtils.toList(buffer.deepEntries());
     }
 
     private FileRecords createFileRecords(Record ... records) throws IOException {

@@ -15,7 +15,7 @@
 
 import time
 import math
-from ducktape.mark import parametrize,ignore
+from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
@@ -53,7 +53,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         # ensure that the consumer is fully started before the producer starts
         # so that we don't miss any messages. This timeout ensures the sufficient
         # condition.
-        self.consumer_init_timeout_sec =  10
+        self.consumer_init_timeout_sec =  20
         self.num_brokers = 6
         self.num_partitions = 3
         self.kafka = KafkaService(test_context,
@@ -138,10 +138,9 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                 estimated_throttled_time,
                 time_taken))
 
-    @ignore
     @cluster(num_nodes=10)
-    @parametrize(bounce_brokers=False)
     @parametrize(bounce_brokers=True)
+    @parametrize(bounce_brokers=False)
     def test_throttled_reassignment(self, bounce_brokers):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

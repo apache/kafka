@@ -306,22 +306,23 @@ object ConsumerGroupCommand extends Logging {
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
-        if (offsetAndMetadata == OffsetMetadataAndError.NoOffset) {
-          val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
-          // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
-          // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-          try {
-            val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-            offsetMap.put(topicAndPartition, offset)
-          } catch {
-            case z: ZkNoNodeException =>
-              printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
-          }
+        offsetAndMetadata match {
+          case OffsetMetadataAndError.NoOffset =>
+            val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
+            // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
+            // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
+            try {
+              val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
+              offsetMap.put(topicAndPartition, offset)
+            } catch {
+              case z: ZkNoNodeException =>
+                printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
+            }
+          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
+            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
+          case _ =>
+            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
-          offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
-        else
-          printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
       }
       channel.disconnect()
       offsetMap.toMap
@@ -395,7 +396,7 @@ object ConsumerGroupCommand extends Logging {
     }
 
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
-      val consumerGroupSummary = adminClient.describeConsumerGroup(group)
+      val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
       (Some(consumerGroupSummary.state),
         consumerGroupSummary.consumers match {
           case None =>
@@ -501,7 +502,11 @@ object ConsumerGroupCommand extends Logging {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer. This is the default."
+    val TimeoutMsDoc = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
+      "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
+      "or is going through some changes)."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
+
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -523,6 +528,11 @@ object ConsumerGroupCommand extends Logging {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
+    val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
+                             .withRequiredArg
+                             .describedAs("timeout (ms)")
+                             .ofType(classOf[Long])
+                             .defaultsTo(5000)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")
@@ -530,11 +540,15 @@ object ConsumerGroupCommand extends Logging {
     val options = parser.parse(args : _*)
 
     val useOldConsumer = options.has(zkConnectOpt)
+    val describeOptPresent = options.has(describeOpt)
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt)
 
     def checkArgs() {
       // check required args
+      if (options.has(timeoutMsOpt) && (!describeOptPresent || useOldConsumer))
+        debug(s"Option '$timeoutMsOpt' is applicable only when both '$bootstrapServerOpt' and '$describeOpt' are used.")
+
       if (useOldConsumer) {
         if (options.has(bootstrapServerOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option '$bootstrapServerOpt' is not valid with '$zkConnectOpt'.")
@@ -549,7 +563,7 @@ object ConsumerGroupCommand extends Logging {
             "committed offset for that group expires.")
       }
 
-      if (options.has(describeOpt))
+      if (describeOptPresent)
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))

@@ -43,7 +43,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
@@ -69,7 +69,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   protected def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      saslProperties = saslProperties, retries = retries, lingerMs = lingerMs, props = props)
+      saslProperties = clientSaslProperties, retries = retries, lingerMs = lingerMs, props = props)
     registerProducer(producer)
   }
 
@@ -96,7 +96,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Test
   def testSendOffset() {
     val producer = createProducer(brokerList)
-    val partition = new Integer(0)
+    val partition = 0
 
     object callback extends Callback {
       var offset = 0L
@@ -175,8 +175,33 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
+  protected def sendAndVerify(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                              numRecords: Int = numRecords,
+                              timeoutMs: Long = 20000L) {
+    val partition = 0
+    try {
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+
+      val recordAndFutures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord(topic, partition, s"key$i".getBytes, s"value$i".getBytes)
+        (record, producer.send(record))
+      }
+      producer.close(timeoutMs, TimeUnit.MILLISECONDS)
+      val lastOffset = recordAndFutures.foldLeft(0) { case (offset, (record, future)) =>
+        val recordMetadata = future.get
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+        assertEquals(offset, recordMetadata.offset)
+        offset + 1
+      }
+      assertEquals(numRecords, lastOffset)
+    } finally {
+      producer.close()
+    }
+  }
+
   protected def sendAndVerifyTimestamp(producer: KafkaProducer[Array[Byte], Array[Byte]], timestampType: TimestampType) {
-    val partition = new Integer(0)
+    val partition = 0
 
     val baseTimestamp = 123456L
     val startTime = System.currentTimeMillis()
@@ -187,13 +212,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       def onCompletion(metadata: RecordMetadata, exception: Exception) {
         if (exception == null) {
-          assertEquals(offset, metadata.offset())
-          assertEquals(topic, metadata.topic())
+          assertEquals(offset, metadata.offset)
+          assertEquals(topic, metadata.topic)
           if (timestampType == TimestampType.CREATE_TIME)
-            assertEquals(baseTimestamp + timestampDiff, metadata.timestamp())
+            assertEquals(baseTimestamp + timestampDiff, metadata.timestamp)
           else
-            assertTrue(metadata.timestamp() >= startTime && metadata.timestamp() <= System.currentTimeMillis())
-          assertEquals(partition, metadata.partition())
+            assertTrue(metadata.timestamp >= startTime && metadata.timestamp <= System.currentTimeMillis())
+          assertEquals(partition, metadata.partition)
           offset += 1
           timestampDiff += 1
         } else {
@@ -211,11 +236,18 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "CreateTime")
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
 
-      for (i <- 1 to numRecords) {
-        val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
-        producer.send(record, callback)
+      val recordAndFutures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes, s"value$i".getBytes)
+        (record, producer.send(record, callback))
       }
       producer.close(20000L, TimeUnit.MILLISECONDS)
+      recordAndFutures.foreach { case (record, future) =>
+        val recordMetadata = future.get
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+          assertTrue(recordMetadata.timestamp >= startTime && recordMetadata.timestamp <= System.currentTimeMillis())
+        else
+          assertEquals(record.timestamp, recordMetadata.timestamp)
+      }
       assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
 
 /**
- * The {@link Predicate} interface represents a predicate (boolean-valued function) of a
- * {@link org.apache.kafka.streams.KeyValue key-value pair}.
+ * The {@code Predicate} interface represents a predicate (boolean-valued function) of a {@link KeyValue} pair.
  * This is a stateless record-by-record operation, i.e, {@link #test(Object, Object)} is invoked individually for each
  * record of a stream.
  *
@@ -40,8 +40,7 @@ public interface Predicate<K, V> {
      *
      * @param key   the key of the record
      * @param value the value of the record
-     * @return {@code true} if the {@link org.apache.kafka.streams.KeyValue key-value pair} satisfies the
-     * predicate&mdash;{@code false} otherwise
+     * @return {@code true} if the {@link KeyValue} pair satisfies the predicate&mdash;{@code false} otherwise
      */
     boolean test(final K key, final V value);
 }

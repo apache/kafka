@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -470,6 +471,62 @@ public abstract class Type {
                 return (Records) item;
 
             throw new SchemaException(item + " is not an instance of " + Records.class.getName());
+        }
+    };
+
+    public static final Type VARINT = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeVarint((Integer) o, buffer);
+        }
+
+        @Override
+        public Integer read(ByteBuffer buffer) {
+            return ByteUtils.readVarint(buffer);
+        }
+
+        @Override
+        public Integer validate(Object item) {
+            if (item instanceof Integer)
+                return (Integer) item;
+            throw new SchemaException(item + " is not an integer");
+        }
+
+        public String toString() {
+            return "VARINT";
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return ByteUtils.sizeOfVarint((Integer) o);
+        }
+    };
+
+    public static final Type VARLONG = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeVarlong((Long) o, buffer);
+        }
+
+        @Override
+        public Long read(ByteBuffer buffer) {
+            return ByteUtils.readVarlong(buffer);
+        }
+
+        @Override
+        public Long validate(Object item) {
+            if (item instanceof Long)
+                return (Long) item;
+            throw new SchemaException(item + " is not a long");
+        }
+
+        public String toString() {
+            return "VARLONG";
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return ByteUtils.sizeOfVarlong((Long) o);
         }
     };
 

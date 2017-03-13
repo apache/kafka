@@ -23,7 +23,7 @@ import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
@@ -94,7 +94,7 @@ class AbstractFetcherThreadTest {
   }
 
   class TestPartitionData(records: MemoryRecords = MemoryRecords.EMPTY) extends PartitionData {
-    override def errorCode: Short = Errors.NONE.code
+    override def error: Errors = Errors.NONE
 
     override def toRecords: MemoryRecords = records
 
@@ -186,7 +186,7 @@ class AbstractFetcherThreadTest {
         val corruptedRecord = Record.create("hello".getBytes())
         val badChecksum = (corruptedRecord.checksum + 1 % Int.MaxValue).toInt
         // Garble checksum
-        Utils.writeUnsignedInt(corruptedRecord.buffer, Record.CRC_OFFSET, badChecksum)
+        ByteUtils.writeUnsignedInt(corruptedRecord.buffer, Record.CRC_OFFSET, badChecksum)
         val records = MemoryRecords.withRecords(corruptedRecord)
         fetchRequest.offsets.mapValues(_ => new TestPartitionData(records)).toSeq
       } else

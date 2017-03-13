@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -110,7 +109,7 @@ public class ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
+            nodeMetrics = new NodeMetrics(context.metrics(), name, "task." + context.taskId());
             nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
@@ -132,9 +131,6 @@ public class ProcessorNode<K, V> {
         this.value = value;
 
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
-
-        // record throughput
-        this.nodeMetrics.metrics.recordThroughput(nodeMetrics.nodeThroughputSensor, 1);
     }
 
     public void punctuate(long timestamp) {
@@ -167,14 +163,14 @@ public class ProcessorNode<K, V> {
         return sb.toString();
     }
 
-    protected class NodeMetrics  {
+    protected static final class NodeMetrics  {
         final StreamsMetricsImpl metrics;
         final String metricGrpName;
         final Map<String, String> metricTags;
 
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
-        final Sensor nodeThroughputSensor;
+        final Sensor sourceNodeForwardSensor;
         final Sensor nodeCreationSensor;
         final Sensor nodeDestructionSensor;
 
@@ -189,18 +185,18 @@ public class ProcessorNode<K, V> {
             this.metricTags.put(tagKey, tagValue);
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencySensor(scope, sensorNamePrefix + "." + name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodePunctuateTimeSensor = metrics.addLatencySensor(scope, sensorNamePrefix + "." + name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeCreationSensor = metrics.addLatencySensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeDestructionSensor = metrics.addLatencySensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeThroughputSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "process-throughput", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
 
         }
 
         public void removeAllSensors() {
             metrics.removeSensor(nodeProcessTimeSensor);
             metrics.removeSensor(nodePunctuateTimeSensor);
-            metrics.removeSensor(nodeThroughputSensor);
+            metrics.removeSensor(sourceNodeForwardSensor);
             metrics.removeSensor(nodeCreationSensor);
             metrics.removeSensor(nodeDestructionSensor);
         }

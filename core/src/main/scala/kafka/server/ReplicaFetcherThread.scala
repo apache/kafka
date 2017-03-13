@@ -26,14 +26,17 @@ import kafka.log.LogConfig
 import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_10_1_IV1, KAFKA_0_10_1_IV2, KAFKA_0_9_0}
 import kafka.common.KafkaStorageException
 import ReplicaFetcherThread._
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import kafka.utils.Exit
+import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.Map
@@ -78,8 +81,9 @@ class ReplicaFetcherThread(name: String,
   private val networkClient = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       brokerConfig.interBrokerSecurityProtocol,
-      LoginType.SERVER,
-      brokerConfig.values,
+      JaasContext.Type.SERVER,
+      brokerConfig,
+      brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
       brokerConfig.saslInterBrokerHandshakeRequestEnable
     )
@@ -141,7 +145,7 @@ class ReplicaFetcherThread(name: String,
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)
-        Runtime.getRuntime.halt(1)
+        Exit.halt(1)
     }
   }
 
@@ -179,11 +183,11 @@ class ReplicaFetcherThread(name: String,
       // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
       if (!LogConfig.fromProps(brokerConfig.originals, AdminUtils.fetchEntityConfig(replicaMgr.zkUtils,
         ConfigType.Topic, topicPartition.topic)).uncleanLeaderElectionEnable) {
-        // Log a fatal error and shutdown the broker to ensure that data loss does not unexpectedly occur.
-        fatal("Exiting because log truncation is not allowed for partition %s,".format(topicPartition) +
-          " Current leader %d's latest offset %d is less than replica %d's latest offset %d"
-          .format(sourceBroker.id, leaderEndOffset, brokerConfig.brokerId, replica.logEndOffset.messageOffset))
-        System.exit(1)
+        // Log a fatal error and shutdown the broker to ensure that data loss does not occur unexpectedly.
+        fatal(s"Exiting because log truncation is not allowed for partition $topicPartition, current leader " +
+          s"${sourceBroker.id}'s latest offset $leaderEndOffset is less than replica ${brokerConfig.brokerId}'s latest " +
+          s"offset ${replica.logEndOffset.messageOffset}")
+        throw new FatalExitError
       }
 
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"
@@ -257,28 +261,24 @@ class ReplicaFetcherThread(name: String,
 
   }
 
-  private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
+  private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, replicaId: Int): Long = {
     val requestBuilder = if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
         val partitions = Map(topicPartition -> (earliestOrLatest: java.lang.Long))
-        new ListOffsetRequest.Builder(consumerId).
-            setTargetTimes(partitions.asJava).
-            setVersion(1)
+        ListOffsetRequest.Builder.forReplica(1, replicaId).setTargetTimes(partitions.asJava)
       } else {
         val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        new ListOffsetRequest.Builder(consumerId).
-            setOffsetData(partitions.asJava).
-            setVersion(0)
+        ListOffsetRequest.Builder.forReplica(0, replicaId).setOffsetData(partitions.asJava)
       }
     val clientResponse = sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
     val partitionData = response.responseData.get(topicPartition)
-    Errors.forCode(partitionData.errorCode) match {
+    partitionData.error match {
       case Errors.NONE =>
         if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
           partitionData.offset
         else
           partitionData.offsets.get(0)
-      case errorCode => throw errorCode.exception
+      case error => throw error.exception
     }
   }
 
@@ -291,9 +291,8 @@ class ReplicaFetcherThread(name: String,
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 
-    val requestBuilder = new JFetchRequest.Builder(maxWait, minBytes, requestMap).
-        setReplicaId(replicaId).setMaxBytes(maxBytes)
-    requestBuilder.setVersion(fetchRequestVersion)
+    val requestBuilder = JFetchRequest.Builder.forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, requestMap)
+      .setMaxBytes(maxBytes)
     new FetchRequest(requestBuilder)
   }
 
@@ -317,7 +316,7 @@ object ReplicaFetcherThread {
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
 
-    def errorCode: Short = underlying.errorCode
+    def error = underlying.error
 
     def toRecords: MemoryRecords = {
       underlying.records.asInstanceOf[MemoryRecords]
@@ -325,7 +324,7 @@ object ReplicaFetcherThread {
 
     def highWatermark: Long = underlying.highWatermark
 
-    def exception: Option[Throwable] = Errors.forCode(errorCode) match {
+    def exception: Option[Throwable] = error match {
       case Errors.NONE => None
       case e => Some(e.exception)
     }

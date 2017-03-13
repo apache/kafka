@@ -18,11 +18,13 @@
 package kafka.tools
 
 import joptsimple._
+
 import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
-import kafka.utils.{CoreUtils, Logging, CommandLineUtils}
+
+import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import kafka.common.Topic
 import java.io.{BufferedOutputStream, OutputStream}
 
@@ -92,12 +94,12 @@ object StateChangeLogMerger extends Logging {
     if ((!options.has(filesOpt) && !options.has(regexOpt)) || (options.has(filesOpt) && options.has(regexOpt))) {
       System.err.println("Provide arguments to exactly one of the two options \"" + filesOpt + "\" or \"" + regexOpt + "\"")
       parser.printHelpOn(System.err)
-      System.exit(1)
+      Exit.exit(1)
     }
     if (options.has(partitionsOpt) && !options.has(topicOpt)) {
       System.err.println("The option \"" + topicOpt + "\" needs to be provided an argument when specifying partition ids")
       parser.printHelpOn(System.err)
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // Populate data structures.
@@ -118,7 +120,7 @@ object StateChangeLogMerger extends Logging {
       val duplicatePartitions = CoreUtils.duplicates(partitions)
       if (duplicatePartitions.nonEmpty) {
         System.err.println("The list of partitions contains repeated entries: %s".format(duplicatePartitions.mkString(",")))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     startDate = dateFormat.parse(options.valueOf(startTimeOpt).replace('\"', ' ').trim)

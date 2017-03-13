@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,10 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -42,14 +40,11 @@ import java.util.Set;
 
 public class KStreamTestDriver {
 
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
     private final ProcessorTopology globalTopology;
-    private ThreadCache cache;
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    public final File stateDir;
-
-    private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
@@ -78,9 +73,8 @@ public class KStreamTestDriver {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
         this.globalTopology = builder.buildGlobalStateTopology();
-        this.stateDir = stateDir;
-        this.cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
-        this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        this.context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -88,7 +82,6 @@ public class KStreamTestDriver {
             initTopology(globalTopology, globalTopology.globalStateStores());
         }
         initTopology(topology, topology.stateStores());
-
     }
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
@@ -106,14 +99,17 @@ public class KStreamTestDriver {
         }
     }
 
+    public ProcessorTopology topology() {
+        return topology;
+    }
 
     public ProcessorContext context() {
         return context;
     }
 
     public void process(String topicName, Object key, Object value) {
-        final ProcessorNode previous = currNode;
-        currNode = topology.source(topicName);
+        final ProcessorNode prevNode = context.currentNode();
+        ProcessorNode currNode = topology.source(topicName);
         if (currNode == null && globalTopology != null) {
             currNode = globalTopology.source(topicName);
         }
@@ -121,33 +117,27 @@ public class KStreamTestDriver {
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
         if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-            currNode = previous;
             return;
         }
         context.setRecordContext(createRecordContext(context.timestamp()));
         context.setCurrentNode(currNode);
         try {
-            forward(key, value);
+            context.forward(key, value);
         } finally {
-            currNode = null;
-            context.setCurrentNode(null);
+            context.setCurrentNode(prevNode);
         }
     }
 
-    private ProcessorRecordContext createRecordContext(long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
-    }
-
-
     public void punctuate(long timestamp) {
+        final ProcessorNode prevNode = context.currentNode();
         for (ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
-                currNode = processor;
+                context.setRecordContext(createRecordContext(timestamp));
+                context.setCurrentNode(processor);
                 try {
-                    context.setRecordContext(createRecordContext(timestamp));
                     processor.processor().punctuate(timestamp);
                 } finally {
-                    currNode = null;
+                    context.setCurrentNode(prevNode);
                 }
             }
         }
@@ -157,59 +147,18 @@ public class KStreamTestDriver {
         context.setTime(timestamp);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) currNode.children()) {
-            currNode = childNode;
-            try {
-                childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, String childName) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currNode = childNode;
-                try {
-                    childNode.process(key, value);
-                } finally {
-                    currNode = thisNode;
-                }
-                break;
-            }
-        }
-    }
-
     public void close() {
         // close all processors
         for (ProcessorNode node : topology.processors()) {
-            currNode = node;
+            context.setCurrentNode(node);
             try {
                 node.close();
             } finally {
-                currNode = null;
+                context.setCurrentNode(null);
             }
         }
 
-        flushState();
+        closeState();
     }
 
     public Set<String> allProcessorNames() {
@@ -245,47 +194,54 @@ public class KStreamTestDriver {
         }
     }
 
-    public void setCurrentNode(final ProcessorNode currentNode) {
-        currNode = currentNode;
-    }
+    private void closeState() {
+        // we need to first flush all stores before trying to close any one
+        // of them since the flushing could cause eviction and hence tries to access other stores
+        flushState();
 
-    public StateStore globalStateStore(final String storeName) {
-        if (globalTopology != null) {
-            for (final StateStore store : globalTopology.globalStateStores()) {
-                if (store.name().equals(storeName)) {
-                    return store;
-                }
-            }
+        for (StateStore stateStore : context.allStateStores().values()) {
+            stateStore.close();
         }
-        return null;
     }
 
+    private ProcessorRecordContext createRecordContext(long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
+    }
 
     private class MockRecordCollector extends RecordCollectorImpl {
-        public MockRecordCollector() {
+        MockRecordCollector() {
             super(null, "KStreamTestDriver");
         }
 
         @Override
-        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer,
                                 StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
-            process(record.topic(), record.key(), record.value());
+            process(topic, key, value);
         }
 
         @Override
-        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-            // The serialization is skipped.
-            process(record.topic(), record.key(), record.value());
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
+        // The serialization is skipped.
+            process(topic, key, value);
         }
 
         @Override
-        public void flush() {
-        }
+        public void flush() {}
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
-
 }

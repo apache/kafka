@@ -1,23 +1,24 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -56,9 +57,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         logHeaderBuffer.rewind();
-        channel.read(logHeaderBuffer, position);
-        if (logHeaderBuffer.hasRemaining())
-            return null;
+        Utils.readFullyOrFail(channel, logHeaderBuffer, position, "log header");
 
         logHeaderBuffer.rewind();
         long offset = logHeaderBuffer.getLong();
@@ -117,9 +116,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                channel.read(buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET);
-                if (buf.hasRemaining())
-                    throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
+                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET, "magic byte");
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);
@@ -136,9 +133,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 return record;
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
-            channel.read(recordBuffer, position + Records.LOG_OVERHEAD);
-            if (recordBuffer.hasRemaining())
-                throw new IOException("Failed to read full record from channel " + channel);
+            Utils.readFullyOrFail(channel, recordBuffer, position + Records.LOG_OVERHEAD, "full record");
 
             recordBuffer.rewind();
             record = new Record(recordBuffer);

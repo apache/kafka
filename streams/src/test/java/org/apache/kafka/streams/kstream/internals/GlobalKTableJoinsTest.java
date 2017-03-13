@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -38,14 +39,15 @@ import static org.junit.Assert.assertEquals;
 public class GlobalKTableJoinsTest {
 
     private final KStreamBuilder builder = new KStreamBuilder();
-    private GlobalKTable<String, String> global;
-    private File stateDir;
     private final Map<String, String> results = new HashMap<>();
+    private final String streamTopic = "stream";
+    private final String globalTopic = "global";
+    private File stateDir;
+    private GlobalKTable<String, String> global;
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
     private ForeachAction<String, String> action;
-    private final String streamTopic = "stream";
-    private final String globalTopic = "global";
+    private KStreamTestDriver driver = null;
 
     @Before
     public void setUp() throws Exception {
@@ -64,7 +66,14 @@ public class GlobalKTableJoinsTest {
                 results.put(key, value);
             }
         };
+    }
 
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test
@@ -94,7 +103,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, String> expected, final String joinInput) {
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table
         driver.process(globalTopic, "a", "A");

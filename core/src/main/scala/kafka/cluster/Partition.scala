@@ -144,7 +144,7 @@ class Partition(val topic: String,
       } catch {
         case e: IOException =>
           fatal(s"Error deleting the log for partition $topicPartition", e)
-          Runtime.getRuntime.halt(1)
+          Exit.halt(1)
       }
     }
   }

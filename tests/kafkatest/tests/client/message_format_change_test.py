@@ -22,7 +22,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_9, LATEST_0_10, TRUNK, KafkaVersion
+from kafkatest.version import LATEST_0_9, LATEST_0_10, DEV_BRANCH, KafkaVersion
 
 
 class MessageFormatChangeTest(ProduceConsumeValidateTest):
@@ -58,7 +58,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
             err_msg="Producer did not produce all messages in reasonable amount of time"))
 
     @cluster(num_nodes=10)
-    @parametrize(producer_version=str(TRUNK), consumer_version=str(TRUNK))
+    @parametrize(producer_version=str(DEV_BRANCH), consumer_version=str(DEV_BRANCH))
     @parametrize(producer_version=str(LATEST_0_9), consumer_version=str(LATEST_0_9))
     def test_compatibility(self, producer_version, consumer_version):
         """ This tests performs the following checks:
@@ -70,7 +70,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
         - The producers and consumers should not have any issue.
         - Note that for 0.9.x consumers/producers we only do steps 1 and 2
         """
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=TRUNK, topics={self.topic: {
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=DEV_BRANCH, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}})
@@ -84,7 +84,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
         self.kafka.alter_message_format(self.topic, str(LATEST_0_10))
         self.produce_and_consume(producer_version, consumer_version, "group2")
 
-        if producer_version == str(TRUNK) and consumer_version == str(TRUNK):
+        if producer_version == str(DEV_BRANCH) and consumer_version == str(DEV_BRANCH):
             self.logger.info("Third format change back to 0.9.0")
             self.kafka.alter_message_format(self.topic, str(LATEST_0_9))
             self.produce_and_consume(producer_version, consumer_version, "group3")

@@ -23,7 +23,7 @@ PUBLIC_ADDRESS=$2
 PUBLIC_ZOOKEEPER_ADDRESSES=$3
 JMX_PORT=$4
 
-kafka_dir=/opt/kafka-trunk
+kafka_dir=/opt/kafka-dev
 cd $kafka_dir
 
 sed \

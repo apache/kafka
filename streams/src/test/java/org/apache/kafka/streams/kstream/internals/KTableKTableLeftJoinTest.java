@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -104,6 +103,8 @@ public class KTableKTableLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic1, null, "SomeVal");
         driver.flushState();
 
         processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
@@ -114,6 +115,8 @@ public class KTableKTableLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
+        // pass tuple with null key, it will be discarded in join process
+        driver.process(topic2, null, "AnotherVal");
         driver.flushState();
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
         checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, null), kv(3, null));
@@ -367,7 +370,6 @@ public class KTableKTableLeftJoinTest {
         };
         final KTable<Long, String> seven = one.mapValues(mapper);
 
-
         final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
         aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
@@ -378,7 +380,7 @@ public class KTableKTableLeftJoinTest {
                 .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
                 .mapValues(mapper);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 250);
+        driver = new KStreamTestDriver(builder, stateDir, 250);
 
         final String[] values = {"a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
                                  "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
@@ -387,7 +389,7 @@ public class KTableKTableLeftJoinTest {
         final Random random = new Random();
         for (int i = 0; i < 1000; i++) {
             for (String input : inputs) {
-                final Long key = Long.valueOf(random.nextInt(1000));
+                final Long key = (long) random.nextInt(1000);
                 final String value = values[random.nextInt(values.length)];
                 driver.process(input, key, value);
             }

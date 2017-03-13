@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Metric;
@@ -113,7 +112,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencySensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
+    public Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
         Map<String, String> tagMap = tagMap(tags);
 
         // first add the global operation metrics if not yet, with the global tags only
@@ -150,15 +149,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-avg", groupNameFromScope(scopeName),
             "The average latency of " + entityName + " " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-max", groupNameFromScope(scopeName),
             "The max latency of " + entityName + " " + opName + " operation.", tags), new Max());
         addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
     }
 
     private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", groupNameFromScope(scopeName),
+        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-rate", groupNameFromScope(scopeName),
             "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
     }
 
@@ -166,7 +165,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (!metrics.metrics().containsKey(name)) {
             sensor.add(name, stat);
         } else {
-            log.debug("Trying to add metric twice " + name);
+            log.trace("Trying to add metric twice: {}", name);
         }
     }
 

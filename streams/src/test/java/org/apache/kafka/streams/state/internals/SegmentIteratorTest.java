@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -48,14 +47,16 @@ public class SegmentIteratorTest {
         }
     };
 
+    private SegmentIterator iterator = null;
+
     @Before
     public void before() {
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.String(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        final MockProcessorContext context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
+                Serdes.String(),
+                Serdes.String(),
+                new NoOpRecordCollector(),
+                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
@@ -67,15 +68,17 @@ public class SegmentIteratorTest {
 
     @After
     public void closeSegments() {
+        if (iterator != null) {
+            iterator.close();
+            iterator = null;
+        }
         segmentOne.close();
         segmentTwo.close();
     }
 
     @Test
     public void shouldIterateOverAllSegments() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
                 Bytes.wrap("z".getBytes()));
@@ -101,9 +104,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldOnlyIterateOverSegmentsInRange() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("a".getBytes()),
                 Bytes.wrap("b".getBytes()));
@@ -121,9 +122,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),
                 Bytes.wrap("h".getBytes()));
@@ -133,9 +132,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnNextIfNoNext() throws Exception {
-        final SegmentIterator iterator = new SegmentIterator(
-                Arrays.asList(segmentOne,
-                              segmentTwo).iterator(),
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
                 hasNextCondition,
                 Bytes.wrap("f".getBytes()),
                 Bytes.wrap("h".getBytes()));
@@ -146,5 +143,4 @@ public class SegmentIteratorTest {
     private KeyValue<String, String> toStringKeyValue(final KeyValue<Bytes, byte[]> binaryKv) {
         return KeyValue.pair(new String(binaryKv.key.get()), new String(binaryKv.value));
     }
-
 }

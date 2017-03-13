@@ -42,6 +42,7 @@
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
 
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />
@@ -156,6 +157,7 @@
     
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
+      <allow pkg="kafka.api" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
@@ -177,6 +179,15 @@
         <allow pkg="org.apache.zookeeper" />
       </subpackage>
     </subpackage>
+  </subpackage>
+
+  <subpackage name="jmh">
+    <allow pkg="org.openjdk.jmh.annotations" />
+    <allow pkg="org.openjdk.jmh.runner" />
+    <allow pkg="org.openjdk.jmh.runner.options" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.streams" />
+    <allow pkg="org.github.jamm" />
   </subpackage>
 
   <subpackage name="log4jappender">

@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -31,13 +30,13 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore<K, V> {
+class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V>, CachedStateStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private CacheFlushListener<K, V> flushListener;
-    private String name;
+    private String cacheName;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
@@ -46,6 +45,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
+        super(underlying);
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -67,15 +67,15 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     }
 
     @SuppressWarnings("unchecked")
-    void initInternal(final ProcessorContext context) {
+    private void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.name = context.taskId() + "-" + underlying.name();
+        this.cacheName = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
-        cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
+        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
@@ -83,7 +83,6 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
                 }
             }
         });
-
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
@@ -93,7 +92,8 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
             if (flushListener != null) {
 
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
-                                    serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
+                                    serdes.valueFrom(entry.newValue()),
+                                    serdes.valueFrom(underlying.get(entry.key())));
 
             }
             underlying.put(entry.key(), entry.newValue());
@@ -108,7 +108,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized void flush() {
-        cache.flush(name);
+        cache.flush(cacheName);
         underlying.flush();
     }
 
@@ -116,7 +116,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     public void close() {
         flush();
         underlying.close();
-        cache.close(name);
+        cache.close(cacheName);
     }
 
     @Override
@@ -139,23 +139,18 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
         return get(rawKey);
     }
 
-    private void validateStoreOpen() {
-        if (!isOpen()) {
-            throw new InvalidStateStoreException("Store " + this.name + " is currently closed");
-        }
-    }
-
     private V get(final byte[] rawKey) {
-        final LRUCacheEntry entry = cache.get(name, rawKey);
+        final Bytes key = Bytes.wrap(rawKey);
+        final LRUCacheEntry entry = cache.get(cacheName, key);
         if (entry == null) {
-            final byte[] rawValue = underlying.get(Bytes.wrap(rawKey));
+            final byte[] rawValue = underlying.get(key);
             if (rawValue == null) {
                 return null;
             }
             // only update the cache if this call is on the streamThread
             // as we don't want other threads to trigger an eviction/flush
             if (Thread.currentThread().equals(streamThread)) {
-                cache.put(name, rawKey, new LRUCacheEntry(rawValue));
+                cache.put(cacheName, key, new LRUCacheEntry(rawValue));
             }
             return serdes.valueFrom(rawValue);
         }
@@ -170,18 +165,18 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
         validateStoreOpen();
-        final byte[] origFrom = serdes.rawKey(from);
-        final byte[] origTo = serdes.rawKey(to);
-        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
+        final Bytes origFrom = Bytes.wrap(serdes.rawKey(from));
+        final Bytes origTo = Bytes.wrap(serdes.rawKey(to));
+        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(origFrom, origTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, origFrom, origTo);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(name, underlying.all());
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), underlying.all());
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
         return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
@@ -199,8 +194,8 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     private synchronized void put(final byte[] rawKey, final V value) {
         final byte[] rawValue = serdes.rawValue(value);
-        cache.put(name, rawKey, new LRUCacheEntry(rawValue, true, context.offset(),
-                                                  context.timestamp(), context.partition(), context.topic()));
+        cache.put(cacheName, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
+                  context.timestamp(), context.partition(), context.topic()));
     }
 
     @Override
@@ -225,13 +220,22 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     public synchronized V delete(final K key) {
         validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
+        final Bytes bytesKey = Bytes.wrap(rawKey);
         final V v = get(rawKey);
-        cache.delete(name, serdes.rawKey(key));
-        underlying.delete(Bytes.wrap(rawKey));
+        cache.delete(cacheName, bytesKey);
+        underlying.delete(bytesKey);
         return v;
     }
 
     KeyValueStore<Bytes, byte[]> underlying() {
+        return underlying;
+    }
+
+    @Override
+    public StateStore inner() {
+        if (underlying instanceof WrappedStateStore) {
+            return ((WrappedStateStore) underlying).inner();
+        }
         return underlying;
     }
 }

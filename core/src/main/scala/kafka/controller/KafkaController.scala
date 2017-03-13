@@ -188,7 +188,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
           if (!isActive)
             0
           else
-            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
+            controllerContext.partitionLeadershipInfo.count(p => 
+              (!controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
+              && (!deleteTopicManager.isTopicQueuedUpForDeletion(p._1.topic))
+            )
         }
       }
     }
@@ -203,7 +206,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
             0
           else
             controllerContext.partitionReplicaAssignment.count {
-              case (topicPartition, replicas) => controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head
+              case (topicPartition, replicas) => 
+                (controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head 
+                && (!deleteTopicManager.isTopicQueuedUpForDeletion(topicPartition.topic))
+                )
             }
         }
       }
@@ -1163,9 +1169,16 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     @throws[Exception]
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
-      onControllerResignation()
-      inLock(controllerContext.controllerLock) {
-        controllerElector.elect
+      if (controllerElector.getControllerID() != config.brokerId) {
+        onControllerResignation()
+        inLock(controllerContext.controllerLock) {
+          controllerElector.elect
+        }
+      } else {
+        // This can happen when there are multiple consecutive session expiration and handleNewSession() are called multiple
+        // times. The first call may already register the controller path using the newest ZK session. Therefore, the
+        // controller path will exist in subsequent calls to handleNewSession().
+        info("ZK expired, but the current controller id %d is the same as this broker id, skip re-elect".format(config.brokerId))
       }
     }
 

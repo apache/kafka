@@ -1,29 +1,39 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.utils;
 
-import java.io.IOException;
-import java.io.InputStream;
+import org.apache.kafka.common.KafkaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.io.FileNotFoundException;
-import java.io.StringWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -36,16 +46,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.Properties;
-import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.KafkaException;
 
 public class Utils {
 
@@ -98,120 +102,6 @@ public class Utils {
     }
 
     /**
-     * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
-     *
-     * @param buffer The buffer to read from
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer) {
-        return buffer.getInt() & 0xffffffffL;
-    }
-
-    /**
-     * Read an unsigned integer from the given position without modifying the buffers position
-     *
-     * @param buffer the buffer to read from
-     * @param index the index from which to read the integer
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer, int index) {
-        return buffer.getInt(index) & 0xffffffffL;
-    }
-
-    /**
-     * Read an unsigned integer stored in little-endian format from the {@link InputStream}.
-     *
-     * @param in The stream to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8 * 0)
-             | (in.read() << 8 * 1)
-             | (in.read() << 8 * 2)
-             | (in.read() << 8 * 3);
-    }
-
-    /**
-     * Get the little-endian value of an integer as a byte array.
-     * @param val The value to convert to a little-endian array
-     * @return The little-endian encoded array of bytes for the value
-     */
-    public static byte[] toArrayLE(int val) {
-        return new byte[] {
-            (byte) (val >> 8 * 0),
-            (byte) (val >> 8 * 1),
-            (byte) (val >> 8 * 2),
-            (byte) (val >> 8 * 3)
-        };
-    }
-
-
-    /**
-     * Read an unsigned integer stored in little-endian format from a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to read from
-     * @param offset The position in buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset++] << 8 * 0)
-             | (buffer[offset++] << 8 * 1)
-             | (buffer[offset++] << 8 * 2)
-             | (buffer[offset]   << 8 * 3);
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, long value) {
-        buffer.putInt((int) (value & 0xffffffffL));
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param index The position in the buffer at which to begin writing
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, int index, long value) {
-        buffer.putInt(index, (int) (value & 0xffffffffL));
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to the {@link OutputStream}.
-     *
-     * @param out The stream to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value >>> 8 * 0);
-        out.write(value >>> 8 * 1);
-        out.write(value >>> 8 * 2);
-        out.write(value >>> 8 * 3);
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to write to
-     * @param offset The position in buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset++] = (byte) (value >>> 8 * 0);
-        buffer[offset++] = (byte) (value >>> 8 * 1);
-        buffer[offset++] = (byte) (value >>> 8 * 2);
-        buffer[offset]   = (byte) (value >>> 8 * 3);
-    }
-
-
-    /**
      * Get the absolute value of the given number. If the number is Int.MinValue return 0. This is different from
      * java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
      */
@@ -227,9 +117,9 @@ public class Utils {
      */
     public static long min(long first, long ... rest) {
         long min = first;
-        for (int i = 0; i < rest.length; i++) {
-            if (rest[i] < min)
-                min = rest[i];
+        for (long r : rest) {
+            if (r < min)
+                min = r;
         }
         return min;
     }
@@ -545,7 +435,7 @@ public class Utils {
      */
     public static void croak(String message) {
         System.err.println(message);
-        System.exit(1);
+        Exit.exit(1);
     }
 
     /**
@@ -801,6 +691,58 @@ public class Utils {
      */
     public static long computeChecksum(ByteBuffer buffer, int start, int size) {
         return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer. If the end
+     * of the file is reached while there are bytes remaining in the buffer, an EOFException is thrown.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     * @param description A description of what is being read, this will be included in the EOFException if it is thrown
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws EOFException If the end of the file is reached while there are remaining bytes in the destination buffer
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position,
+                                       String description) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        int expectedReadBytes = destinationBuffer.remaining();
+        readFully(channel, destinationBuffer, position);
+        if (destinationBuffer.hasRemaining()) {
+            throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
+                    "but reached end of file after reading %d bytes. Started read from position %d.",
+                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+        }
+    }
+
+    /**
+     * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or the end
+     * of the file has been reached.
+     *
+     * @param channel File channel containing the data to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred
+     * @param position The file position at which the transfer is to begin; it must be non-negative
+     *
+     * @throws IllegalArgumentException If position is negative
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     */
+    public static void readFully(FileChannel channel, ByteBuffer destinationBuffer, long position) throws IOException {
+        if (position < 0) {
+            throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
+        }
+        long currentPosition = position;
+        int bytesRead;
+        do {
+            bytesRead = channel.read(destinationBuffer, currentPosition);
+            currentPosition += bytesRead;
+        } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
 
 }

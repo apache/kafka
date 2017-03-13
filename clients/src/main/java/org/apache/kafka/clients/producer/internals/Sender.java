@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
 
@@ -34,7 +38,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -189,21 +192,21 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
-        Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster,
+        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster,
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
                                                                          now);
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
-            for (List<RecordBatch> batchList : batches.values()) {
-                for (RecordBatch batch : batchList)
+            for (List<ProducerBatch> batchList : batches.values()) {
+                for (ProducerBatch batch : batchList)
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
 
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
+        List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
         // update sensors
-        for (RecordBatch expiredBatch : expiredBatches)
+        for (ProducerBatch expiredBatch : expiredBatches)
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
 
         sensors.updateProduceRequestMetrics(batches);
@@ -248,17 +251,17 @@ public class Sender implements Runnable {
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, RecordBatch> batches, long now) {
+    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         int correlationId = response.requestHeader().correlationId();
         if (response.wasDisconnected()) {
             log.trace("Cancelled request {} due to node {} being disconnected", response, response.destination());
-            for (RecordBatch batch : batches.values())
-                completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
+            for (ProducerBatch batch : batches.values())
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
-            for (RecordBatch batch : batches.values())
-                completeBatch(batch, Errors.INVALID_REQUEST, -1L, Record.NO_TIMESTAMP, correlationId, now);
+            for (ProducerBatch batch : batches.values())
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.INVALID_REQUEST), correlationId, now);
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -267,16 +270,16 @@ public class Sender implements Runnable {
                 for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
-                    Errors error = Errors.forCode(partResp.errorCode);
-                    RecordBatch batch = batches.get(tp);
-                    completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
+                    ProducerBatch batch = batches.get(tp);
+                    completeBatch(batch, partResp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
-                for (RecordBatch batch : batches.values())
-                    completeBatch(batch, Errors.NONE, -1L, Record.NO_TIMESTAMP, correlationId, now);
+                for (ProducerBatch batch : batches.values()) {
+                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now);
+                }
             }
         }
     }
@@ -285,19 +288,19 @@ public class Sender implements Runnable {
      * Complete or retry the given batch of records.
      * 
      * @param batch The record batch
-     * @param error The error (or null if none)
-     * @param baseOffset The base offset assigned to the records if successful
-     * @param timestamp The timestamp returned by the broker for this batch
+     * @param response The produce response
      * @param correlationId The correlation id for the request
-     * @param now The current POSIX time stamp in milliseconds
+     * @param now The current POSIX timestamp in milliseconds
      */
-    private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
+    private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
+                               long now) {
+        Errors error = response.error;
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                      correlationId,
                      batch.topicPartition,
-                     this.retries - batch.attempts - 1,
+                     this.retries - batch.attempts() - 1,
                      error);
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
@@ -308,7 +311,7 @@ public class Sender implements Runnable {
             else
                 exception = error.exception();
             // tell the user the result of their request
-            batch.done(baseOffset, timestamp, exception);
+            batch.done(response.baseOffset, response.logAppendTime, exception);
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
@@ -328,25 +331,25 @@ public class Sender implements Runnable {
     /**
      * We can retry a send if the error is transient and the number of attempts taken is fewer than the maximum allowed
      */
-    private boolean canRetry(RecordBatch batch, Errors error) {
-        return batch.attempts < this.retries && error.exception() instanceof RetriableException;
+    private boolean canRetry(ProducerBatch batch, Errors error) {
+        return batch.attempts() < this.retries && error.exception() instanceof RetriableException;
     }
 
     /**
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private void sendProduceRequests(Map<Integer, List<RecordBatch>> collated, long now) {
-        for (Map.Entry<Integer, List<RecordBatch>> entry : collated.entrySet())
+    private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
+        for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
             sendProduceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue());
     }
 
     /**
      * Create a produce request from the given record batches
      */
-    private void sendProduceRequest(long now, int destination, short acks, int timeout, List<RecordBatch> batches) {
+    private void sendProduceRequest(long now, int destination, short acks, int timeout, List<ProducerBatch> batches) {
         Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
-        final Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<>(batches.size());
-        for (RecordBatch batch : batches) {
+        final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
+        for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
             produceRecordsByPartition.put(tp, batch.records());
             recordsByPartition.put(tp, batch);
@@ -490,11 +493,11 @@ public class Sender implements Runnable {
             }
         }
 
-        public void updateProduceRequestMetrics(Map<Integer, List<RecordBatch>> batches) {
+        public void updateProduceRequestMetrics(Map<Integer, List<ProducerBatch>> batches) {
             long now = time.milliseconds();
-            for (List<RecordBatch> nodeBatch : batches.values()) {
+            for (List<ProducerBatch> nodeBatch : batches.values()) {
                 int records = 0;
-                for (RecordBatch batch : nodeBatch) {
+                for (ProducerBatch batch : nodeBatch) {
                     // register all per-topic metrics at once
                     String topic = batch.topicPartition.topic();
                     maybeRegisterTopicMetrics(topic);
@@ -516,7 +519,7 @@ public class Sender implements Runnable {
 
                     // global metrics
                     this.batchSizeSensor.record(batch.sizeInBytes(), now);
-                    this.queueTimeSensor.record(batch.drainedMs - batch.createdMs, now);
+                    this.queueTimeSensor.record(batch.queueTimeMs(), now);
                     this.compressionRateSensor.record(batch.compressionRate());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;
