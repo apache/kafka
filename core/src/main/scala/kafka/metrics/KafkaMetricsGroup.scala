@@ -17,11 +17,7 @@
 
 package kafka.metrics
 
-
-import java.util.concurrent.TimeUnit
-
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Gauge, MetricName}
+import com.codahale.metrics._
 import kafka.consumer.{ConsumerTopicStatsRegistry, FetchRequestAndResponseStatsRegistry}
 import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, ProducerTopicStatsRegistry}
 import kafka.utils.Logging
@@ -46,7 +42,11 @@ trait KafkaMetricsGroup extends Logging {
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
     // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
     def quoteIfRequired(value: String) = if (value.contains(':')) ObjectName.quote(value) else value
-    val metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
+
+    var metricTags: scala.collection.Map[String, String] = null
+    if (tags != null) {
+      metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
+    }
 
     explicitMetricName(pkg, simpleName, name, metricTags)
   }
@@ -66,31 +66,41 @@ trait KafkaMetricsGroup extends Logging {
       nameBuilder.append(name)
     }
 
-    val scope: String = KafkaMetricsGroup.toScope(tags).getOrElse(null)
-    val tagsName = KafkaMetricsGroup.toMBeanName(tags)
-    tagsName match {
-      case Some(tn) =>
-        nameBuilder.append(",").append(tn)
-      case None =>
+    var scope: String = null
+    if (tags != null) {
+      scope = KafkaMetricsGroup.toScope(tags).orNull
+      val tagsName = KafkaMetricsGroup.toMBeanName(tags)
+      tagsName match {
+        case Some(tn) =>
+          nameBuilder.append(",").append(tn)
+        case None =>
+      }
     }
 
-    new MetricName(group, typeName, name, scope, nameBuilder.toString())
+
+    new KafkaMetricsName(group, typeName, name, scope, nameBuilder.toString())
   }
 
-  def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
-    Metrics.defaultRegistry().newGauge(metricName(name, tags), metric)
+  def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty): Gauge[T] = {
+    try {
+      KafkaMetricsGroup.registry.register(metricName(name, tags).toString, metric)
+    } catch {
+      case _: IllegalArgumentException => KafkaMetricsGroup.registry.getGauges.get(metricName(name, tags).toString).asInstanceOf[Gauge[T]]
+      case exception: Throwable => throw exception
+    }
+  }
 
-  def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty) =
-    Metrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit)
+  def newMeter(name: String, tags: scala.collection.Map[String, String] = Map.empty): Meter =
+    KafkaMetricsGroup.registry.meter(metricName(name, tags).toString)
 
-  def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty) =
-    Metrics.defaultRegistry().newHistogram(metricName(name, tags), biased)
+  def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty): Histogram =
+    KafkaMetricsGroup.registry.histogram(metricName(name, tags).toString)
 
-  def newTimer(name: String, durationUnit: TimeUnit, rateUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty) =
-    Metrics.defaultRegistry().newTimer(metricName(name, tags), durationUnit, rateUnit)
+  def newTimer(name: String, tags: scala.collection.Map[String, String] = Map.empty): Timer =
+    KafkaMetricsGroup.registry.timer(metricName(name, tags).toString)
 
-  def removeMetric(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
-    Metrics.defaultRegistry().removeMetric(metricName(name, tags))
+  def removeMetric(name: String, tags: scala.collection.Map[String, String] = Map.empty): Boolean =
+    KafkaMetricsGroup.registry.remove(metricName(name, tags).toString)
 
 
 }
@@ -100,62 +110,65 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
    * To make sure all the metrics be de-registered after consumer/producer close, the metric names should be
    * put into the metric name set.
    */
-  private val consumerMetricNameList: immutable.List[MetricName] = immutable.List[MetricName](
+
+  val registry = new MetricRegistry
+
+  private val consumerMetricNameList: immutable.List[KafkaMetricsName] = immutable.List[KafkaMetricsName](
     // kafka.consumer.ZookeeperConsumerConnector
-    new MetricName("kafka.consumer", "ZookeeperConsumerConnector", "FetchQueueSize"),
-    new MetricName("kafka.consumer", "ZookeeperConsumerConnector", "KafkaCommitsPerSec"),
-    new MetricName("kafka.consumer", "ZookeeperConsumerConnector", "ZooKeeperCommitsPerSec"),
-    new MetricName("kafka.consumer", "ZookeeperConsumerConnector", "RebalanceRateAndTime"),
-    new MetricName("kafka.consumer", "ZookeeperConsumerConnector", "OwnedPartitionsCount"),
+    new KafkaMetricsName("kafka.consumer", "ZookeeperConsumerConnector", "FetchQueueSize"),
+    new KafkaMetricsName("kafka.consumer", "ZookeeperConsumerConnector", "KafkaCommitsPerSec"),
+    new KafkaMetricsName("kafka.consumer", "ZookeeperConsumerConnector", "ZooKeeperCommitsPerSec"),
+    new KafkaMetricsName("kafka.consumer", "ZookeeperConsumerConnector", "RebalanceRateAndTime"),
+    new KafkaMetricsName("kafka.consumer", "ZookeeperConsumerConnector", "OwnedPartitionsCount"),
 
     // kafka.consumer.ConsumerFetcherManager
-    new MetricName("kafka.consumer", "ConsumerFetcherManager", "MaxLag"),
-    new MetricName("kafka.consumer", "ConsumerFetcherManager", "MinFetchRate"),
+    new KafkaMetricsName("kafka.consumer", "ConsumerFetcherManager", "MaxLag"),
+    new KafkaMetricsName("kafka.consumer", "ConsumerFetcherManager", "MinFetchRate"),
 
     // kafka.server.AbstractFetcherThread <-- kafka.consumer.ConsumerFetcherThread
-    new MetricName("kafka.server", "FetcherLagMetrics", "ConsumerLag"),
+    new KafkaMetricsName("kafka.server", "FetcherLagMetrics", "ConsumerLag"),
 
     // kafka.consumer.ConsumerTopicStats <-- kafka.consumer.{ConsumerIterator, PartitionTopicInfo}
-    new MetricName("kafka.consumer", "ConsumerTopicMetrics", "MessagesPerSec"),
+    new KafkaMetricsName("kafka.consumer", "ConsumerTopicMetrics", "MessagesPerSec"),
 
     // kafka.consumer.ConsumerTopicStats
-    new MetricName("kafka.consumer", "ConsumerTopicMetrics", "BytesPerSec"),
+    new KafkaMetricsName("kafka.consumer", "ConsumerTopicMetrics", "BytesPerSec"),
 
     // kafka.server.AbstractFetcherThread <-- kafka.consumer.ConsumerFetcherThread
-    new MetricName("kafka.server", "FetcherStats", "BytesPerSec"),
-    new MetricName("kafka.server", "FetcherStats", "RequestsPerSec"),
+    new KafkaMetricsName("kafka.server", "FetcherStats", "BytesPerSec"),
+    new KafkaMetricsName("kafka.server", "FetcherStats", "RequestsPerSec"),
 
     // kafka.consumer.FetchRequestAndResponseStats <-- kafka.consumer.SimpleConsumer
-    new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchResponseSize"),
-    new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestRateAndTimeMs"),
-    new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestThrottleRateAndTimeMs"),
+    new KafkaMetricsName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchResponseSize"),
+    new KafkaMetricsName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestRateAndTimeMs"),
+    new KafkaMetricsName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestThrottleRateAndTimeMs"),
 
     /**
      * ProducerRequestStats <-- SyncProducer
      * metric for SyncProducer in fetchTopicMetaData() needs to be removed when consumer is closed.
      */
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize")
+    new KafkaMetricsName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
+    new KafkaMetricsName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize")
   )
 
-  private val producerMetricNameList: immutable.List[MetricName] = immutable.List[MetricName](
+  private val producerMetricNameList: immutable.List[KafkaMetricsName] = immutable.List[KafkaMetricsName](
     // kafka.producer.ProducerStats <-- DefaultEventHandler <-- Producer
-    new MetricName("kafka.producer", "ProducerStats", "SerializationErrorsPerSec"),
-    new MetricName("kafka.producer", "ProducerStats", "ResendsPerSec"),
-    new MetricName("kafka.producer", "ProducerStats", "FailedSendsPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerStats", "SerializationErrorsPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerStats", "ResendsPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerStats", "FailedSendsPerSec"),
 
     // kafka.producer.ProducerSendThread
-    new MetricName("kafka.producer.async", "ProducerSendThread", "ProducerQueueSize"),
+    new KafkaMetricsName("kafka.producer.async", "ProducerSendThread", "ProducerQueueSize"),
 
     // kafka.producer.ProducerTopicStats <-- kafka.producer.{Producer, async.DefaultEventHandler}
-    new MetricName("kafka.producer", "ProducerTopicMetrics", "MessagesPerSec"),
-    new MetricName("kafka.producer", "ProducerTopicMetrics", "DroppedMessagesPerSec"),
-    new MetricName("kafka.producer", "ProducerTopicMetrics", "BytesPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerTopicMetrics", "MessagesPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerTopicMetrics", "DroppedMessagesPerSec"),
+    new KafkaMetricsName("kafka.producer", "ProducerTopicMetrics", "BytesPerSec"),
 
     // kafka.producer.ProducerRequestStats <-- SyncProducer
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize"),
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestThrottleRateAndTimeMs")
+    new KafkaMetricsName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
+    new KafkaMetricsName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize"),
+    new KafkaMetricsName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestThrottleRateAndTimeMs")
   )
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {
@@ -196,22 +209,20 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     removeAllMetricsInList(KafkaMetricsGroup.producerMetricNameList, clientId)
   }
 
-  private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String) {
+  private def removeAllMetricsInList(metricNameList: immutable.List[KafkaMetricsName], clientId: String) {
     metricNameList.foreach(metric => {
       val pattern = (".*clientId=" + clientId + ".*").r
-      val registeredMetrics = Metrics.defaultRegistry().allMetrics().keySet().asScala
+      val registeredMetrics = registry.getMetrics.keySet().asScala
       for (registeredMetric <- registeredMetrics) {
-        if (registeredMetric.getGroup == metric.getGroup &&
-          registeredMetric.getName == metric.getName &&
-          registeredMetric.getType == metric.getType) {
-          pattern.findFirstIn(registeredMetric.getMBeanName) match {
-            case Some(_) => {
-              val beforeRemovalSize = Metrics.defaultRegistry().allMetrics().keySet().size
-              Metrics.defaultRegistry().removeMetric(registeredMetric)
-              val afterRemovalSize = Metrics.defaultRegistry().allMetrics().keySet().size
+        val registeredMetricName = KafkaMetricsName.fromString(registeredMetric)
+        if (registeredMetricName.equals(metric)) {
+          pattern.findFirstIn(metric.commonName) match {
+            case Some(_) =>
+              val beforeRemovalSize = registry.getMetrics.keySet().size
+              registry.remove(registeredMetric)
+              val afterRemovalSize = registry.getMetrics.keySet().size
               trace("Removing metric %s. Metrics registry size reduced from %d to %d".format(
                 registeredMetric, beforeRemovalSize, afterRemovalSize))
-            }
             case _ =>
           }
         }

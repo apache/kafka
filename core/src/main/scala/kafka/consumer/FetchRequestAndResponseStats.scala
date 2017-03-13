@@ -32,9 +32,9 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetr
       Map("clientId" -> clientId)
   }
 
-  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
+  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", tags))
   val requestSizeHist = newHistogram("FetchResponseSize", biased = true, tags)
-  val throttleTimeStats = newTimer("FetchRequestThrottleRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags)
+  val throttleTimeStats = newTimer("FetchRequestThrottleRateAndTimeMs", tags)
 }
 
 /**

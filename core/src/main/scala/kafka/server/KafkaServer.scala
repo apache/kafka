@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.KAFKA_0_9_0
 import kafka.cluster.Broker
@@ -142,22 +142,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   newGauge(
     "BrokerState",
     new Gauge[Int] {
-      def value = brokerState.currentState
+      override def getValue: Int = brokerState.currentState
     }
   )
 
   newGauge(
     "ClusterId",
     new Gauge[String] {
-      def value = clusterId
+      override def getValue: String = clusterId
     }
   )
 
   newGauge(
     "yammer-metrics-count",
     new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry().allMetrics().size()
+      override def getValue: Int = {
+        KafkaMetricsGroup.registry.getMetrics.size()
       }
     }
   )

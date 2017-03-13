@@ -33,7 +33,7 @@ import org.apache.kafka.common.requests.ListOffsetRequest
 
 import scala.collection.Seq
 import scala.collection.JavaConverters._
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import org.apache.kafka.common.TopicPartition
@@ -128,30 +128,30 @@ class Log(@volatile var dir: File,
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
-      def value = numberOfSegments
+      override def getValue: Int = numberOfSegments
     },
     tags)
 
   newGauge("LogStartOffset",
     new Gauge[Long] {
-      def value = logStartOffset
+      override def getValue: Long = logStartOffset
     },
     tags)
 
   newGauge("LogEndOffset",
     new Gauge[Long] {
-      def value = logEndOffset
+      override def getValue: Long = logEndOffset
     },
     tags)
 
   newGauge("Size",
     new Gauge[Long] {
-      def value = size
+      override def getValue: Long = size
     },
     tags)
 
   /** The name of this log */
-  def name  = dir.getName()
+  def name: String = dir.getName
 
   /* Load the log segments from the log files on disk */
   private def loadSegments() {

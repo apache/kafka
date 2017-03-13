@@ -21,7 +21,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -150,7 +150,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   newGauge(
     "PurgatorySize",
     new Gauge[Int] {
-      def value = watched()
+      override def getValue: Int = watched()
     },
     metricsTags
   )
@@ -158,7 +158,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   newGauge(
     "NumDelayedOperations",
     new Gauge[Int] {
-      def value = delayed()
+      override def getValue: Int = delayed()
     },
     metricsTags
   )

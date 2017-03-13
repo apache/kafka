@@ -34,7 +34,7 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
 import org.apache.kafka.common.record.MemoryRecords
@@ -283,7 +283,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
 
   newGauge(FetcherMetrics.ConsumerLag,
     new Gauge[Long] {
-      def value = lagVal.get
+      override def getValue: Long = lagVal.get
     },
     tags
   )
@@ -332,9 +332,9 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
     "brokerHost" -> metricId.brokerHost,
     "brokerPort" -> metricId.brokerPort.toString)
 
-  val requestRate = newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val requestRate = newMeter(FetcherMetrics.RequestsPerSec, tags)
 
-  val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val byteRate = newMeter(FetcherMetrics.BytesPerSec, tags)
 
   def unregister() {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)

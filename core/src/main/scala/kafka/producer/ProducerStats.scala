@@ -23,9 +23,9 @@ import kafka.utils.Pool
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class ProducerStats(clientId: String) extends KafkaMetricsGroup {
   val tags: Map[String, String] = Map("clientId" -> clientId)
-  val serializationErrorRate = newMeter("SerializationErrorsPerSec", "errors", TimeUnit.SECONDS, tags)
-  val resendRate = newMeter("ResendsPerSec", "resends", TimeUnit.SECONDS, tags)
-  val failedSendRate = newMeter("FailedSendsPerSec", "failed sends", TimeUnit.SECONDS, tags)
+  val serializationErrorRate = newMeter("SerializationErrorsPerSec", tags)
+  val resendRate = newMeter("ResendsPerSec", tags)
+  val failedSendRate = newMeter("FailedSendsPerSec", tags)
 }
 
 /**

@@ -89,7 +89,7 @@ class KafkaHealthcheck(brokerId: Int,
         Expired -> "Expires"
       )
       stateToEventTypeMap.map { case (state, eventType) =>
-        state -> newMeter(s"ZooKeeper${eventType}PerSec", eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
+        state -> newMeter(s"ZooKeeper${eventType}PerSec", null)
       }
     }
 

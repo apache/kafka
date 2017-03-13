@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
@@ -197,18 +197,18 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   newGauge(
     "RequestQueueSize",
     new Gauge[Int] {
-      def value = requestQueue.size
+      override def getValue: Int = requestQueue.size
     }
   )
 
   newGauge("ResponseQueueSize", new Gauge[Int]{
-    def value = responseQueues.foldLeft(0) {(total, q) => total + q.size()}
+    override def getValue: Int = responseQueues.foldLeft(0) {(total, q) => total + q.size()}
   })
 
   for (i <- 0 until numProcessors) {
     newGauge("ResponseQueueSize",
       new Gauge[Int] {
-        def value = responseQueues(i).size()
+        override def getValue: Int = responseQueues(i).size()
       },
       Map("processor" -> i.toString)
     )
@@ -275,7 +275,7 @@ object RequestMetrics {
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val tags = Map("request" -> name)
-  val requestRate = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
+  val requestRate = newMeter("RequestsPerSec", tags)
   // time a request spent in a request queue
   val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker

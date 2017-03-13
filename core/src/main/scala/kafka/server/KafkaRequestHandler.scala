@@ -22,7 +22,7 @@ import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import com.yammer.metrics.core.Meter
+import com.codahale.metrics.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -84,7 +84,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               numThreads: Int) extends Logging with KafkaMetricsGroup {
 
   /* a meter to track the average free capacity of the request handlers */
-  private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+  private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent")
 
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new Array[KafkaRequestHandler](numThreads)
@@ -109,14 +109,14 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  val messagesInRate = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
-  val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val messagesInRate: Meter = newMeter(BrokerTopicStats.MessagesInPerSec, tags)
+  val bytesInRate: Meter = newMeter(BrokerTopicStats.BytesInPerSec, tags)
+  val bytesOutRate: Meter = newMeter(BrokerTopicStats.BytesOutPerSec, tags)
+  val bytesRejectedRate: Meter = newMeter(BrokerTopicStats.BytesRejectedPerSec, tags)
+  val failedProduceRequestRate: Meter = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
+  val failedFetchRequestRate: Meter = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
+  val totalProduceRequestRate: Meter = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
+  val totalFetchRequestRate: Meter = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
 
   def close() {
     removeMetric(BrokerTopicStats.MessagesInPerSec, tags)

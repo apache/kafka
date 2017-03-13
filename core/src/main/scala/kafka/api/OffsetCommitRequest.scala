@@ -76,7 +76,7 @@ object OffsetCommitRequest extends Logging {
           if (versionId == 1)
             buffer.getLong
           else
-            org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP
+            org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME
         }
         val metadata = readShortString(buffer)
 

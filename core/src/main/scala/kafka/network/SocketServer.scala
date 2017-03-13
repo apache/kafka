@@ -25,7 +25,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
@@ -107,7 +107,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        def value = allMetricNames.map { metricName =>
+        override def getValue: Double = allMetricNames.map { metricName =>
           Option(metrics.metric(metricName)).fold(0.0)(_.value)
         }.sum / totalProcessorThreads
       }
@@ -122,11 +122,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   /**
    * Shutdown the socket server
    */
-  def shutdown() = {
+  def shutdown(): Unit = {
     info("Shutting down")
     this.synchronized {
-      acceptors.values.foreach(_.shutdown)
-      processors.foreach(_.shutdown)
+      acceptors.values.foreach(_.shutdown())
+      processors.foreach(_.shutdown())
     }
     info("Shutdown completed")
   }
@@ -404,7 +404,7 @@ private[kafka] class Processor(val id: Int,
 
   newGauge("IdlePercent",
     new Gauge[Double] {
-      def value = {
+      override def getValue: Double = {
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },

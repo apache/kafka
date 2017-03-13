@@ -24,8 +24,10 @@ import org.apache.zookeeper.Watcher
 import org.easymock.EasyMock
 import org.junit.{Assert, Test}
 import Assert._
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Meter
+import com.codahale.metrics.Meter
+import com.codahale.metrics.Meter
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsName}
+
 import scala.collection.JavaConverters._
 
 class SessionExpireListenerTest {
@@ -33,8 +35,8 @@ class SessionExpireListenerTest {
   private val brokerId = 1
 
   private def cleanMetricsRegistry() {
-    val metrics = Metrics.defaultRegistry
-    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
+    val metrics = KafkaMetricsGroup.registry
+    metrics.getMetrics.keySet.asScala.foreach(metrics.remove)
   }
 
   @Test
@@ -42,13 +44,14 @@ class SessionExpireListenerTest {
 
     cleanMetricsRegistry()
 
-    val metrics = Metrics.defaultRegistry
+    val metrics = KafkaMetricsGroup.registry
 
     def checkMeterCount(name: String, expected: Long) {
-      val meter = metrics.allMetrics.asScala.collectFirst {
-        case (metricName, meter: Meter) if metricName.getName == name => meter
+      val meter = metrics.getMetrics.asScala.collectFirst {
+        case (metricName, meter: Meter) if KafkaMetricsName.fromString(metricName).name == name =>
+          meter
       }.getOrElse(sys.error(s"Unable to find meter with name $name"))
-      assertEquals(s"Unexpected meter count for $name", expected, meter.count)
+      assertEquals(s"Unexpected meter count for $name", expected, meter.getCount)
     }
 
     val zkClient = EasyMock.mock(classOf[ZkClient])

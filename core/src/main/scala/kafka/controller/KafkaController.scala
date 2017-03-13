@@ -21,7 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 
 import scala.collection._
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.codahale.metrics.{Gauge, Meter}
 import java.util.concurrent.TimeUnit
 
 import kafka.admin.AdminUtils
@@ -176,14 +176,14 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   newGauge(
     "ActiveControllerCount",
     new Gauge[Int] {
-      def value() = if (isActive) 1 else 0
+      override def getValue: Int = if (isActive) 1 else 0
     }
   )
 
   newGauge(
     "OfflinePartitionsCount",
     new Gauge[Int] {
-      def value(): Int = {
+      override def getValue: Int = {
         inLock(controllerContext.controllerLock) {
           if (!isActive)
             0
@@ -200,7 +200,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   newGauge(
     "PreferredReplicaImbalanceCount",
     new Gauge[Int] {
-      def value(): Int = {
+      override def getValue: Int = {
         inLock(controllerContext.controllerLock) {
           if (!isActive)
             0
@@ -1454,8 +1454,8 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 
 object ControllerStats extends KafkaMetricsGroup {
 
-  private val _uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
-  private val _leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  private val _uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", null)
+  private val _leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", null))
 
   // KafkaServer needs to initialize controller metrics during startup. We perform initialization
   // through method calls to avoid Scala compiler warnings.
