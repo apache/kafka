@@ -340,6 +340,7 @@ object DumpLogSegments {
         println("offset: " + entry.lastOffset + " position: " + validBytes +
           " " + entry.timestampType + ": " + entry.maxTimestamp + " isvalid: " + entry.isValid +
           " size: " + entry.sizeInBytes + " magic: " + entry.magic +
+          " pid: " + entry.pid + " epoch: " + entry.epoch + " lastsequence: " + entry.lastSequence +
           " compresscodec: " + entry.compressionType + " crc: " + entry.checksum)
       }
       validBytes += entry.sizeInBytes

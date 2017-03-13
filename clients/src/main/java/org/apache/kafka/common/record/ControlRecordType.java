@@ -20,9 +20,25 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Control records specify a schema for the record key which includes a version and type:
+ *
+ * Key => Version Type
+ *   Version => Int16
+ *   Type => Int16
+ *
+ * In the future, the version can be bumped to indicate a new schema, but it must be backwards compatible
+ * with the current schema. In general, this means we can add new fields, but we cannot remove old ones.
+ *
+ * Note that control records are not considered for compaction by the log cleaner.
+ *
+ * The schema for the value field is left to the control record type to specify.
+ */
 public enum ControlRecordType {
     COMMIT((short) 0),
     ABORT((short) 1),
@@ -30,12 +46,14 @@ public enum ControlRecordType {
     // UNKNOWN is used to indicate a control type which the client is not aware of and should be ignored
     UNKNOWN((short) -1);
 
-    private static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
+    private static final Logger log = LoggerFactory.getLogger(ControlRecordType.class);
+
+    static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
     private static final Schema CONTROL_RECORD_KEY_SCHEMA_VERSION_V0 = new Schema(
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));
 
-    private final short type;
+    final short type;
 
     ControlRecordType(short type) {
         this.type = type;
@@ -54,7 +72,8 @@ public enum ControlRecordType {
     public static ControlRecordType parse(ByteBuffer key) {
         short version = key.getShort(0);
         if (version != CURRENT_CONTROL_RECORD_KEY_VERSION)
-            throw new IllegalArgumentException("Cannot parse control record key schema with version " + version);
+            log.debug("Received unexpected control record key version {}. Parsing as version {}" +
+                    version, CURRENT_CONTROL_RECORD_KEY_VERSION);
         short type = key.getShort(2);
         switch (type) {
             case 0:

@@ -40,6 +40,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.record.CompressionType;
@@ -74,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singleton;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -155,6 +157,42 @@ public class FetcherTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    @Test
+    public void testFetcherIgnoresControlRecords() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        builder.append(0L, "key".getBytes(), null);
+        builder.appendControlRecord(0L, ControlRecordType.COMMIT, null);
+        builder.append(0L, "key".getBytes(), null);
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 3L);
+        builder.appendControlRecord(0L, ControlRecordType.ABORT, null);
+        builder.close();
+
+        buffer.flip();
+
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp);
+        assertEquals(2, records.size());
+        assertEquals(3L, subscriptions.position(tp).longValue());
+        for (ConsumerRecord<byte[], byte[]> record : records)
+            assertArrayEquals("key".getBytes(), record.key());
     }
 
     @Test

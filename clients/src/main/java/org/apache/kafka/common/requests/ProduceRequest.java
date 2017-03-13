@@ -102,6 +102,8 @@ public class ProduceRequest extends AbstractRequest {
         super(version);
         this.acks = acks;
         this.timeout = timeout;
+
+        // TODO: Include transactional id in constructor once transactions are supported
         this.transactionalId = null;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
@@ -167,7 +169,6 @@ public class ProduceRequest extends AbstractRequest {
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
 
-        // TODO: Include transactional id once transactions are supported
         if (version >= 3)
             struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
 
