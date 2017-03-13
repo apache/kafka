@@ -296,8 +296,23 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public boolean hasInFlightRequests() {
+        return !requests.isEmpty();
+    }
+
+    @Override
     public int inFlightRequestCount(String node) {
-        return requests.size();
+        int result = 0;
+        for (ClientRequest req : requests) {
+            if (req.destination().equals(node))
+                ++result;
+        }
+        return result;
+    }
+
+    @Override
+    public boolean hasInFlightRequests(String node) {
+        return inFlightRequestCount(node) > 0;
     }
 
     @Override

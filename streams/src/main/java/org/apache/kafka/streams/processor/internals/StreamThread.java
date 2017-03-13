@@ -236,9 +236,8 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState,
                         final long cacheSizeBytes) {
-        super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
+        super(clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
-        String threadName = getName();
         this.config = config;
         this.builder = builder;
         this.sourceTopicPattern = builder.sourceTopicPattern();
@@ -246,16 +245,16 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-        threadClientId = clientId + "-" + threadName;
+        threadClientId = getName();
         this.streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
+            log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadClientId);
         }
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.streamsMetrics);
 
 
-        this.logPrefix = String.format("stream-thread [%s]", threadName);
+        this.logPrefix = String.format("stream-thread [%s]", threadClientId);
 
         // set the producer and consumer clients
         log.info("{} Creating producer client", logPrefix);
