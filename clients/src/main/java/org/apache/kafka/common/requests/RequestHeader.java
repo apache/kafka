@@ -85,4 +85,9 @@ public class RequestHeader extends AbstractRequestResponse {
     public static RequestHeader parse(ByteBuffer buffer) {
         return new RequestHeader(Protocol.REQUEST_HEADER.read(buffer));
     }
+
+    @Override
+    public String toString() {
+        return toStruct().toString();
+    }
 }
