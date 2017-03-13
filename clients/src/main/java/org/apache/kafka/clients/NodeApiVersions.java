@@ -35,10 +35,10 @@ import java.util.TreeMap;
  * An internal class which represents the API versions supported by a particular node.
  */
 public class NodeApiVersions {
-    // An array of the usable versions of each API, indexed by the ApiKeys ID.
+    // An map of the usable versions of each API, indexed by the ApiKeys instance
     private final Map<ApiKeys, UsableVersion> usableVersions = new EnumMap<>(ApiKeys.class);
 
-    // List of APIs which the broker supports, but which are unknown to the client.
+    // List of APIs which the broker supports, but which are unknown to the client
     private final List<ApiVersion> unknownApis = new ArrayList<>();
 
     /**
@@ -78,14 +78,7 @@ public class NodeApiVersions {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey)) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey);
-                short v = Utils.min(nodeApiKey.latestVersion(), nodeApiVersion.maxVersion);
-                if (v < nodeApiVersion.minVersion) {
-                    usableVersions.put(nodeApiKey, UsableVersion.tooNew(nodeApiVersion));
-                } else if (v < nodeApiKey.oldestVersion()) {
-                    usableVersions.put(nodeApiKey, UsableVersion.tooOld(nodeApiVersion));
-                } else {
-                    usableVersions.put(nodeApiKey, new UsableVersion(nodeApiVersion, v));
-                }
+                usableVersions.put(nodeApiKey, new UsableVersion(nodeApiKey, nodeApiVersion));
             } else {
                 // Newer brokers may support ApiKeys we don't know about
                 unknownApis.add(nodeApiVersion);
@@ -107,7 +100,7 @@ public class NodeApiVersions {
             throw new UnsupportedVersionException("The broker is too new to support " + apiKey +
                 " version " + apiKey.latestVersion());
         else
-            return usableVersion.defaultVersion;
+            return usableVersion.value;
     }
 
     /**
@@ -192,17 +185,16 @@ public class NodeApiVersions {
             else if (usableVersion.isTooNew())
                 bld.append(" [unusable: node too new]");
             else
-                bld.append(" [usable: ").append(usableVersion.defaultVersion).append("]");
+                bld.append(" [usable: ").append(usableVersion.value).append("]");
         }
         return bld.toString();
     }
 
     public ApiVersion apiVersion(ApiKeys apiKey) {
-        for (UsableVersion usableVersion : usableVersions.values()) {
-            if (usableVersion.apiVersion.apiKey == apiKey.id)
-                return usableVersion.apiVersion;
-        }
-        throw new NoSuchElementException();
+        UsableVersion usableVersion = usableVersions.get(apiKey);
+        if (usableVersion == null)
+            throw new NoSuchElementException();
+        return usableVersion.apiVersion;
     }
 
     private static class UsableVersion {
@@ -210,27 +202,26 @@ public class NodeApiVersions {
         private static final short NODE_TOO_NEW = (short) -2;
 
         private final ApiVersion apiVersion;
-        private final Short defaultVersion;
+        private final Short value;
 
-        private static UsableVersion tooOld(ApiVersion apiVersion) {
-            return new UsableVersion(apiVersion, NODE_TOO_OLD);
-        }
-
-        private static UsableVersion tooNew(ApiVersion apiVersion) {
-            return new UsableVersion(apiVersion, NODE_TOO_NEW);
-        }
-
-        private UsableVersion(ApiVersion apiVersion, Short defaultVersion) {
-            this.apiVersion = apiVersion;
-            this.defaultVersion = defaultVersion;
+        private UsableVersion(ApiKeys nodeApiKey, ApiVersion nodeApiVersion) {
+            this.apiVersion = nodeApiVersion;
+            short v = Utils.min(nodeApiKey.latestVersion(), nodeApiVersion.maxVersion);
+            if (v < nodeApiVersion.minVersion) {
+                this.value = NODE_TOO_NEW;
+            } else if (v < nodeApiKey.oldestVersion()) {
+                this.value = NODE_TOO_OLD;
+            } else {
+                this.value = v;
+            }
         }
 
         private boolean isTooOld() {
-            return defaultVersion == NODE_TOO_OLD;
+            return value == NODE_TOO_OLD;
         }
 
         private boolean isTooNew() {
-            return defaultVersion == NODE_TOO_NEW;
+            return value == NODE_TOO_NEW;
         }
     }
 

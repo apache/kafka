@@ -271,4 +271,20 @@ public class ProduceRequest extends AbstractRequest {
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
         return new ProduceRequest(ApiKeys.PRODUCE.parseRequest(version, buffer), version);
     }
+
+    public static byte requiredMagicForVersion(short produceRequestVersion) {
+        switch (produceRequestVersion) {
+            case 0:
+            case 1:
+                return LogEntry.MAGIC_VALUE_V0;
+
+            case 2:
+                return LogEntry.MAGIC_VALUE_V1;
+
+            case 3:
+            default:
+                return LogEntry.MAGIC_VALUE_V2;
+        }
+    }
+
 }
