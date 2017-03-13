@@ -777,7 +777,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val aliveBrokers = metadataCache.getAliveBrokers
     if (aliveBrokers.size < config.offsetsTopicReplicationFactor) {
       error(s"Number of alive brokers ${aliveBrokers.size} does not meet the replication requirement " +
-        s"${config.offsetsTopicReplicationFactor} for offsets topic. This error can be ignored if cluster is just starting up" +
+        s"${config.offsetsTopicReplicationFactor} for offsets topic. This error can be ignored if cluster is just starting up " +
         s"and not all brokers are up yet.");
       new MetadataResponse.TopicMetadata(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Topic.GroupMetadataTopicName, true,
         java.util.Collections.emptyList())
