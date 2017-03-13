@@ -224,11 +224,15 @@ public class ConsumerConfig extends AbstractConfig {
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
-     * <code>leave.group.on.close</code>
+     * <code>internal.leave.group.on.close</code>
      * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
      * won't occur until <code>session.timeout.ms</code> expires.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
      */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "leave.group.on.close";
+    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
