@@ -244,8 +244,15 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public void writeTo(ByteBuffer buffer) {
-            loadUnderlyingEntry();
-            underlying.writeTo(buffer);
+            try {
+                buffer.limit(entrySize + LOG_OVERHEAD);
+                buffer.putLong(offset);
+                buffer.putInt(entrySize);
+                Utils.readFully(channel, buffer, position);
+            } catch (IOException e) {
+                throw new KafkaException("Failed to read log entry at position " + position + " from file channel " +
+                        channel, e);
+            }
         }
 
         @Override
