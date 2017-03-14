@@ -107,8 +107,13 @@ public abstract class AbstractRecords implements Records {
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
                 timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records)
+        for (Record record : recordBatchAndRecords.records) {
+            // control messages are only supported in v2 and above, so skip when down-converting
+            if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
+                continue;
+
             builder.append(record);
+        }
 
         builder.close();
         return builder.buffer();

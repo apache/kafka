@@ -356,7 +356,8 @@ public class MemoryRecordsBuilderTest {
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 1L);
         builder.append(11L, "2".getBytes(), "b".getBytes());
-        builder.append(12L, "3".getBytes(), "c".getBytes());
+        builder.appendControlRecord(12L, ControlRecordType.COMMIT, null);
+        builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
 
         buffer.flip();
@@ -376,6 +377,7 @@ public class MemoryRecordsBuilderTest {
         }
 
         List<Record> logRecords = Utils.toList(records.records().iterator());
+        assertEquals(3, logRecords.size());
         assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
         assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
         assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
