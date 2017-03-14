@@ -16,22 +16,34 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class TopicTest {
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
 
     @Test
     public void shouldRecognizeValidTopicNames() {
         String[] validTopicNames = {"valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_."};
 
         for (String topicName : validTopicNames) {
-            assertFalse(Topic.isEmpty(topicName));
-            assertFalse(Topic.containsOnlyPeriods(topicName));
-            assertFalse(Topic.exceedsMaxLength(topicName));
-            assertFalse(Topic.containsInvalidCharacters(topicName));
+            Topic.validate(topicName);
+        }
+    }
+
+    @Test
+    public void shouldRecognizeInvalidTopicNames() {
+        String[] invalidTopicNames = {"", "foo bar", "..", "foo:bar", "foo=bar"};
+
+        for (String topicName : invalidTopicNames) {
+            thrown.expect(InvalidTopicException.class);
+            Topic.validate(topicName);
         }
     }
 
@@ -58,6 +70,15 @@ public class TopicTest {
         for (Character c : invalidChars) {
             String topicName = "Is " + c + "illegal";
             assertTrue(Topic.containsInvalidCharacters(topicName));
+        }
+    }
+
+    @Test
+    public void shouldRecognizeTopicNamesThatContainOnlyPeriods() {
+        String[] invalidTopicNames = {".", "..", "...."};
+
+        for (String topicName : invalidTopicNames) {
+            assertTrue(Topic.containsOnlyPeriods(topicName));
         }
     }
 }
