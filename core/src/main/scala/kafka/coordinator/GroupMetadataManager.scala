@@ -19,6 +19,7 @@ package kafka.coordinator
 
 import java.io.PrintStream
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -1040,10 +1041,10 @@ object GroupMetadataManager {
           val formattedValue =
             if (value == null) "NULL"
             else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-          output.write(groupTopicPartition.toString.getBytes)
-          output.write("::".getBytes)
-          output.write(formattedValue.getBytes)
-          output.write("\n".getBytes)
+          output.write(groupTopicPartition.toString.getBytes(StandardCharsets.UTF_8))
+          output.write("::".getBytes(StandardCharsets.UTF_8))
+          output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
+          output.write("\n".getBytes(StandardCharsets.UTF_8))
         case _ => // no-op
       }
     }
@@ -1061,10 +1062,10 @@ object GroupMetadataManager {
           val formattedValue =
             if (value == null) "NULL"
             else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
-          output.write(groupId.getBytes)
-          output.write("::".getBytes)
-          output.write(formattedValue.getBytes)
-          output.write("\n".getBytes)
+          output.write(groupId.getBytes(StandardCharsets.UTF_8))
+          output.write("::".getBytes(StandardCharsets.UTF_8))
+          output.write(formattedValue.getBytes(StandardCharsets.UTF_8))
+          output.write("\n".getBytes(StandardCharsets.UTF_8))
         case _ => // no-op
       }
     }

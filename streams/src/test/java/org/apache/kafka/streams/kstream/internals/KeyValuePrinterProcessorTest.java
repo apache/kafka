@@ -26,11 +26,14 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -39,11 +42,18 @@ public class KeyValuePrinterProcessorTest {
 
     private final String topicName = "topic";
     private final Serde<String> stringSerde = Serdes.String();
-    private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    private final KStreamBuilder builder = new KStreamBuilder();
-    private final PrintStream printStream = new PrintStream(baos);
+    private ByteArrayOutputStream baos;
+    private KStreamBuilder builder;
+    private PrintWriter printWriter;
+    private KStreamTestDriver driver;
 
-    private KStreamTestDriver driver = null;
+    @Before
+    public void setup() {
+        baos = new ByteArrayOutputStream();
+        builder = new KStreamBuilder();
+        printWriter = new PrintWriter(new OutputStreamWriter(baos, StandardCharsets.UTF_8));
+        driver = null;
+    }
 
     @After
     public void cleanup() {
@@ -56,7 +66,7 @@ public class KeyValuePrinterProcessorTest {
     @Test
     public void testPrintKeyValueDefaultSerde() throws Exception {
 
-        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream, null);
+        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printWriter, null);
         String[] suppliedKeys = {"foo", "bar", null};
         String[] suppliedValues = {"value1", "value2", "value3"};
         String[] expectedValues = {"[null]: foo , value1", "[null]: bar , value2", "[null]: null , value3"};
@@ -69,7 +79,7 @@ public class KeyValuePrinterProcessorTest {
         for (int i = 0; i < suppliedKeys.length; i++) {
             driver.process(topicName, suppliedKeys[i], suppliedValues[i]);
         }
-
+        printWriter.flush();
         String[] capturedValues = new String(baos.toByteArray(), Charset.forName("UTF-8")).split("\n");
 
         for (int i = 0; i < capturedValues.length; i++) {
@@ -80,7 +90,7 @@ public class KeyValuePrinterProcessorTest {
     @Test
     public void testPrintKeyValuesWithName() throws Exception {
 
-        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream, "test-stream");
+        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printWriter, "test-stream");
         String[] suppliedKeys = {"foo", "bar", null};
         String[] suppliedValues = {"value1", "value2", "value3"};
         String[] expectedValues = {"[test-stream]: foo , value1", "[test-stream]: bar , value2", "[test-stream]: null , value3"};
@@ -93,7 +103,7 @@ public class KeyValuePrinterProcessorTest {
         for (int i = 0; i < suppliedKeys.length; i++) {
             driver.process(topicName, suppliedKeys[i], suppliedValues[i]);
         }
-
+        printWriter.flush();
         String[] capturedValues = new String(baos.toByteArray(), Charset.forName("UTF-8")).split("\n");
 
         for (int i = 0; i < capturedValues.length; i++) {
@@ -106,7 +116,7 @@ public class KeyValuePrinterProcessorTest {
     public void testPrintKeyValueWithProvidedSerde() throws Exception {
 
         Serde<MockObject> mockObjectSerde = Serdes.serdeFrom(new MockSerializer(), new MockDeserializer());
-        KeyValuePrinter<String, MockObject> keyValuePrinter = new KeyValuePrinter<>(printStream, stringSerde, mockObjectSerde, null);
+        KeyValuePrinter<String, MockObject> keyValuePrinter = new KeyValuePrinter<>(printWriter, stringSerde, mockObjectSerde, null);
         KStream<String, MockObject> stream = builder.stream(stringSerde, mockObjectSerde, topicName);
 
         stream.process(keyValuePrinter);
@@ -117,10 +127,10 @@ public class KeyValuePrinterProcessorTest {
         byte[] suppliedValue = "{\"name\":\"print\", \"label\":\"test\"}".getBytes(Charset.forName("UTF-8"));
 
         driver.process(topicName, suppliedKey, suppliedValue);
-        String expectedPrintedValue = "[null]: null , name:print label:test";
+        printWriter.flush();
         String capturedValue = new String(baos.toByteArray(), Charset.forName("UTF-8")).trim();
 
-        assertEquals(capturedValue, expectedPrintedValue);
+        assertEquals("[null]: null , name:print label:test", capturedValue);
 
     }
 

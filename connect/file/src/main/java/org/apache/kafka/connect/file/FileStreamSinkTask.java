@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 
@@ -60,8 +62,9 @@ public class FileStreamSinkTask extends SinkTask {
             outputStream = System.out;
         } else {
             try {
-                outputStream = new PrintStream(new FileOutputStream(filename, true));
-            } catch (FileNotFoundException e) {
+                outputStream = new PrintStream(new FileOutputStream(filename, true), false,
+                    StandardCharsets.UTF_8.name());
+            } catch (FileNotFoundException | UnsupportedEncodingException e) {
                 throw new ConnectException("Couldn't find or create file for FileStreamSinkTask", e);
             }
         }
