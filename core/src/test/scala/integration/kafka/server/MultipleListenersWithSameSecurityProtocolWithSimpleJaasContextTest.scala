@@ -23,7 +23,7 @@ import kafka.server.MultipleListenersWithSameSecurityProtocolBaseTest
 import org.apache.kafka.common.network.ListenerName
 
 
-class MultipleListenersWithSameSecurityProtocolWithSimpleJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
+class MultipleListenersWithDefaultJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
   override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
     val plainSaslProperties = kafkaClientSaslProperties("PLAIN", dynamicJaasConfig = true)
 

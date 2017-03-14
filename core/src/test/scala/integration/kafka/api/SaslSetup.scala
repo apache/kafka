@@ -96,6 +96,10 @@ trait SaslSetup {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, JaasTestUtils.writeJaasContextsToFile(jaasContext))
   }
 
+  protected def removeJaasSection(context: String) {
+    jaasContext = jaasContext.filter(_.contextName != context)
+  }
+
   def closeSasl() {
     if (kdc != null)
       kdc.stop()

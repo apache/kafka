@@ -24,7 +24,7 @@ import kafka.server.MultipleListenersWithSameSecurityProtocolBaseTest
 import org.apache.kafka.common.network.ListenerName
 
 
-class MultipleListenersWithSameSecurityProtocolWithMultipleJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest{
+class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest{
 
   override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
 
@@ -41,5 +41,6 @@ class MultipleListenersWithSameSecurityProtocolWithMultipleJaasContextTest exten
   override def addJaasSection(): Unit = {
     createJaasConfiguration(CustomKafkaServerSasl, "secure_external.KafkaServer", List("GSSAPI"), None)
     createJaasConfiguration(CustomKafkaServerSasl, "secure_internal.KafkaServer", List("PLAIN"), None)
+    removeJaasSection("KafkaServer")
   }
 }

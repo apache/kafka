@@ -82,7 +82,7 @@ object JaasTestUtils {
     }
   }
 
-  class JaasSection(contextName: String,
+  case class JaasSection(contextName: String,
                     jaasModule: Seq[JaasModule]) {
     override def toString: String = {
       s"""|$contextName {
