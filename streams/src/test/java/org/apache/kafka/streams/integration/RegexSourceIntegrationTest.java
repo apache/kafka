@@ -45,7 +45,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -67,6 +69,10 @@ import static org.junit.Assert.fail;
  */
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(300);
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;

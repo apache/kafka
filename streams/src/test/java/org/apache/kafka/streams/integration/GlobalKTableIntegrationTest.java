@@ -40,7 +40,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -50,6 +52,9 @@ import java.util.Properties;
 
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(300);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =

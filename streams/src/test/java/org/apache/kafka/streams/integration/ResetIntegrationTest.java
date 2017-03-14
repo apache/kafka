@@ -46,7 +46,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -62,6 +64,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 public class ResetIntegrationTest {
     private static final int NUM_BROKERS = 1;
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(300);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;

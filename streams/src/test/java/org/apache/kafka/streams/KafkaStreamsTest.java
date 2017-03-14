@@ -33,7 +33,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,6 +59,9 @@ public class KafkaStreamsTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private KafkaStreams streams;
     private Properties props;
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(180);
 
     @Before
     public void before() {
