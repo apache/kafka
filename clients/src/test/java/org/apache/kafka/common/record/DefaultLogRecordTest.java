@@ -24,7 +24,7 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-public class EosLogRecordTest {
+public class DefaultLogRecordTest {
 
     @Test
     public void testBasicSerde() {
@@ -44,10 +44,10 @@ public class EosLogRecordTest {
                 long timestampDelta = 323;
 
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
-                EosLogRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
+                DefaultLogRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
                 buffer.flip();
 
-                EosLogRecord logRecord = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+                DefaultLogRecord logRecord = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
                 assertNotNull(logRecord);
                 assertEquals(baseOffset + offsetDelta, logRecord.offset());
                 assertEquals(baseSequence + offsetDelta, logRecord.sequence());
@@ -69,10 +69,10 @@ public class EosLogRecordTest {
         long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        EosLogRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
+        DefaultLogRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
         buffer.flip();
 
-        EosLogRecord record = EosLogRecord.readFrom(buffer, baseOffset, baseTimestamp, LogEntry.NO_SEQUENCE, null);
+        DefaultLogRecord record = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, LogEntry.NO_SEQUENCE, null);
         assertNotNull(record);
         assertEquals(LogEntry.NO_SEQUENCE, record.sequence());
     }

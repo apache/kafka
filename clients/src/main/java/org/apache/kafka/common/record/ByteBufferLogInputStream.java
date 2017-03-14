@@ -42,8 +42,8 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
             return null;
 
         int recordSize = buffer.getInt(buffer.position() + Records.SIZE_OFFSET);
-        if (recordSize < Record.RECORD_OVERHEAD_V0)
-            throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", Record.RECORD_OVERHEAD_V0));
+        if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
+            throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
         if (recordSize > maxMessageSize)
             throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
 
@@ -51,16 +51,16 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
         if (remaining < entrySize)
             return null;
 
-        byte magic = buffer.get(buffer.position() + LOG_OVERHEAD + Record.MAGIC_OFFSET);
+        byte magic = buffer.get(buffer.position() + LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET);
 
         ByteBuffer entrySlice = buffer.slice();
         entrySlice.limit(entrySize);
         buffer.position(buffer.position() + entrySize);
 
         if (magic > LogEntry.MAGIC_VALUE_V1)
-            return new EosLogEntry(entrySlice);
+            return new DefaultLogEntry(entrySlice);
         else
-            return new OldLogEntry.ByteBufferOldLogEntry(entrySlice);
+            return new LegacyLogEntry.ByteBufferLegacyLogEntry(entrySlice);
     }
 
 }

@@ -27,7 +27,7 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.common.record.MemoryRecords.LogRecordFilter
-import org.apache.kafka.common.record.{FileRecords, LogRecord, MemoryRecords}
+import org.apache.kafka.common.record.{FileRecords, Record, MemoryRecords}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 
@@ -451,7 +451,7 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
     val logCleanerFilter = new LogRecordFilter {
-      def shouldRetain(record: LogRecord): Boolean =
+      def shouldRetain(record: Record): Boolean =
         record.isControlRecord || shouldRetainMessage(source, map, retainDeletes, record, stats)
     }
 
@@ -493,7 +493,7 @@ private[log] class Cleaner(val id: Int,
   private def shouldRetainMessage(source: kafka.log.LogSegment,
                                   map: kafka.log.OffsetMap,
                                   retainDeletes: Boolean,
-                                  record: LogRecord,
+                                  record: Record,
                                   stats: CleanerStats): Boolean = {
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)

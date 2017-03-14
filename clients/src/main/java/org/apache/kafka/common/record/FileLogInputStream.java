@@ -66,8 +66,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         long offset = logHeaderBuffer.getLong();
         int size = logHeaderBuffer.getInt();
 
-        if (size < Record.RECORD_OVERHEAD_V0)
-            throw new CorruptRecordException(String.format("Record size is smaller than minimum record overhead (%d).", Record.RECORD_OVERHEAD_V0));
+        if (size < LegacyRecord.RECORD_OVERHEAD_V0)
+            throw new CorruptRecordException(String.format("Record size is smaller than minimum record overhead (%d).", LegacyRecord.RECORD_OVERHEAD_V0));
 
         if (size > maxRecordSize)
             throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxRecordSize));
@@ -137,12 +137,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 return underlying.lastOffset();
 
             try {
-                // FIXME: This logic probably should be moved into EosLogEntry somehow
+                // FIXME: This logic probably should be moved into DefaultLogEntry somehow
                 // maybe we just need two separate implementations
 
                 byte[] offsetDelta = new byte[4];
                 ByteBuffer buf = ByteBuffer.wrap(offsetDelta);
-                channel.read(buf, position + EosLogEntry.LAST_OFFSET_DELTA_OFFSET);
+                channel.read(buf, position + DefaultLogEntry.LAST_OFFSET_DELTA_OFFSET);
                 if (buf.hasRemaining())
                     throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
                 return offset + buf.getInt(0);
@@ -163,7 +163,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET, "magic byte");
+                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET, "magic byte");
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);
@@ -203,18 +203,18 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 Utils.readFullyOrFail(channel, entryBuffer, position, "full entry");
                 entryBuffer.rewind();
 
-                byte magic = entryBuffer.get(LOG_OVERHEAD + Record.MAGIC_OFFSET);
+                byte magic = entryBuffer.get(LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET);
                 if (magic > LogEntry.MAGIC_VALUE_V1)
-                    underlying = new EosLogEntry(entryBuffer);
+                    underlying = new DefaultLogEntry(entryBuffer);
                 else
-                    underlying = new OldLogEntry.ByteBufferOldLogEntry(entryBuffer);
+                    underlying = new LegacyLogEntry.ByteBufferLegacyLogEntry(entryBuffer);
             } catch (IOException e) {
                 throw new KafkaException("Failed to load log entry at position " + position + " from file channel " + channel);
             }
         }
 
         @Override
-        public Iterator<LogRecord> iterator() {
+        public Iterator<Record> iterator() {
             loadUnderlyingEntry();
             return underlying.iterator();
         }

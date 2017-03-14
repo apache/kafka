@@ -96,7 +96,7 @@ public class MemoryRecordsTest {
                 }
 
                 int records = 0;
-                for (LogRecord record : entry) {
+                for (Record record : entry) {
                     assertTrue(record.isValid());
                     assertTrue(record.hasMagic(entry.magic()));
                     assertFalse(record.isCompressed());
@@ -202,31 +202,31 @@ public class MemoryRecordsTest {
                     shallowEntry.timestampType());
         }
 
-        List<LogRecord> records = TestUtils.toList(filteredRecords.records());
+        List<Record> records = TestUtils.toList(filteredRecords.records());
         assertEquals(4, records.size());
 
-        LogRecord first = records.get(0);
+        Record first = records.get(0);
         assertEquals(1L, first.offset());
         if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(11L, first.timestamp());
         assertEquals(ByteBuffer.wrap("1".getBytes()), first.key());
         assertEquals(ByteBuffer.wrap("b".getBytes()), first.value());
 
-        LogRecord second = records.get(1);
+        Record second = records.get(1);
         assertEquals(4L, second.offset());
         if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(20L, second.timestamp());
         assertEquals(ByteBuffer.wrap("4".getBytes()), second.key());
         assertEquals(ByteBuffer.wrap("e".getBytes()), second.value());
 
-        LogRecord third = records.get(2);
+        Record third = records.get(2);
         assertEquals(5L, third.offset());
         if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(15L, third.timestamp());
         assertEquals(ByteBuffer.wrap("5".getBytes()), third.key());
         assertEquals(ByteBuffer.wrap("f".getBytes()), third.value());
 
-        LogRecord fourth = records.get(3);
+        Record fourth = records.get(3);
         assertEquals(6L, fourth.offset());
         if (magic > LogEntry.MAGIC_VALUE_V0)
             assertEquals(16L, fourth.timestamp());
@@ -289,7 +289,7 @@ public class MemoryRecordsTest {
 
     private static class RetainNonNullKeysFilter implements MemoryRecords.LogRecordFilter {
         @Override
-        public boolean shouldRetain(LogRecord record) {
+        public boolean shouldRetain(Record record) {
             return record.hasKey();
         }
     }

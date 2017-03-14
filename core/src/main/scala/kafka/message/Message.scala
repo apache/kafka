@@ -19,7 +19,7 @@ package kafka.message
 
 import java.nio._
 
-import org.apache.kafka.common.record.{Record, TimestampType}
+import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
 
 import scala.math._
 import org.apache.kafka.common.utils.{ByteUtils, Utils}
@@ -97,7 +97,7 @@ object Message {
     MessageHeaderSizeMap(toMagicValue) - MessageHeaderSizeMap(fromMagicValue)
 
 
-  def fromRecord(record: Record): Message = {
+  def fromRecord(record: LegacyRecord): Message = {
     val wrapperTimestamp: Option[Long] = if (record.wrapperRecordTimestamp == null) None else Some(record.wrapperRecordTimestamp)
     val wrapperTimestampType = Option(record.wrapperRecordTimestampType)
     new Message(record.buffer, wrapperTimestamp, wrapperTimestampType)
@@ -138,9 +138,9 @@ class Message(val buffer: ByteBuffer,
   
   import kafka.message.Message._
 
-  private[message] def asRecord: Record = wrapperMessageTimestamp match {
-    case None => new Record(buffer)
-    case Some(timestamp) => new Record(buffer, timestamp, wrapperMessageTimestampType.orNull)
+  private[message] def asRecord: LegacyRecord = wrapperMessageTimestamp match {
+    case None => new LegacyRecord(buffer)
+    case Some(timestamp) => new LegacyRecord(buffer, timestamp, wrapperMessageTimestampType.orNull)
   }
 
   /**

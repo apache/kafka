@@ -25,7 +25,7 @@ import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.LogRecord
+import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -167,7 +167,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(0, logEntries(partitionData).map(_.sizeInBytes).sum)
   }
 
-  private def logEntries(partitionData: FetchResponse.PartitionData): Seq[LogRecord] = {
+  private def logEntries(partitionData: FetchResponse.PartitionData): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 

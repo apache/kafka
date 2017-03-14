@@ -17,10 +17,10 @@
 
 package kafka.message
 
-import org.apache.kafka.common.record.OldLogEntry
+import org.apache.kafka.common.record.LegacyLogEntry
 
 object MessageAndOffset {
-  def fromLogEntry(logEntry: OldLogEntry): MessageAndOffset = {
+  def fromLogEntry(logEntry: LegacyLogEntry): MessageAndOffset = {
     MessageAndOffset(Message.fromRecord(logEntry.record), logEntry.lastOffset)
   }
 }

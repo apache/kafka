@@ -146,10 +146,10 @@ public class MemoryRecordsBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
-        Record[] records = new Record[] {
-                Record.create(LogEntry.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()),
-                Record.create(LogEntry.MAGIC_VALUE_V0, 1L, "b".getBytes(), "2".getBytes()),
-                Record.create(LogEntry.MAGIC_VALUE_V0, 2L, "c".getBytes(), "3".getBytes()),
+        LegacyRecord[] records = new LegacyRecord[] {
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, 0L, "a".getBytes(), "1".getBytes()),
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, 1L, "b".getBytes(), "2".getBytes()),
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, 2L, "c".getBytes(), "3".getBytes()),
         };
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, LogEntry.MAGIC_VALUE_V0, compressionType,
@@ -157,7 +157,7 @@ public class MemoryRecordsBuilderTest {
                 false, LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         int uncompressedSize = 0;
-        for (Record record : records) {
+        for (LegacyRecord record : records) {
             uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
             builder.append(record);
         }
@@ -166,7 +166,7 @@ public class MemoryRecordsBuilderTest {
         if (compressionType == CompressionType.NONE) {
             assertEquals(1.0, builder.compressionRate(), 0.00001);
         } else {
-            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD_V0;
+            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
         }
@@ -177,10 +177,10 @@ public class MemoryRecordsBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
-        Record[] records = new Record[] {
-                Record.create(LogEntry.MAGIC_VALUE_V1, 0L, "a".getBytes(), "1".getBytes()),
-                Record.create(LogEntry.MAGIC_VALUE_V1, 1L, "b".getBytes(), "2".getBytes()),
-                Record.create(LogEntry.MAGIC_VALUE_V1, 2L, "c".getBytes(), "3".getBytes()),
+        LegacyRecord[] records = new LegacyRecord[] {
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V1, 0L, "a".getBytes(), "1".getBytes()),
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V1, 1L, "b".getBytes(), "2".getBytes()),
+                LegacyRecord.create(LogEntry.MAGIC_VALUE_V1, 2L, "c".getBytes(), "3".getBytes()),
         };
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, LogEntry.MAGIC_VALUE_V1, compressionType,
@@ -188,7 +188,7 @@ public class MemoryRecordsBuilderTest {
                 false, LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         int uncompressedSize = 0;
-        for (Record record : records) {
+        for (LegacyRecord record : records) {
             uncompressedSize += record.sizeInBytes() + Records.LOG_OVERHEAD;
             builder.append(record);
         }
@@ -197,7 +197,7 @@ public class MemoryRecordsBuilderTest {
         if (compressionType == CompressionType.NONE) {
             assertEquals(1.0, builder.compressionRate(), 0.00001);
         } else {
-            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD_V1;
+            int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V1;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
             assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
         }
@@ -224,7 +224,7 @@ public class MemoryRecordsBuilderTest {
 
         for (LogEntry logEntry : records.entries()) {
             assertEquals(TimestampType.LOG_APPEND_TIME, logEntry.timestampType());
-            for (LogRecord record : logEntry)
+            for (Record record : logEntry)
                 assertEquals(logAppendTime, record.timestamp());
         }
     }
@@ -255,7 +255,7 @@ public class MemoryRecordsBuilderTest {
         long[] expectedTimestamps = new long[] {0L, 2L, 1L};
         for (LogEntry logEntry : records.entries()) {
             assertEquals(TimestampType.CREATE_TIME, logEntry.timestampType());
-            for (LogRecord record : logEntry)
+            for (Record record : logEntry)
                 assertEquals(expectedTimestamps[i++], record.timestamp());
         }
     }
@@ -269,7 +269,7 @@ public class MemoryRecordsBuilderTest {
         int writeLimit = 0;
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, LogEntry.CURRENT_MAGIC_VALUE, compressionType,
-                TimestampType.CREATE_TIME, 0L, Record.NO_TIMESTAMP, LogEntry.NO_PID, LogEntry.NO_EPOCH,
+                TimestampType.CREATE_TIME, 0L, LegacyRecord.NO_TIMESTAMP, LogEntry.NO_PID, LogEntry.NO_EPOCH,
                 LogEntry.NO_SEQUENCE, false, LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, writeLimit);
 
         assertFalse(builder.isFull());
@@ -280,10 +280,10 @@ public class MemoryRecordsBuilderTest {
         assertFalse(builder.hasRoomFor(0L, key, value));
 
         MemoryRecords memRecords = builder.build();
-        List<LogRecord> records = TestUtils.toList(memRecords.records());
+        List<Record> records = TestUtils.toList(memRecords.records());
         assertEquals(1, records.size());
 
-        LogRecord record = records.get(0);
+        Record record = records.get(0);
         assertEquals(ByteBuffer.wrap(key), record.key());
         assertEquals(ByteBuffer.wrap(value), record.value());
     }
@@ -311,7 +311,7 @@ public class MemoryRecordsBuilderTest {
         long i = 0L;
         for (LogEntry logEntry : records.entries()) {
             assertEquals(TimestampType.CREATE_TIME, logEntry.timestampType());
-            for (LogRecord record : logEntry)
+            for (Record record : logEntry)
                 assertEquals(i++, record.timestamp());
         }
     }
@@ -342,7 +342,7 @@ public class MemoryRecordsBuilderTest {
                 TimestampType.CREATE_TIME, 0L, logAppendTime, LogEntry.NO_PID, LogEntry.NO_EPOCH, LogEntry.NO_SEQUENCE,
                 false, LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, buffer.capacity());
 
-        builder.append(Record.create(LogEntry.MAGIC_VALUE_V0, 0L, "a".getBytes(), null));
+        builder.append(LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, 0L, "a".getBytes(), null));
     }
 
     @Test
@@ -375,7 +375,7 @@ public class MemoryRecordsBuilderTest {
             assertEquals(TimestampType.CREATE_TIME, entries.get(2).timestampType());
         }
 
-        List<LogRecord> logRecords = Utils.toList(records.records().iterator());
+        List<Record> logRecords = Utils.toList(records.records().iterator());
         assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
         assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
         assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
@@ -411,7 +411,7 @@ public class MemoryRecordsBuilderTest {
             assertEquals(LogEntry.MAGIC_VALUE_V1, entries.get(2).magic());
         }
 
-        List<LogRecord> logRecords = Utils.toList(records.records().iterator());
+        List<Record> logRecords = Utils.toList(records.records().iterator());
         assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
         assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
         assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());

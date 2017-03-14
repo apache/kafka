@@ -56,7 +56,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
  *  -----------------------------------------------------------------------------------
  */
-public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
+public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
     static final int BASE_OFFSET_OFFSET = 0;
     static final int BASE_OFFSET_LENGTH = 8;
     static final int SIZE_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
@@ -89,7 +89,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
     private final ByteBuffer buffer;
 
-    EosLogEntry(ByteBuffer buffer) {
+    DefaultLogEntry(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 
@@ -177,7 +177,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private Iterator<LogRecord> compressedIterator() {
+    private Iterator<Record> compressedIterator() {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
@@ -185,7 +185,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
         // TODO: An improvement for the consumer would be to only decompress the records
         // we need to fill max.poll.records and leave the rest compressed.
-        Deque<LogRecord> records = new ArrayDeque<>();
+        Deque<Record> records = new ArrayDeque<>();
         try {
             Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             long baseOffset = baseOffset();
@@ -195,7 +195,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
 
             while (true) {
                 try {
-                    EosLogRecord record = EosLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    DefaultLogRecord record = DefaultLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                     records.add(record);
 
                     if (record.offset() == lastOffset)
@@ -213,13 +213,13 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return records.iterator();
     }
 
-    private Iterator<LogRecord> uncompressedIterator() {
+    private Iterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
-        return new AbstractIterator<LogRecord>() {
+        return new AbstractIterator<Record>() {
             int position = RECORDS_OFFSET;
 
             @Override
-            protected LogRecord makeNext() {
+            protected Record makeNext() {
                 if (position >= buffer.limit())
                     return allDone();
 
@@ -231,7 +231,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
                 long baseTimestamp = baseTimestamp();
                 int baseSequence = baseSequence();
 
-                EosLogRecord record = EosLogRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                DefaultLogRecord record = DefaultLogRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 if (record == null)
                     return allDone();
 
@@ -242,7 +242,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
     }
 
     @Override
-    public Iterator<LogRecord> iterator() {
+    public Iterator<Record> iterator() {
         if (isCompressed())
             return compressedIterator();
         else
@@ -295,7 +295,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        EosLogEntry that = (EosLogEntry) o;
+        DefaultLogEntry that = (DefaultLogEntry) o;
         return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
     }
 
@@ -353,20 +353,20 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
         return "LogEntry(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
     }
 
-    public static int sizeInBytes(long baseOffset, Iterable<LogRecord> records) {
-        Iterator<LogRecord> iterator = records.iterator();
+    public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
+        Iterator<Record> iterator = records.iterator();
         if (!iterator.hasNext())
             return 0;
 
         int size = LOG_ENTRY_OVERHEAD;
         Long baseTimestamp = null;
         while (iterator.hasNext()) {
-            LogRecord record = iterator.next();
+            Record record = iterator.next();
             int offsetDelta = (int) (record.offset() - baseOffset);
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += EosLogRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
+            size += DefaultLogRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
         }
         return size;
     }
@@ -384,7 +384,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += EosLogRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
+            size += DefaultLogRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
         }
         return size;
     }
@@ -394,7 +394,7 @@ public class EosLogEntry extends AbstractLogEntry implements LogEntry.MutableLog
      * key and value.
      */
     public static int entrySizeUpperBound(byte[] key, byte[] value) {
-        return LOG_ENTRY_OVERHEAD + EosLogRecord.recordSizeUpperBound(key, value);
+        return LOG_ENTRY_OVERHEAD + DefaultLogRecord.recordSizeUpperBound(key, value);
     }
 
 }

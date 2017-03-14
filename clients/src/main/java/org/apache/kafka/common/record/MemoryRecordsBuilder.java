@@ -145,11 +145,11 @@ public class MemoryRecordsBuilder {
         this.initialCapacity = buffer.capacity();
 
         if (magic > LogEntry.MAGIC_VALUE_V1) {
-            buffer.position(initPos + EosLogEntry.RECORDS_OFFSET);
+            buffer.position(initPos + DefaultLogEntry.RECORDS_OFFSET);
         } else if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
             // and move the starting position to the value payload offset
-            buffer.position(initPos + Records.LOG_OVERHEAD + Record.recordOverhead(magic));
+            buffer.position(initPos + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
         }
 
         // create the stream
@@ -236,7 +236,7 @@ public class MemoryRecordsBuilder {
             maxTimestamp = this.maxTimestamp;
         }
 
-        EosLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
+        DefaultLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
                 baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional, partitionLeaderEpoch);
 
         buffer.position(pos);
@@ -248,11 +248,11 @@ public class MemoryRecordsBuilder {
         buffer.position(initPos);
 
         int wrapperSize = pos - initPos - Records.LOG_OVERHEAD;
-        int writtenCompressed = wrapperSize - Record.recordOverhead(magic);
-        OldLogEntry.writeHeader(buffer, lastOffset, wrapperSize);
+        int writtenCompressed = wrapperSize - LegacyRecord.recordOverhead(magic);
+        LegacyLogEntry.writeHeader(buffer, lastOffset, wrapperSize);
 
         long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
-        Record.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
+        LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
 
         buffer.position(pos);
 
@@ -301,8 +301,8 @@ public class MemoryRecordsBuilder {
                                     ByteBuffer key, ByteBuffer value) throws IOException {
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = EosLogRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
-        recordWritten(offset, timestamp, EosLogRecord.sizeInBytes(offsetDelta, timestamp, key, value));
+        long crc = DefaultLogRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
+        recordWritten(offset, timestamp, DefaultLogRecord.sizeInBytes(offsetDelta, timestamp, key, value));
         return crc;
     }
 
@@ -310,12 +310,12 @@ public class MemoryRecordsBuilder {
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
 
-        int size = Record.recordSize(magic, key, value);
-        OldLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
+        int size = LegacyRecord.recordSize(magic, key, value);
+        LegacyLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
 
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
-        long crc = Record.write(appendStream, magic, timestamp, key, value, CompressionType.NONE, timestampType);
+        long crc = LegacyRecord.write(appendStream, magic, timestamp, key, value, CompressionType.NONE, timestampType);
         recordWritten(offset, timestamp, size + Records.LOG_OVERHEAD);
         return crc;
     }
@@ -361,10 +361,10 @@ public class MemoryRecordsBuilder {
      * @param offset The offset of the record
      * @param record The record to add
      */
-    public void appendUncheckedWithOffset(long offset, Record record) {
+    public void appendUncheckedWithOffset(long offset, LegacyRecord record) {
         try {
             int size = record.sizeInBytes();
-            OldLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
+            LegacyLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
 
             ByteBuffer buffer = record.buffer().duplicate();
             appendStream.write(buffer.array(), buffer.arrayOffset(), buffer.limit());
@@ -379,7 +379,7 @@ public class MemoryRecordsBuilder {
      *
      * @param record
      */
-    public void append(LogRecord record) {
+    public void append(Record record) {
         appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value());
     }
 
@@ -388,7 +388,7 @@ public class MemoryRecordsBuilder {
      * @param offset
      * @param record
      */
-    public void appendWithOffset(long offset, LogRecord record) {
+    public void appendWithOffset(long offset, Record record) {
         appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value());
     }
 
@@ -398,7 +398,7 @@ public class MemoryRecordsBuilder {
      * @param offset The offset of the record
      * @param record The record to add
      */
-    public void appendWithOffset(long offset, Record record) {
+    public void appendWithOffset(long offset, LegacyRecord record) {
         if (record.magic() != magic)
             throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
         if (lastOffset >= 0 && offset <= lastOffset)
@@ -411,7 +411,7 @@ public class MemoryRecordsBuilder {
      * offset of this builder.
      * @param record The record to add
      */
-    public void append(Record record) {
+    public void append(LegacyRecord record) {
         appendWithOffset(nextSequentialOffset(), record);
     }
 
@@ -464,11 +464,11 @@ public class MemoryRecordsBuilder {
 
         final int recordSize;
         if (magic < LogEntry.MAGIC_VALUE_V2) {
-            recordSize = Records.LOG_OVERHEAD + Record.recordSize(magic, key, value);
+            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
             int nextOffsetDelta = (int) (lastOffset + 1 - baseOffset);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = EosLogRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
+            recordSize = DefaultLogRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
         }
 
         return numRecords == 0 ?

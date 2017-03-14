@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  * many records otherwise. Newer versions (magic versions 2 and above) will generally contain many records
  * regardless of compression.
  */
-public interface LogEntry extends Iterable<LogRecord> {
+public interface LogEntry extends Iterable<Record> {
 
     /**
      * The "magic" values

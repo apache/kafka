@@ -26,9 +26,9 @@ import java.util.List;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<LogRecord> records = new Iterable<LogRecord>() {
+    private final Iterable<Record> records = new Iterable<Record>() {
         @Override
-        public Iterator<LogRecord> iterator() {
+        public Iterator<Record> iterator() {
             return recordsIterator();
         }
     };
@@ -75,14 +75,14 @@ public abstract class AbstractRecords implements Records {
                     totalSizeEstimate += entry.sizeInBytes();
                     logEntryAndRecordsList.add(new LogEntryAndRecords(entry, null, null));
                 } else {
-                    List<LogRecord> logRecords = Utils.toList(entry.iterator());
+                    List<Record> records = Utils.toList(entry.iterator());
                     final long baseOffset;
                     if (entry.magic() >= LogEntry.MAGIC_VALUE_V2)
                         baseOffset = entry.baseOffset();
                     else
-                        baseOffset = logRecords.get(0).offset();
-                    totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, entry.compressionType(), logRecords);
-                    logEntryAndRecordsList.add(new LogEntryAndRecords(entry, logRecords, baseOffset));
+                        baseOffset = records.get(0).offset();
+                    totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, entry.compressionType(), records);
+                    logEntryAndRecordsList.add(new LogEntryAndRecords(entry, records, baseOffset));
                 }
             }
 
@@ -106,8 +106,8 @@ public abstract class AbstractRecords implements Records {
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, entry.compressionType(),
                 timestampType, logEntryAndRecords.baseOffset, logAppendTime);
-        for (LogRecord logRecord : logEntryAndRecords.records)
-            builder.append(logRecord);
+        for (Record record : logEntryAndRecords.records)
+            builder.append(record);
 
         builder.close();
         return builder.buffer();
@@ -118,17 +118,17 @@ public abstract class AbstractRecords implements Records {
      * @return An iterator over the records
      */
     @Override
-    public Iterable<LogRecord> records() {
+    public Iterable<Record> records() {
         return records;
     }
 
-    private Iterator<LogRecord> recordsIterator() {
-        return new AbstractIterator<LogRecord>() {
+    private Iterator<Record> recordsIterator() {
+        return new AbstractIterator<Record>() {
             private final Iterator<? extends LogEntry> entries = entries().iterator();
-            private Iterator<LogRecord> records;
+            private Iterator<Record> records;
 
             @Override
-            protected LogRecord makeNext() {
+            protected Record makeNext() {
                 if (records != null && records.hasNext())
                     return records.next();
 
@@ -145,13 +145,13 @@ public abstract class AbstractRecords implements Records {
     public static int estimateSizeInBytes(byte magic,
                                           long baseOffset,
                                           CompressionType compressionType,
-                                          Iterable<LogRecord> records) {
+                                          Iterable<Record> records) {
         int size = 0;
         if (magic <= LogEntry.MAGIC_VALUE_V1) {
-            for (LogRecord record : records)
-                size += Records.LOG_OVERHEAD + Record.recordSize(magic, record.key(), record.value());
+            for (Record record : records)
+                size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
         } else {
-            size = EosLogEntry.sizeInBytes(baseOffset, records);
+            size = DefaultLogEntry.sizeInBytes(baseOffset, records);
         }
         return estimateCompressedSizeInBytes(size, compressionType);
     }
@@ -162,9 +162,9 @@ public abstract class AbstractRecords implements Records {
         int size = 0;
         if (magic <= LogEntry.MAGIC_VALUE_V1) {
             for (KafkaRecord record : records)
-                size += Records.LOG_OVERHEAD + Record.recordSize(magic, record.key(), record.value());
+                size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
         } else {
-            size = EosLogEntry.sizeInBytes(records);
+            size = DefaultLogEntry.sizeInBytes(records);
         }
         return estimateCompressedSizeInBytes(size, compressionType);
     }
@@ -175,17 +175,17 @@ public abstract class AbstractRecords implements Records {
 
     public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
         if (magic >= LogEntry.MAGIC_VALUE_V2)
-            return EosLogEntry.entrySizeUpperBound(key, value);
+            return DefaultLogEntry.entrySizeUpperBound(key, value);
         else
-            return Records.LOG_OVERHEAD + Record.recordSize(magic, key, value);
+            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }
 
     private static class LogEntryAndRecords {
         private final LogEntry entry;
-        private final List<LogRecord> records;
+        private final List<Record> records;
         private final Long baseOffset;
 
-        private LogEntryAndRecords(LogEntry entry, List<LogRecord> records, Long baseOffset) {
+        private LogEntryAndRecords(LogEntry entry, List<Record> records, Long baseOffset) {
             this.entry = entry;
             this.records = records;
             this.baseOffset = baseOffset;

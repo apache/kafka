@@ -336,7 +336,7 @@ object TestUtils extends Logging {
               epoch: Short = LogEntry.NO_EPOCH,
               sequence: Int = LogEntry.NO_SEQUENCE): MemoryRecords = {
     val kafkaRecords = records.map(record => new KafkaRecord(record._3, record._1, record._2))
-    val buf = ByteBuffer.allocate(EosLogEntry.sizeInBytes(kafkaRecords.asJava))
+    val buf = ByteBuffer.allocate(DefaultLogEntry.sizeInBytes(kafkaRecords.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
       System.currentTimeMillis, pid, epoch, sequence)
     records.foreach { case (key, value, timestamp) =>

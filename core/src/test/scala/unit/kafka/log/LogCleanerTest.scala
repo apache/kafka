@@ -751,7 +751,7 @@ class LogCleanerTest extends JUnitSuite {
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
     val records = keysAndValues.map(kv =>
-      Record.create(LogEntry.MAGIC_VALUE_V0,
+      LegacyRecord.create(LogEntry.MAGIC_VALUE_V0,
         LogEntry.NO_TIMESTAMP,
         kv._1.toString.getBytes,
         kv._2.toString.getBytes))

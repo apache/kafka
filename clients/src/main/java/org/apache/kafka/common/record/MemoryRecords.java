@@ -132,9 +132,9 @@ public class MemoryRecords extends AbstractRecords {
             byte shallowMagic = logEntry.magic();
             boolean writeOriginalEntry = true;
             long firstOffset = -1;
-            List<LogRecord> retainedRecords = new ArrayList<>();
+            List<Record> retainedRecords = new ArrayList<>();
 
-            for (LogRecord record : logEntry) {
+            for (Record record : logEntry) {
                 if (firstOffset < 0)
                     firstOffset = record.offset();
 
@@ -171,7 +171,7 @@ public class MemoryRecords extends AbstractRecords {
                 MemoryRecordsBuilder builder = builder(slice, logEntry.magic(), logEntry.compressionType(), timestampType,
                         firstOffset, logAppendTime);
 
-                for (LogRecord record : retainedRecords)
+                for (Record record : retainedRecords)
                     builder.append(record);
 
                 MemoryRecords records = builder.build();
@@ -204,11 +204,11 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public String toString() {
-        Iterator<LogRecord> iter = records().iterator();
+        Iterator<Record> iter = records().iterator();
         StringBuilder builder = new StringBuilder();
         builder.append('[');
         while (iter.hasNext()) {
-            LogRecord record = iter.next();
+            Record record = iter.next();
             builder.append('(');
             builder.append("record=");
             builder.append(record);
@@ -236,7 +236,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public interface LogRecordFilter {
-        boolean shouldRetain(LogRecord record);
+        boolean shouldRetain(Record record);
     }
 
     public static class FilterResult {

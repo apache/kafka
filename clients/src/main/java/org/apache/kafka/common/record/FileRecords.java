@@ -278,7 +278,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         for (LogEntry logEntry : entriesFrom(startingPosition)) {
             if (logEntry.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                for (LogRecord record : logEntry) {
+                for (Record record : logEntry) {
                     long timestamp = record.timestamp();
                     if (timestamp >= targetTimestamp)
                         return new TimestampAndOffset(timestamp, record.offset());

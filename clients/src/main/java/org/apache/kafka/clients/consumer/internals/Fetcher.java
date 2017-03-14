@@ -46,7 +46,7 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
-import org.apache.kafka.common.record.LogRecord;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -770,7 +770,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
                 for (LogEntry entry : partition.records.entries()) {
-                    for (LogRecord record : entry) {
+                    for (Record record : entry) {
                         // control records should not be returned to the user. also skip anything out of range
                         if (record.isControlRecord() || record.offset() < position) {
                             skippedRecords = true;
@@ -850,7 +850,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
                                              LogEntry entry,
-                                             LogRecord record) {
+                                             Record record) {
         if (this.checkCrcs) {
             try {
                 record.ensureValid();

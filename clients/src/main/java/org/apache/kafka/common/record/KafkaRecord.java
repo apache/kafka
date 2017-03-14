@@ -52,8 +52,8 @@ public class KafkaRecord {
         this(LogEntry.NO_TIMESTAMP, key, value);
     }
 
-    public KafkaRecord(LogRecord logRecord) {
-        this(logRecord.timestamp(), logRecord.key(), logRecord.value());
+    public KafkaRecord(Record record) {
+        this(record.timestamp(), record.key(), record.value());
     }
 
     public ByteBuffer key() {

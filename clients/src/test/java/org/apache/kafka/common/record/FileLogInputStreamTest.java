@@ -46,7 +46,7 @@ public class FileLogInputStreamTest {
             buffer.flip();
 
             MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
-            List<LogRecord> records = Utils.toList(memRecords.records().iterator());
+            List<Record> records = Utils.toList(memRecords.records().iterator());
             assertEquals(1, records.size());
         }
     }

@@ -191,7 +191,7 @@ private[kafka] object LogValidator extends Logging {
 
       var maxTimestamp = LogEntry.NO_TIMESTAMP
       val expectedInnerOffset = new LongRef(0)
-      val validatedRecords = new mutable.ArrayBuffer[LogRecord]
+      val validatedRecords = new mutable.ArrayBuffer[Record]
 
       for (entry <- records.entries.asScala) {
         ensureNonTransactional(entry)
@@ -259,7 +259,7 @@ private[kafka] object LogValidator extends Logging {
 
   private def buildRecordsAndAssignOffsets(magic: Byte, offsetCounter: LongRef, timestampType: TimestampType,
                                            compressionType: CompressionType, logAppendTime: Long,
-                                           validatedRecords: Seq[LogRecord]): ValidationAndOffsetAssignResult = {
+                                           validatedRecords: Seq[Record]): ValidationAndOffsetAssignResult = {
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType, validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value, logAppendTime)
@@ -283,13 +283,13 @@ private[kafka] object LogValidator extends Logging {
       throw new InvalidRecordException("Transactional messages are not currently supported")
   }
 
-  private def ensureNotControlRecord(record: LogRecord) {
+  private def ensureNotControlRecord(record: Record) {
     // Until we have implemented transaction support, we do not permit control records to be written
     if (record.isControlRecord)
       throw new InvalidRecordException("Control messages are not currently supported")
   }
 
-  private def validateKey(record: LogRecord, compactedTopic: Boolean) {
+  private def validateKey(record: Record, compactedTopic: Boolean) {
     if (compactedTopic && !record.hasKey)
       throw new InvalidMessageException("Compacted topic cannot accept message without key.")
   }
@@ -299,7 +299,7 @@ private[kafka] object LogValidator extends Logging {
    * If the message is using create time, this method checks if it is within acceptable range.
    */
   private def validateTimestamp(entry: LogEntry,
-                                record: LogRecord,
+                                record: Record,
                                 now: Long,
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {

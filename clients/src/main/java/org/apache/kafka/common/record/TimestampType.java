@@ -37,11 +37,11 @@ public enum TimestampType {
             throw new IllegalArgumentException("Cannot use NO_TIMESTAMP_TYPE in attributes");
 
         return this == CREATE_TIME ?
-            (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
+            (byte) (attributes & ~LegacyRecord.TIMESTAMP_TYPE_MASK) : (byte) (attributes | LegacyRecord.TIMESTAMP_TYPE_MASK);
     }
 
     public static TimestampType forAttributes(byte attributes) {
-        int timestampType = (attributes & Record.TIMESTAMP_TYPE_MASK) >> Record.TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
+        int timestampType = (attributes & LegacyRecord.TIMESTAMP_TYPE_MASK) >> LegacyRecord.TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
         return timestampType == 0 ? CREATE_TIME : LOG_APPEND_TIME;
     }
 

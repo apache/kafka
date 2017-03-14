@@ -551,7 +551,7 @@ class LogValidatorTest extends JUnitSuite {
 
   private def recordsWithInvalidInnerMagic(initialOffset: Long): MemoryRecords = {
     val records = (0 until 20).map(id =>
-      Record.create(LogEntry.MAGIC_VALUE_V0,
+      LegacyRecord.create(LogEntry.MAGIC_VALUE_V0,
         LogEntry.NO_TIMESTAMP,
         id.toString.getBytes,
         id.toString.getBytes))

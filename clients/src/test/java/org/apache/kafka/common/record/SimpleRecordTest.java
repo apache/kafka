@@ -37,14 +37,14 @@ public class SimpleRecordTest {
     public void testCompressedIterationWithNullValue() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1);
-        Record.write(out, LogEntry.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
+        LegacyLogEntry.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1);
+        LegacyRecord.write(out, LogEntry.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (LogRecord record : records.records())
+        for (Record record : records.records())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -58,14 +58,14 @@ public class SimpleRecordTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
-        Record.write(out, LogEntry.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
+        LegacyLogEntry.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
+        LegacyRecord.write(out, LogEntry.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (LogRecord record : records.records())
+        for (Record record : records.records())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -73,7 +73,7 @@ public class SimpleRecordTest {
     @Test(expected = InvalidRecordException.class)
     public void testIsValidWithTooSmallBuffer() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
-        Record record = new Record(buffer);
+        LegacyRecord record = new LegacyRecord(buffer);
         assertFalse(record.isValid());
         record.ensureValid();
     }
@@ -83,7 +83,7 @@ public class SimpleRecordTest {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         // set checksum
         buffer.putInt(2);
-        Record record = new Record(buffer);
+        LegacyRecord record = new LegacyRecord(buffer);
         assertFalse(record.isValid());
         record.ensureValid();
     }
@@ -91,7 +91,7 @@ public class SimpleRecordTest {
     @Test
     public void testIsValidWithFourBytesBuffer() {
         ByteBuffer buffer = ByteBuffer.allocate(4);
-        Record record = new Record(buffer);
+        LegacyRecord record = new LegacyRecord(buffer);
         // it is a bit weird that we return `true` in this case, we could extend the definition of `isValid` to
         // something like the following to detect a clearly corrupt record:
         // return size() >= recordSize(0, 0) && checksum() == computeChecksum();
@@ -102,7 +102,7 @@ public class SimpleRecordTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void cannotUpconvertWithNoTimestampType() {
-        Record record = Record.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
+        LegacyRecord record = LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
         record.convert(LogEntry.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE);
     }
 
@@ -112,8 +112,8 @@ public class SimpleRecordTest {
         byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
 
         for (int i = 0; i < keys.length; i++) {
-            Record record = Record.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, keys[i], values[i]);
-            Record converted = record.convert(LogEntry.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
+            LegacyRecord record = LegacyRecord.create(LogEntry.MAGIC_VALUE_V0, LogEntry.NO_TIMESTAMP, keys[i], values[i]);
+            LegacyRecord converted = record.convert(LogEntry.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
 
             assertEquals(LogEntry.MAGIC_VALUE_V1, converted.magic());
             assertEquals(LogEntry.NO_TIMESTAMP, converted.timestamp());
@@ -131,8 +131,8 @@ public class SimpleRecordTest {
         byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
 
         for (int i = 0; i < keys.length; i++) {
-            Record record = Record.create(LogEntry.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
-            Record converted = record.convert(LogEntry.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
+            LegacyRecord record = LegacyRecord.create(LogEntry.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
+            LegacyRecord converted = record.convert(LogEntry.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
 
             assertEquals(LogEntry.MAGIC_VALUE_V0, converted.magic());
             assertEquals(LogEntry.NO_TIMESTAMP, converted.timestamp());
@@ -159,7 +159,7 @@ public class SimpleRecordTest {
             assertEquals(1234568, entry.lastOffset());
             assertTrue(entry.isValid());
 
-            for (LogRecord record : entry) {
+            for (Record record : entry) {
                 assertTrue(record.isValid());
             }
         }
@@ -175,14 +175,14 @@ public class SimpleRecordTest {
         builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.ABORT, null);
         MemoryRecords records = builder.build();
 
-        List<LogRecord> logRecords = TestUtils.toList(records.records());
+        List<Record> logRecords = TestUtils.toList(records.records());
         assertEquals(2, logRecords.size());
 
-        LogRecord commitRecord = logRecords.get(0);
+        Record commitRecord = logRecords.get(0);
         assertTrue(commitRecord.isControlRecord());
         assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(commitRecord.key()));
 
-        LogRecord abortRecord = logRecords.get(1);
+        Record abortRecord = logRecords.get(1);
         assertTrue(abortRecord.isControlRecord());
         assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
     }

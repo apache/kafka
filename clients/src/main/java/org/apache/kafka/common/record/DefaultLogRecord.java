@@ -52,7 +52,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * The offset and timestamp deltas compute the difference relative to the base offset and
  * base timestamp of the log entry that this record is contained in.
  */
-public class EosLogRecord implements LogRecord {
+public class DefaultLogRecord implements Record {
 
     // 5 bytes length + 10 bytes timestamp + 5 bytes offset + 5 bytes keylen + 5 bytes valuelen + 1 byte attributes
     private static final int MAX_RECORD_OVERHEAD = 26;
@@ -69,13 +69,13 @@ public class EosLogRecord implements LogRecord {
     private final ByteBuffer value;
     private Long checksum = null;
 
-    private EosLogRecord(int sizeInBytes,
-                         byte attributes,
-                         long offset,
-                         long timestamp,
-                         int sequence,
-                         ByteBuffer key,
-                         ByteBuffer value) {
+    private DefaultLogRecord(int sizeInBytes,
+                             byte attributes,
+                             long offset,
+                             long timestamp,
+                             int sequence,
+                             ByteBuffer key,
+                             ByteBuffer value) {
         this.sizeInBytes = sizeInBytes;
         this.attributes = attributes;
         this.offset = offset;
@@ -243,11 +243,11 @@ public class EosLogRecord implements LogRecord {
         return (attributes & CONTROL_FLAG_MASK) != 0;
     }
 
-    public static EosLogRecord readFrom(DataInputStream input,
-                                        long baseOffset,
-                                        long baseTimestamp,
-                                        int baseSequence,
-                                        Long logAppendTime) throws IOException {
+    public static DefaultLogRecord readFrom(DataInputStream input,
+                                            long baseOffset,
+                                            long baseTimestamp,
+                                            int baseSequence,
+                                            Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
         input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
@@ -255,11 +255,11 @@ public class EosLogRecord implements LogRecord {
         return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
 
-    public static EosLogRecord readFrom(ByteBuffer buffer,
-                                        long baseOffset,
-                                        long baseTimestamp,
-                                        int baseSequence,
-                                        Long logAppendTime) {
+    public static DefaultLogRecord readFrom(ByteBuffer buffer,
+                                            long baseOffset,
+                                            long baseTimestamp,
+                                            int baseSequence,
+                                            Long logAppendTime) {
         ByteBuffer dup = buffer.duplicate();
         int sizeOfBodyInBytes = ByteUtils.readVarint(dup);
         if (buffer.remaining() < sizeOfBodyInBytes)
@@ -270,12 +270,12 @@ public class EosLogRecord implements LogRecord {
         return readFrom(dup, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
 
-    private static EosLogRecord readFrom(ByteBuffer buffer,
-                                         int sizeInBytes,
-                                         long baseOffset,
-                                         long baseTimestamp,
-                                         int baseSequence,
-                                         Long logAppendTime) {
+    private static DefaultLogRecord readFrom(ByteBuffer buffer,
+                                             int sizeInBytes,
+                                             long baseOffset,
+                                             long baseTimestamp,
+                                             int baseSequence,
+                                             Long logAppendTime) {
         byte attributes = buffer.get();
         long timestamp = baseTimestamp + ByteUtils.readVarlong(buffer);
         if (logAppendTime != null)
@@ -305,7 +305,7 @@ public class EosLogRecord implements LogRecord {
             buffer.position(buffer.position() + valueSize);
         }
 
-        return new EosLogRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
+        return new DefaultLogRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
     }
 
     private static byte computeAttributes(boolean isControlRecord) {

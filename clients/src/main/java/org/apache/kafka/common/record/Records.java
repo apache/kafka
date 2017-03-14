@@ -24,7 +24,7 @@ import java.nio.channels.GatheringByteChannel;
  * (see {@link LogEntry}).
  *
  * For magic versions 1 and below, each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow"
- * {@link LogRecord record}. If the entry is not compressed, then each entry will have only the shallow record contained
+ * {@link Record record}. If the entry is not compressed, then each entry will have only the shallow record contained
  * inside it. If it is compressed, the entry contains "deep" records, which are packed into the value field of the
  * shallow record. To iterate over the shallow entries, use {@link #entries()}; for the deep records, use
  * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed entries: if the entry is
@@ -65,7 +65,7 @@ public interface Records {
     /**
      * Get the shallow log entries in this log buffer. Note that the signature allows subclasses
      * to return a more specific log entry type. This enables optimizations such as in-place offset
-     * assignment (see for example {@link EosLogEntry}), and partial reading of
+     * assignment (see for example {@link DefaultLogEntry}), and partial reading of
      * record data (see {@link FileLogInputStream.FileChannelLogEntry#magic()}.
      * @return An iterator over the shallow entries of the log
      */
@@ -98,5 +98,5 @@ public interface Records {
      * Get an iterator over the records in this log (i.e. the "deep" entries)
      * @return The record iterator
      */
-    Iterable<LogRecord> records();
+    Iterable<Record> records();
 }

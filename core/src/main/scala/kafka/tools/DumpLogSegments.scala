@@ -216,11 +216,11 @@ object DumpLogSegments {
   }
 
   private trait MessageParser[K, V] {
-    def parse(record: LogRecord): (Option[K], Option[V])
+    def parse(record: Record): (Option[K], Option[V])
   }
 
   private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
-    override def parse(record: LogRecord): (Option[K], Option[V]) = {
+    override def parse(record: Record): (Option[K], Option[V]) = {
       if (!record.hasValue) {
         (None, None)
       } else {
@@ -283,7 +283,7 @@ object DumpLogSegments {
       (Some(keyString), Some(valueString))
     }
 
-    override def parse(record: LogRecord): (Option[String], Option[String]) = {
+    override def parse(record: Record): (Option[String], Option[String]) = {
       if (!record.hasValue)
         (None, None)
       else if (!record.hasKey) {

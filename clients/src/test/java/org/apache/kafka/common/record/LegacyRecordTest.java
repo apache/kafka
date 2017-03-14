@@ -33,7 +33,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 @RunWith(value = Parameterized.class)
-public class RecordTest {
+public class LegacyRecordTest {
 
     private final byte magic;
     private final long timestamp;
@@ -41,16 +41,16 @@ public class RecordTest {
     private final ByteBuffer value;
     private final CompressionType compression;
     private final TimestampType timestampType;
-    private final Record record;
+    private final LegacyRecord record;
 
-    public RecordTest(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
+    public LegacyRecordTest(byte magic, long timestamp, byte[] key, byte[] value, CompressionType compression) {
         this.magic = magic;
         this.timestamp = timestamp;
         this.timestampType = TimestampType.CREATE_TIME;
         this.key = key == null ? null : ByteBuffer.wrap(key);
         this.value = value == null ? null : ByteBuffer.wrap(value);
         this.compression = compression;
-        this.record = Record.create(magic, timestamp, key, value, compression, timestampType);
+        this.record = LegacyRecord.create(magic, timestamp, key, value, compression, timestampType);
     }
 
     @Test
@@ -77,8 +77,8 @@ public class RecordTest {
     public void testChecksum() {
         assertEquals(record.checksum(), record.computeChecksum());
 
-        byte attributes = Record.computeAttributes(magic, this.compression, TimestampType.CREATE_TIME);
-        assertEquals(record.checksum(), Record.computeChecksum(
+        byte attributes = LegacyRecord.computeAttributes(magic, this.compression, TimestampType.CREATE_TIME);
+        assertEquals(record.checksum(), LegacyRecord.computeChecksum(
                 magic,
                 attributes,
                 this.timestamp,
@@ -86,8 +86,8 @@ public class RecordTest {
                 this.value == null ? null : this.value.array()
         ));
         assertTrue(record.isValid());
-        for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.sizeInBytes(); i++) {
-            Record copy = copyOf(record);
+        for (int i = LegacyRecord.CRC_OFFSET + LegacyRecord.CRC_LENGTH; i < record.sizeInBytes(); i++) {
+            LegacyRecord copy = copyOf(record);
             copy.buffer().put(i, (byte) 69);
             assertFalse(copy.isValid());
             try {
@@ -99,12 +99,12 @@ public class RecordTest {
         }
     }
 
-    private Record copyOf(Record record) {
+    private LegacyRecord copyOf(LegacyRecord record) {
         ByteBuffer buffer = ByteBuffer.allocate(record.sizeInBytes());
         record.buffer().put(buffer);
         buffer.rewind();
         record.buffer().rewind();
-        return new Record(buffer);
+        return new LegacyRecord(buffer);
     }
 
     @Test

@@ -84,7 +84,7 @@ public class FileRecordsTest {
         fileRecords.channel().write(buffer);
 
         // appending those bytes should not change the contents
-        Iterator<LogRecord> logRecords = fileRecords.records().iterator();
+        Iterator<Record> logRecords = fileRecords.records().iterator();
         for (byte[] value : values) {
             assertTrue(logRecords.hasNext());
             assertEquals(logRecords.next().value(), ByteBuffer.wrap(value));
@@ -97,7 +97,7 @@ public class FileRecordsTest {
     @Test
     public void testIterationDoesntChangePosition() throws IOException {
         long position = fileRecords.channel().position();
-        Iterator<LogRecord> logRecords = fileRecords.records().iterator();
+        Iterator<Record> logRecords = fileRecords.records().iterator();
         for (byte[] value : values) {
             assertTrue(logRecords.hasNext());
             assertEquals(logRecords.next().value(), ByteBuffer.wrap(value));
@@ -364,7 +364,7 @@ public class FileRecordsTest {
         int i = 0;
         for (LogEntry entry : convertedRecords.entries()) {
             assertEquals("magic byte should be " + magicByte, magicByte, entry.magic());
-            for (LogRecord record : entry) {
+            for (Record record : entry) {
                 assertTrue("Inner record should have magic " + magicByte, record.hasMagic(magicByte));
                 assertEquals("offset should not change", initialOffsets.get(i).longValue(), record.offset());
                 assertEquals("key should not change", initialRecords.get(i).key(), record.key());
