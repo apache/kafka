@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
@@ -31,7 +30,6 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 
 
 class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
@@ -162,54 +160,4 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         this.flushListener = flushListener;
     }
 
-    private static class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
-        private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
-        private final HasNextCondition hasNextCondition;
-
-        FilteredCacheIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
-                              final HasNextCondition hasNextCondition) {
-            this.cacheIterator = cacheIterator;
-            this.hasNextCondition = hasNextCondition;
-        }
-
-        @Override
-        public void close() {
-            // no-op
-        }
-
-        @Override
-        public Bytes peekNextKey() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return cacheIterator.peekNextKey();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return hasNextCondition.hasNext(cacheIterator);
-        }
-
-        @Override
-        public KeyValue<Bytes, LRUCacheEntry> next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return cacheIterator.next();
-
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public KeyValue<Bytes, LRUCacheEntry> peekNext() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return cacheIterator.peekNext();
-        }
-    }
 }

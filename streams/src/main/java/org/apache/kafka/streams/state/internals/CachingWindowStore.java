@@ -38,6 +38,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final long windowSize;
+    private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
 
     private String name;
     private ThreadCache cache;
@@ -149,9 +150,16 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         Bytes fromBytes = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         Bytes toBytes = WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes);
 
-        final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
+        final Bytes keyBytes = Bytes.wrap(serdes.rawKey(key));
+        final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(keyBytes, timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, fromBytes, toBytes);
-        return new MergedSortedCacheWindowStoreIterator<>(cacheIterator,
+
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyBytes,
+                                                                             timeFrom,
+                                                                             timeTo);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
+
+        return new MergedSortedCacheWindowStoreIterator<>(filteredCacheIterator,
                                                           underlyingIterator,
                                                           new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
     }
