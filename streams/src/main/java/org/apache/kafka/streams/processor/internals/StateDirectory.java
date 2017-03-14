@@ -100,6 +100,7 @@ public class StateDirectory {
     boolean lock(final TaskId taskId, int retry) throws IOException {
         // we already have the lock so bail out here
         if (locks.containsKey(taskId)) {
+            log.debug("Found cached state dir lock for task {}", taskId);
             return true;
         }
         final File lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
@@ -117,6 +118,7 @@ public class StateDirectory {
 
         final FileLock lock = tryLock(retry, channel);
         if (lock != null) {
+            log.debug("Acquired and cached state dir lock for task {}", taskId);
             locks.put(taskId, lock);
         }
         return lock != null;
@@ -124,6 +126,7 @@ public class StateDirectory {
 
     boolean lockGlobalState(final int retry) throws IOException {
         if (globalStateLock != null) {
+            log.debug("Found cached state dir lock for the global task");
             return true;
         }
 
@@ -144,6 +147,9 @@ public class StateDirectory {
         }
         globalStateChannel = channel;
         globalStateLock = fileLock;
+
+        log.debug("Acquired global state dir lock");
+
         return true;
     }
 
@@ -155,23 +161,9 @@ public class StateDirectory {
         globalStateChannel.close();
         globalStateLock = null;
         globalStateChannel = null;
+
+        log.debug("Released global state dir lock");
     }
-
-    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
-        FileLock lock = tryAcquireLock(channel);
-        while (lock == null && retry > 0) {
-            try {
-                Thread.sleep(200);
-            } catch (Exception ex) {
-                // do nothing
-            }
-            retry--;
-            lock = tryAcquireLock(channel);
-        }
-        return lock;
-    }
-
-
 
     /**
      * Unlock the state directory for the given {@link TaskId}
@@ -182,6 +174,9 @@ public class StateDirectory {
         final FileLock lock = locks.remove(taskId);
         if (lock != null) {
             lock.release();
+
+            log.debug("Released state dir lock for task {}", taskId);
+
             final FileChannel fileChannel = channels.remove(taskId);
             if (fileChannel != null) {
                 fileChannel.close();
@@ -203,8 +198,8 @@ public class StateDirectory {
         }
 
         for (File taskDir : taskDirs) {
-            final String dirName = taskDir.getName();
-            TaskId id = TaskId.parse(dirName);
+            final String dirName = taskDir.getAbsolutePath();
+            TaskId id = TaskId.parse(taskDir.getName());
             if (!locks.containsKey(id)) {
                 try {
                     if (lock(id, 0)) {
@@ -241,6 +236,20 @@ public class StateDirectory {
                 return pathname.isDirectory() && name.matches("\\d+_\\d+");
             }
         });
+    }
+
+    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
+        FileLock lock = tryAcquireLock(channel);
+        while (lock == null && retry > 0) {
+            try {
+                Thread.sleep(200);
+            } catch (Exception ex) {
+                // do nothing
+            }
+            retry--;
+            lock = tryAcquireLock(channel);
+        }
+        return lock;
     }
 
     private FileChannel getOrCreateFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
