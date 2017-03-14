@@ -379,7 +379,7 @@ public class KStreamRepartitionJoinTest {
             config,
             topic,
             numMessages,
-            COMMIT_INTERVAL_MS * 2);
+            60 * 1000);
         Collections.sort(received);
 
         return received;

@@ -297,7 +297,7 @@ public class KStreamKTableJoinIntegrationTest {
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
 
         final List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
-            outputTopic, expectedClicksPerRegion.size(), COMMIT_INTERVAL_MS * 2);
+            outputTopic, expectedClicksPerRegion.size());
 
         assertThat(actualClicksPerRegion, equalTo(expectedClicksPerRegion));
     }

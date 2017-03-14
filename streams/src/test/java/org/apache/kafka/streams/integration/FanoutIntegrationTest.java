@@ -162,7 +162,7 @@ public class FanoutIntegrationTest {
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigB.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         final List<String> actualValuesForB = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigB,
-            OUTPUT_TOPIC_B, inputValues.size(), COMMIT_INTERVAL_MS * 2);
+            OUTPUT_TOPIC_B, inputValues.size());
         assertThat(actualValuesForB, equalTo(expectedValuesForB));
 
         // Verify output topic C
@@ -173,9 +173,8 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         final List<String> actualValuesForC = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigC,
-            OUTPUT_TOPIC_C, inputValues.size(), COMMIT_INTERVAL_MS * 2);
+            OUTPUT_TOPIC_C, inputValues.size());
         streams.close();
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
-
 }

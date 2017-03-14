@@ -673,7 +673,7 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            COMMIT_INTERVAL_MS * 2);
+            60 * 1000);
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
