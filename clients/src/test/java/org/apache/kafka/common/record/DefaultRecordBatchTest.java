@@ -22,7 +22,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
-public class DefaultLogEntryTest {
+public class DefaultRecordBatchTest {
 
     @Test
     public void testSizeInBytes() {
@@ -33,7 +33,7 @@ public class DefaultLogEntryTest {
             new KafkaRecord(timestamp + 60000, "key".getBytes(), null)
         };
         int actualSize = MemoryRecords.withRecords(CompressionType.NONE, records).sizeInBytes();
-        assertEquals(actualSize, DefaultLogEntry.sizeInBytes(Arrays.asList(records)));
+        assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));
     }
 
 }

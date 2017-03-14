@@ -30,16 +30,16 @@ public class ByteBufferLogInputStreamTest {
     @Test
     public void iteratorIgnoresIncompleteEntries() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
         builder.append(20L, "b".getBytes(), "2".getBytes());
 
         ByteBuffer recordsBuffer = builder.build().buffer();
         recordsBuffer.limit(recordsBuffer.limit() - 5);
 
-        Iterator<LogEntry.MutableLogEntry> iterator = MemoryRecords.readableRecords(recordsBuffer).entries().iterator();
+        Iterator<RecordBatch.MutableRecordBatch> iterator = MemoryRecords.readableRecords(recordsBuffer).batches().iterator();
         assertTrue(iterator.hasNext());
-        LogEntry.MutableLogEntry first = iterator.next();
+        RecordBatch.MutableRecordBatch first = iterator.next();
         assertEquals(0L, first.lastOffset());
 
         assertFalse(iterator.hasNext());
@@ -48,12 +48,12 @@ public class ByteBufferLogInputStreamTest {
     @Test
     public void testSetCreateTimeV1() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
-        Iterator<LogEntry.MutableLogEntry> iterator = builder.build().entries().iterator();
+        Iterator<RecordBatch.MutableRecordBatch> iterator = builder.build().batches().iterator();
 
         assertTrue(iterator.hasNext());
-        LogEntry.MutableLogEntry entry = iterator.next();
+        RecordBatch.MutableRecordBatch entry = iterator.next();
 
         long createTimeMs = 20L;
         entry.setMaxTimestamp(TimestampType.CREATE_TIME, createTimeMs);
@@ -65,12 +65,12 @@ public class ByteBufferLogInputStreamTest {
     @Test(expected = IllegalArgumentException.class)
     public void testSetCreateTimeNotAllowedV0() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
-        Iterator<LogEntry.MutableLogEntry> iterator = builder.build().entries().iterator();
+        Iterator<RecordBatch.MutableRecordBatch> iterator = builder.build().batches().iterator();
 
         assertTrue(iterator.hasNext());
-        LogEntry.MutableLogEntry entry = iterator.next();
+        RecordBatch.MutableRecordBatch entry = iterator.next();
 
         long createTimeMs = 20L;
         entry.setMaxTimestamp(TimestampType.CREATE_TIME, createTimeMs);
@@ -79,12 +79,12 @@ public class ByteBufferLogInputStreamTest {
     @Test
     public void testSetLogAppendTimeV1() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
-        Iterator<LogEntry.MutableLogEntry> iterator = builder.build().entries().iterator();
+        Iterator<RecordBatch.MutableRecordBatch> iterator = builder.build().batches().iterator();
 
         assertTrue(iterator.hasNext());
-        LogEntry.MutableLogEntry entry = iterator.next();
+        RecordBatch.MutableRecordBatch entry = iterator.next();
 
         long logAppendTime = 20L;
         entry.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, logAppendTime);
@@ -96,12 +96,12 @@ public class ByteBufferLogInputStreamTest {
     @Test(expected = IllegalArgumentException.class)
     public void testSetLogAppendTimeNotAllowedV0() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
-        Iterator<LogEntry.MutableLogEntry> iterator = builder.build().entries().iterator();
+        Iterator<RecordBatch.MutableRecordBatch> iterator = builder.build().batches().iterator();
 
         assertTrue(iterator.hasNext());
-        LogEntry.MutableLogEntry entry = iterator.next();
+        RecordBatch.MutableRecordBatch entry = iterator.next();
 
         long logAppendTime = 20L;
         entry.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, logAppendTime);

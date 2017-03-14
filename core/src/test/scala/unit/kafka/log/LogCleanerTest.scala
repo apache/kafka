@@ -681,8 +681,8 @@ class LogCleanerTest extends JUnitSuite {
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 
-    for (segment <- log.logSegments; entry <- segment.log.entries.asScala; record <- entry.asScala) {
-      assertTrue(record.hasMagic(entry.magic))
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala; record <- batch.asScala) {
+      assertTrue(record.hasMagic(batch.magic))
       val value = TestUtils.readString(record.value).toLong
       assertEquals(record.offset, value)
     }
@@ -729,14 +729,14 @@ class LogCleanerTest extends JUnitSuite {
                                           timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000))
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.entries.iterator.next().lastOffset)
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
     // Append a message and roll out another log segment.
     log.append(TestUtils.singletonRecords(value = "1".getBytes,
                                           key = "1".getBytes,
                                           timestamp = time.milliseconds()))
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.entries.iterator.next().lastOffset)
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
@@ -751,13 +751,13 @@ class LogCleanerTest extends JUnitSuite {
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
     val records = keysAndValues.map(kv =>
-      LegacyRecord.create(LogEntry.MAGIC_VALUE_V0,
-        LogEntry.NO_TIMESTAMP,
+      LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0,
+        RecordBatch.NO_TIMESTAMP,
         kv._1.toString.getBytes,
         kv._2.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
+    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
 
     var offset = initialOffset
     records.foreach { record =>

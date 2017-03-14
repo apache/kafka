@@ -312,15 +312,15 @@ object TestUtils extends Logging {
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
-                       timestamp: Long = LogEntry.NO_TIMESTAMP,
-                       magicValue: Byte = LogEntry.CURRENT_MAGIC_VALUE): MemoryRecords = {
+                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     records(magicValue = magicValue, codec = codec, (key, value, timestamp))
   }
 
   def recordsWithValues(magicValue: Byte,
                         codec: CompressionType,
                         values: Array[Byte]*): MemoryRecords = {
-    records(magicValue, codec, values.map((null, _, LogEntry.NO_TIMESTAMP)): _*)
+    records(magicValue, codec, values.map((null, _, RecordBatch.NO_TIMESTAMP)): _*)
   }
 
   def records(magicValue: Byte,
@@ -330,13 +330,13 @@ object TestUtils extends Logging {
   }
 
   def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
-              magicValue: Byte = LogEntry.CURRENT_MAGIC_VALUE,
+              magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
-              pid: Long = LogEntry.NO_PID,
-              epoch: Short = LogEntry.NO_EPOCH,
-              sequence: Int = LogEntry.NO_SEQUENCE): MemoryRecords = {
+              pid: Long = RecordBatch.NO_PID,
+              epoch: Short = RecordBatch.NO_EPOCH,
+              sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
     val kafkaRecords = records.map(record => new KafkaRecord(record._3, record._1, record._2))
-    val buf = ByteBuffer.allocate(DefaultLogEntry.sizeInBytes(kafkaRecords.asJava))
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(kafkaRecords.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
       System.currentTimeMillis, pid, epoch, sequence)
     records.foreach { case (key, value, timestamp) =>

@@ -52,7 +52,7 @@ private[kafka] object LogValidator extends Logging {
                                                       sourceCodec: CompressionCodec,
                                                       targetCodec: CompressionCodec,
                                                       compactedTopic: Boolean = false,
-                                                      messageFormatVersion: Byte = LogEntry.CURRENT_MAGIC_VALUE,
+                                                      messageFormatVersion: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
                                                       messageTimestampType: TimestampType,
                                                       messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
@@ -81,7 +81,7 @@ private[kafka] object LogValidator extends Logging {
       CompressionType.NONE, records.records)
 
     val (pid, epoch, sequence) = {
-      val first = records.entries.asScala.head
+      val first = records.batches.asScala.head
       (first.pid, first.epoch, first.baseSequence)
     }
 
@@ -89,13 +89,13 @@ private[kafka] object LogValidator extends Logging {
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, pid, epoch, sequence)
 
-    for (entry <- records.entries.asScala) {
-      ensureNonTransactional(entry)
+    for (batch <- records.batches.asScala) {
+      ensureNonTransactional(batch)
 
-      for (record <- entry.asScala) {
+      for (record <- batch.asScala) {
         ensureNotControlRecord(record)
         validateKey(record, compactedTopic)
-        validateTimestamp(entry, record, now, timestampType, messageTimestampDiffMaxMs)
+        validateTimestamp(batch, record, now, timestampType, messageTimestampDiffMaxMs)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
     }
@@ -115,22 +115,22 @@ private[kafka] object LogValidator extends Logging {
                                          compactedTopic: Boolean,
                                          timestampType: TimestampType,
                                          timestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
-    var maxTimestamp = LogEntry.NO_TIMESTAMP
+    var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
-    for (entry <- records.entries.asScala) {
-      ensureNonTransactional(entry)
+    for (batch <- records.batches.asScala) {
+      ensureNonTransactional(batch)
 
       val baseOffset = offsetCounter.value
-      for (record <- entry.asScala) {
+      for (record <- batch.asScala) {
         record.ensureValid()
         ensureNotControlRecord(record)
         validateKey(record, compactedTopic)
 
         val offset = offsetCounter.getAndIncrement()
-        if (entry.magic > LogEntry.MAGIC_VALUE_V0) {
-          validateTimestamp(entry, record, currentTimestamp, timestampType, timestampDiffMaxMs)
+        if (batch.magic > RecordBatch.MAGIC_VALUE_V0) {
+          validateTimestamp(batch, record, currentTimestamp, timestampType, timestampDiffMaxMs)
 
           if (record.timestamp > maxTimestamp) {
             maxTimestamp = record.timestamp
@@ -139,15 +139,15 @@ private[kafka] object LogValidator extends Logging {
         }
       }
 
-      if (entry.magic > LogEntry.MAGIC_VALUE_V1)
-        entry.setOffset(baseOffset)
+      if (batch.magic > RecordBatch.MAGIC_VALUE_V1)
+        batch.setOffset(baseOffset)
       else
-        entry.setOffset(offsetCounter.value - 1)
+        batch.setOffset(offsetCounter.value - 1)
 
-      // TODO: in the compressed path, we ensure that the entry max timestamp is correct.
+      // TODO: in the compressed path, we ensure that the batch max timestamp is correct.
       //       We should either do the same or (better) let those two paths converge.
-      if (entry.magic > 0 && timestampType == TimestampType.LOG_APPEND_TIME)
-        entry.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, currentTimestamp)
+      if (batch.magic > 0 && timestampType == TimestampType.LOG_APPEND_TIME)
+        batch.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, currentTimestamp)
     }
 
     if (timestampType == TimestampType.LOG_APPEND_TIME) {
@@ -176,7 +176,7 @@ private[kafka] object LogValidator extends Logging {
                                                  sourceCodec: CompressionCodec,
                                                  targetCodec: CompressionCodec,
                                                  compactedTopic: Boolean = false,
-                                                 messageFormatVersion: Byte = LogEntry.CURRENT_MAGIC_VALUE,
+                                                 messageFormatVersion: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
                                                  messageTimestampType: TimestampType,
                                                  messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
       // Deal with compressed messages
@@ -187,27 +187,27 @@ private[kafka] object LogValidator extends Logging {
       // 4. Message format conversion is needed.
 
       // No in place assignment situation 1 and 2
-      var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > LogEntry.MAGIC_VALUE_V0
+      var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > RecordBatch.MAGIC_VALUE_V0
 
-      var maxTimestamp = LogEntry.NO_TIMESTAMP
+      var maxTimestamp = RecordBatch.NO_TIMESTAMP
       val expectedInnerOffset = new LongRef(0)
       val validatedRecords = new mutable.ArrayBuffer[Record]
 
-      for (entry <- records.entries.asScala) {
-        ensureNonTransactional(entry)
+      for (batch <- records.batches.asScala) {
+        ensureNonTransactional(batch)
 
-        for (record <- entry.asScala) {
-          if (!record.hasMagic(entry.magic))
-            throw new InvalidRecordException(s"Log record magic does not match outer magic ${entry.magic}")
+        for (record <- batch.asScala) {
+          if (!record.hasMagic(batch.magic))
+            throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
 
           record.ensureValid()
           ensureNotControlRecord(record)
           validateKey(record, compactedTopic)
 
-          if (!record.hasMagic(LogEntry.MAGIC_VALUE_V0) && messageFormatVersion > LogEntry.MAGIC_VALUE_V0) {
+          if (!record.hasMagic(RecordBatch.MAGIC_VALUE_V0) && messageFormatVersion > RecordBatch.MAGIC_VALUE_V0) {
             // No in place assignment situation 3
             // Validate the timestamp
-            validateTimestamp(entry, record, currentTimestamp, messageTimestampType, messageTimestampDiffMaxMs)
+            validateTimestamp(batch, record, currentTimestamp, messageTimestampType, messageTimestampDiffMaxMs)
             // Check if we need to overwrite offset
             if (record.offset != expectedInnerOffset.getAndIncrement())
               inPlaceAssignment = false
@@ -235,20 +235,20 @@ private[kafka] object LogValidator extends Logging {
         validatedRecords.foreach(_.ensureValid)
 
         // we can update the wrapper message only and write the compressed payload as is
-        val entry = records.entries.iterator.next()
+        val batch = records.batches.iterator.next()
         val firstOffset = offsetCounter.value
         val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
 
-        if (messageFormatVersion > LogEntry.MAGIC_VALUE_V1)
-          entry.setOffset(firstOffset)
+        if (messageFormatVersion > RecordBatch.MAGIC_VALUE_V1)
+          batch.setOffset(firstOffset)
         else
-          entry.setOffset(lastOffset)
+          batch.setOffset(lastOffset)
 
         if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
           maxTimestamp = currentTimestamp
 
-        if (messageFormatVersion >= LogEntry.MAGIC_VALUE_V1)
-          entry.setMaxTimestamp(messageTimestampType, maxTimestamp)
+        if (messageFormatVersion >= RecordBatch.MAGIC_VALUE_V1)
+          batch.setMaxTimestamp(messageTimestampType, maxTimestamp)
 
         ValidationAndOffsetAssignResult(validatedRecords = records,
           maxTimestamp = maxTimestamp,
@@ -278,8 +278,8 @@ private[kafka] object LogValidator extends Logging {
       messageSizeMaybeChanged = true)
   }
 
-  private def ensureNonTransactional(entry: LogEntry) {
-    if (entry.isTransactional)
+  private def ensureNonTransactional(batch: RecordBatch) {
+    if (batch.isTransactional)
       throw new InvalidRecordException("Transactional messages are not currently supported")
   }
 
@@ -298,17 +298,17 @@ private[kafka] object LogValidator extends Logging {
    * This method validates the timestamps of a message.
    * If the message is using create time, this method checks if it is within acceptable range.
    */
-  private def validateTimestamp(entry: LogEntry,
+  private def validateTimestamp(batch: RecordBatch,
                                 record: Record,
                                 now: Long,
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {
     if (timestampType == TimestampType.CREATE_TIME
-      && record.timestamp != LogEntry.NO_TIMESTAMP
+      && record.timestamp != RecordBatch.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]")
-    if (entry.timestampType == TimestampType.LOG_APPEND_TIME)
+    if (batch.timestampType == TimestampType.LOG_APPEND_TIME)
       throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
         s"timestamp type to LogAppendTime.")
   }

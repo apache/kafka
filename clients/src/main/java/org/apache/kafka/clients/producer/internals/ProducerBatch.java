@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.slf4j.Logger;
@@ -174,7 +174,7 @@ public final class ProducerBatch {
     void expirationDone() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not expired");
-        this.done(-1L, LogEntry.NO_TIMESTAMP,
+        this.done(-1L, RecordBatch.NO_TIMESTAMP,
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 

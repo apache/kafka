@@ -25,7 +25,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.record.LogEntry.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
 /**
@@ -283,7 +283,7 @@ public class DefaultLogRecord implements Record {
 
         int delta = ByteUtils.readVarint(buffer);
         long offset = baseOffset + delta;
-        int sequence = baseSequence >= 0 ? baseSequence + delta : LogEntry.NO_SEQUENCE;
+        int sequence = baseSequence >= 0 ? baseSequence + delta : RecordBatch.NO_SEQUENCE;
 
         final ByteBuffer key;
         int keySize = ByteUtils.readVarint(buffer);

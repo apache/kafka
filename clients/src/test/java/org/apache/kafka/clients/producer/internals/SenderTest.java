@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -150,7 +150,7 @@ public class SenderTest {
                 MemoryRecords records = request.partitionRecords().get(tp0);
                 return records != null &&
                         records.sizeInBytes() > 0 &&
-                        records.hasMatchingMagic(LogEntry.MAGIC_VALUE_V1);
+                        records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
             }
         }, produceResponse(tp0, offset, Errors.NONE, 0));
 
@@ -186,7 +186,7 @@ public class SenderTest {
         // start off support produce request v3
         apiVersions.update("0", NodeApiVersions.create());
 
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, LogEntry.NO_TIMESTAMP);
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, RecordBatch.NO_TIMESTAMP);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = new HashMap<>();
         partResp.put(tp0, resp);
         partResp.put(tp1, resp);
@@ -204,7 +204,7 @@ public class SenderTest {
                     return false;
 
                 for (MemoryRecords records : recordsMap.values()) {
-                    if (records == null || records.sizeInBytes() == 0 || !records.hasMatchingMagic(LogEntry.MAGIC_VALUE_V1))
+                    if (records == null || records.sizeInBytes() == 0 || !records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1))
                         return false;
                 }
                 return true;
@@ -392,7 +392,7 @@ public class SenderTest {
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, LogEntry.NO_TIMESTAMP);
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }

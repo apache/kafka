@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -59,7 +59,7 @@ public class ProduceRequest extends AbstractRequest {
                        short acks,
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords) {
-            super(ApiKeys.PRODUCE, (short) (magic == LogEntry.MAGIC_VALUE_V2 ? 3 : 2));
+            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
             this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
@@ -141,12 +141,12 @@ public class ProduceRequest extends AbstractRequest {
 
     private void validateRecords(short version, MemoryRecords records) {
         if (version >= 3) {
-            Iterator<LogEntry.MutableLogEntry> iterator = records.entries().iterator();
+            Iterator<RecordBatch.MutableRecordBatch> iterator = records.batches().iterator();
             if (!iterator.hasNext())
                 throw new InvalidRecordException("Version 3 and above of the produce request contained no log entries");
 
-            LogEntry.MutableLogEntry entry = iterator.next();
-            if (entry.magic() != LogEntry.MAGIC_VALUE_V2)
+            RecordBatch.MutableRecordBatch entry = iterator.next();
+            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
                         "contain log entries with magic version 2");
 
@@ -276,13 +276,13 @@ public class ProduceRequest extends AbstractRequest {
         switch (produceRequestVersion) {
             case 0:
             case 1:
-                return LogEntry.MAGIC_VALUE_V0;
+                return RecordBatch.MAGIC_VALUE_V0;
 
             case 2:
-                return LogEntry.MAGIC_VALUE_V1;
+                return RecordBatch.MAGIC_VALUE_V1;
 
             case 3:
-                return LogEntry.MAGIC_VALUE_V2;
+                return RecordBatch.MAGIC_VALUE_V2;
 
             default:
                 // raise an exception if the version has not been explicitly added to this method.

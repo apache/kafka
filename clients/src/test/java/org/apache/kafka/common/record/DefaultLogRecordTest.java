@@ -72,9 +72,9 @@ public class DefaultLogRecordTest {
         DefaultLogRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
         buffer.flip();
 
-        DefaultLogRecord record = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, LogEntry.NO_SEQUENCE, null);
+        DefaultLogRecord record = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
         assertNotNull(record);
-        assertEquals(LogEntry.NO_SEQUENCE, record.sequence());
+        assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
     }
 
 }

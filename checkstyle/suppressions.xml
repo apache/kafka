@@ -28,7 +28,7 @@
     <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
     <suppress checks="ParameterNumber"
-              files="DefaultLogEntry.java"/>
+              files="DefaultRecordBatch.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse).java"/>

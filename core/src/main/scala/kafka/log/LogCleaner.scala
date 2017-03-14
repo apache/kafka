@@ -26,10 +26,10 @@ import com.yammer.metrics.core.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.record.MemoryRecords.LogRecordFilter
-import org.apache.kafka.common.record.{FileRecords, Record, MemoryRecords}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Record}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 
 import scala.collection._
 import JavaConverters._
@@ -450,7 +450,7 @@ private[log] class Cleaner(val id: Int,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
-    val logCleanerFilter = new LogRecordFilter {
+    val logCleanerFilter = new RecordFilter {
       def shouldRetain(record: Record): Boolean =
         record.isControlRecord || shouldRetainMessage(source, map, retainDeletes, record, stats)
     }
@@ -475,7 +475,7 @@ private[log] class Cleaner(val id: Int,
       if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = MemoryRecords.readableRecords(writeBuffer)
-        dest.append(firstOffset = retained.entries.iterator.next().baseOffset,
+        dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
           largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,

@@ -28,8 +28,8 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.record.LogEntry.NO_TIMESTAMP
-import org.apache.kafka.common.record.{LogEntry, _}
+import org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP
+import org.apache.kafka.common.record.{RecordBatch, _}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -201,13 +201,13 @@ class LogTest extends JUnitSuite {
       log.append(TestUtils.singletonRecords(value = value))
 
     for(i <- values.indices) {
-      val read = log.read(i, 100, Some(i+1)).records.entries.iterator.next()
+      val read = log.read(i, 100, Some(i+1)).records.batches.iterator.next()
       assertEquals("Offset read should match order appended.", i, read.lastOffset)
       val actual = read.iterator.next()
       assertNull(s"Key should be null", actual.key)
       assertEquals(s"Values not equal", ByteBuffer.wrap(values(i)), actual.value)
     }
-    assertEquals("Reading beyond the last message returns nothing.", 0, log.read(values.length, 100, None).records.entries.asScala.size)
+    assertEquals("Reading beyond the last message returns nothing.", 0, log.read(values.length, 100, None).records.batches.asScala.size)
   }
 
   /**
@@ -253,7 +253,7 @@ class LogTest extends JUnitSuite {
     log.logSegments.head.truncateTo(1)
 
     assertEquals("A read should now return the last message in the log", log.logEndOffset - 1,
-      log.read(1, 200, None).records.entries.iterator.next().lastOffset)
+      log.read(1, 200, None).records.batches.iterator.next().lastOffset)
   }
 
   @Test
@@ -280,7 +280,7 @@ class LogTest extends JUnitSuite {
         assertEquals("Message should match appended.", records(idx), new KafkaRecord(read))
       }
 
-      assertEquals(Seq.empty, log.read(i, 1, Some(1), minOneMessage = true).records.entries.asScala.toIndexedSeq)
+      assertEquals(Seq.empty, log.read(i, 1, Some(1), minOneMessage = true).records.batches.asScala.toIndexedSeq)
     }
   }
 
@@ -365,7 +365,7 @@ class LogTest extends JUnitSuite {
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
     for(i <- 0 until numMessages) {
-      val messages = log.read(offset, 1024*1024).records.entries
+      val messages = log.read(offset, 1024*1024).records.batches
       val head = messages.iterator.next()
       assertEquals("Offsets not equal", offset, head.lastOffset)
 
@@ -638,7 +638,7 @@ class LogTest extends JUnitSuite {
     assertTrue("The index should have been rebuilt", log.logSegments.head.index.entries > 0)
     assertTrue("The time index should have been rebuilt", log.logSegments.head.timeIndex.entries > 0)
     for(i <- 0 until numMessages) {
-      assertEquals(i, log.read(i, 100, None).records.entries.iterator.next().lastOffset)
+      assertEquals(i, log.read(i, 100, None).records.batches.iterator.next().lastOffset)
       if (i == 0)
         assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
       else
@@ -716,7 +716,7 @@ class LogTest extends JUnitSuite {
     log = new Log(logDir, config, recoveryPoint = 200L, time.scheduler, time)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
-      assertEquals(i, log.read(i, 100, None).records.entries.iterator.next().lastOffset)
+      assertEquals(i, log.read(i, 100, None).records.batches.iterator.next().lastOffset)
       if (i == 0)
         assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
       else
@@ -998,7 +998,7 @@ class LogTest extends JUnitSuite {
       time.scheduler,
       time)
     log.append(MemoryRecords.withRecords(CompressionType.NONE,
-      new KafkaRecord(LogEntry.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
+      new KafkaRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
   }
 
   @Test

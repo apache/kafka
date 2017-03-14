@@ -186,20 +186,20 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val entries = records.entries.asScala.toIndexedSeq
-      assertTrue(entries.size < numMessagesPerPartition)
-      val entriesSize = entries.map(_.sizeInBytes).sum
-      responseSize += entriesSize
-      if (entriesSize == 0 && !emptyResponseSeen) {
+      val batches = records.batches.asScala.toIndexedSeq
+      assertTrue(batches.size < numMessagesPerPartition)
+      val batchesSize = batches.map(_.sizeInBytes).sum
+      responseSize += batchesSize
+      if (batchesSize == 0 && !emptyResponseSeen) {
         assertEquals(0, records.sizeInBytes)
         emptyResponseSeen = true
       }
-      else if (entriesSize != 0 && !emptyResponseSeen) {
-        assertTrue(entriesSize <= maxPartitionBytes)
+      else if (batchesSize != 0 && !emptyResponseSeen) {
+        assertTrue(batchesSize <= maxPartitionBytes)
         assertEquals(maxPartitionBytes, records.sizeInBytes)
       }
-      else if (entriesSize != 0 && emptyResponseSeen)
-        fail(s"Expected partition with size 0, but found $tp with size $entriesSize")
+      else if (batchesSize != 0 && emptyResponseSeen)
+        fail(s"Expected partition with size 0, but found $tp with size $batchesSize")
       else if (records.sizeInBytes != 0 && emptyResponseSeen)
         fail(s"Expected partition buffer with size 0, but found $tp with size ${records.sizeInBytes}")
 

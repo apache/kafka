@@ -33,9 +33,9 @@ import java.util.Iterator;
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
 /**
- * LogEntry implementation for magic 2 and above. The schema is given below:
+ * RecordBatch implementation for magic 2 and above. The schema is given below:
  *
- * LogEntry =>
+ * RecordBatch =>
  *  BaseOffset => Int64
  *  Length => Int32
  *  CRC => Int32
@@ -56,7 +56,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
  *  -----------------------------------------------------------------------------------
  */
-public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.MutableLogEntry {
+public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBatch.MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
     static final int BASE_OFFSET_LENGTH = 8;
     static final int SIZE_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
@@ -89,7 +89,7 @@ public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.Mutabl
 
     private final ByteBuffer buffer;
 
-    DefaultLogEntry(ByteBuffer buffer) {
+    DefaultRecordBatch(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 
@@ -295,7 +295,7 @@ public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.Mutabl
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        DefaultLogEntry that = (DefaultLogEntry) o;
+        DefaultRecordBatch that = (DefaultRecordBatch) o;
         return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
     }
 
@@ -325,7 +325,7 @@ public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.Mutabl
                             int sequence,
                             boolean isTransactional,
                             int partitionLeaderEpoch) {
-        if (magic < LogEntry.CURRENT_MAGIC_VALUE)
+        if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
@@ -350,7 +350,7 @@ public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.Mutabl
 
     @Override
     public String toString() {
-        return "LogEntry(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
+        return "RecordBatch(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
     }
 
     public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
@@ -390,10 +390,9 @@ public class DefaultLogEntry extends AbstractLogEntry implements LogEntry.Mutabl
     }
 
     /**
-     * Get an upper bound on the size of a log entry with only a single record using a given
-     * key and value.
+     * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
-    public static int entrySizeUpperBound(byte[] key, byte[] value) {
+    static int batchSizeUpperBound(byte[] key, byte[] value) {
         return LOG_ENTRY_OVERHEAD + DefaultLogRecord.recordSizeUpperBound(key, value);
     }
 

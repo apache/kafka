@@ -48,14 +48,14 @@ public class MemoryRecordsTest {
         this.magic = magic;
         this.compression = compression;
         this.firstOffset = firstOffset;
-        if (magic >= LogEntry.MAGIC_VALUE_V2) {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             pid = 134234L;
             epoch = 28;
             firstSequence = 777;
         } else {
-            pid = LogEntry.NO_PID;
-            epoch = LogEntry.NO_EPOCH;
-            firstSequence = LogEntry.NO_SEQUENCE;
+            pid = RecordBatch.NO_PID;
+            epoch = RecordBatch.NO_EPOCH;
+            firstSequence = RecordBatch.NO_SEQUENCE;
         }
     }
 
@@ -78,46 +78,46 @@ public class MemoryRecordsTest {
         MemoryRecords memoryRecords = builder.build();
         for (int iteration = 0; iteration < 2; iteration++) {
             int total = 0;
-            for (LogEntry entry : memoryRecords.entries()) {
-                assertTrue(entry.isValid());
-                assertEquals(compression, entry.compressionType());
-                assertEquals(firstOffset + total, entry.baseOffset());
+            for (RecordBatch batch : memoryRecords.batches()) {
+                assertTrue(batch.isValid());
+                assertEquals(compression, batch.compressionType());
+                assertEquals(firstOffset + total, batch.baseOffset());
 
-                if (magic >= LogEntry.MAGIC_VALUE_V2) {
-                    assertEquals(pid, entry.pid());
-                    assertEquals(epoch, entry.epoch());
-                    assertEquals(firstSequence + total, entry.baseSequence());
-                    assertEquals(partitionLeaderEpoch, entry.partitionLeaderEpoch());
+                if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+                    assertEquals(pid, batch.pid());
+                    assertEquals(epoch, batch.epoch());
+                    assertEquals(firstSequence + total, batch.baseSequence());
+                    assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
                 } else {
-                    assertEquals(LogEntry.NO_PID, entry.pid());
-                    assertEquals(LogEntry.NO_EPOCH, entry.epoch());
-                    assertEquals(LogEntry.NO_SEQUENCE, entry.baseSequence());
-                    assertEquals(LogEntry.UNKNOWN_PARTITION_LEADER_EPOCH, entry.partitionLeaderEpoch());
+                    assertEquals(RecordBatch.NO_PID, batch.pid());
+                    assertEquals(RecordBatch.NO_EPOCH, batch.epoch());
+                    assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
+                    assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                 }
 
                 int records = 0;
-                for (Record record : entry) {
+                for (Record record : batch) {
                     assertTrue(record.isValid());
-                    assertTrue(record.hasMagic(entry.magic()));
+                    assertTrue(record.hasMagic(batch.magic()));
                     assertFalse(record.isCompressed());
                     assertEquals(firstOffset + total, record.offset());
                     assertEquals(wrapNullable(keys[total]), record.key());
                     assertEquals(wrapNullable(values[total]), record.value());
 
-                    if (magic >= LogEntry.MAGIC_VALUE_V2)
+                    if (magic >= RecordBatch.MAGIC_VALUE_V2)
                         assertEquals(firstSequence + total, record.sequence());
 
-                    if (magic > LogEntry.MAGIC_VALUE_V0) {
+                    if (magic > RecordBatch.MAGIC_VALUE_V0) {
                         assertEquals(timestamps[total], record.timestamp());
-                        if (magic < LogEntry.MAGIC_VALUE_V2)
-                            assertTrue(record.hasTimestampType(entry.timestampType()));
+                        if (magic < RecordBatch.MAGIC_VALUE_V2)
+                            assertTrue(record.hasTimestampType(batch.timestampType()));
                     }
 
                     total++;
                     records++;
                 }
 
-                assertEquals(entry.baseOffset() + records - 1, entry.lastOffset());
+                assertEquals(batch.baseOffset() + records - 1, batch.lastOffset());
             }
         }
     }
@@ -175,14 +175,14 @@ public class MemoryRecordsTest {
 
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-        List<LogEntry.MutableLogEntry> shallowEntries = TestUtils.toList(filteredRecords.entries());
+        List<RecordBatch.MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
         final List<Long> expectedEndOffsets;
         final List<Long> expectedStartOffsets;
 
-        if (magic < LogEntry.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
             expectedEndOffsets = asList(1L, 4L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 5L, 6L);
-        } else if (magic < LogEntry.MAGIC_VALUE_V2) {
+        } else if (magic < RecordBatch.MAGIC_VALUE_V2) {
             expectedEndOffsets = asList(1L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 6L);
         } else {
@@ -190,15 +190,15 @@ public class MemoryRecordsTest {
             expectedStartOffsets = asList(1L, 3L, 6L);
         }
 
-        assertEquals(expectedEndOffsets.size(), shallowEntries.size());
+        assertEquals(expectedEndOffsets.size(), shallowBatches.size());
 
         for (int i = 0; i < expectedEndOffsets.size(); i++) {
-            LogEntry shallowEntry = shallowEntries.get(i);
+            RecordBatch shallowEntry = shallowBatches.get(i);
             assertEquals(expectedStartOffsets.get(i).longValue(), shallowEntry.baseOffset());
             assertEquals(expectedEndOffsets.get(i).longValue(), shallowEntry.lastOffset());
             assertEquals(magic, shallowEntry.magic());
             assertEquals(compression, shallowEntry.compressionType());
-            assertEquals(magic == LogEntry.MAGIC_VALUE_V0 ? TimestampType.NO_TIMESTAMP_TYPE : TimestampType.CREATE_TIME,
+            assertEquals(magic == RecordBatch.MAGIC_VALUE_V0 ? TimestampType.NO_TIMESTAMP_TYPE : TimestampType.CREATE_TIME,
                     shallowEntry.timestampType());
         }
 
@@ -207,28 +207,28 @@ public class MemoryRecordsTest {
 
         Record first = records.get(0);
         assertEquals(1L, first.offset());
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(11L, first.timestamp());
         assertEquals(ByteBuffer.wrap("1".getBytes()), first.key());
         assertEquals(ByteBuffer.wrap("b".getBytes()), first.value());
 
         Record second = records.get(1);
         assertEquals(4L, second.offset());
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(20L, second.timestamp());
         assertEquals(ByteBuffer.wrap("4".getBytes()), second.key());
         assertEquals(ByteBuffer.wrap("e".getBytes()), second.value());
 
         Record third = records.get(2);
         assertEquals(5L, third.offset());
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(15L, third.timestamp());
         assertEquals(ByteBuffer.wrap("5".getBytes()), third.key());
         assertEquals(ByteBuffer.wrap("f".getBytes()), third.value());
 
         Record fourth = records.get(3);
         assertEquals(6L, fourth.offset());
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(16L, fourth.timestamp());
         assertEquals(ByteBuffer.wrap("6".getBytes()), fourth.key());
         assertEquals(ByteBuffer.wrap("g".getBytes()), fourth.value());
@@ -265,12 +265,12 @@ public class MemoryRecordsTest {
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-        List<LogEntry.MutableLogEntry> shallowEntries = TestUtils.toList(filteredRecords.entries());
-        assertEquals(magic < LogEntry.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, shallowEntries.size());
+        List<RecordBatch.MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
+        assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, shallowBatches.size());
 
-        for (LogEntry shallowEntry : shallowEntries) {
+        for (RecordBatch shallowEntry : shallowBatches) {
             assertEquals(compression, shallowEntry.compressionType());
-            if (magic > LogEntry.MAGIC_VALUE_V0) {
+            if (magic > RecordBatch.MAGIC_VALUE_V0) {
                 assertEquals(TimestampType.LOG_APPEND_TIME, shallowEntry.timestampType());
                 assertEquals(logAppendTime, shallowEntry.maxTimestamp());
             }
@@ -281,13 +281,13 @@ public class MemoryRecordsTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (long firstOffset : asList(0L, 57L))
-            for (byte magic : asList(LogEntry.MAGIC_VALUE_V0, LogEntry.MAGIC_VALUE_V1, LogEntry.MAGIC_VALUE_V2))
+            for (byte magic : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2))
                 for (CompressionType type: CompressionType.values())
                     values.add(new Object[] {magic, firstOffset, type});
         return values;
     }
 
-    private static class RetainNonNullKeysFilter implements MemoryRecords.LogRecordFilter {
+    private static class RetainNonNullKeysFilter implements MemoryRecords.RecordFilter {
         @Override
         public boolean shouldRetain(Record record) {
             return record.hasKey();

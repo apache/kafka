@@ -17,7 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.Test;
 
@@ -30,17 +30,17 @@ public class ApiVersionsTest {
     @Test
     public void testMaxUsableProduceMagic() {
         ApiVersions apiVersions = new ApiVersions();
-        assertEquals(LogEntry.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
 
         apiVersions.update("0", NodeApiVersions.create());
-        assertEquals(LogEntry.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
 
         apiVersions.update("1", NodeApiVersions.create(Collections.singleton(
                 new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
-        assertEquals(LogEntry.MAGIC_VALUE_V1, apiVersions.maxUsableProduceMagic());
+        assertEquals(RecordBatch.MAGIC_VALUE_V1, apiVersions.maxUsableProduceMagic());
 
         apiVersions.remove("1");
-        assertEquals(LogEntry.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
     }
 
 }

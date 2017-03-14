@@ -59,14 +59,14 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
     log.append(MemoryRecords.withRecords(CompressionType.forId(messageCompressionCode.codec),
       new KafkaRecord("hello".getBytes), new KafkaRecord("there".getBytes)))
 
-    def readEntry(offset: Int) = log.read(offset, 4096).records.entries.iterator.next()
+    def readBatch(offset: Int) = log.read(offset, 4096).records.batches.iterator.next()
 
     if (!brokerCompression.equals("producer")) {
       val brokerCompressionCode = BrokerCompressionCodec.getCompressionCodec(brokerCompression)
-      assertEquals("Compression at offset 0 should produce " + brokerCompressionCode.name, brokerCompressionCode.codec, readEntry(0).compressionType.id)
+      assertEquals("Compression at offset 0 should produce " + brokerCompressionCode.name, brokerCompressionCode.codec, readBatch(0).compressionType.id)
     }
     else
-      assertEquals("Compression at offset 0 should produce " + messageCompressionCode.name, messageCompressionCode.codec, readEntry(0).compressionType.id)
+      assertEquals("Compression at offset 0 should produce " + messageCompressionCode.name, messageCompressionCode.codec, readBatch(0).compressionType.id)
   }
 
 }

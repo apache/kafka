@@ -28,7 +28,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
 /**
  * This class is used to write new log data in memory, i.e. this is the write path for {@link MemoryRecords}.
- * It transparently handles compression and exposes methods for appending new entries, possibly with message
+ * It transparently handles compression and exposes methods for appending new records, possibly with message
  * format conversion.
  */
 public class MemoryRecordsBuilder {
@@ -67,7 +67,7 @@ public class MemoryRecordsBuilder {
     private long writtenUncompressed = 0;
     private long numRecords = 0;
     private float compressionRate = 1;
-    private long maxTimestamp = LogEntry.NO_TIMESTAMP;
+    private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
     private long lastOffset = -1;
     private Long baseTimestamp = null;
@@ -104,25 +104,25 @@ public class MemoryRecordsBuilder {
                                 boolean isTransactional,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
-        if (magic > LogEntry.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+        if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
 
         if (isTransactional) {
-            if (pid == LogEntry.NO_PID)
+            if (pid == RecordBatch.NO_PID)
                 throw new IllegalArgumentException("Cannot write transactional messages without a valid PID");
 
-            if (magic < LogEntry.MAGIC_VALUE_V2)
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
         }
 
-        if (pid != LogEntry.NO_PID) {
+        if (pid != RecordBatch.NO_PID) {
             if (epoch  < 0)
                 throw new IllegalArgumentException("Invalid negative epoch number");
 
             if (baseSequence < 0)
                  throw new IllegalArgumentException("Invalid negative sequence number used");
 
-            if (magic < LogEntry.MAGIC_VALUE_V2)
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
         }
 
@@ -135,7 +135,7 @@ public class MemoryRecordsBuilder {
         this.numRecords = 0;
         this.writtenUncompressed = 0;
         this.compressionRate = 1;
-        this.maxTimestamp = LogEntry.NO_TIMESTAMP;
+        this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
         this.pid = pid;
         this.epoch = epoch;
         this.baseSequence = baseSequence;
@@ -144,8 +144,8 @@ public class MemoryRecordsBuilder {
         this.writeLimit = writeLimit;
         this.initialCapacity = buffer.capacity();
 
-        if (magic > LogEntry.MAGIC_VALUE_V1) {
-            buffer.position(initPos + DefaultLogEntry.RECORDS_OFFSET);
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            buffer.position(initPos + DefaultRecordBatch.RECORDS_OFFSET);
         } else if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
             // and move the starting position to the value payload offset
@@ -187,8 +187,8 @@ public class MemoryRecordsBuilder {
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             return new RecordsInfo(logAppendTime,  lastOffset);
-        else if (maxTimestamp == LogEntry.NO_TIMESTAMP)
-            return new RecordsInfo(LogEntry.NO_TIMESTAMP, lastOffset);
+        else if (maxTimestamp == RecordBatch.NO_TIMESTAMP)
+            return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         else
             return new RecordsInfo(maxTimestamp, compressionType == CompressionType.NONE ? offsetOfMaxTimestamp : lastOffset);
     }
@@ -236,7 +236,7 @@ public class MemoryRecordsBuilder {
             maxTimestamp = this.maxTimestamp;
         }
 
-        DefaultLogEntry.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
+        DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
                 baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional, partitionLeaderEpoch);
 
         buffer.position(pos);
@@ -249,7 +249,7 @@ public class MemoryRecordsBuilder {
 
         int wrapperSize = pos - initPos - Records.LOG_OVERHEAD;
         int writtenCompressed = wrapperSize - LegacyRecord.recordOverhead(magic);
-        LegacyLogEntry.writeHeader(buffer, lastOffset, wrapperSize);
+        LegacyRecordBatch.writeHeader(buffer, lastOffset, wrapperSize);
 
         long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
         LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
@@ -275,16 +275,16 @@ public class MemoryRecordsBuilder {
             if (lastOffset >= 0 && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
 
-            if (timestamp < 0 && timestamp != LogEntry.NO_TIMESTAMP)
+            if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
 
-            if (isControlRecord && magic < LogEntry.MAGIC_VALUE_V2)
+            if (isControlRecord && magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Magic v" + magic + " does not support control records");
 
             if (baseTimestamp == null)
                 baseTimestamp = timestamp;
 
-            if (magic > LogEntry.MAGIC_VALUE_V1)
+            if (magic > RecordBatch.MAGIC_VALUE_V1)
                 return appendEosLogRecord(offset, isControlRecord, timestamp, key, value);
             else
                 return appendOldLogRecord(offset, timestamp, key, value);
@@ -311,7 +311,7 @@ public class MemoryRecordsBuilder {
             timestamp = logAppendTime;
 
         int size = LegacyRecord.recordSize(magic, key, value);
-        LegacyLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
+        LegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
 
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
@@ -364,7 +364,7 @@ public class MemoryRecordsBuilder {
     public void appendUncheckedWithOffset(long offset, LegacyRecord record) {
         try {
             int size = record.sizeInBytes();
-            LegacyLogEntry.writeHeader(appendStream, toInnerOffset(offset), size);
+            LegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
 
             ByteBuffer buffer = record.buffer().duplicate();
             appendStream.write(buffer.array(), buffer.arrayOffset(), buffer.limit());
@@ -376,8 +376,8 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     *
-     * @param record
+     * Append a record at the next sequential offset.
+     * @param record the record to add
      */
     public void append(Record record) {
         appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value());
@@ -385,8 +385,8 @@ public class MemoryRecordsBuilder {
 
     /**
      * Append a log record using a different offset
-     * @param offset
-     * @param record
+     * @param offset The offset of the record
+     * @param record The record to add
      */
     public void appendWithOffset(long offset, Record record) {
         appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value());
@@ -394,7 +394,7 @@ public class MemoryRecordsBuilder {
 
     /**
      * Add a record with a given offset. The record must have a magic which matches the magic use to
-     * construct this builder and the offset must be greater than the last appended entry.
+     * construct this builder and the offset must be greater than the last appended record.
      * @param offset The offset of the record
      * @param record The record to add
      */
@@ -402,7 +402,8 @@ public class MemoryRecordsBuilder {
         if (record.magic() != magic)
             throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
         if (lastOffset >= 0 && offset <= lastOffset)
-            throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
+            throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
+                    "(Offsets must increase monotonically).", offset, lastOffset));
         appendUncheckedWithOffset(offset, record);
     }
 
@@ -427,7 +428,7 @@ public class MemoryRecordsBuilder {
         writtenUncompressed += size;
         lastOffset = offset;
 
-        if (magic > LogEntry.MAGIC_VALUE_V0 && timestamp > maxTimestamp) {
+        if (magic > RecordBatch.MAGIC_VALUE_V0 && timestamp > maxTimestamp) {
             maxTimestamp = timestamp;
             offsetOfMaxTimestamp = offset;
         }
@@ -463,7 +464,7 @@ public class MemoryRecordsBuilder {
             return false;
 
         final int recordSize;
-        if (magic < LogEntry.MAGIC_VALUE_V2) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
             int nextOffsetDelta = (int) (lastOffset + 1 - baseOffset);

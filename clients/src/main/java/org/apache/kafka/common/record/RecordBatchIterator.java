@@ -16,16 +16,28 @@
  */
 package org.apache.kafka.common.record;
 
-abstract class AbstractLogEntry implements LogEntry {
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.AbstractIterator;
 
-    @Override
-    public long nextOffset() {
-        return lastOffset() + 1;
+import java.io.IOException;
+
+class RecordBatchIterator<T extends RecordBatch> extends AbstractIterator<T> {
+
+    private final LogInputStream<T> logInputStream;
+
+    RecordBatchIterator(LogInputStream<T> logInputStream) {
+        this.logInputStream = logInputStream;
     }
 
     @Override
-    public boolean isCompressed() {
-        return compressionType() != CompressionType.NONE;
+    protected T makeNext() {
+        try {
+            T batch = logInputStream.nextBatch();
+            if (batch == null)
+                return allDone();
+            return batch;
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
     }
-
 }

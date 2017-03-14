@@ -38,7 +38,7 @@ public class FileLogInputStreamTest {
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), Integer.MAX_VALUE, 0,
                     fileRecords.sizeInBytes());
 
-            FileLogInputStream.FileChannelLogEntry entry = logInputStream.nextEntry();
+            FileLogInputStream.FileChannelRecordBatch entry = logInputStream.nextBatch();
             assertNotNull(entry);
 
             ByteBuffer buffer = ByteBuffer.allocate(128);

@@ -20,20 +20,20 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries
- * (see {@link LogEntry}).
+ * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
+ * batches (see {@link RecordBatch}).
  *
- * For magic versions 1 and below, each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow"
- * {@link Record record}. If the entry is not compressed, then each entry will have only the shallow record contained
- * inside it. If it is compressed, the entry contains "deep" records, which are packed into the value field of the
- * shallow record. To iterate over the shallow entries, use {@link #entries()}; for the deep records, use
- * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed entries: if the entry is
- * not compressed, the shallow record is returned; otherwise, the shallow record is decompressed and the deep entries
+ * For magic versions 1 and below, each batch consists of an 8 byte offset, a 4 byte record size, and a "shallow"
+ * {@link Record record}. If the batch is not compressed, then each batch will have only the shallow record contained
+ * inside it. If it is compressed, the batch contains "deep" records, which are packed into the value field of the
+ * shallow record. To iterate over the shallow batches, use {@link #batches()}; for the deep records, use
+ * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed batches: if the batch is
+ * not compressed, the shallow record is returned; otherwise, the shallow batch is decompressed and the deep records
  * are returned.
  *
- * For magic version 2, every log entry contains 1 or more log record, regardless of compression. You can iterate
- * over the entries directly using {@link #entries()}. Records can be iterated either directly from an individual
- * entry or through {@link #records()}. Just as in previous versions, iterating over the records typically involves
+ * For magic version 2, every batch contains 1 or more log record, regardless of compression. You can iterate
+ * over the batches directly using {@link #batches()}. Records can be iterated either directly from an individual
+ * batch or through {@link #records()}. Just as in previous versions, iterating over the records typically involves
  * decompression and should therefore be used with caution.
  *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
@@ -63,39 +63,40 @@ public interface Records {
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
     /**
-     * Get the shallow log entries in this log buffer. Note that the signature allows subclasses
-     * to return a more specific log entry type. This enables optimizations such as in-place offset
-     * assignment (see for example {@link DefaultLogEntry}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelLogEntry#magic()}.
-     * @return An iterator over the shallow entries of the log
+     * Get the record batches. Note that the signature allows subclasses
+     * to return a more specific batch type. This enables optimizations such as in-place offset
+     * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
+     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
+     * @return An iterator over the record batches of the log
      */
-    Iterable<? extends LogEntry> entries();
+    Iterable<? extends RecordBatch> batches();
 
     /**
-     * Check whether all shallow entries in this buffer have a certain magic value.
+     * Check whether all batches in this buffer have a certain magic value.
      * @param magic The magic value to check
-     * @return true if all shallow entries have a matching magic value, false otherwise
+     * @return true if all record batches have a matching magic value, false otherwise
      */
     boolean hasMatchingMagic(byte magic);
 
     /**
      * Check whether this log buffer has a magic value compatible with a particular value
-     * (i.e. whether all message sets contained in the buffer have a lower magic)
-     * @param magic
-     * @return
+     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
+     * @param magic The magic version to ensure compatibility with
+     * @return true if all batches have compatible magic, false otherwise
      */
     boolean hasCompatibleMagic(byte magic);
 
     /**
-     * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
+     * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
-     * @return A Records (which may or may not be the same instance)
+     * @return A Records instance (which may or may not be the same instance)
      */
     Records downConvert(byte toMagic);
 
     /**
-     * Get an iterator over the records in this log (i.e. the "deep" entries)
+     * Get an iterator over the records in this log. Note that this generally requires decompression,
+     * and should therefore be used with care.
      * @return The record iterator
      */
     Iterable<Record> records();

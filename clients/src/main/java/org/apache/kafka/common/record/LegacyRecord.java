@@ -32,7 +32,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * This class represents the serialized key and value along with the associated CRC and other fields
  * of message format versions 0 and 1. Note that it is uncommon to need to access this class directly.
  * Usually it should be accessed indirectly through the {@link Record} interface which is exposed
- * through the {@link Records} object
+ * through the {@link Records} object.
  */
 public final class LegacyRecord {
 
@@ -158,7 +158,7 @@ public final class LegacyRecord {
      * @return the size in bytes of the key (0 if the key is null)
      */
     public int keySize() {
-        if (magic() == LogEntry.MAGIC_VALUE_V0)
+        if (magic() == RecordBatch.MAGIC_VALUE_V0)
             return buffer.getInt(KEY_SIZE_OFFSET_V0);
         else
             return buffer.getInt(KEY_SIZE_OFFSET_V1);
@@ -176,7 +176,7 @@ public final class LegacyRecord {
      * The position where the value size is stored
      */
     private int valueSizeOffset() {
-        if (magic() == LogEntry.MAGIC_VALUE_V0)
+        if (magic() == RecordBatch.MAGIC_VALUE_V0)
             return KEY_OFFSET_V0 + Math.max(0, keySize());
         else
             return KEY_OFFSET_V1 + Math.max(0, keySize());
@@ -223,8 +223,8 @@ public final class LegacyRecord {
      * @return the timestamp as determined above
      */
     public long timestamp() {
-        if (magic() == LogEntry.MAGIC_VALUE_V0)
-            return LogEntry.NO_TIMESTAMP;
+        if (magic() == RecordBatch.MAGIC_VALUE_V0)
+            return RecordBatch.NO_TIMESTAMP;
         else {
             // case 2
             if (wrapperRecordTimestampType == TimestampType.LOG_APPEND_TIME && wrapperRecordTimestamp != null)
@@ -267,7 +267,7 @@ public final class LegacyRecord {
      * @return the buffer or null if the key for this record is null
      */
     public ByteBuffer key() {
-        if (magic() == LogEntry.MAGIC_VALUE_V0)
+        if (magic() == RecordBatch.MAGIC_VALUE_V0)
             return Utils.sizeDelimited(buffer, KEY_SIZE_OFFSET_V0);
         else
             return Utils.sizeDelimited(buffer, KEY_SIZE_OFFSET_V1);
@@ -342,7 +342,7 @@ public final class LegacyRecord {
             return this;
 
         final TimestampType timestampType;
-        if (magic == LogEntry.MAGIC_VALUE_V0) {
+        if (magic == RecordBatch.MAGIC_VALUE_V0) {
             if (upconvertTimestampType == TimestampType.NO_TIMESTAMP_TYPE)
                 throw new IllegalArgumentException("Cannot up-convert using timestamp type " + upconvertTimestampType);
             timestampType = upconvertTimestampType;
@@ -390,7 +390,7 @@ public final class LegacyRecord {
     }
 
     public static LegacyRecord create(long timestamp, byte[] key, byte[] value) {
-        return create(LogEntry.MAGIC_VALUE_V1, timestamp, key, value, CompressionType.NONE, TimestampType.CREATE_TIME);
+        return create(RecordBatch.MAGIC_VALUE_V1, timestamp, key, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }
 
     public static LegacyRecord create(byte magic, long timestamp, byte[] key, byte[] value) {
@@ -406,15 +406,15 @@ public final class LegacyRecord {
     }
 
     public static LegacyRecord create(byte magic, byte[] key, byte[] value) {
-        return create(magic, LogEntry.NO_TIMESTAMP, key, value);
+        return create(magic, RecordBatch.NO_TIMESTAMP, key, value);
     }
 
     public static LegacyRecord create(byte[] key, byte[] value) {
-        return create(LogEntry.NO_TIMESTAMP, key, value);
+        return create(RecordBatch.NO_TIMESTAMP, key, value);
     }
 
     public static LegacyRecord create(byte[] value) {
-        return create(LogEntry.MAGIC_VALUE_V1, LogEntry.NO_TIMESTAMP, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
+        return create(RecordBatch.MAGIC_VALUE_V1, RecordBatch.NO_TIMESTAMP, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }
 
     /**
@@ -522,9 +522,9 @@ public final class LegacyRecord {
                               long timestamp,
                               ByteBuffer key,
                               ByteBuffer value) throws IOException {
-        if (magic != LogEntry.MAGIC_VALUE_V0 && magic != LogEntry.MAGIC_VALUE_V1)
+        if (magic != RecordBatch.MAGIC_VALUE_V0 && magic != RecordBatch.MAGIC_VALUE_V1)
             throw new IllegalArgumentException("Invalid magic value " + magic);
-        if (timestamp < 0 && timestamp != LogEntry.NO_TIMESTAMP)
+        if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + timestamp);
 
         // write crc
@@ -535,7 +535,7 @@ public final class LegacyRecord {
         out.writeByte(attributes);
 
         // maybe write timestamp
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             out.writeLong(timestamp);
 
         // write the key
@@ -557,7 +557,7 @@ public final class LegacyRecord {
     }
 
     public static int recordSize(byte[] key, byte[] value) {
-        return recordSize(LogEntry.CURRENT_MAGIC_VALUE, key, value);
+        return recordSize(RecordBatch.CURRENT_MAGIC_VALUE, key, value);
     }
 
     public static int recordSize(byte magic, byte[] key, byte[] value) {
@@ -577,7 +577,7 @@ public final class LegacyRecord {
         byte attributes = 0;
         if (type.id > 0)
             attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             return timestampType.updateAttributes(attributes);
         return attributes;
     }
@@ -594,7 +594,7 @@ public final class LegacyRecord {
         Crc32 crc = new Crc32();
         crc.update(magic);
         crc.update(attributes);
-        if (magic > LogEntry.MAGIC_VALUE_V0)
+        if (magic > RecordBatch.MAGIC_VALUE_V0)
             crc.updateLong(timestamp);
         // update for the key
         if (key == null) {

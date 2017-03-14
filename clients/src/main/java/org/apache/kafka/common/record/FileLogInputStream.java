@@ -30,7 +30,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 /**
  * A log input stream which is backed by a {@link FileChannel}.
  */
-public class FileLogInputStream implements LogInputStream<FileLogInputStream.FileChannelLogEntry> {
+public class FileLogInputStream implements LogInputStream<FileLogInputStream.FileChannelRecordBatch> {
     private int position;
     private final int end;
     private final FileChannel channel;
@@ -55,7 +55,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     }
 
     @Override
-    public FileChannelLogEntry nextEntry() throws IOException {
+    public FileChannelRecordBatch nextBatch() throws IOException {
         if (position + LOG_OVERHEAD >= end)
             return null;
 
@@ -75,7 +75,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (position + LOG_OVERHEAD + size > end)
             return null;
 
-        FileChannelLogEntry logEntry = new FileChannelLogEntry(offset, channel, position, size);
+        FileChannelRecordBatch logEntry = new FileChannelRecordBatch(offset, channel, position, size);
         position += logEntry.sizeInBytes();
         return logEntry;
     }
@@ -85,17 +85,17 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      * entries without needing to read the record data into memory until it is needed. The downside
      * is that entries will generally no longer be readable when the underlying channel is closed.
      */
-    public static class FileChannelLogEntry extends AbstractLogEntry {
+    public static class FileChannelRecordBatch extends AbstractRecordBatch {
         private final long offset;
         private final FileChannel channel;
         private final int position;
         private final int entrySize;
-        private LogEntry underlying;
+        private RecordBatch underlying;
 
-        private FileChannelLogEntry(long offset,
-                                    FileChannel channel,
-                                    int position,
-                                    int entrySize) {
+        private FileChannelRecordBatch(long offset,
+                                       FileChannel channel,
+                                       int position,
+                                       int entrySize) {
             this.offset = offset;
             this.channel = channel;
             this.position = position;
@@ -104,7 +104,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public long baseOffset() {
-            if (magic() >= LogEntry.MAGIC_VALUE_V2)
+            if (magic() >= RecordBatch.MAGIC_VALUE_V2)
                 return offset;
 
             loadUnderlyingEntry();
@@ -131,18 +131,18 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public long lastOffset() {
-            if (magic() < LogEntry.MAGIC_VALUE_V2)
+            if (magic() < RecordBatch.MAGIC_VALUE_V2)
                 return offset;
             else if (underlying != null)
                 return underlying.lastOffset();
 
             try {
-                // FIXME: This logic probably should be moved into DefaultLogEntry somehow
+                // FIXME: This logic probably should be moved into DefaultRecordBatch somehow
                 // maybe we just need two separate implementations
 
                 byte[] offsetDelta = new byte[4];
                 ByteBuffer buf = ByteBuffer.wrap(offsetDelta);
-                channel.read(buf, position + DefaultLogEntry.LAST_OFFSET_DELTA_OFFSET);
+                channel.read(buf, position + DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET);
                 if (buf.hasRemaining())
                     throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
                 return offset + buf.getInt(0);
@@ -204,10 +204,10 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 entryBuffer.rewind();
 
                 byte magic = entryBuffer.get(LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET);
-                if (magic > LogEntry.MAGIC_VALUE_V1)
-                    underlying = new DefaultLogEntry(entryBuffer);
+                if (magic > RecordBatch.MAGIC_VALUE_V1)
+                    underlying = new DefaultRecordBatch(entryBuffer);
                 else
-                    underlying = new LegacyLogEntry.ByteBufferLegacyLogEntry(entryBuffer);
+                    underlying = new LegacyRecordBatch.ByteBufferLegacyRecordBatch(entryBuffer);
             } catch (IOException e) {
                 throw new KafkaException("Failed to load log entry at position " + position + " from file channel " + channel);
             }
@@ -272,7 +272,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            FileChannelLogEntry that = (FileChannelLogEntry) o;
+            FileChannelRecordBatch that = (FileChannelRecordBatch) o;
 
             if (offset != that.offset) return false;
             if (position != that.position) return false;

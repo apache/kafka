@@ -68,7 +68,7 @@ public class LegacyRecordTest {
             assertEquals(timestamp, record.timestamp());
             assertEquals(timestampType, record.timestampType());
         } else {
-            assertEquals(LogEntry.NO_TIMESTAMP, record.timestamp());
+            assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
             assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
         }
     }
@@ -117,8 +117,8 @@ public class LegacyRecordTest {
         byte[] payload = new byte[1000];
         Arrays.fill(payload, (byte) 1);
         List<Object[]> values = new ArrayList<>();
-        for (byte magic : Arrays.asList(LogEntry.MAGIC_VALUE_V0, LogEntry.MAGIC_VALUE_V1))
-            for (long timestamp : Arrays.asList(LogEntry.NO_TIMESTAMP, 0L, 1L))
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1))
+            for (long timestamp : Arrays.asList(RecordBatch.NO_TIMESTAMP, 0L, 1L))
                 for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
                     for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
                         for (CompressionType compression : CompressionType.values())

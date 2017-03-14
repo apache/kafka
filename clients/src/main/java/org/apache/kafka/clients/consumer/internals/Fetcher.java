@@ -45,7 +45,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -769,13 +769,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
-                for (LogEntry entry : partition.records.entries()) {
-                    for (Record record : entry) {
+                for (RecordBatch batch : partition.records.batches()) {
+                    for (Record record : batch) {
                         // control records should not be returned to the user. also skip anything out of range
                         if (record.isControlRecord() || record.offset() < position) {
                             skippedRecords = true;
                         } else {
-                            parsed.add(parseRecord(tp, entry, record));
+                            parsed.add(parseRecord(tp, batch, record));
                             bytes += record.sizeInBytes();
                         }
                     }
@@ -849,7 +849,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
-                                             LogEntry entry,
+                                             RecordBatch entry,
                                              Record record) {
         if (this.checkCrcs) {
             try {

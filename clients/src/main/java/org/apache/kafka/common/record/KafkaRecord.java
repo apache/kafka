@@ -45,11 +45,11 @@ public class KafkaRecord {
     }
 
     public KafkaRecord(byte[] value) {
-        this(LogEntry.NO_TIMESTAMP, null, value);
+        this(RecordBatch.NO_TIMESTAMP, null, value);
     }
 
     public KafkaRecord(byte[] key, byte[] value) {
-        this(LogEntry.NO_TIMESTAMP, key, value);
+        this(RecordBatch.NO_TIMESTAMP, key, value);
     }
 
     public KafkaRecord(Record record) {

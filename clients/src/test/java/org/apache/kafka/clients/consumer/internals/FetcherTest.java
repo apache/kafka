@@ -42,7 +42,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -259,7 +259,7 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
-        byte magic = LogEntry.MAGIC_VALUE_V1;
+        byte magic = RecordBatch.MAGIC_VALUE_V1;
         byte[] key = "foo".getBytes();
         byte[] value = "baz".getBytes();
         long offset = 0;
@@ -784,7 +784,7 @@ public class FetcherTest {
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
                     TimestampType.CREATE_TIME, 0L);
             for (int v = 0; v < 3; v++)
-                builder.appendWithOffset((long) i * 3 + v, LogEntry.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+                builder.appendWithOffset((long) i * 3 + v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
             List<ConsumerRecord<byte[], byte[]>> records = fetchRecords(builder.build(), Errors.NONE, 100L, 100 * i).get(tp);
             assertEquals(3, records.size());
         }
@@ -824,7 +824,7 @@ public class FetcherTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
-            builder.appendWithOffset((long) v, LogEntry.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+            builder.appendWithOffset((long) v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE, 200L, 0);
         assertEquals(197, recordsFetchLagMax.value(), EPSILON);
 

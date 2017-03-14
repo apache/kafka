@@ -111,18 +111,18 @@ public class FileRecordsTest {
     @Test
     public void testRead() throws IOException {
         FileRecords read = fileRecords.read(0, fileRecords.sizeInBytes());
-        TestUtils.checkEquals(fileRecords.entries(), read.entries());
+        TestUtils.checkEquals(fileRecords.batches(), read.batches());
 
-        List<LogEntry> items = shallowEntries(read);
-        LogEntry second = items.get(1);
+        List<RecordBatch> items = shallowBatches(read);
+        RecordBatch second = items.get(1);
 
         read = fileRecords.read(second.sizeInBytes(), fileRecords.sizeInBytes());
         assertEquals("Try a read starting from the second message",
-                items.subList(1, 3), shallowEntries(read));
+                items.subList(1, 3), shallowBatches(read));
 
         read = fileRecords.read(second.sizeInBytes(), second.sizeInBytes());
         assertEquals("Try a read of a single message starting from the second message",
-                Collections.singletonList(second), shallowEntries(read));
+                Collections.singletonList(second), shallowBatches(read));
     }
 
     /**
@@ -134,7 +134,7 @@ public class FileRecordsTest {
         KafkaRecord lastMessage = new KafkaRecord("test".getBytes());
         fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
-        List<LogEntry> entries = shallowEntries(fileRecords);
+        List<RecordBatch> entries = shallowBatches(fileRecords);
         int position = 0;
 
         int message1Size = entries.get(0).sizeInBytes();
@@ -166,13 +166,13 @@ public class FileRecordsTest {
      */
     @Test
     public void testIteratorWithLimits() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(1);
+        RecordBatch entry = shallowBatches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
-        assertEquals(Collections.singletonList(entry), shallowEntries(slice));
+        assertEquals(Collections.singletonList(entry), shallowBatches(slice));
         FileRecords slice2 = fileRecords.read(start, size - 1);
-        assertEquals(Collections.emptyList(), shallowEntries(slice2));
+        assertEquals(Collections.emptyList(), shallowBatches(slice2));
     }
 
     /**
@@ -180,10 +180,10 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncate() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(0);
+        RecordBatch entry = shallowBatches(fileRecords).get(0);
         int end = fileRecords.searchForOffsetWithSize(1, 0).position;
         fileRecords.truncateTo(end);
-        assertEquals(Collections.singletonList(entry), shallowEntries(fileRecords));
+        assertEquals(Collections.singletonList(entry), shallowBatches(fileRecords));
         assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
     }
 
@@ -304,12 +304,12 @@ public class FileRecordsTest {
 
     @Test
     public void testFormatConversionWithPartialMessage() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(1);
+        RecordBatch entry = shallowBatches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.downConvert(LogEntry.MAGIC_VALUE_V0);
-        assertTrue("No message should be there", shallowEntries(messageV0).isEmpty());
+        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0);
+        assertTrue("No message should be there", shallowBatches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
 
@@ -321,7 +321,7 @@ public class FileRecordsTest {
                 new KafkaRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 0; i < offsets.size(); i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
@@ -330,8 +330,8 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(builder.build());
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(LogEntry.MAGIC_VALUE_V0);
-            verifyConvertedMessageSet(records, offsets, convertedRecords, LogEntry.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.downConvert(RecordBatch.MAGIC_VALUE_V0);
+            verifyConvertedMessageSet(records, offsets, convertedRecords, RecordBatch.MAGIC_VALUE_V0);
         }
     }
 
@@ -343,7 +343,7 @@ public class FileRecordsTest {
                 new KafkaRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.GZIP,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 0; i < offsets.size(); i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
@@ -352,8 +352,8 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(builder.build());
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(LogEntry.MAGIC_VALUE_V0);
-            verifyConvertedMessageSet(records, offsets, convertedRecords, LogEntry.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.downConvert(RecordBatch.MAGIC_VALUE_V0);
+            verifyConvertedMessageSet(records, offsets, convertedRecords, RecordBatch.MAGIC_VALUE_V0);
         }
     }
 
@@ -362,9 +362,9 @@ public class FileRecordsTest {
                                            Records convertedRecords,
                                            byte magicByte) {
         int i = 0;
-        for (LogEntry entry : convertedRecords.entries()) {
-            assertEquals("magic byte should be " + magicByte, magicByte, entry.magic());
-            for (Record record : entry) {
+        for (RecordBatch batch : convertedRecords.batches()) {
+            assertEquals("magic byte should be " + magicByte, magicByte, batch.magic());
+            for (Record record : batch) {
                 assertTrue("Inner record should have magic " + magicByte, record.hasMagic(magicByte));
                 assertEquals("offset should not change", initialOffsets.get(i).longValue(), record.offset());
                 assertEquals("key should not change", initialRecords.get(i).key(), record.key());
@@ -374,8 +374,8 @@ public class FileRecordsTest {
         }
     }
 
-    private static List<LogEntry> shallowEntries(Records buffer) {
-        return TestUtils.toList(buffer.entries());
+    private static List<RecordBatch> shallowBatches(Records buffer) {
+        return TestUtils.toList(buffer.batches());
     }
 
     private FileRecords createFileRecords(byte[][] values) throws IOException {
@@ -388,7 +388,7 @@ public class FileRecordsTest {
         long offset = 0L;
         for (byte[] value : values) {
             ByteBuffer buffer = ByteBuffer.allocate(128);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.CURRENT_MAGIC_VALUE,
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
                     CompressionType.NONE, TimestampType.CREATE_TIME, offset);
             builder.appendWithOffset(offset++, System.currentTimeMillis(), null, value);
             fileRecords.append(builder.build());

@@ -179,15 +179,15 @@ object DumpLogSegments {
       return
     }
 
-    var prevTimestamp = LogEntry.NO_TIMESTAMP
+    var prevTimestamp = RecordBatch.NO_TIMESTAMP
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
       val partialFileRecords = fileRecords.read(position, Int.MaxValue)
-      val shallowEntries = partialFileRecords.entries.asScala
-      var maxTimestamp = LogEntry.NO_TIMESTAMP
+      val shallowBatches = partialFileRecords.batches.asScala
+      var maxTimestamp = RecordBatch.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
-      val maybeLogEntry = shallowEntries.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
+      val maybeLogEntry = shallowBatches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
       maybeLogEntry match {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
@@ -310,7 +310,7 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val entries = messageSet.entries(maxMessageSize).asScala
+    val entries = messageSet.batches(maxMessageSize).asScala
     for (entry <- entries) { // this only does shallow iteration
       if (isDeepIteration) {
         for (record <- entry.asScala) {

@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.KafkaRecord;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
@@ -272,7 +272,7 @@ public class RequestResponseTest {
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, LogEntry.NO_TIMESTAMP));
+                10000, RecordBatch.NO_TIMESTAMP));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
@@ -306,38 +306,38 @@ public class RequestResponseTest {
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(buffer));
-        new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
+        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
     }
 
     @Test(expected = InvalidRecordException.class)
     public void produceRequestV3CannotHaveNoLogEntries() {
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), MemoryRecords.EMPTY);
-        new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
+        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
     }
 
     @Test(expected = InvalidRecordException.class)
     public void produceRequestV3CannotUseMagicV0() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V0, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE,
                 TimestampType.NO_TIMESTAMP_TYPE, 0L);
         builder.append(10L, null, "a".getBytes());
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
-        new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
+        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
     }
 
     @Test(expected = InvalidRecordException.class)
     public void produceRequestV3CannotUseMagicV1() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, LogEntry.MAGIC_VALUE_V1, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
-        new ProduceRequest.Builder(LogEntry.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
+        new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();
     }
 
     @Test
@@ -598,7 +598,7 @@ public class RequestResponseTest {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
 
-        byte magic = version == 2 ? LogEntry.MAGIC_VALUE_V1 : LogEntry.MAGIC_VALUE_V2;
+        byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new KafkaRecord("woot".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
         return new ProduceRequest.Builder(magic, (short) 1, 5000, produceData).build((short) version);
@@ -607,7 +607,7 @@ public class RequestResponseTest {
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, LogEntry.NO_TIMESTAMP));
+                10000, RecordBatch.NO_TIMESTAMP));
         return new ProduceResponse(responseData, 0);
     }
 

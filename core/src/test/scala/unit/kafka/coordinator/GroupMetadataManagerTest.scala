@@ -541,7 +541,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(LogEntry.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -552,9 +552,9 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
-    recordsCapture.getValue.entries.asScala.foreach { entry =>
-      assertEquals(LogEntry.MAGIC_VALUE_V1, entry.magic)
-      assertEquals(TimestampType.CREATE_TIME, entry.timestampType)
+    recordsCapture.getValue.batches.asScala.foreach { batch =>
+      assertEquals(RecordBatch.MAGIC_VALUE_V1, batch.magic)
+      assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
     }
     assertEquals(1, records.size)
 
@@ -588,7 +588,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(LogEntry.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -599,10 +599,10 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
-    recordsCapture.getValue.entries.asScala.foreach { entry =>
-      assertEquals(LogEntry.MAGIC_VALUE_V1, entry.magic)
+    recordsCapture.getValue.batches.asScala.foreach { batch =>
+      assertEquals(RecordBatch.MAGIC_VALUE_V1, batch.magic)
       // Use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
-      assertEquals(TimestampType.CREATE_TIME, entry.timestampType)
+      assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
     }
     assertEquals(1, records.size)
 
@@ -765,10 +765,10 @@ class GroupMetadataManagerTest {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(error, 0L, LogEntry.NO_TIMESTAMP)
+          new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(LogEntry.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
   }
 
   private def buildStableGroupRecordWithMember(memberId: String): KafkaRecord = {

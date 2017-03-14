@@ -24,7 +24,7 @@ import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{LogEntry, _}
+import org.apache.kafka.common.record.{RecordBatch, _}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit._
@@ -55,7 +55,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   @Test
   def cleanerTest() {
     val largeMessageKey = 20
-    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, LogEntry.CURRENT_MAGIC_VALUE)
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
@@ -146,7 +146,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   @Test
   def testCleanerWithMessageFormatV0(): Unit = {
     val largeMessageKey = 20
-    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, LogEntry.MAGIC_VALUE_V0)
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0)
     val maxMessageSize = codec match {
       case CompressionType.NONE => largeMessageSet.sizeInBytes
       case _ =>
@@ -164,7 +164,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
 
-    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V0)
+    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
     val startSize = log.size
     cleaner.startup()
 
@@ -176,14 +176,14 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     checkLogAfterAppendingDups(log, startSize, appends)
 
     val appends2: Seq[(Int, String, Long)] = {
-      val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V0)
+      val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
       val appendInfo = log.append(largeMessageSet, assignOffsets = true)
       val largeMessageOffset = appendInfo.firstOffset
 
       // also add some messages with version 1 to check that we handle mixed format versions correctly
       props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
       log.config = new LogConfig(props)
-      val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V1)
+      val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
       appends ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1
     }
     val firstDirty2 = log.activeSegment.baseOffset
@@ -204,15 +204,15 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     // with compression enabled, these messages will be written as a single message containing
     // all of the individual messages
-    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V0)
-    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V0)
+    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
 
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
     log.config = new LogConfig(props)
 
-    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = LogEntry.MAGIC_VALUE_V1)
+    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
 
     val appends = appendsV0 ++ appendsV1
 
@@ -259,7 +259,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   private def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                        startKey: Int = 0, magicValue: Byte = LogEntry.MAGIC_VALUE_V1): Seq[(Int, String, Long)] = {
+                        startKey: Int = 0, magicValue: Byte = RecordBatch.MAGIC_VALUE_V1): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.append(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
@@ -270,7 +270,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                                        startKey: Int = 0, magicValue: Byte = LogEntry.MAGIC_VALUE_V1): Seq[(Int, String, Long)] = {
+                                        startKey: Int = 0, magicValue: Byte = RecordBatch.MAGIC_VALUE_V1): Seq[(Int, String, Long)] = {
     val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
       counter += 1

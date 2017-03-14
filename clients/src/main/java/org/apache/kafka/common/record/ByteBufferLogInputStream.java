@@ -27,7 +27,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * A byte buffer backed log input stream. This class avoids the need to copy records by returning
  * slices from the underlying byte buffer.
  */
-class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntry> {
+class ByteBufferLogInputStream implements LogInputStream<RecordBatch.MutableRecordBatch> {
     private final ByteBuffer buffer;
     private final int maxMessageSize;
 
@@ -36,7 +36,7 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
         this.maxMessageSize = maxMessageSize;
     }
 
-    public LogEntry.MutableLogEntry nextEntry() throws IOException {
+    public RecordBatch.MutableRecordBatch nextBatch() throws IOException {
         int remaining = buffer.remaining();
         if (remaining < LOG_OVERHEAD)
             return null;
@@ -57,10 +57,10 @@ class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntr
         entrySlice.limit(entrySize);
         buffer.position(buffer.position() + entrySize);
 
-        if (magic > LogEntry.MAGIC_VALUE_V1)
-            return new DefaultLogEntry(entrySlice);
+        if (magic > RecordBatch.MAGIC_VALUE_V1)
+            return new DefaultRecordBatch(entrySlice);
         else
-            return new LegacyLogEntry.ByteBufferLegacyLogEntry(entrySlice);
+            return new LegacyRecordBatch.ByteBufferLegacyRecordBatch(entrySlice);
     }
 
 }
