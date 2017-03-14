@@ -24,35 +24,35 @@ import java.nio.ByteBuffer;
  * High-level representation of a kafka record. This is useful when building record sets to
  * avoid depending on a specific magic version.
  */
-public class KafkaRecord {
+public class SimpleRecord {
 
     private final ByteBuffer key;
     private final ByteBuffer value;
     private final long timestamp;
 
-    public KafkaRecord(long timestamp, ByteBuffer key, ByteBuffer value) {
+    public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value) {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
     }
 
-    public KafkaRecord(long timestamp, byte[] key, byte[] value) {
+    public SimpleRecord(long timestamp, byte[] key, byte[] value) {
         this(timestamp, Utils.wrapNullable(key), Utils.wrapNullable(value));
     }
 
-    public KafkaRecord(long timestamp, byte[] value) {
+    public SimpleRecord(long timestamp, byte[] value) {
         this(timestamp, null, value);
     }
 
-    public KafkaRecord(byte[] value) {
+    public SimpleRecord(byte[] value) {
         this(RecordBatch.NO_TIMESTAMP, null, value);
     }
 
-    public KafkaRecord(byte[] key, byte[] value) {
+    public SimpleRecord(byte[] key, byte[] value) {
         this(RecordBatch.NO_TIMESTAMP, key, value);
     }
 
-    public KafkaRecord(Record record) {
+    public SimpleRecord(Record record) {
         this(record.timestamp(), record.key(), record.value());
     }
 
@@ -73,7 +73,7 @@ public class KafkaRecord {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        KafkaRecord that = (KafkaRecord) o;
+        SimpleRecord that = (SimpleRecord) o;
 
         if (timestamp != that.timestamp) return false;
         if (key != null ? !key.equals(that.key) : that.key != null) return false;

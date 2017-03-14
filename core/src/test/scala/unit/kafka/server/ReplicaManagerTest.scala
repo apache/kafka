@@ -110,7 +110,7 @@ class ReplicaManagerTest {
         requiredAcks = 3,
         internalTopicsAllowed = false,
         entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
-          new KafkaRecord("first message".getBytes))),
+          new SimpleRecord("first message".getBytes))),
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -168,7 +168,7 @@ class ReplicaManagerTest {
         requiredAcks = -1,
         internalTopicsAllowed = false,
         entriesPerPartition = Map(new TopicPartition(topic, 0) -> MemoryRecords.withRecords(CompressionType.NONE,
-          new KafkaRecord("first message".getBytes()))),
+          new SimpleRecord("first message".getBytes()))),
         responseCallback = produceCallback)
 
       // Fetch some messages

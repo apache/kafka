@@ -159,10 +159,10 @@ public abstract class AbstractRecords implements Records {
 
     public static int estimateSizeInBytes(byte magic,
                                           CompressionType compressionType,
-                                          Iterable<KafkaRecord> records) {
+                                          Iterable<SimpleRecord> records) {
         int size = 0;
         if (magic <= RecordBatch.MAGIC_VALUE_V1) {
-            for (KafkaRecord record : records)
+            for (SimpleRecord record : records)
                 size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
         } else {
             size = DefaultRecordBatch.sizeInBytes(records);

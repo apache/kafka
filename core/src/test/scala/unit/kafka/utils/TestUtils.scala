@@ -335,7 +335,7 @@ object TestUtils extends Logging {
               pid: Long = RecordBatch.NO_PID,
               epoch: Short = RecordBatch.NO_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
-    val kafkaRecords = records.map(record => new KafkaRecord(record._3, record._1, record._2))
+    val kafkaRecords = records.map(record => new SimpleRecord(record._3, record._1, record._2))
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(kafkaRecords.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
       System.currentTimeMillis, pid, epoch, sequence)

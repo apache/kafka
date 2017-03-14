@@ -197,6 +197,6 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
   private def logEntries(key: Int, value: Int, timestamp: Long) =
-    MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
+    MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
 
 }

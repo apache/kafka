@@ -32,7 +32,7 @@ public class FileLogInputStreamTest {
     @Test
     public void testWriteTo() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("foo".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("foo".getBytes())));
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), Integer.MAX_VALUE, 0,

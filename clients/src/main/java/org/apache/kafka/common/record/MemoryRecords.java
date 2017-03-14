@@ -319,31 +319,31 @@ public class MemoryRecords extends AbstractRecords {
                 buffer.capacity());
     }
 
-    public static MemoryRecords withRecords(CompressionType compressionType, KafkaRecord ... records) {
+    public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, compressionType, records);
     }
 
-    public static MemoryRecords withRecords(byte magic, CompressionType compressionType, KafkaRecord ... records) {
+    public static MemoryRecords withRecords(byte magic, CompressionType compressionType, SimpleRecord... records) {
         return withRecords(magic, 0L, compressionType, TimestampType.CREATE_TIME, records);
     }
 
     public static MemoryRecords withRecords(byte magic, CompressionType compressionType, TimestampType timestampType,
-                                            KafkaRecord ... records) {
+                                            SimpleRecord... records) {
         return withRecords(magic, 0L, compressionType, timestampType, records);
     }
 
-    public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, KafkaRecord ... records) {
+    public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
-                                            TimestampType timestampType, KafkaRecord ... records) {
+                                            TimestampType timestampType, SimpleRecord... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
         MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset);
-        for (KafkaRecord record : records)
+        for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();
     }

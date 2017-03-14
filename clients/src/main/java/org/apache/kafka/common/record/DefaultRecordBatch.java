@@ -371,8 +371,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         return size;
     }
 
-    public static int sizeInBytes(Iterable<KafkaRecord> records) {
-        Iterator<KafkaRecord> iterator = records.iterator();
+    public static int sizeInBytes(Iterable<SimpleRecord> records) {
+        Iterator<SimpleRecord> iterator = records.iterator();
         if (!iterator.hasNext())
             return 0;
 
@@ -380,7 +380,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         int offsetDelta = 0;
         Long baseTimestamp = null;
         while (iterator.hasNext()) {
-            KafkaRecord record = iterator.next();
+            SimpleRecord record = iterator.next();
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;

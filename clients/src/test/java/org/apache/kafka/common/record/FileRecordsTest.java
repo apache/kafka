@@ -57,7 +57,7 @@ public class FileRecordsTest {
     public void testFileSize() throws IOException {
         assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         for (int i = 0; i < 20; i++) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("abcd".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("abcd".getBytes())));
             assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
     }
@@ -131,7 +131,7 @@ public class FileRecordsTest {
     @Test
     public void testSearch() throws IOException {
         // append a new message with a high offset
-        KafkaRecord lastMessage = new KafkaRecord("test".getBytes());
+        SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
         fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
         List<RecordBatch> entries = shallowBatches(fileRecords);
@@ -316,9 +316,9 @@ public class FileRecordsTest {
     @Test
     public void testConvertNonCompressedToMagic0() throws IOException {
         List<Long> offsets = Arrays.asList(0L, 2L);
-        List<KafkaRecord> records = Arrays.asList(
-                new KafkaRecord(1L, "k1".getBytes(), "hello".getBytes()),
-                new KafkaRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
+        List<SimpleRecord> records = Arrays.asList(
+                new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
+                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
@@ -338,9 +338,9 @@ public class FileRecordsTest {
     @Test
     public void testConvertCompressedToMagic0() throws IOException {
         List<Long> offsets = Arrays.asList(0L, 2L);
-        List<KafkaRecord> records = Arrays.asList(
-                new KafkaRecord(1L, "k1".getBytes(), "hello".getBytes()),
-                new KafkaRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
+        List<SimpleRecord> records = Arrays.asList(
+                new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
+                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
@@ -357,7 +357,7 @@ public class FileRecordsTest {
         }
     }
 
-    private void verifyConvertedMessageSet(List<KafkaRecord> initialRecords,
+    private void verifyConvertedMessageSet(List<SimpleRecord> initialRecords,
                                            List<Long> initialOffsets,
                                            Records convertedRecords,
                                            byte magicByte) {

@@ -27,10 +27,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSizeInBytes() {
         long timestamp = System.currentTimeMillis();
-        KafkaRecord[] records = new KafkaRecord[] {
-            new KafkaRecord(timestamp, "key".getBytes(), "value".getBytes()),
-            new KafkaRecord(timestamp + 30000, null, "value".getBytes()),
-            new KafkaRecord(timestamp + 60000, "key".getBytes(), null)
+        SimpleRecord[] records = new SimpleRecord[] {
+            new SimpleRecord(timestamp, "key".getBytes(), "value".getBytes()),
+            new SimpleRecord(timestamp + 30000, null, "value".getBytes()),
+            new SimpleRecord(timestamp + 60000, "key".getBytes(), null)
         };
         int actualSize = MemoryRecords.withRecords(CompressionType.NONE, records).sizeInBytes();
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));

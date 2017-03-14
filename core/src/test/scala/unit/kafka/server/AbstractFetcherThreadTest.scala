@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords}
+import org.apache.kafka.common.record.{SimpleRecord, CompressionType, MemoryRecords}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
@@ -156,8 +156,8 @@ class AbstractFetcherThreadTest {
     @volatile var fetchCount = 0
 
     private val normalPartitionDataSet = List(
-      new TestPartitionData(MemoryRecords.withRecords(0L, CompressionType.NONE, new KafkaRecord("hello".getBytes()))),
-      new TestPartitionData(MemoryRecords.withRecords(1L, CompressionType.NONE, new KafkaRecord("hello".getBytes())))
+      new TestPartitionData(MemoryRecords.withRecords(0L, CompressionType.NONE, new SimpleRecord("hello".getBytes()))),
+      new TestPartitionData(MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes())))
     )
 
     override def processPartitionData(topicPartition: TopicPartition,
@@ -181,7 +181,7 @@ class AbstractFetcherThreadTest {
       fetchCount += 1
       // Set the first fetch to get a corrupted message
       if (fetchCount == 1) {
-        val record = new KafkaRecord("hello".getBytes())
+        val record = new SimpleRecord("hello".getBytes())
         val records = MemoryRecords.withRecords(CompressionType.NONE, record)
         ByteUtils.writeUnsignedInt(records.buffer, 15, Int.MaxValue)
 

@@ -220,7 +220,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => new KafkaRecord(id.toString.getBytes))
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for(i <- records.indices)
@@ -229,7 +229,7 @@ class LogTest extends JUnitSuite {
       val idx = messageIds.indexWhere(_ >= i)
       val read = log.read(i, 100, None).records.records.iterator.next()
       assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
-      assertEquals("Message should match appended.", records(idx), new KafkaRecord(read))
+      assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
     }
   }
 
@@ -262,7 +262,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => new KafkaRecord(id.toString.getBytes))
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for (i <- records.indices)
@@ -277,7 +277,7 @@ class LogTest extends JUnitSuite {
       ).map(_.records.records.iterator.next())
       reads.foreach { read =>
         assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
-        assertEquals("Message should match appended.", records(idx), new KafkaRecord(read))
+        assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
       }
 
       assertEquals(Seq.empty, log.read(i, 1, Some(1), minOneMessage = true).records.batches.asScala.toIndexedSeq)
@@ -290,7 +290,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
     val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
-    val records = messageIds.map(id => new KafkaRecord(id.toString.getBytes))
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
     for (i <- records.indices)
@@ -396,8 +396,8 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
 
     /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, new KafkaRecord("hello".getBytes), new KafkaRecord("there".getBytes)))
-    log.append(MemoryRecords.withRecords(CompressionType.GZIP, new KafkaRecord("alpha".getBytes), new KafkaRecord("beta".getBytes)))
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP, new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)))
+    log.append(MemoryRecords.withRecords(CompressionType.GZIP, new SimpleRecord("alpha".getBytes), new SimpleRecord("beta".getBytes)))
 
     def read(offset: Int) = log.read(offset, 4096).records.records
 
@@ -448,7 +448,7 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSetSizeCheck() {
-    val messageSet = MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("You".getBytes), new KafkaRecord("bethe".getBytes))
+    val messageSet = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
     // append messages to log
     val configSegmentSize = messageSet.sizeInBytes - 1
     val logProps = new Properties()
@@ -467,9 +467,9 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testCompactedTopicConstraints() {
-    val keyedMessage = new KafkaRecord("and here it is".getBytes, "this message has a key".getBytes)
-    val anotherKeyedMessage = new KafkaRecord("another key".getBytes, "this message also has a key".getBytes)
-    val unkeyedMessage = new KafkaRecord("this message does not have a key".getBytes)
+    val keyedMessage = new SimpleRecord("and here it is".getBytes, "this message has a key".getBytes)
+    val anotherKeyedMessage = new SimpleRecord("another key".getBytes, "this message also has a key".getBytes)
+    val unkeyedMessage = new SimpleRecord("this message does not have a key".getBytes)
 
     val messageSetWithUnkeyedMessage = MemoryRecords.withRecords(CompressionType.NONE, unkeyedMessage, keyedMessage)
     val messageSetWithOneUnkeyedMessage = MemoryRecords.withRecords(CompressionType.NONE, unkeyedMessage)
@@ -515,10 +515,10 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testMessageSizeCheck() {
-    val first = MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("You".getBytes), new KafkaRecord("bethe".getBytes))
+    val first = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
     val second = MemoryRecords.withRecords(CompressionType.NONE,
-      new KafkaRecord("change (I need more bytes)... blah blah blah.".getBytes),
-      new KafkaRecord("More padding boo hoo".getBytes))
+      new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes),
+      new SimpleRecord("More padding boo hoo".getBytes))
 
     // append messages to log
     val maxMessageSize = second.sizeInBytes - 1
@@ -600,7 +600,7 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
 
     val messages = (0 until numMessages).map { i =>
-      MemoryRecords.withRecords(100 + i, CompressionType.NONE, new KafkaRecord(time.milliseconds + i, i.toString.getBytes()))
+      MemoryRecords.withRecords(100 + i, CompressionType.NONE, new SimpleRecord(time.milliseconds + i, i.toString.getBytes()))
     }
     messages.foreach(log.append(_, assignOffsets = false))
     val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
@@ -984,9 +984,9 @@ class LogTest extends JUnitSuite {
       recoveryPoint = 0L,
       time.scheduler,
       time)
-    val records = (0 until 2).map(id => new KafkaRecord(id.toString.getBytes)).toArray
+    val records = (0 until 2).map(id => new SimpleRecord(id.toString.getBytes)).toArray
     records.foreach(record => log.append(MemoryRecords.withRecords(CompressionType.NONE, record)))
-    val invalidRecord = MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord(1.toString.getBytes))
+    val invalidRecord = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(1.toString.getBytes))
     log.append(invalidRecord, assignOffsets = false)
   }
 
@@ -998,7 +998,7 @@ class LogTest extends JUnitSuite {
       time.scheduler,
       time)
     log.append(MemoryRecords.withRecords(CompressionType.NONE,
-      new KafkaRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
+      new SimpleRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes, "value".getBytes)))
   }
 
   @Test
@@ -1061,10 +1061,10 @@ class LogTest extends JUnitSuite {
       recoveryPoint = 0L,
       time.scheduler,
       time)
-    val set1 = MemoryRecords.withRecords(0, CompressionType.NONE, new KafkaRecord("v1".getBytes(), "k1".getBytes()))
-    val set2 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 2, CompressionType.NONE, new KafkaRecord("v3".getBytes(), "k3".getBytes()))
-    val set3 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 3, CompressionType.NONE, new KafkaRecord("v4".getBytes(), "k4".getBytes()))
-    val set4 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 4, CompressionType.NONE, new KafkaRecord("v5".getBytes(), "k5".getBytes()))
+    val set1 = MemoryRecords.withRecords(0, CompressionType.NONE, new SimpleRecord("v1".getBytes(), "k1".getBytes()))
+    val set2 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 2, CompressionType.NONE, new SimpleRecord("v3".getBytes(), "k3".getBytes()))
+    val set3 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 3, CompressionType.NONE, new SimpleRecord("v4".getBytes(), "k4".getBytes()))
+    val set4 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 4, CompressionType.NONE, new SimpleRecord("v5".getBytes(), "k5".getBytes()))
     //Writes into an empty log with baseOffset 0
     log.append(set1, false)
     assertEquals(0L, log.activeSegment.baseOffset)

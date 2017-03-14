@@ -42,7 +42,7 @@ import org.apache.kafka.common.KafkaException
 import kafka.admin.AdminUtils
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, RecordBatch, MemoryRecords}
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
@@ -184,7 +184,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createProduceRequest = {
     new requests.ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 1, 5000,
-      collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("test".getBytes))).asJava).
+      collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava).
       build()
   }
 

@@ -278,7 +278,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     }
 
     val records = kvs.map { case (key, payload) =>
-      new KafkaRecord(key.toString.getBytes, payload.toString.getBytes)
+      new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
     }
 
     val appendInfo = log.append(MemoryRecords.withRecords(magicValue, codec, records: _*), assignOffsets = true)

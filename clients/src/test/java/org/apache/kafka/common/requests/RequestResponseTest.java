@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.KafkaRecord;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -441,7 +441,7 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new KafkaRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
                 1000000, FetchResponse.INVALID_LSO, null, records));
 
@@ -599,7 +599,7 @@ public class RequestResponseTest {
             throw new IllegalArgumentException("Produce request version 2 is not supported");
 
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
-        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new KafkaRecord("woot".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
         return new ProduceRequest.Builder(magic, (short) 1, 5000, produceData).build((short) version);
     }

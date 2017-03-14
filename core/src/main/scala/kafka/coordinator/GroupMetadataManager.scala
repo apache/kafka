@@ -152,7 +152,7 @@ class GroupMetadataManager(val brokerId: Int,
 
         val records = {
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType,
-            Seq(new KafkaRecord(timestamp, key, value)).asJava))
+            Seq(new SimpleRecord(timestamp, key, value)).asJava))
           val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L)
           builder.append(timestamp, key, value)
           builder.build()
@@ -258,7 +258,7 @@ class GroupMetadataManager(val brokerId: Int,
           val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             val key = GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition)
             val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
-            new KafkaRecord(timestamp, key, value)
+            new SimpleRecord(timestamp, key, value)
           }
           val offsetTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
@@ -605,11 +605,11 @@ class GroupMetadataManager(val brokerId: Int,
 
           val partitionOpt = replicaManager.getPartition(appendPartition)
           partitionOpt.foreach { partition =>
-            val tombstones = ListBuffer.empty[KafkaRecord]
+            val tombstones = ListBuffer.empty[SimpleRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
-              tombstones += new KafkaRecord(timestamp, commitKey, null)
+              tombstones += new SimpleRecord(timestamp, commitKey, null)
             }
             trace(s"Marked ${removedOffsets.size} offsets in $appendPartition for deletion.")
 
@@ -620,7 +620,7 @@ class GroupMetadataManager(val brokerId: Int,
               // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
               // retry removing this group.
               val groupMetadataKey = GroupMetadataManager.groupMetadataKey(group.groupId)
-              tombstones += new KafkaRecord(timestamp, groupMetadataKey, null)
+              tombstones += new SimpleRecord(timestamp, groupMetadataKey, null)
               trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
             }
 

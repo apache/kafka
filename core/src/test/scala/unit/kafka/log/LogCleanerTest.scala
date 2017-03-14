@@ -769,7 +769,7 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   private def messageWithOffset(key: Array[Byte], value: Array[Byte], offset: Long): MemoryRecords =
-    MemoryRecords.withRecords(offset, CompressionType.NONE, new KafkaRecord(key, value))
+    MemoryRecords.withRecords(offset, CompressionType.NONE, new SimpleRecord(key, value))
 
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)

@@ -105,7 +105,7 @@ object TestLinearWriteSpeed {
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
-      val records = (0 until numMessages).map(_ => new KafkaRecord(createTime, null, new Array[Byte](messageSize)))
+      val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
       MemoryRecords.withRecords(compressionType, records: _*)
     }
 

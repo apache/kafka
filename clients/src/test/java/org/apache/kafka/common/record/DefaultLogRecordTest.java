@@ -28,15 +28,15 @@ public class DefaultLogRecordTest {
 
     @Test
     public void testBasicSerde() {
-        KafkaRecord[] records = new KafkaRecord[] {
-            new KafkaRecord("hi".getBytes(), "there".getBytes()),
-            new KafkaRecord(null, "there".getBytes()),
-            new KafkaRecord("hi".getBytes(), null),
-            new KafkaRecord(null, null)
+        SimpleRecord[] records = new SimpleRecord[] {
+            new SimpleRecord("hi".getBytes(), "there".getBytes()),
+            new SimpleRecord(null, "there".getBytes()),
+            new SimpleRecord("hi".getBytes(), null),
+            new SimpleRecord(null, null)
         };
 
         for (boolean isControlRecord : Arrays.asList(true, false)) {
-            for (KafkaRecord record : records) {
+            for (SimpleRecord record : records) {
                 int baseSequence = 723;
                 long baseOffset = 37;
                 int offsetDelta = 10;

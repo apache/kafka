@@ -340,7 +340,7 @@ public class MemoryRecordsBuilder {
         return append(timestamp, wrapNullable(key), wrapNullable(value));
     }
 
-    public long append(KafkaRecord record) {
+    public long append(SimpleRecord record) {
         return append(record.timestamp(), record.key(), record.value());
     }
 
@@ -352,7 +352,7 @@ public class MemoryRecordsBuilder {
         return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value);
     }
 
-    public long appendWithOffset(long offset, KafkaRecord record) {
+    public long appendWithOffset(long offset, SimpleRecord record) {
         return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value());
     }
 

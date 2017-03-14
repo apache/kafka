@@ -154,9 +154,9 @@ class LogValidatorTest extends JUnitSuite {
     val timestampSeq = Seq(now - 1, now + 1, now)
     val records =
       MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-        new KafkaRecord(timestampSeq(0), "hello".getBytes),
-        new KafkaRecord(timestampSeq(1), "there".getBytes),
-        new KafkaRecord(timestampSeq(2), "beautiful".getBytes))
+        new SimpleRecord(timestampSeq(0), "hello".getBytes),
+        new SimpleRecord(timestampSeq(1), "there".getBytes),
+        new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
@@ -251,9 +251,9 @@ class LogValidatorTest extends JUnitSuite {
     val timestampSeq = Seq(now - 1, now + 1, now)
     val records =
       MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
-        new KafkaRecord(timestampSeq(0), "hello".getBytes),
-        new KafkaRecord(timestampSeq(1), "there".getBytes),
-        new KafkaRecord(timestampSeq(2), "beautiful".getBytes))
+        new SimpleRecord(timestampSeq(0), "hello".getBytes),
+        new SimpleRecord(timestampSeq(1), "there".getBytes),
+        new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
         offsetCounter = new LongRef(0),

@@ -28,7 +28,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
 import org.easymock.EasyMock
 import org.junit.Assert._
 
@@ -52,8 +52,8 @@ class SimpleFetchTest {
   val partitionHW = 5
 
   val fetchSize = 100
-  val recordToHW = new KafkaRecord("recordToHW".getBytes())
-  val recordToLEO = new KafkaRecord("recordToLEO".getBytes())
+  val recordToHW = new SimpleRecord("recordToHW".getBytes())
+  val recordToLEO = new SimpleRecord("recordToLEO".getBytes())
 
   val topic = "test-topic"
   val partitionId = 0
@@ -158,7 +158,7 @@ class SimpleFetchTest {
       quota = UnboundedQuota).find(_._1 == topicPartition)
     val firstReadRecord = readCommittedRecords.get._2.info.records.records.iterator.next()
     assertEquals("Reading committed data should return messages only up to high watermark", recordToHW,
-      new KafkaRecord(firstReadRecord))
+      new SimpleRecord(firstReadRecord))
 
     val readAllRecords = replicaManager.readFromLocalLog(
       replicaId = Request.OrdinaryConsumerId,
@@ -171,7 +171,7 @@ class SimpleFetchTest {
 
     val firstRecord = readAllRecords.get._2.info.records.records.iterator.next()
     assertEquals("Reading any data can return messages up to the end of the log", recordToLEO,
-      new KafkaRecord(firstRecord))
+      new SimpleRecord(firstRecord))
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())

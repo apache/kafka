@@ -123,7 +123,7 @@ class GroupMetadataManagerTest {
     )
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
-    val tombstone = new KafkaRecord(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
+    val tombstone = new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       offsetCommitRecords ++ Seq(tombstone): _*)
 
@@ -185,7 +185,7 @@ class GroupMetadataManagerTest {
 
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val groupMetadataTombstone = new KafkaRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
+    val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       Seq(groupMetadataRecord, groupMetadataTombstone): _*)
 
@@ -215,7 +215,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val groupMetadataTombstone = new KafkaRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
+    val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       Seq(groupMetadataRecord, groupMetadataTombstone) ++ offsetCommitRecords: _*)
 
@@ -771,7 +771,7 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
   }
 
-  private def buildStableGroupRecordWithMember(memberId: String): KafkaRecord = {
+  private def buildStableGroupRecordWithMember(memberId: String): SimpleRecord = {
     val group = new GroupMetadata(groupId)
     group.transitionTo(PreparingRebalance)
     val memberProtocols = List(("roundrobin", Array.emptyByteArray))
@@ -783,7 +783,7 @@ class GroupMetadataManagerTest {
 
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
     val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> Array.empty[Byte]))
-    new KafkaRecord(groupMetadataKey, groupMetadataValue)
+    new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
   private def expectGroupMetadataLoad(groupMetadataTopicPartition: TopicPartition,
@@ -805,12 +805,12 @@ class GroupMetadataManagerTest {
   }
 
   private def createCommittedOffsetRecords(committedOffsets: Map[TopicPartition, Long],
-                                           groupId: String = groupId): Seq[KafkaRecord] = {
+                                           groupId: String = groupId): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
       val offsetAndMetadata = OffsetAndMetadata(offset)
       val offsetCommitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
       val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
-      new KafkaRecord(offsetCommitKey, offsetCommitValue)
+      new SimpleRecord(offsetCommitKey, offsetCommitValue)
     }.toSeq
   }
 
