@@ -70,6 +70,8 @@ import static org.junit.Assert.assertThat;
 @RunWith(Parameterized.class)
 public class FanoutIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 3000L;
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
@@ -112,6 +114,7 @@ public class FanoutIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "fanout-integration-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
@@ -159,7 +162,7 @@ public class FanoutIntegrationTest {
         consumerConfigB.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigB.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         final List<String> actualValuesForB = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigB,
-            OUTPUT_TOPIC_B, inputValues.size());
+            OUTPUT_TOPIC_B, inputValues.size(), COMMIT_INTERVAL_MS * 2);
         assertThat(actualValuesForB, equalTo(expectedValuesForB));
 
         // Verify output topic C
@@ -170,7 +173,7 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         final List<String> actualValuesForC = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigC,
-            OUTPUT_TOPIC_C, inputValues.size());
+            OUTPUT_TOPIC_C, inputValues.size(), COMMIT_INTERVAL_MS * 2);
         streams.close();
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
