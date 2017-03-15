@@ -48,7 +48,9 @@ import java.util.Set;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RequestResponseTest {
 
@@ -209,6 +211,31 @@ public class RequestResponseTest {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    @Test
+    public void produceRequestToStringTest() {
+        ProduceRequest request = createProduceRequest();
+        assertFalse(request.toString(false).contains("partitionSizes"));
+        assertTrue(request.toString(true).contains("partitionSizes"));
+    }
+
+    @Test
+    public void produceRequestClearPartitionsTest() {
+        ProduceRequest request = createProduceRequest();
+        assertEquals(1, request.partitionRecordsOrFail().size());
+        assertFalse(request.toString(false).contains("partitionSizes"));
+        assertTrue(request.toString(true).contains("partitionSizes"));
+
+        request.clearPartitionRecords();
+        try {
+            request.partitionRecordsOrFail();
+            fail("partitionRecordsOrFail should fail after clearPartitionRecords()");
+        } catch (IllegalStateException e) {
+            // OK
+        }
+        assertFalse(request.toString(false).contains("partitionSizes"));
+        assertTrue(request.toString(true).contains("partitionSizes"));
     }
 
     @Test
