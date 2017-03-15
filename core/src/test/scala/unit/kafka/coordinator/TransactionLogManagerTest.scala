@@ -17,7 +17,7 @@
 package kafka.coordinator
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, KafkaRecord, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
 
 import org.junit.Test
 import org.junit.Assert.assertEquals
@@ -77,7 +77,7 @@ class TransactionLogManagerTest extends JUnitSuite {
       val keyBytes = TransactionLogManager.keyToBytes(transactionalId)
       val valueBytes = TransactionLogManager.valueToBytes(pidMetadata)
 
-      new KafkaRecord(keyBytes, valueBytes)
+      new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
 
     val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
