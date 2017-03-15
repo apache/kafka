@@ -84,7 +84,7 @@ public class StandaloneHerderTest {
 
     private enum SourceSink {
         SOURCE, SINK
-    };
+    }
 
     private StandaloneHerder herder;
 

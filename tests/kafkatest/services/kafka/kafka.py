@@ -30,7 +30,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
@@ -67,7 +67,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
+                 authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[]):
         """
         :type context
@@ -118,6 +118,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for node in self.nodes:
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+
+
+    def set_version(self, version):
+        for node in self.nodes:
+            node.version = version
 
     @property
     def security_config(self):
@@ -203,12 +208,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         self.security_config.setup_node(node)
+        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
+
+        # Credentials for inter-broker communication are created before starting Kafka.
+        # Client credentials are created after starting Kafka so that both loading of
+        # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
+        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=False)
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:

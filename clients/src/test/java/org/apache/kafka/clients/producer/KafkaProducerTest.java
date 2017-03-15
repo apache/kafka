@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -51,6 +52,20 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 public class KafkaProducerTest {
+
+    @Test
+    public void testConstructorWithSerializers() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer()).close();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testNoSerializerProvided() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer(producerProps);
+    }
 
     @Test
     public void testConstructorFailureCloseResource() {

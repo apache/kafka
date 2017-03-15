@@ -193,7 +193,7 @@ public class Protocol {
                                                                                                                         INT16),
                                                                                                               new Field("base_offset",
                                                                                                                         INT64),
-                                                                                                              new Field("timestamp",
+                                                                                                              new Field("log_append_time",
                                                                                                                         INT64,
                                                                                                                         "The timestamp returned by broker after appending the messages. " +
                                                                                                                             "If CreateTime is used for the topic, the timestamp will be -1. " +
@@ -323,8 +323,14 @@ public class Protocol {
 
     /*
      * Wire formats of version 0 and 1 are the same, but with different functionality.
-     * Version 0 will read the offsets from ZK;
+     * Wire format of version 2 is similar to version 1, with the exception of
+     * - accepting 'null' as list of topics
+     * - returning a top level error code
+     * Version 0 will read the offsets from ZK.
      * Version 1 will read the offsets from Kafka.
+     * Version 2 will read the offsets from Kafka, and returns all associated topic partition offsets if
+     * a 'null' is passed instead of a list of specific topic partitions. It also returns a top level error code
+     * for group or coordinator level errors.
      */
     public static final Schema OFFSET_FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
                                                                                         INT32,
@@ -365,8 +371,20 @@ public class Protocol {
     public static final Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
     public static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
 
-    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1};
-    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1};
+    public static final Schema OFFSET_FETCH_REQUEST_V2 = new Schema(new Field("group_id",
+                                                                              STRING,
+                                                                              "The consumer group id."),
+                                                                              new Field("topics",
+                                                                                        ArrayOf.nullable(OFFSET_FETCH_REQUEST_TOPIC_V0),
+                                                                                        "Topics to fetch offsets. If the topic array is null fetch offsets for all topics."));
+
+    public static final Schema OFFSET_FETCH_RESPONSE_V2 = new Schema(new Field("responses",
+                                                                               new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+                                                                     new Field("error_code",
+                                                                               INT16));
+
+    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2};
+    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2};
 
     /* List offset api */
     public static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -835,9 +853,31 @@ public class Protocol {
 
     public static final Schema UPDATE_METADATA_RESPONSE_V2 = UPDATE_METADATA_RESPONSE_V1;
 
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V3 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V2;
 
-    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2};
-    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1, UPDATE_METADATA_RESPONSE_V2};
+    public static final Schema UPDATE_METADATA_REQUEST_END_POINT_V3 =
+            new Schema(new Field("port", INT32, "The port on which the broker accepts requests."),
+                    new Field("host", STRING, "The hostname of the broker."),
+                    new Field("listener_name", STRING, "The listener name."),
+                    new Field("security_protocol_type", INT16, "The security protocol type."));
+
+    public static final Schema UPDATE_METADATA_REQUEST_BROKER_V3 =
+            new Schema(new Field("id", INT32, "The broker id."),
+                    new Field("end_points", new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V3)),
+                    new Field("rack", NULLABLE_STRING, "The rack"));
+
+    public static final Schema UPDATE_METADATA_REQUEST_V3 =
+            new Schema(new Field("controller_id", INT32, "The controller id."),
+                    new Field("controller_epoch", INT32, "The controller epoch."),
+                    new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V3)),
+                    new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
+
+    public static final Schema UPDATE_METADATA_RESPONSE_V3 = UPDATE_METADATA_RESPONSE_V2;
+
+    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1,
+        UPDATE_METADATA_REQUEST_V2, UPDATE_METADATA_REQUEST_V3};
+    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1,
+        UPDATE_METADATA_RESPONSE_V2, UPDATE_METADATA_RESPONSE_V3};
 
     /* SASL handshake api */
     public static final Schema SASL_HANDSHAKE_REQUEST_V0 = new Schema(
@@ -873,6 +913,10 @@ public class Protocol {
 
     public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
 
+    // Improves on TOPIC_ERROR_CODE by adding an error_message to complement the error_code
+    public static final Schema TOPIC_ERROR = new Schema(new Field("topic", STRING), new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING));
+
     /* CreateTopic api */
     public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
         new Field("topic",
@@ -900,12 +944,30 @@ public class Protocol {
             "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"));
 
     public static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
-        new Field("topic_error_codes",
+        new Field("topic_errors",
             new ArrayOf(TOPIC_ERROR_CODE),
             "An array of per topic error codes."));
 
-    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0};
-    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0};
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V1 = SINGLE_CREATE_TOPIC_REQUEST_V0;
+
+    public static final Schema CREATE_TOPICS_REQUEST_V1 = new Schema(
+            new Field("create_topic_requests",
+                    new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1),
+                    "An array of single topic creation requests. Can not have multiple entries for the same topic."),
+            new Field("timeout",
+                    INT32,
+                    "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"),
+            new Field("validate_only",
+                    BOOLEAN,
+                    "If this is true, the request will be validated, but the topic won't be created."));
+
+    public static final Schema CREATE_TOPICS_RESPONSE_V1 = new Schema(
+            new Field("topic_errors",
+                    new ArrayOf(TOPIC_ERROR),
+                    "An array of per topic errors."));
+
+    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1};
 
     /* DeleteTopic api */
     public static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
@@ -928,10 +990,10 @@ public class Protocol {
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
-    public static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
+    static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
 
     /* the latest version of each api */
-    public static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
+    static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
 
     static {
         REQUESTS[ApiKeys.PRODUCE.id] = PRODUCE_REQUEST;

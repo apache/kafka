@@ -105,4 +105,16 @@ public class KTableForeachTest {
             assertEquals(expectedRecord, actualRecord);
         }
     }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
+            @Override
+            public void apply(Number key, Object value) {}
+        };
+
+        new KStreamBuilder()
+            .<Integer, String>table("emptyTopic", "emptyStore")
+            .foreach(consume);
+    }
 }

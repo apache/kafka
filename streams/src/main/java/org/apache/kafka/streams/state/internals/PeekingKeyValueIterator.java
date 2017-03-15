@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public interface PeekingKeyValueIterator<K, V> extends KeyValueIterator<K, V> {
 
-    K peekNextKey();
+    KeyValue<K, V> peekNext();
 }

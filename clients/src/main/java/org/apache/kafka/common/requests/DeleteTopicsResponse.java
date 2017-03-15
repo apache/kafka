@@ -67,8 +67,8 @@ public class DeleteTopicsResponse extends AbstractResponse {
         for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
             Struct topicErrorCodeStruct = (Struct) topicErrorCodeStructObj;
             String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
-            short errorCode = topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME);
-            errors.put(topic, Errors.forCode(errorCode));
+            Errors error = Errors.forCode(topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME));
+            errors.put(topic, error);
         }
 
         this.errors = errors;

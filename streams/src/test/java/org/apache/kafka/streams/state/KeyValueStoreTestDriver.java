@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,31 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
-import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.MockProcessorContext;
-import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.TestUtils;
-
 import java.io.File;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -49,6 +26,33 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.TestUtils;
 
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
@@ -171,8 +175,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               Serializer<V> valueSerializer,
                                                               Deserializer<V> valueDeserializer) {
         StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
-                Serdes.serdeFrom(keySerializer, keyDeserializer),
-                Serdes.serdeFrom(valueSerializer, valueDeserializer));
+            Serdes.serdeFrom(keySerializer, keyDeserializer),
+            Serdes.serdeFrom(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<K, V>(serdes);
     }
 
@@ -181,18 +185,13 @@ public class KeyValueStoreTestDriver<K, V> {
     private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    private final ThreadCache cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
-    private final StreamsMetrics metrics = new StreamsMetrics() {
-        @Override
-        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-            return null;
-        }
+    private MockTime time = new MockTime();
+    private MetricConfig config = new MetricConfig();
+    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
 
-        @Override
-        public void recordLatency(Sensor sensor, long startNs, long endNs) {
-        }
-    };
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private final ThreadCache cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+    private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final RecordCollector recordCollector;
     private File stateDir = null;
 
@@ -203,19 +202,32 @@ public class KeyValueStoreTestDriver<K, V> {
         this.recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
             @SuppressWarnings("unchecked")
             @Override
-            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                // for byte arrays we need to wrap it for comparison
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            // for byte arrays we need to wrap it for comparison
 
-                K key = serdes.keyFrom(keySerializer.serialize(record.topic(), record.key()));
-                V value = serdes.valueFrom(valueSerializer.serialize(record.topic(), record.value()));
+                K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
+                V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
 
-                recordFlushed(key, value);
+                recordFlushed(keyTest, valueTest);
             }
+
             @Override
-            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
-                                    StreamPartitioner<K1, V1> partitioner) {
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer,
+                                      StreamPartitioner<? super K1, ? super V1> partitioner) {
                 // ignore partitioner
-                send(record, keySerializer, valueSerializer);
+                send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
             }
         };
         this.stateDir = TestUtils.tempDirectory();
@@ -230,7 +242,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
 
 
-        this.context = new MockProcessorContext(null, this.stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+        this.context = new MockProcessorContext(this.stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             @Override
             public TaskId taskId() {
                 return new TaskId(0, 1);
@@ -254,7 +266,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public StreamsMetrics metrics() {
-                return metrics;
+                return streamsMetrics;
             }
 
             @Override

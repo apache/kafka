@@ -20,6 +20,7 @@ import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
@@ -32,10 +33,14 @@ import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 import java.util
+
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
+
 import scala.collection.{Map, immutable}
 import kafka.utils.CoreUtils._
+import org.apache.kafka.common.TopicPartition
+
 import scala.collection.JavaConverters._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -152,6 +157,21 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     intercept[InvalidTopicException] {
       // shouldn't be able to create a topic that collides
       AdminUtils.createTopic(zkUtils, collidingTopic, 3, 1)
+    }
+  }
+
+  @Test
+  def testConcurrentTopicCreation() {
+    val topic = "test.topic"
+
+    // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
+    val zkMock = EasyMock.createNiceMock(classOf[ZkUtils])
+    EasyMock.expect(zkMock.pathExists(s"/brokers/topics/$topic")).andReturn(false)
+    EasyMock.expect(zkMock.getAllTopics).andReturn(Seq("some.topic", topic, "some.other.topic"))
+    EasyMock.replay(zkMock)
+
+    intercept[TopicExistsException] {
+      AdminUtils.validateCreateOrUpdateTopic(zkMock, topic, Map.empty, new Properties, update = false)
     }
   }
 
@@ -406,14 +426,15 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           assertEquals(expected.split(",").toSeq, actual.asScala)
       }
       TestUtils.retry(10000) {
-        for(part <- 0 until partitions) {
-          val log = server.logManager.getLog(TopicAndPartition(topic, part))
+        for (part <- 0 until partitions) {
+          val tp = new TopicPartition(topic, part)
+          val log = server.logManager.getLog(tp)
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
           checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
           checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
-          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(TopicAndPartition(topic, part)))
+          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(tp))
         }
       }
     }

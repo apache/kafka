@@ -73,7 +73,7 @@ class LogConfigTest {
       case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
       case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
       case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
+      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar")
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
@@ -109,6 +109,16 @@ class LogConfigTest {
       true
     } catch {
       case _: ConfigException => false
+    }
+  }
+  def testValueValidator() {
+    val p = new Properties()
+    p.setProperty(LogConfig.SegmentBytesProp, "100")
+    p.setProperty(LogConfig.RetentionBytesProp, "100")
+    LogConfig.validate(p)
+    p.setProperty(LogConfig.RetentionBytesProp, "90")
+    intercept[IllegalArgumentException] {
+      LogConfig.validate(p)
     }
   }
 

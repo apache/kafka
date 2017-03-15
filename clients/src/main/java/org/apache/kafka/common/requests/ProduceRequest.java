@@ -14,14 +14,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 public class ProduceRequest extends AbstractRequest {
-    
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
     private static final String ACKS_KEY_NAME = "acks";
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
@@ -44,12 +42,45 @@ public class ProduceRequest extends AbstractRequest {
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
+    public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
+        private final short acks;
+        private final int timeout;
+        private final Map<TopicPartition, MemoryRecords> partitionRecords;
+
+        public Builder(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
+            super(ApiKeys.PRODUCE);
+            this.acks = acks;
+            this.timeout = timeout;
+            this.partitionRecords = partitionRecords;
+        }
+
+        @Override
+        public ProduceRequest build() {
+            short version = version();
+            if (version < 2) {
+                throw new UnsupportedVersionException("ProduceRequest versions older than 2 are not supported.");
+            }
+            return new ProduceRequest(version, acks, timeout, partitionRecords);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=ProduceRequest")
+                    .append(", acks=").append(acks)
+                    .append(", timeout=").append(timeout)
+                    .append(", partitionRecords=(").append(Utils.mkString(partitionRecords))
+                    .append("))");
+            return bld.toString();
+        }
+    }
+
     private final short acks;
     private final int timeout;
     private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
-    public ProduceRequest(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
-        super(new Struct(CURRENT_SCHEMA));
+    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, version)), version);
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
@@ -74,8 +105,8 @@ public class ProduceRequest extends AbstractRequest {
         this.partitionRecords = partitionRecords;
     }
 
-    public ProduceRequest(Struct struct) {
-        super(struct);
+    public ProduceRequest(Struct struct, short version) {
+        super(struct, version);
         partitionRecords = new HashMap<>();
         for (Object topicDataObj : struct.getArray(TOPIC_DATA_KEY_NAME)) {
             Struct topicData = (Struct) topicDataObj;
@@ -92,17 +123,18 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
+        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
 
-        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet()) {
-            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET, Record.NO_TIMESTAMP));
-        }
+        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
+            responseMap.put(entry.getKey(), partitionResponse);
 
+        short versionId = version();
         switch (versionId) {
             case 0:
                 return new ProduceResponse(responseMap);
@@ -128,14 +160,15 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public void clearPartitionRecords() {
+        struct.clear();
         partitionRecords.clear();
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
-        return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer));
+        return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer), (short) versionId);
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {
-        return new ProduceRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id));
     }
 }

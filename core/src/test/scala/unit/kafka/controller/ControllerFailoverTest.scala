@@ -68,7 +68,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     val epochMap: mutable.Map[Int, Int] = mutable.Map.empty
     for (server <- this.servers) {
       epochMap += (server.config.brokerId -> server.kafkaController.epoch)
-      if(server.kafkaController.isActive()) {
+      if(server.kafkaController.isActive) {
         controller = server
       }
     }

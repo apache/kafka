@@ -17,6 +17,10 @@
 
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.api.PartitionStateInfo;
+import kafka.api.Request;
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -24,12 +28,14 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +53,6 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    public static final int UNLIMITED_MESSAGES = -1;
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
 
     /**
@@ -55,28 +60,17 @@ public class IntegrationTestUtils {
      *
      * @param topic          Kafka topic to read messages from
      * @param consumerConfig Kafka consumer configuration
+     * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    public static <V> List<V> readValues(final String topic, final Properties consumerConfig, final int maxMessages) {
+    public static <V> List<V> readValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final List<V> returnList = new ArrayList<>();
-        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
+        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, waitTime, maxMessages);
         for (final KeyValue<?, V> kv : kvs) {
             returnList.add(kv.value);
         }
         return returnList;
-    }
-
-    /**
-     * Returns as many messages as possible from the topic until a (currently hardcoded) timeout is
-     * reached.
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @return The KeyValue elements retrieved via the consumer.
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig) {
-        return readKeyValues(topic, consumerConfig, UNLIMITED_MESSAGES);
     }
 
     /**
@@ -85,24 +79,26 @@ public class IntegrationTestUtils {
      *
      * @param topic          Kafka topic to read messages from
      * @param consumerConfig Kafka consumer configuration
+     * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer
      * @return The KeyValue elements retrieved via the consumer
      */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final int maxMessages) {
+    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(consumerConfig);
         consumer.subscribe(Collections.singletonList(topic));
         final int pollIntervalMs = 100;
-        final int maxTotalPollTimeMs = 2000;
-        int totalPollTimeMs = 0;
         final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
-        while (totalPollTimeMs < maxTotalPollTimeMs && continueConsuming(consumedValues.size(), maxMessages)) {
+        int totalPollTimeMs = 0;
+        while (totalPollTimeMs < waitTime && continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));
             }
         }
+
         consumer.close();
+
         return consumedValues;
     }
 
@@ -200,13 +196,13 @@ public class IntegrationTestUtils {
         final TestCondition valuesRead = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig);
+                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
                 return accumData.size() >= expectedNumRecords;
             }
         };
 
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records from topic " + topic + " while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
@@ -240,17 +236,55 @@ public class IntegrationTestUtils {
         final TestCondition valuesRead = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                final List<V> readData = readValues(topic, consumerConfig, expectedNumRecords);
+                final List<V> readData = readValues(topic, consumerConfig, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
+
                 return accumData.size() >= expectedNumRecords;
             }
         };
 
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+        final String conditionDetails = "Expecting " + expectedNumRecords + " records from topic " + topic + " while only received " + accumData.size() + ": " + accumData;
 
         TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
         return accumData;
     }
 
+    public static void waitForTopicPartitions(final List<KafkaServer> servers,
+                                              final List<TopicPartition> partitions,
+                                              final long timeout) throws InterruptedException {
+        final long end = System.currentTimeMillis() + timeout;
+        for (final TopicPartition partition : partitions) {
+            final long remaining = end - System.currentTimeMillis();
+            if (remaining <= 0) {
+                throw new AssertionError("timed out while waiting for partitions to become available. Timeout=" + timeout);
+            }
+            waitUntilMetadataIsPropagated(servers, partition.topic(), partition.partition(), remaining);
+        }
+    }
+
+    public static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
+                                                     final String topic,
+                                                     final int partition,
+                                                     final long timeout) throws InterruptedException {
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                for (final KafkaServer server : servers) {
+                    final MetadataCache metadataCache = server.apis().metadataCache();
+                    final Option<PartitionStateInfo> partitionInfo =
+                            metadataCache.getPartitionInfo(topic, partition);
+                    if (partitionInfo.isEmpty()) {
+                        return false;
+                    }
+                    final PartitionStateInfo partitionStateInfo = partitionInfo.get();
+                    if (!Request.isValidBrokerId(partitionStateInfo.leaderIsrAndControllerEpoch().leaderAndIsr().leader())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }, timeout, "metatadata for topic=" + topic + " partition=" + partition + " not propogated to all brokers");
+
+    }
 }

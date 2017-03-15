@@ -32,19 +32,22 @@ import java.util.List;
 public class MultiSend implements Send {
 
     private static final Logger log = LoggerFactory.getLogger(MultiSend.class);
-    private String dest;
+
+    private final String dest;
+    private final Iterator<Send> sendsIterator;
+    private final long size;
+
     private long totalWritten = 0;
-    private Iterator<Send> sendsIterator;
     private Send current;
-    private boolean doneSends = false;
-    private long size = 0;
 
     public MultiSend(String dest, List<Send> sends) {
         this.dest = dest;
         this.sendsIterator = sends.iterator();
         nextSendOrDone();
-        for (Send send: sends)
-            this.size += send.size();
+        long size = 0;
+        for (Send send : sends)
+            size += send.size();
+        this.size = size;
     }
 
     @Override
@@ -59,40 +62,39 @@ public class MultiSend implements Send {
 
     @Override
     public boolean completed() {
-        if (doneSends) {
-            if (totalWritten != size)
-                log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
-            return true;
-        } else {
-            return false;
-        }
+        return current == null;
     }
 
     @Override
     public long writeTo(GatheringByteChannel channel) throws IOException {
         if (completed())
-            throw new KafkaException("This operation cannot be completed on a complete request.");
+            throw new KafkaException("This operation cannot be invoked on a complete request.");
 
         int totalWrittenPerCall = 0;
         boolean sendComplete;
         do {
             long written = current.writeTo(channel);
-            totalWritten += written;
             totalWrittenPerCall += written;
             sendComplete = current.completed();
             if (sendComplete)
                 nextSendOrDone();
         } while (!completed() && sendComplete);
-        if (log.isTraceEnabled())
-            log.trace("Bytes written as part of multisend call : " + totalWrittenPerCall +  "Total bytes written so far : " + totalWritten + "Expected bytes to write : " + size);
+
+        totalWritten += totalWrittenPerCall;
+
+        if (completed() && totalWritten != size)
+            log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
+
+        log.trace("Bytes written as part of multi-send call: {}, total bytes written so far: {}, expected bytes to write: {}",
+                totalWrittenPerCall, totalWritten, size);
+
         return totalWrittenPerCall;
     }
 
-    // update current if there's a next Send, mark sends as done if there isn't
     private void nextSendOrDone() {
         if (sendsIterator.hasNext())
             current = sendsIterator.next();
         else
-            doneSends = true;
+            current = null;
     }
 }

@@ -51,7 +51,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e: Throwable =>
         error("Unknown error when running consumer: ", e)
-        System.exit(1);
+        Exit.exit(1)
     }
   }
 
@@ -89,14 +89,14 @@ object ConsoleConsumer extends Logging {
   def checkZk(config: ConsumerConfig) {
     if (!checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/brokers/ids")) {
       System.err.println("No brokers found in ZK.")
-      System.exit(1)
+      Exit.exit(1)
     }
 
     if (!config.options.has(config.deleteConsumerOffsetsOpt) && config.options.has(config.resetBeginningOpt) &&
       checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/consumers/" + config.consumerProps.getProperty("group.id") + "/offsets")) {
       System.err.println("Found previous offset information for this group " + config.consumerProps.getProperty("group.id")
         + ". Please use --delete-consumer-offsets to delete previous offsets metadata")
-      System.exit(1)
+      Exit.exit(1)
     }
   }
 
@@ -177,7 +177,7 @@ object ConsoleConsumer extends Logging {
       checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/consumers/" + props.getProperty("group.id") + "/offsets")) {
       System.err.println("Found previous offset information for this group " + props.getProperty("group.id")
         + ". Please use --delete-consumer-offsets to delete previous offsets metadata")
-      System.exit(1)
+      Exit.exit(1)
     }
 
     if (config.options.has(config.deleteConsumerOffsetsOpt))
@@ -389,13 +389,12 @@ object ConsoleConsumer extends Logging {
       groupIdPassed = false
     }
 
-    def tryParse(parser: OptionParser, args: Array[String]) = {
+    def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          Utils.croak(e.getMessage)
-          null
+          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
       }
     }
   }
@@ -463,6 +462,8 @@ class DefaultMessageFormatter extends MessageFormatter {
 class LoggingMessageFormatter extends MessageFormatter   {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
   val logger = Logger.getLogger(getClass().getName)
+
+  override def init(props: Properties): Unit = defaultWriter.init(props)
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._

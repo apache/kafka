@@ -29,9 +29,10 @@ import java.util.Collections;
 import java.util.Map;
 
 public class MockStateStoreSupplier implements StateStoreSupplier {
-    private final String name;
-    private final boolean persistent;
-    private final boolean loggingEnabled;
+    private String name;
+    private boolean persistent;
+    private boolean loggingEnabled;
+    private MockStateStore stateStore;
 
     public MockStateStoreSupplier(String name, boolean persistent) {
         this(name, persistent, true);
@@ -43,6 +44,10 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         this.loggingEnabled = loggingEnabled;
     }
 
+    public MockStateStoreSupplier(final MockStateStore stateStore) {
+        this.stateStore = stateStore;
+    }
+
     @Override
     public String name() {
         return name;
@@ -50,6 +55,9 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
 
     @Override
     public StateStore get() {
+        if (stateStore != null) {
+            return stateStore;
+        }
         if (loggingEnabled) {
             return new MockStateStore(name, persistent).enableLogging();
         } else {
@@ -74,7 +82,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         public boolean loggingEnabled = false;
         public boolean initialized = false;
         public boolean flushed = false;
-        public boolean closed = false;
+        public boolean closed = true;
         public final ArrayList<Integer> keys = new ArrayList<>();
 
         public MockStateStore(String name, boolean persistent) {
@@ -96,6 +104,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         public void init(ProcessorContext context, StateStore root) {
             context.register(root, loggingEnabled, stateRestoreCallback);
             initialized = true;
+            closed = false;
         }
 
         @Override

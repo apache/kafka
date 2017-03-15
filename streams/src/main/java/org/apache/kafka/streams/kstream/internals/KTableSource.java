@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -53,17 +52,17 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
         public void process(K key, V value) {
-            // the keys should never be null
+            // if the key is null, then ignore the record
             if (key == null)
-                throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
+                return;
             V oldValue = store.get(key);
             store.put(key, value);
-            tupleForwarder.maybeForward(key, value, oldValue, sendOldValues);
+            tupleForwarder.maybeForward(key, value, oldValue);
         }
     }
 }

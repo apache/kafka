@@ -25,6 +25,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -66,13 +68,12 @@ public class AbstractTaskTest {
                                                       Collections.<String, SinkNode>emptyMap(),
                                                       Collections.<StateStore>emptyList(),
                                                       Collections.<String, String>emptyMap(),
-                                                      Collections.<StateStore, ProcessorNode>emptyMap()
-                                               ),
+                                                      Collections.<StateStore>emptyList()),
                                 consumer,
                                 consumer,
                                 false,
-                                new StateDirectory("app", TestUtils.tempDirectory().getPath()),
-                                new ThreadCache(0)) {
+                                new StateDirectory("app", TestUtils.tempDirectory().getPath(), new MockTime()),
+                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
             public void commit() {
                 // do nothing

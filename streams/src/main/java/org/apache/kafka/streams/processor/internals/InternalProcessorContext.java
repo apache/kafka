@@ -43,8 +43,14 @@ public interface InternalProcessorContext extends ProcessorContext {
     void setCurrentNode(ProcessorNode currentNode);
 
     ProcessorNode currentNode();
+
     /**
      * Get the thread-global cache
      */
     ThreadCache getCache();
+
+    /**
+     * Mark this contex as being initialized
+     */
+    void initialized();
 }

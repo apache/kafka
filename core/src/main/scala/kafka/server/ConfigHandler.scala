@@ -22,6 +22,7 @@ import java.util.Properties
 import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
+import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
@@ -29,7 +30,10 @@ import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+
 import scala.collection.JavaConverters._
+import scala.collection.mutable
+
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
   */
@@ -44,15 +48,8 @@ trait ConfigHandler {
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
-    // Validate the compatibility of message format version.
-    val configNameToExclude = Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(LogConfig.MessageFormatVersionProp)
-      } else
-        None
-    }
+    // Validate the configurations.
+    val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
     if (logs.nonEmpty) {
@@ -60,9 +57,15 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       val props = new Properties()
       props.putAll(logManager.defaultConfig.originals)
       topicConfig.asScala.foreach { case (key, value) =>
-        if (key != configNameToExclude) props.put(key, value)
+        if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
+      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+        || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
+        && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
+        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
+          s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
+          s"This may result in potential frequent log rolling.")
       logs.foreach(_.config = logConfig)
     }
 
@@ -92,6 +95,19 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
+  }
+  
+  def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+    val excludeConfigs: mutable.Set[String] = new mutable.HashSet[String]
+    // Verify message format version
+    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
+        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+        excludeConfigs += LogConfig.MessageFormatVersionProp
+      }
+    }
+    excludeConfigs.toSet
   }
 }
 
@@ -134,16 +150,18 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Qu
  * The callback provides the node name containing sanitized user principal, client-id if this is
  * a <user, client-id> update and the full properties set read from ZK.
  */
-class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
 
   def processConfigChanges(quotaEntityPath: String, config: Properties) {
     // Entity path is <user> or <user>/clients/<client>
     val entities = quotaEntityPath.split("/")
     if (entities.length != 1 && entities.length != 3)
-      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath);
+      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
     val sanitizedUser = entities(0)
     val clientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), clientId, config)
+    if (!clientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+      credentialProvider.updateCredentials(QuotaId.desanitize(sanitizedUser), config)
   }
 }
 

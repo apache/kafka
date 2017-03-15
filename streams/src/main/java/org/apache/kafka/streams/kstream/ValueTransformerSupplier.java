@@ -14,18 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * A {@link ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
+ * A {@code ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
+ *
+ * @param <V>  value type
+ * @param <VR> transformed value type
+ * @see ValueTransformer
+ * @see KStream#transformValues(ValueTransformerSupplier, String...)
+ * @see Transformer
+ * @see TransformerSupplier
+ * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerSupplier<V, R> {
+@InterfaceStability.Unstable
+public interface ValueTransformerSupplier<V, VR> {
 
     /**
      * Return a new {@link ValueTransformer} instance.
      *
-     * @return  a new {@link ValueTransformer} instance.
+     * @return a new {@link ValueTransformer} instance.
      */
-    ValueTransformer<V, R> get();
+    ValueTransformer<V, VR> get();
 }

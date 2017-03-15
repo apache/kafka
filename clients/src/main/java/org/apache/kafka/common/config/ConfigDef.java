@@ -70,9 +70,21 @@ public class ConfigDef {
 
     public static final Object NO_DEFAULT_VALUE = new String("");
 
-    private final Map<String, ConfigKey> configKeys = new HashMap<>();
-    private final List<String> groups = new LinkedList<>();
+    private final Map<String, ConfigKey> configKeys;
+    private final List<String> groups;
     private Set<String> configsWithNoParent;
+
+    public ConfigDef() {
+        configKeys = new HashMap<>();
+        groups = new LinkedList<>();
+        configsWithNoParent = null;
+    }
+
+    public ConfigDef(ConfigDef base) {
+        configKeys = new HashMap<>(base.configKeys);
+        groups = new LinkedList<>(base.groups);
+        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+    }
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
@@ -81,6 +93,17 @@ public class ConfigDef {
      */
     public Set<String> names() {
         return Collections.unmodifiableSet(configKeys.keySet());
+    }
+
+    public ConfigDef define(ConfigKey key) {
+        if (configKeys.containsKey(key.name)) {
+            throw new ConfigException("Configuration " + key.name + " is defined twice.");
+        }
+        if (key.group != null && !groups.contains(key.group)) {
+            groups.add(key.group);
+        }
+        configKeys.put(key.name, key);
+        return this;
     }
 
     /**
@@ -101,15 +124,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        if (configKeys.containsKey(name)) {
-            throw new ConfigException("Configuration " + name + " is defined twice.");
-        }
-        if (group != null && !groups.contains(group)) {
-            groups.add(group);
-        }
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
-        return this;
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
     }
 
     /**
@@ -411,24 +426,26 @@ public class ConfigDef {
         }
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
-        for (ConfigKey key : configKeys.values()) {
-            Object value;
-            // props map contains setting - assign ConfigKey value
-            if (props.containsKey(key.name)) {
-                value = parseType(key.name, props.get(key.name), key.type);
-                // props map doesn't contain setting, the key is required because no default value specified - its an error
-            } else if (key.defaultValue == NO_DEFAULT_VALUE) {
-                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-            } else {
-                // otherwise assign setting its default value
-                value = key.defaultValue;
-            }
-            if (key.validator != null) {
-                key.validator.ensureValid(key.name, value);
-            }
-            values.put(key.name, value);
-        }
+        for (ConfigKey key : configKeys.values())
+            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name)));
         return values;
+    }
+
+    Object parseValue(ConfigKey key, Object value, boolean isSet) {
+        Object parsedValue;
+        if (isSet) {
+            parsedValue = parseType(key.name, value, key.type);
+        // props map doesn't contain setting, the key is required because no default value specified - its an error
+        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+            throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
+        } else {
+            // otherwise assign setting its default value
+            parsedValue = key.defaultValue;
+        }
+        if (key.validator != null) {
+            key.validator.ensureValid(key.name, parsedValue);
+        }
+        return parsedValue;
     }
 
     /**
@@ -584,7 +601,7 @@ public class ConfigDef {
      * @param type  The expected type
      * @return The parsed object
      */
-    private Object parseType(String name, Object value, Type type) {
+    public static Object parseType(String name, Object value, Type type) {
         try {
             if (value == null) return null;
 
@@ -623,7 +640,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Integer.parseInt(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 32-bit integer, but it was a " + value.getClass().getName());
                     }
                 case SHORT:
                     if (value instanceof Short) {
@@ -631,7 +648,7 @@ public class ConfigDef {
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
                     } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 16-bit integer (short), but it was a " + value.getClass().getName());
                     }
                 case LONG:
                     if (value instanceof Integer)
@@ -641,14 +658,14 @@ public class ConfigDef {
                     else if (value instanceof String)
                         return Long.parseLong(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a 64-bit integer (long), but it was a " + value.getClass().getName());
                 case DOUBLE:
                     if (value instanceof Number)
                         return ((Number) value).doubleValue();
                     else if (value instanceof String)
                         return Double.parseDouble(trimmed);
                     else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
+                        throw new ConfigException(name, value, "Expected value to be a double, but it was a " + value.getClass().getName());
                 case LIST:
                     if (value instanceof List)
                         return (List<?>) value;
@@ -882,11 +899,11 @@ public class ConfigDef {
                          List<String> dependents, Recommender recommender) {
             this.name = name;
             this.type = type;
-            this.defaultValue = defaultValue;
+            this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null && this.hasDefault())
-                this.validator.ensureValid(name, defaultValue);
+            if (this.validator != null && hasDefault())
+                this.validator.ensureValid(name, this.defaultValue);
             this.documentation = documentation;
             this.dependents = dependents;
             this.group = group;
@@ -980,7 +997,7 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         String lastKeyGroupName = "";
-        for (ConfigKey def : sortedConfigsByGroup()) {
+        for (ConfigKey def : sortedConfigs()) {
             if (def.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
                     b.append(def.group).append("\n");
@@ -1034,38 +1051,11 @@ public class ConfigDef {
     }
 
     /**
-     * Get a list of configs sorted into "natural" order: listing required fields first, then
-     * ordering by importance, and finally by name.
-     */
-    protected List<ConfigKey> sortedConfigs() {
-        // sort first required fields, then by importance, then name
-        List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                // first take anything with no default value
-                if (!k1.hasDefault() && k2.hasDefault()) {
-                    return -1;
-                } else if (!k2.hasDefault() && k1.hasDefault()) {
-                    return 1;
-                }
-
-                // then sort by importance
-                int cmp = k1.importance.compareTo(k2.importance);
-                if (cmp == 0) {
-                    // then sort in alphabetical order
-                    return k1.name.compareTo(k2.name);
-                } else {
-                    return cmp;
-                }
-            }
-        });
-        return configs;
-    }
-
-    /**
      * Get a list of configs sorted taking the 'group' and 'orderInGroup' into account.
+     *
+     * If grouping is not specified, the result will reflect "natural" order: listing required fields first, then ordering by importance, and finally by name.
      */
-    protected List<ConfigKey> sortedConfigsByGroup() {
+    private List<ConfigKey> sortedConfigs() {
         final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
         int ord = 0;
         for (String group: groups) {
@@ -1081,14 +1071,101 @@ public class ConfigDef {
                         : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
                 if (cmp == 0) {
                     cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
-                }
-                if (cmp == 0) {
-                    cmp = k1.name.compareTo(k2.name);
+                    if (cmp == 0) {
+                        // first take anything with no default value
+                        if (!k1.hasDefault() && k2.hasDefault()) {
+                            cmp = -1;
+                        } else if (!k2.hasDefault() && k1.hasDefault()) {
+                            cmp = 1;
+                        } else {
+                            cmp = k1.importance.compareTo(k2.importance);
+                            if (cmp == 0) {
+                                return k1.name.compareTo(k2.name);
+                            }
+                        }
+                    }
                 }
                 return cmp;
             }
         });
         return configs;
+    }
+
+    public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
+        int orderInGroup = startingOrd;
+        for (ConfigDef.ConfigKey key : child.sortedConfigs()) {
+            define(new ConfigDef.ConfigKey(
+                    keyPrefix + key.name,
+                    key.type,
+                    key.defaultValue,
+                    embeddedValidator(keyPrefix, key.validator),
+                    key.importance,
+                    key.documentation,
+                    groupPrefix + (key.group == null ? "" : ": " + key.group),
+                    orderInGroup++,
+                    key.width,
+                    key.displayName,
+                    embeddedDependents(keyPrefix, key.dependents),
+                    embeddedRecommender(keyPrefix, key.recommender)
+            ));
+        }
+    }
+
+    /**
+     * Returns a new validator instance that delegates to the base validator but unprefixes the config name along the way.
+     */
+    private static ConfigDef.Validator embeddedValidator(final String keyPrefix, final ConfigDef.Validator base) {
+        if (base == null) return null;
+        return new ConfigDef.Validator() {
+            @Override
+            public void ensureValid(String name, Object value) {
+                base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+        };
+    }
+
+    /**
+     * Updated list of dependent configs with the specified {@code prefix} added.
+     */
+    private static List<String> embeddedDependents(final String keyPrefix, final List<String> dependents) {
+        if (dependents == null) return null;
+        final List<String> updatedDependents = new ArrayList<>(dependents.size());
+        for (String dependent : dependents) {
+            updatedDependents.add(keyPrefix + dependent);
+        }
+        return updatedDependents;
+    }
+
+    /**
+     * Returns a new recommender instance that delegates to the base recommender but unprefixes the input parameters along the way.
+     */
+    private static ConfigDef.Recommender embeddedRecommender(final String keyPrefix, final ConfigDef.Recommender base) {
+        if (base == null) return null;
+        return new ConfigDef.Recommender() {
+            private String unprefixed(String k) {
+                return k.substring(keyPrefix.length());
+            }
+
+            private Map<String, Object> unprefixed(Map<String, Object> parsedConfig) {
+                final Map<String, Object> unprefixedParsedConfig = new HashMap<>(parsedConfig.size());
+                for (Map.Entry<String, Object> e : parsedConfig.entrySet()) {
+                    if (e.getKey().startsWith(keyPrefix)) {
+                        unprefixedParsedConfig.put(unprefixed(e.getKey()), e.getValue());
+                    }
+                }
+                return unprefixedParsedConfig;
+            }
+
+            @Override
+            public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                return base.validValues(unprefixed(name), unprefixed(parsedConfig));
+            }
+
+            @Override
+            public boolean visible(String name, Map<String, Object> parsedConfig) {
+                return base.visible(unprefixed(name), unprefixed(parsedConfig));
+            }
+        };
     }
 
 }

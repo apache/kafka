@@ -15,10 +15,10 @@
   * limitations under the License.
   */
 
-package unit.kafka.server
+package kafka.server
 
 import org.apache.kafka.common.requests.ApiVersionsResponse
-import org.apache.kafka.common.protocol.{Protocol, ApiKeys}
+import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, Protocol}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -26,14 +26,14 @@ class ApiVersionsTest {
 
   @Test
   def testApiVersions {
-    val apiVersions = ApiVersionsResponse.apiVersionsResponse.apiVersions
+    val apiVersions = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions
     assertEquals("API versions for all API keys must be maintained.", apiVersions.size, ApiKeys.values().length)
 
     for (key <- ApiKeys.values) {
-      val version = ApiVersionsResponse.apiVersionsResponse.apiVersion(key.id)
+      val version = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersion(key.id)
       assertNotNull(s"Could not find ApiVersion for API ${key.name}", version)
-      assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, Protocol.MIN_VERSIONS(key.id))
-      assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, Protocol.CURR_VERSION(key.id))
+      assertEquals(s"Incorrect min version for Api ${key.name}.", version.minVersion, ProtoUtils.oldestVersion(key.id))
+      assertEquals(s"Incorrect max version for Api ${key.name}.", version.maxVersion, ProtoUtils.latestVersion(key.id))
 
       // Check if versions less than min version are indeed set as null, i.e., deprecated.
       for (i <- 0 until version.minVersion) {

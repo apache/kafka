@@ -54,9 +54,8 @@ public class ProducerInterceptorsTest {
             if (throwExceptionOnSend)
                 throw new KafkaException("Injected exception in AppendProducerInterceptor.onSend");
 
-            ProducerRecord<Integer, String> newRecord = new ProducerRecord<>(
+            return new ProducerRecord<>(
                     record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
-            return newRecord;
         }
 
         @Override

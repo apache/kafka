@@ -27,12 +27,16 @@ public enum TimestampType {
 
     public final int id;
     public final String name;
+
     TimestampType(int id, String name) {
         this.id = id;
         this.name = name;
     }
 
     public byte updateAttributes(byte attributes) {
+        if (this == NO_TIMESTAMP_TYPE)
+            throw new IllegalArgumentException("Cannot use NO_TIMESTAMP_TYPE in attributes");
+
         return this == CREATE_TIME ?
             (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
     }

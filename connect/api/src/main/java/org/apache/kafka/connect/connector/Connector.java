@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
@@ -42,7 +41,6 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-@InterfaceStability.Unstable
 public abstract class Connector {
 
     protected ConnectorContext context;

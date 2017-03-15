@@ -66,10 +66,10 @@ public class KTableMapValuesTest {
         String topic1 = "topic1";
 
         KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
+        KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
-            public Integer apply(String value) {
-                return new Integer(value);
+            public Integer apply(CharSequence value) {
+                return value.charAt(0) - 48;
             }
         });
 
@@ -78,10 +78,10 @@ public class KTableMapValuesTest {
 
         driver = new KStreamTestDriver(builder, stateDir);
 
-        driver.process(topic1, "A", "01");
-        driver.process(topic1, "B", "02");
-        driver.process(topic1, "C", "03");
-        driver.process(topic1, "D", "04");
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "B", "2");
+        driver.process(topic1, "C", "3");
+        driver.process(topic1, "D", "4");
         driver.flushState();
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
     }

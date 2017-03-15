@@ -109,6 +109,8 @@ public class WorkerSinkTaskTest {
     @Mock
     private Converter valueConverter;
     @Mock
+    private TransformationChain<SinkRecord> transformationChain;
+    @Mock
     private TaskStatus.Listener statusListener;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
@@ -130,7 +132,7 @@ public class WorkerSinkTaskTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, transformationChain, time);
 
         recordsReturned = 0;
     }
@@ -139,7 +141,7 @@ public class WorkerSinkTaskTest {
     public void testStartPaused() throws Exception {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, time);
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, transformationChain, time);
 
         expectInitializeTask();
         expectPollInitialAssignment();
@@ -164,7 +166,7 @@ public class WorkerSinkTaskTest {
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -178,7 +180,9 @@ public class WorkerSinkTaskTest {
         consumer.pause(partitions);
         PowerMock.expectLastCall();
 
-        // No records returned
+        // Offset commit as requested when pausing; No records returned by consumer.poll()
+        sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andStubReturn(Collections.emptyMap());
         expectConsumerPoll(0);
         sinkTask.put(Collections.<SinkRecord>emptyList());
         EasyMock.expectLastCall();
@@ -194,7 +198,7 @@ public class WorkerSinkTaskTest {
         PowerMock.expectLastCall();
 
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -221,7 +225,7 @@ public class WorkerSinkTaskTest {
 
         // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(records));
         EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
@@ -306,7 +310,7 @@ public class WorkerSinkTaskTest {
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -353,6 +357,9 @@ public class WorkerSinkTaskTest {
         consumer.resume(Collections.singleton(TOPIC_PARTITION2));
         EasyMock.expectLastCall();
 
+        statusListener.onResume(taskId);
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -371,7 +378,7 @@ public class WorkerSinkTaskTest {
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -424,7 +431,7 @@ public class WorkerSinkTaskTest {
 
         // iter 2
         expectConsumerPoll(2);
-        expectConvertMessages(2);
+        expectConversionAndTransformation(2);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -487,7 +494,7 @@ public class WorkerSinkTaskTest {
 
         // iter 2
         expectConsumerPoll(1);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
         sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
@@ -527,8 +534,8 @@ public class WorkerSinkTaskTest {
     @Test
     public void testMissingTimestampPropagation() throws Exception {
         expectInitializeTask();
-        expectConsumerPoll(1, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
-        expectConvertMessages(1);
+        expectConsumerPoll(1, Record.NO_TIMESTAMP, TimestampType.CREATE_TIME);
+        expectConversionAndTransformation(1);
 
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
 
@@ -544,7 +551,7 @@ public class WorkerSinkTaskTest {
 
         // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
         assertEquals(null, record.timestamp());
-        assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
+        assertEquals(TimestampType.CREATE_TIME, record.timestampType());
 
         PowerMock.verifyAll();
     }
@@ -556,7 +563,7 @@ public class WorkerSinkTaskTest {
 
         expectInitializeTask();
         expectConsumerPoll(1, timestamp, timestampType);
-        expectConvertMessages(1);
+        expectConversionAndTransformation(1);
 
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
 
@@ -677,9 +684,18 @@ public class WorkerSinkTaskTest {
                 });
     }
 
-    private void expectConvertMessages(final int numMessages) {
+    private void expectConversionAndTransformation(final int numMessages) {
         EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
+
+        final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
+        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
+                .andAnswer(new IAnswer<SinkRecord>() {
+                    @Override
+                    public SinkRecord answer() {
+                        return recordCapture.getValue();
+                    }
+                }).times(numMessages);
     }
 
     private abstract static class TestSinkTask extends SinkTask  {

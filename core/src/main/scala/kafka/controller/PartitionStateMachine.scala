@@ -17,13 +17,11 @@
 package kafka.controller
 
 import collection._
-import collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.utils.{Logging, ReplicationUtils}
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.controller.Callbacks.CallbackBuilder
 import kafka.utils.CoreUtils._
@@ -48,8 +46,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
-  private val topicChangeListener = new TopicChangeListener()
-  private val deleteTopicsListener = new DeleteTopicsListener()
+  private val topicChangeListener = new TopicChangeListener(controller)
+  private val deleteTopicsListener = new DeleteTopicsListener(controller)
   private val partitionModificationsListeners: mutable.Map[String, PartitionModificationsListener] = mutable.Map.empty
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
@@ -375,7 +373,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   def registerPartitionChangeListener(topic: String) = {
-    partitionModificationsListeners.put(topic, new PartitionModificationsListener(topic))
+    partitionModificationsListeners.put(topic, new PartitionModificationsListener(controller, topic))
     zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), partitionModificationsListeners(topic))
   }
 
@@ -406,17 +404,17 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * This is the zookeeper listener that triggers all the state transitions for a partition
    */
-  class TopicChangeListener extends IZkChildListener with Logging {
-    this.logIdent = "[TopicChangeListener on Controller " + controller.config.brokerId + "]: "
+  class TopicChangeListener(protected val controller: KafkaController) extends ControllerZkChildListener {
 
-    @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    protected def logName = "TopicChangeListener"
+
+    def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           try {
             val currentChildren = {
-              debug("Topic change listener fired for path %s with children %s".format(parentPath, children.asScala.mkString(",")))
-              children.asScala.toSet
+              debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
+              children.toSet
             }
             val newTopics = currentChildren -- controllerContext.allTopics
             val deletedTopics = controllerContext.allTopics -- currentChildren
@@ -431,7 +429,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if (newTopics.nonEmpty)
               controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet)
           } catch {
-            case e: Throwable => error("Error while handling new topic", e )
+            case e: Throwable => error("Error while handling new topic", e)
           }
         }
       }
@@ -443,21 +441,22 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * 1. Add the topic to be deleted to the delete topics cache, only if the topic exists
    * 2. If there are topics to be deleted, it signals the delete topic thread
    */
-  class DeleteTopicsListener() extends IZkChildListener with Logging {
-    this.logIdent = "[DeleteTopicsListener on " + controller.config.brokerId + "]: "
-    val zkUtils = controllerContext.zkUtils
+  class DeleteTopicsListener(protected val controller: KafkaController) extends ControllerZkChildListener {
+    private val zkUtils = controllerContext.zkUtils
+
+    protected def logName = "DeleteTopicsListener"
 
     /**
      * Invoked when a topic is being deleted
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    @throws[Exception]
+    def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
-        var topicsToBeDeleted = children.asScala.toSet
+        var topicsToBeDeleted = children.toSet
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
         val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
-        if(nonExistentTopics.nonEmpty) {
+        if (nonExistentTopics.nonEmpty) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
@@ -481,29 +480,20 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
           for (topic <- topicsToBeDeleted) {
             info("Removing " + getDeleteTopicPath(topic) + " since delete topic is disabled")
-            val zkUtils = controllerContext.zkUtils
             zkUtils.zkClient.delete(getDeleteTopicPath(topic))
           }
         }
       }
     }
 
-    /**
-     *
-     * @throws Exception
-   *             On any error.
-     */
-    @throws(classOf[Exception])
-    def handleDataDeleted(dataPath: String) {
-    }
+    def doHandleDataDeleted(dataPath: String) {}
   }
 
-  class PartitionModificationsListener(topic: String) extends IZkDataListener with Logging {
+  class PartitionModificationsListener(protected val controller: KafkaController, topic: String) extends ControllerZkDataListener {
 
-    this.logIdent = "[AddPartitionsListener on " + controller.config.brokerId + "]: "
+    protected def logName = "AddPartitionsListener"
 
-    @throws(classOf[Exception])
-    def handleDataChange(dataPath : String, data: Object) {
+    def doHandleDataChange(dataPath: String, data: AnyRef) {
       inLock(controllerContext.controllerLock) {
         try {
           info(s"Partition modification triggered $data for path $dataPath")
@@ -521,15 +511,13 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             }
           }
         } catch {
-          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
+          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e)
         }
       }
     }
 
-    @throws(classOf[Exception])
-    def handleDataDeleted(parentPath : String) {
-      // this is not implemented for partition change
-    }
+    // this is not implemented for partition change
+    def doHandleDataDeleted(parentPath: String): Unit = {}
   }
 }
 

@@ -46,13 +46,13 @@ public class SaslHandshakeRequest extends AbstractRequest {
     private final String mechanism;
 
     public SaslHandshakeRequest(String mechanism) {
-        super(new Struct(CURRENT_SCHEMA));
+        super(new Struct(CURRENT_SCHEMA), ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
         struct.set(MECHANISM_KEY_NAME, mechanism);
         this.mechanism = mechanism;
     }
 
-    public SaslHandshakeRequest(Struct struct) {
-        super(struct);
+    public SaslHandshakeRequest(Struct struct, short versionId) {
+        super(struct, versionId);
         mechanism = struct.getString(MECHANISM_KEY_NAME);
     }
 
@@ -61,11 +61,12 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
         switch (versionId) {
             case 0:
                 List<String> enabledMechanisms = Collections.emptyList();
-                return new SaslHandshakeResponse(Errors.forException(e).code(), enabledMechanisms);
+                return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id)));
@@ -73,11 +74,12 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer, int versionId) {
-        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer));
+        return new SaslHandshakeRequest(ProtoUtils.parseRequest(ApiKeys.SASL_HANDSHAKE.id, versionId, buffer),
+                (short) versionId);
     }
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer) {
-        return new SaslHandshakeRequest(CURRENT_SCHEMA.read(buffer));
+        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.SASL_HANDSHAKE.id));
     }
 }
 

@@ -14,7 +14,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 import java.util.ArrayList;
@@ -66,7 +66,7 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse body) {
+    public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
         // Do nothing
     }
 

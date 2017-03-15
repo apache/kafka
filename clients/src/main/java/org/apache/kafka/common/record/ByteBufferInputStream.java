@@ -16,34 +16,41 @@
  */
 package org.apache.kafka.common.record;
 
+import java.io.DataInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
  * A byte buffer backed input inputStream
  */
-public class ByteBufferInputStream extends InputStream {
-
-    private ByteBuffer buffer;
+public final class ByteBufferInputStream extends DataInputStream {
 
     public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
+        super(new UnderlyingInputStream(buffer));
     }
 
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
-    }
+    private static final class UnderlyingInputStream extends InputStream {
+        private final ByteBuffer buffer;
 
-    public int read(byte[] bytes, int off, int len) {
-        if (!buffer.hasRemaining()) {
-            return -1;
+        public UnderlyingInputStream(ByteBuffer buffer) {
+            this.buffer = buffer;
         }
 
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
+        public int read() {
+            if (!buffer.hasRemaining()) {
+                return -1;
+            }
+            return buffer.get() & 0xFF;
+        }
+
+        public int read(byte[] bytes, int off, int len) {
+            if (!buffer.hasRemaining()) {
+                return -1;
+            }
+
+            len = Math.min(len, buffer.remaining());
+            buffer.get(bytes, off, len);
+            return len;
+        }
     }
 }

@@ -22,6 +22,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -158,18 +159,13 @@ public class VerifiableLog4jAppender {
      *
      * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate
      * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests,
-     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
     public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
         Properties props = new Properties();
-        InputStream propStream = null;
-        try {
-            propStream = new FileInputStream(filename);
+        try (InputStream propStream = new FileInputStream(filename)) {
             props.load(propStream);
-        } finally {
-            if (propStream != null)
-                propStream.close();
         }
         return props;
     }
@@ -222,10 +218,10 @@ public class VerifiableLog4jAppender {
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
-                System.exit(0);
+                Exit.exit(0);
             } else {
                 parser.handleError(e);
-                System.exit(1);
+                Exit.exit(1);
             }
         }
 

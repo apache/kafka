@@ -20,16 +20,19 @@ package kafka.admin
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
+
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{TopicAndPartition, _}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
+
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -81,7 +84,8 @@ object ConsumerGroupCommand extends Logging {
                 case Some("Dead") =>
                   printError(s"Consumer group '$groupId' does not exist.")
                 case Some("Empty") =>
-                  printError(s"Consumer group '$groupId' has no active members.")
+                  System.err.println(s"Consumer group '$groupId' has no active members.")
+                  printAssignment(assignments, true)
                 case Some("PreparingRebalance") | Some("AwaitingSync") =>
                   System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
                   printAssignment(assignments, true)
@@ -107,6 +111,8 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
+  val MISSING_COLUMN_VALUE = "-"
+
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
     println(s"Error: $msg")
     e.foreach(debug("Exception in consumer group command", _))
@@ -120,11 +126,11 @@ object ConsumerGroupCommand extends Logging {
 
     groupAssignment.foreach { consumerAssignment =>
       print("%-30s %-10s %-15s %-15s %-10s %-50s".format(
-        consumerAssignment.topic.getOrElse("-"), consumerAssignment.partition.getOrElse("-"),
-        consumerAssignment.offset.getOrElse("-"), consumerAssignment.logEndOffset.getOrElse("-"),
-        consumerAssignment.lag.getOrElse("-"), consumerAssignment.consumerId.getOrElse("-")))
+        consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
       if (useNewConsumer)
-        print("%-30s %s".format(consumerAssignment.host.getOrElse("-"), consumerAssignment.clientId.getOrElse("-")))
+        print("%-30s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
       println()
     }
   }
@@ -236,9 +242,7 @@ object ConsumerGroupCommand extends Logging {
       // mapping of topic partition -> consumer id
       val consumerIdByTopicPartition = topicPartitions.map { topicPartition =>
         val owner = zkUtils.readDataMaybeNull(new ZKGroupTopicDirs(group, topicPartition.topic).consumerOwnerDir + "/" + topicPartition.partition)._1
-        var consumerId = ""
-        owner.foreach(o => consumerId = o.substring(0, o.lastIndexOf('-')))
-        topicPartition -> consumerId
+        topicPartition -> owner.map(o => o.substring(0, o.lastIndexOf('-'))).getOrElse(MISSING_COLUMN_VALUE)
       }.toMap
 
       // mapping of consumer id -> list of topic partitions
@@ -302,22 +306,23 @@ object ConsumerGroupCommand extends Logging {
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
-        if (offsetAndMetadata == OffsetMetadataAndError.NoOffset) {
-          val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
-          // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
-          // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-          try {
-            val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-            offsetMap.put(topicAndPartition, offset)
-          } catch {
-            case z: ZkNoNodeException =>
-              printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
-          }
+        offsetAndMetadata match {
+          case OffsetMetadataAndError.NoOffset =>
+            val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
+            // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
+            // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
+            try {
+              val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
+              offsetMap.put(topicAndPartition, offset)
+            } catch {
+              case z: ZkNoNodeException =>
+                printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
+            }
+          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
+            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
+          case _ =>
+            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
-          offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
-        else
-          printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${Errors.forCode(offsetAndMetadata.error).exception}.")
       }
       channel.disconnect()
       offsetMap.toMap
@@ -367,7 +372,7 @@ object ConsumerGroupCommand extends Logging {
     private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
       try {
         zkUtils.getBrokerInfo(brokerId)
-          .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+          .map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
           .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerGroupCommand"))
           .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId)))
       } catch {
@@ -397,23 +402,36 @@ object ConsumerGroupCommand extends Logging {
           case None =>
             None
           case Some(consumers) =>
-            if (consumers.isEmpty)
-              Some(Array[PartitionAssignmentState]())
-            else {
-              val consumer = getConsumer()
-              Some(consumers.sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-                val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-                val partitionOffsets = topicPartitions.flatMap { topicPartition =>
-                  Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
-                    topicPartition -> offsetAndMetadata.offset
-                  }
-                }.toMap
-                collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
-                  partitionOffsets.get, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
-                  Some(s"${consumerSummary.clientId}"))
-              })
-            }
-        }
+            var assignedTopicPartitions = Array[TopicPartition]()
+            val offsets = adminClient.listGroupOffsets(group)
+            val rowsWithConsumer =
+              if (offsets.isEmpty)
+                List[PartitionAssignmentState]()
+              else {
+                consumers.sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
+                  val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+                  assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
+                  val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
+                    new TopicAndPartition(topicPartition) -> offsets.get(topicPartition)
+                  }.toMap
+                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
+                    partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+                    Some(s"${consumerSummary.clientId}"))
+                }
+              }
+
+            val rowsWithoutConsumer = offsets.filterNot {
+              case (topicPartition, offset) => assignedTopicPartitions.contains(topicPartition)
+              }.flatMap {
+                case (topicPartition, offset) =>
+                  val topicAndPartition = new TopicAndPartition(topicPartition)
+                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
+                      Map(topicAndPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
+                      Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
+                }
+
+            Some(rowsWithConsumer ++ rowsWithoutConsumer)
+      }
       )
     }
 

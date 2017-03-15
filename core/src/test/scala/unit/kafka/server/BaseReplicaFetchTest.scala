@@ -24,8 +24,8 @@ import org.junit.{After, Before, Test}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import TestUtils._
-import kafka.common._
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 
 abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
@@ -75,10 +75,10 @@ abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
     def logsMatch(): Boolean = {
       var result = true
       for (topic <- List(topic1, topic2)) {
-        val topicAndPart = TopicAndPartition(topic, partition)
-        val expectedOffset = brokers.head.getLogManager().getLog(topicAndPart).get.logEndOffset
+        val tp = new TopicPartition(topic, partition)
+        val expectedOffset = brokers.head.getLogManager().getLog(tp).get.logEndOffset
         result = result && expectedOffset > 0 && brokers.forall { item =>
-          expectedOffset == item.getLogManager().getLog(topicAndPart).get.logEndOffset
+          expectedOffset == item.getLogManager().getLog(tp).get.logEndOffset
         }
       }
       result

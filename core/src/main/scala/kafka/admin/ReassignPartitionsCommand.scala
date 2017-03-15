@@ -74,7 +74,7 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkUtils, partitionsToBeReassigned, reassignedPartitionsStatus)
   }
 
-  private def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
+  private[admin] def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus], admin: AdminUtilities = AdminUtils): Unit = {
     var changed = false
 
     //If all partitions have completed remove the throttle
@@ -82,11 +82,11 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null){
-          AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
+          admin.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
       }
@@ -94,11 +94,11 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
       for (topic <- topics) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
           | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null){
-          AdminUtils.changeTopicConfig(zkUtils, topic, configs)
+          admin.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
       }
@@ -116,8 +116,8 @@ object ReassignPartitionsCommand extends Logging {
     val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
     val disableRackAware = opts.options.has(opts.disableRackAware)
     val (proposedAssignments, currentAssignments) = generateAssignment(zkUtils, brokerListToReassign, topicsToMoveJsonString, disableRackAware)
-    println("Current partition replica assignment\n\n%s".format(ZkUtils.formatAsReassignmentJson(currentAssignments)))
-    println("Proposed partition reassignment configuration\n\n%s".format(ZkUtils.formatAsReassignmentJson(proposedAssignments)))
+    println("Current partition replica assignment\n%s\n".format(ZkUtils.formatAsReassignmentJson(currentAssignments)))
+    println("Proposed partition reassignment configuration\n%s".format(ZkUtils.formatAsReassignmentJson(proposedAssignments)))
   }
 
   def generateAssignment(zkUtils: ZkUtils, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
@@ -303,7 +303,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]])
+class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils)
   extends Logging {
 
   def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
@@ -329,10 +329,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
       for (id <- brokers) {
-        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
+        val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
         configs.put(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString)
         configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
-        AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
+        admin.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(s"The throttle limit was set to $throttle B/s")
     }
@@ -360,16 +360,17 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    //For each partition in the proposed list, filter out any replicas that exist now (i.e. are in the proposed list and hence are not moving)
-    existing.map { case (tp, current) =>
-      tp -> (proposed(tp).toSet -- current).toSeq
+    //For each partition in the proposed list, filter out any replicas that exist now, and hence aren't being moved.
+    proposed.map { case (tp, proposedReplicas) =>
+      tp -> (proposedReplicas.toSet -- existing(tp)).toSeq
     }
   }
 
   private def preRebalanceReplicaForMovingPartitions(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    //Throttle all existing replicas (as any one might be a leader). So just filter out those which aren't moving
-    existing.filter { case (tp, current) =>
-      (proposed(tp).toSet -- current).nonEmpty
+    def moving(before: Seq[Int], after: Seq[Int]) = (after.toSet -- before.toSet).nonEmpty
+    //For any moving partition, throttle all the original (pre move) replicas (as any one might be a leader)
+    existing.filter { case (tp, preMoveReplicas) =>
+      proposed.contains(tp) && moving(preMoveReplicas, proposed(tp))
     }
   }
 

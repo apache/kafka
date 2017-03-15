@@ -43,13 +43,13 @@ public interface OffsetBackingStore {
     /**
      * Start this offset store.
      */
-    public void start();
+    void start();
 
     /**
      * Stop the backing store. Implementations should attempt to shutdown gracefully, but not block
      * indefinitely.
      */
-    public void stop();
+    void stop();
 
     /**
      * Get the values for the specified keys
@@ -57,7 +57,7 @@ public interface OffsetBackingStore {
      * @param callback callback to invoke on completion
      * @return future for the resulting map from key to value
      */
-    public Future<Map<ByteBuffer, ByteBuffer>> get(
+    Future<Map<ByteBuffer, ByteBuffer>> get(
             Collection<ByteBuffer> keys,
             Callback<Map<ByteBuffer, ByteBuffer>> callback);
 
@@ -67,12 +67,12 @@ public interface OffsetBackingStore {
      * @param callback callback to invoke on completion
      * @return void future for the operation
      */
-    public Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
+    Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
                             Callback<Void> callback);
 
     /**
      * Configure class with the given key-value pairs
      * @param config can be DistributedConfig or StandaloneConfig
      */
-    public void configure(WorkerConfig config);
+    void configure(WorkerConfig config);
 }

@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import kafka.utils.ZkUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.{Json, Logging, ZKCheckedEphemeral}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -53,7 +52,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
   }
 
-  private def getControllerID(): Int = {
+  def getControllerID(): Int = {
     controllerContext.zkUtils.readDataMaybeNull(electionPath)._1 match {
        case Some(controller) => KafkaController.parseControllerId(controller)
        case None => -1
@@ -121,7 +120,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      * Called when the leader information stored in zookeeper has changed. Record the new leader in memory
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleDataChange(dataPath: String, data: Object) {
       val shouldResign = inLock(controllerContext.controllerLock) {
         val amILeaderBeforeDataChange = amILeader
@@ -131,9 +130,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         amILeaderBeforeDataChange && !amILeader
       }
 
-      if (shouldResign) {
+      if (shouldResign)
         onResigningAsLeader()
-      }
     }
 
     /**
@@ -141,7 +139,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      * @throws Exception
      *             On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleDataDeleted(dataPath: String) { 
       val shouldResign = inLock(controllerContext.controllerLock) {
         debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
@@ -149,9 +147,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         amILeader
       }
 
-      if(shouldResign) {
+      if (shouldResign)
         onResigningAsLeader()
-      }
 
       inLock(controllerContext.controllerLock) {
         elect

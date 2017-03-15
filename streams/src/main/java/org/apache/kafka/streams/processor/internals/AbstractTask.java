@@ -70,8 +70,7 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
-
+            this.stateMgr = new ProcessorStateManager(id, partitions, restoreConsumer, isStandby, stateDirectory, topology.storeToChangelogTopic());
         } catch (IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
@@ -85,6 +84,7 @@ public abstract class AbstractTask {
             log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
+
     }
 
     public final TaskId id() {
@@ -122,11 +122,12 @@ public abstract class AbstractTask {
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
+     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
-    void closeStateManager() {
+    void closeStateManager(final boolean writeCheckpoint) {
         log.trace("task [{}] Closing", id());
         try {
-            stateMgr.close(recordCollectorOffsets());
+            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
         } catch (IOException e) {
             throw new ProcessorStateException("Error while closing the state manager", e);
         }
@@ -156,29 +157,37 @@ public abstract class AbstractTask {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamTask.
+     * Produces a string representation containing useful information about a StreamTask.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
 
         // print topology
         if (topology != null) {
-            sb.append("\t\t\t" + topology.toString());
+            sb.append(indent).append(topology.toString(indent + "\t"));
         }
 
         // print assigned partitions
         if (partitions != null && !partitions.isEmpty()) {
-            sb.append("\t\t\tPartitions [");
+            sb.append(indent).append("Partitions [");
             for (TopicPartition topicPartition : partitions) {
-                sb.append(topicPartition.toString() + ",");
+                sb.append(topicPartition.toString()).append(", ");
             }
-            sb.setLength(sb.length() - 1);
-            sb.append("]");
+            sb.setLength(sb.length() - 2);
+            sb.append("]\n");
         }
-
-        sb.append("\n");
         return sb.toString();
     }
 

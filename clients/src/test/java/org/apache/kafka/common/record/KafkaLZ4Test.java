@@ -41,11 +41,13 @@ public class KafkaLZ4Test {
     private final boolean useBrokenFlagDescriptorChecksum;
     private final boolean ignoreFlagDescriptorChecksum;
     private final byte[] payload;
+    private final boolean close;
 
-    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum, byte[] payload) {
+    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum, byte[] payload, boolean close) {
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.payload = payload;
+        this.close = close;
     }
 
     @Parameters
@@ -55,7 +57,8 @@ public class KafkaLZ4Test {
         List<Object[]> values = new ArrayList<Object[]>();
         for (boolean broken : Arrays.asList(false, true))
             for (boolean ignore : Arrays.asList(false, true))
-                values.add(new Object[] {broken, ignore, payload});
+                for (boolean close : Arrays.asList(false, true))
+                    values.add(new Object[] {broken, ignore, payload, close});
         return values;
     }
 
@@ -64,26 +67,30 @@ public class KafkaLZ4Test {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(output, this.useBrokenFlagDescriptorChecksum);
         lz4.write(this.payload, 0, this.payload.length);
-        lz4.flush();
+        if (this.close) {
+            lz4.close();
+        } else {
+            lz4.flush();
+        }
         byte[] compressed = output.toByteArray();
 
         // Check magic bytes stored as little-endian
         int offset = 0;
-        assertEquals(compressed[offset++], 0x04);
-        assertEquals(compressed[offset++], 0x22);
-        assertEquals(compressed[offset++], 0x4D);
-        assertEquals(compressed[offset++], 0x18);
+        assertEquals(0x04, compressed[offset++]);
+        assertEquals(0x22, compressed[offset++]);
+        assertEquals(0x4D, compressed[offset++]);
+        assertEquals(0x18, compressed[offset++]);
 
         // Check flg descriptor
         byte flg = compressed[offset++];
 
         // 2-bit version must be 01
         int version = (flg >>> 6) & 3;
-        assertEquals(version, 1);
+        assertEquals(1, version);
 
         // Reserved bits should always be 0
         int reserved = flg & 3;
-        assertEquals(reserved, 0);
+        assertEquals(0, reserved);
 
         // Check block descriptor
         byte bd = compressed[offset++];
@@ -96,9 +103,9 @@ public class KafkaLZ4Test {
 
         // Multiple reserved bit ranges in block descriptor
         reserved = bd & 15;
-        assertEquals(reserved, 0);
+        assertEquals(0, reserved);
         reserved = (bd >>> 7) & 1;
-        assertEquals(reserved, 0);
+        assertEquals(0, reserved);
 
         // If flg descriptor sets content size flag
         // there are 8 additional bytes before checksum
@@ -121,7 +128,16 @@ public class KafkaLZ4Test {
         int hash = XXHashFactory.fastestInstance().hash32().hash(compressed, off, len, 0);
 
         byte hc = compressed[offset++];
-        assertEquals(hc, (byte) ((hash >> 8) & 0xFF));
+        assertEquals((byte) ((hash >> 8) & 0xFF), hc);
+
+        // Check EndMark, data block with size `0` expressed as a 32-bits value
+        if (this.close) {
+            offset = compressed.length - 4;
+            assertEquals(0, compressed[offset++]);
+            assertEquals(0, compressed[offset++]);
+            assertEquals(0, compressed[offset++]);
+            assertEquals(0, compressed[offset++]);
+        }
 
         ByteArrayInputStream input = new ByteArrayInputStream(compressed);
         try {

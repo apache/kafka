@@ -21,7 +21,7 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.{Callable, Executors, TimeUnit}
-import java.util.{Properties, Random}
+import java.util.Properties
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
@@ -47,7 +47,9 @@ import org.junit.Assert._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.network.Mode
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -123,6 +125,12 @@ object TestUtils extends Logging {
     server
   }
 
+  def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
+    server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
+
+  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
+    new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+
   /**
    * Create a test config for the provided parameters.
    *
@@ -148,7 +156,19 @@ object TestUtils extends Logging {
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    servers.map(s => formatAddress(s.config.hostName, s.boundPort(protocol))).mkString(",")
+    servers.map { s =>
+      val listener = s.config.advertisedListeners.find(_.securityProtocol == protocol).getOrElse(
+        sys.error(s"Could not find listener with security protocol $protocol"))
+      formatAddress(listener.host, boundPort(s, protocol))
+    }.mkString(",")
+  }
+
+  def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
+    servers.map { s =>
+      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
+        sys.error(s"Could not find listener with name ${listenerName.value}"))
+      formatAddress(listener.host, s.boundPort(listenerName))
+    }.mkString(",")
   }
 
   /**
@@ -197,6 +217,8 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
+    props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
+    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
@@ -226,7 +248,7 @@ object TestUtils extends Logging {
     // create topic
     AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
-    (0 until numPartitions).map { case i =>
+    (0 until numPartitions).map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, i)
     }.toMap
@@ -269,16 +291,21 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wrap the message in a message set
-   *
-   * @param payload The bytes of the message
+   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
    */
-  def singleMessageSet(payload: Array[Byte],
-                       codec: CompressionCodec = NoCompressionCodec,
+  def fail(msg: String): Nothing = throw new AssertionError(msg)
+
+  /**
+   * Wrap a single record log buffer.
+   */
+  def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
-                       timestamp: Long = Message.NoTimestamp,
-                       magicValue: Byte = Message.CurrentMagicValue) =
-    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, timestamp, magicValue))
+                       codec: CompressionType = CompressionType.NONE,
+                       timestamp: Long = Record.NO_TIMESTAMP,
+                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE) = {
+    val record = Record.create(magicValue, timestamp, key, value)
+    MemoryRecords.withRecords(codec, record)
+  }
 
   /**
    * Generate an array of random bytes
@@ -594,7 +621,8 @@ object TestUtils extends Logging {
   def createBrokersInZk(brokerMetadatas: Seq[kafka.admin.BrokerMetadata], zkUtils: ZkUtils): Seq[Broker] = {
     val brokers = brokerMetadatas.map { b =>
       val protocol = SecurityProtocol.PLAINTEXT
-      Broker(b.id, Map(protocol -> EndPoint("localhost", 6667, protocol)).toMap, b.rack)
+      val listenerName = ListenerName.forSecurityProtocol(protocol)
+      Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), b.rack)
     }
     brokers.foreach(b => zkUtils.registerBrokerInZk(b.id, "localhost", 6667, b.endPoints, jmxPort = -1,
       rack = b.rack, ApiVersion.latestVersion))
@@ -602,7 +630,7 @@ object TestUtils extends Logging {
   }
 
   def deleteBrokersInZk(zkUtils: ZkUtils, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
+    val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     brokers.foreach(b => zkUtils.deletePath(ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }
@@ -745,30 +773,21 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
         fail(msg)
-      Thread.sleep(waitTime.min(100L))
+      Thread.sleep(waitTime.min(pause))
     }
     // should never hit here
     throw new RuntimeException("unexpected error")
   }
 
   def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
-    val partitionOpt = server.replicaManager.getPartition(topic, partitionId)
-    partitionOpt match {
-      case None => false
-      case Some(partition) =>
-        val replicaOpt = partition.leaderReplicaIfLocal
-        replicaOpt match {
-          case None => false
-          case Some(_) => true
-        }
-    }
+    server.replicaManager.getPartition(new TopicPartition(topic, partitionId)).exists(_.leaderReplicaIfLocal.isDefined)
   }
 
   def createRequestByteBuffer(request: RequestOrResponse): ByteBuffer = {
@@ -812,12 +831,11 @@ object TestUtils extends Logging {
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
                              timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    val tp = new TopicPartition(topic, partition)
     TestUtils.waitUntilTrue(() =>
       servers.exists { server =>
-        server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
-      },
-      "Partition [%s,%d] leaders not made yet after %d ms".format(topic, partition, timeout),
-      waitTime = timeout
+        server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
+      }, s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout
     )
   }
 
@@ -859,7 +877,7 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
     TestUtils.waitUntilTrue(() => {
         val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
-        leaderBroker.replicaManager.underReplicatedPartitionCount() == 0
+        leaderBroker.replicaManager.underReplicatedPartitionCount == 0
       },
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
@@ -1014,7 +1032,7 @@ object TestUtils extends Logging {
   }
 
   def verifyTopicDeletion(zkUtils: ZkUtils, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
-    val topicAndPartitions = (0 until numPartitions).map(TopicAndPartition(topic, _))
+    val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
@@ -1022,13 +1040,13 @@ object TestUtils extends Logging {
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>
-      servers.forall(server => topicAndPartitions.forall(tp => server.replicaManager.getPartition(tp.topic, tp.partition).isEmpty)),
+      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.forall(server => topicAndPartitions.forall(tp => server.getLogManager().getLog(tp).isEmpty)))
+      servers.forall(server => topicPartitions.forall(tp => server.getLogManager().getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
-    TestUtils.waitUntilTrue(() => servers.forall(server => topicAndPartitions.forall { tp =>
+    TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
       val checkpoints = server.getLogManager().logDirs.map { logDir =>
         new OffsetCheckpoint(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
@@ -1048,12 +1066,16 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
+  def copyOf(props: Properties): Properties = {
+    val copy = new Properties()
+    copy.putAll(props)
+    copy
+  }
 
+  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
     val trustStore = trustStoreFile.getOrElse {
       throw new Exception("SSL enabled but no trustStoreFile provided")
     }
-
 
     val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
 

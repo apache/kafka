@@ -58,7 +58,7 @@ object Mx4jLoader extends Logging {
       mbs.registerMBean(xsltProcessor, processorName)
       httpAdaptorClass.getMethod("start").invoke(httpAdaptor)
       info("mx4j successfuly loaded")
-      true
+      return true
     }
     catch {
 	  case _: ClassNotFoundException =>

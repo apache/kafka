@@ -31,11 +31,8 @@ class KafkaVersion(LooseVersion):
         assert v10 > v9  # assertion passes!
     """
     def __init__(self, version_string):
-        self.is_trunk = (version_string.lower() == "trunk")
-        if self.is_trunk:
-            # Since "trunk" may actually be a branch that is not trunk,
-            # use kafkatest_version() for comparison purposes,
-            # and track whether we're in "trunk" with a flag
+        self.is_dev = (version_string.lower() == "dev")
+        if self.is_dev:
             version_string = kafkatest_version()
 
             # Drop dev suffix if present
@@ -48,22 +45,22 @@ class KafkaVersion(LooseVersion):
         LooseVersion.__init__(self, version_string)
 
     def __str__(self):
-        if self.is_trunk:
-            return "trunk"
+        if self.is_dev:
+            return "dev"
         else:
             return LooseVersion.__str__(self)
 
 
 def get_version(node=None):
     """Return the version attached to the given node.
-    Default to trunk if node or node.version is undefined (aka None)
+    Default to DEV_BRANCH if node or node.version is undefined (aka None)
     """
     if node is not None and hasattr(node, "version") and node.version is not None:
         return node.version
     else:
-        return TRUNK
+        return DEV_BRANCH
 
-TRUNK = KafkaVersion("trunk")
+DEV_BRANCH = KafkaVersion("dev")
 
 # 0.8.2.X versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -78,7 +75,11 @@ LATEST_0_9 = V_0_9_0_1
 # 0.10.0.X versions
 V_0_10_0_0 = KafkaVersion("0.10.0.0")
 V_0_10_0_1 = KafkaVersion("0.10.0.1")
-# Adding 0.10.0 as the next version will be 0.10.1.x
 LATEST_0_10_0 = V_0_10_0_1
 
-LATEST_0_10 = LATEST_0_10_0
+# 0.10.1.x versions
+V_0_10_1_0 = KafkaVersion("0.10.1.0")
+V_0_10_1_1 = KafkaVersion("0.10.1.1")
+LATEST_0_10_1 = V_0_10_1_1
+
+LATEST_0_10 = LATEST_0_10_1

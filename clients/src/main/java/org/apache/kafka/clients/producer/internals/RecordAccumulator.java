@@ -12,8 +12,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.Iterator;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -27,8 +25,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,7 +50,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * This class acts as a queue that accumulates records into {@link org.apache.kafka.common.record.MemoryRecords}
+ * This class acts as a queue that accumulates records into {@link MemoryRecords}
  * instances to be sent to the server.
  * <p>
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
@@ -77,7 +78,7 @@ public final class RecordAccumulator {
     /**
      * Create a new record accumulator
      * 
-     * @param batchSize The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
+     * @param batchSize The size to use when allocating {@link MemoryRecords} instances
      * @param totalSize The maximum memory the record accumulator can use.
      * @param compression The compression codec for the records
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
@@ -164,6 +165,7 @@ public final class RecordAccumulator {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
+        ByteBuffer buffer = null;
         try {
             // check if we have an in-progress batch
             Deque<RecordBatch> dq = getOrCreateDeque(tp);
@@ -178,7 +180,7 @@ public final class RecordAccumulator {
             // we don't have an in-progress record batch try to allocate a new batch
             int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
-            ByteBuffer buffer = free.allocate(size, maxTimeToBlock);
+            buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed)
@@ -187,18 +189,24 @@ public final class RecordAccumulator {
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                    free.deallocate(buffer);
                     return appendResult;
                 }
-                MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
-                RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
+
+                MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, compression, TimestampType.CREATE_TIME, this.batchSize);
+                RecordBatch batch = new RecordBatch(tp, recordsBuilder, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
-                return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
+
+                // Don't deallocate this buffer in the finally block as it's being used in the record batch
+                buffer = null;
+                
+                return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
             }
         } finally {
+            if (buffer != null)
+                free.deallocate(buffer);
             appendsInProgress.decrementAndGet();
         }
     }
@@ -212,9 +220,9 @@ public final class RecordAccumulator {
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
             if (future == null)
-                last.records.close();
+                last.close();
             else
-                return new RecordAppendResult(future, deque.size() > 1 || last.records.isFull(), false);
+                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
         }
         return null;
     }
@@ -240,13 +248,15 @@ public final class RecordAccumulator {
                     Iterator<RecordBatch> batchIterator = dq.iterator();
                     while (batchIterator.hasNext()) {
                         RecordBatch batch = batchIterator.next();
-                        boolean isFull = batch != lastBatch || batch.records.isFull();
-                        // check if the batch is expired
+                        boolean isFull = batch != lastBatch || batch.isFull();
+                        // Check if the batch has expired. Expired batches are closed by maybeExpire, but callbacks
+                        // are invoked after completing the iterations, since sends invoked from callbacks
+                        // may append more batches to the deque being iterated. The batch is deallocated after
+                        // callbacks are invoked.
                         if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
                             count++;
                             batchIterator.remove();
-                            deallocate(batch);
                         } else {
                             // Stop at the first batch that has not expired.
                             break;
@@ -255,8 +265,13 @@ public final class RecordAccumulator {
                 }
             }
         }
-        if (!expiredBatches.isEmpty())
+        if (!expiredBatches.isEmpty()) {
             log.trace("Expired {} batches in accumulator", count);
+            for (RecordBatch batch : expiredBatches) {
+                batch.expirationDone();
+                deallocate(batch);
+            }
+        }
 
         return expiredBatches;
     }
@@ -319,7 +334,7 @@ public final class RecordAccumulator {
                         long waitedTimeMs = nowMs - batch.lastAttemptMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
-                        boolean full = deque.size() > 1 || batch.records.isFull();
+                        boolean full = deque.size() > 1 || batch.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
@@ -389,15 +404,15 @@ public final class RecordAccumulator {
                                 boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
                                 // Only drain the batch if it is not during backoff period.
                                 if (!backoff) {
-                                    if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                    if (size + first.sizeInBytes() > maxSize && !ready.isEmpty()) {
                                         // there is a rare case that a single batch size is larger than the request size due
                                         // to compression; in this case we will still eventually send this batch in a single
                                         // request
                                         break;
                                     } else {
                                         RecordBatch batch = deque.pollFirst();
-                                        batch.records.close();
-                                        size += batch.records.sizeInBytes();
+                                        batch.close();
+                                        size += batch.sizeInBytes();
                                         ready.add(batch);
                                         batch.drainedMs = now;
                                     }
@@ -437,7 +452,7 @@ public final class RecordAccumulator {
      */
     public void deallocate(RecordBatch batch) {
         incomplete.remove(batch);
-        free.deallocate(batch.records.buffer(), batch.records.initialCapacity());
+        free.deallocate(batch.buffer(), batch.initialCapacity());
     }
     
     /**
@@ -507,7 +522,7 @@ public final class RecordAccumulator {
             Deque<RecordBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
-                batch.records.close();
+                batch.close();
                 dq.remove(batch);
             }
             batch.done(-1L, Record.NO_TIMESTAMP, new IllegalStateException("Producer is closed forcefully."));

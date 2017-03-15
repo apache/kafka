@@ -37,13 +37,7 @@ public abstract class AbstractStream<K> {
     protected final String name;
     protected final Set<String> sourceNodes;
 
-    public AbstractStream(AbstractStream<K> stream) {
-        this.topology = stream.topology;
-        this.name = stream.name;
-        this.sourceNodes = stream.sourceNodes;
-    }
-
-    public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
+    AbstractStream(final KStreamBuilder topology, String name, final Set<String> sourceNodes) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
@@ -53,7 +47,7 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
-    protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
+    Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(other.sourceNodes);
@@ -63,7 +57,7 @@ public abstract class AbstractStream<K> {
         return allSourceNodes;
     }
 
-    public static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
+    static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override
             public R apply(T2 value2, T1 value1) {
@@ -73,27 +67,27 @@ public abstract class AbstractStream<K> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                  final Serde<T> aggValueSerde,
-                                                                  final String storeName) {
+    static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+                                                                   final Serde<T> aggValueSerde,
+                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
     @SuppressWarnings("unchecked")
-    public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                     final Serde<T> aggValSerde,
-                                                                                     final Windows<W> windows,
-                                                                                     final String storeName) {
+    static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+                                                                                   final Serde<T> aggValSerde,
+                                                                                   final Windows<W> windows,
+                                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValSerde, storeName)
                 .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
     }
-    @SuppressWarnings("unchecked")
-    public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                         final Serde<T> aggValueSerde,
-                                                                         final String storeName) {
+
+    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+                                                                       final Serde<T> aggValueSerde,
+                                                                       final String storeName) {
         return Stores.create(storeName)
                 .withKeys(keySerde)
                 .withValues(aggValueSerde)

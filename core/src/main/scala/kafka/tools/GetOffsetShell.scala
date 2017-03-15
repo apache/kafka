@@ -33,6 +33,7 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 
+
 object GetOffsetShell {
 
   val clientId = "GetOffsetShell"
@@ -82,6 +83,7 @@ object GetOffsetShell {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
+
     val partitionList = options.valueOf(partitionOpt)
     val time = options.valueOf(timeOpt).longValue
     val commandConfig = if (options.has(commandConfigOpt)) {
@@ -93,8 +95,8 @@ object GetOffsetShell {
     val adminClient = createAdminClient(commandConfig)
 
     val shuffledBrokers = Random.shuffle(metadataTargetBrokers)
-    val metadataRes = adminClient.getMetadata(new MetadataRequest(List(topic).asJava), getNode(shuffledBrokers(0)))
 
+    val metadataRes = adminClient.getMetadata(new MetadataRequest.Builder(List(topic).asJava), getNode(shuffledBrokers(0)))
 
     if(metadataRes.errors.containsKey(topic)){
       metadataRes.errors().get(topic).exception()
@@ -117,17 +119,17 @@ object GetOffsetShell {
             val partitions:java.util.Map[TopicPartition, java.lang.Long] = Map(new TopicPartition(metadata.topic(), metadata.partition()) ->
               java.lang.Long.valueOf(time)).asJava
 
-            val request: ListOffsetRequest = new ListOffsetRequest(partitions, ListOffsetRequest.CONSUMER_REPLICA_ID)
+            val request: ListOffsetRequest.Builder = new ListOffsetRequest.Builder().setMinVersion(0.toShort).setTargetTimes(partitions)
 
             val listOffset= adminClient.getTopicListOffset(request,metadata.leader() )
 
             listOffset.keys.foreach(topicPartition =>{
               val data = listOffset.get(topicPartition).get
 
-              if (data.errorCode == Errors.NONE.code) {
+              if (data.error.code() == Errors.NONE.code) {
                 println("%s:%d:%s".format(topic, partitionId, data.offset ))
               } else {
-                val errormessage =Errors.forCode(data.errorCode ).exception.getMessage
+                val errormessage =Errors.forCode(data.error.code()).exception.getMessage
                 println(s"Attempt to fetch offsets for partition $topicPartition failed due to: $errormessage")
               }
             })

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
@@ -25,51 +26,58 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 
+/**
+ * An iterator which handles both the shallow and deep iteration of record sets.
+ */
 public class RecordsIterator extends AbstractIterator<LogEntry> {
-    private final LogInputStream logStream;
     private final boolean shallow;
+    private final boolean ensureMatchingMagic;
+    private final int maxRecordSize;
+    private final ShallowRecordsIterator<?> shallowIter;
     private DeepRecordsIterator innerIter;
 
-    public RecordsIterator(LogInputStream logStream, boolean shallow) {
-        this.logStream = logStream;
+    public RecordsIterator(LogInputStream<?> logInputStream,
+                           boolean shallow,
+                           boolean ensureMatchingMagic,
+                           int maxRecordSize) {
+        this.shallowIter = new ShallowRecordsIterator<>(logInputStream);
         this.shallow = shallow;
+        this.ensureMatchingMagic = ensureMatchingMagic;
+        this.maxRecordSize = maxRecordSize;
     }
 
-    /*
-     * Read the next record from the buffer.
-     *
-     * Note that in the compressed message set, each message value size is set as the size of the un-compressed
-     * version of the message value, so when we do de-compression allocating an array of the specified size for
-     * reading compressed value data is sufficient.
+    /**
+     * Get a shallow iterator over the given input stream.
+     * @param logInputStream The log input stream to read the entries from
+     * @param <T> The type of the log entry
+     * @return The shallow iterator.
      */
+    public static <T extends LogEntry> Iterator<T> shallowIterator(LogInputStream<T> logInputStream) {
+        return new ShallowRecordsIterator<>(logInputStream);
+    }
+
     @Override
     protected LogEntry makeNext() {
         if (innerDone()) {
-            try {
-                LogEntry entry = logStream.nextEntry();
-                // No more record to return.
-                if (entry == null)
-                    return allDone();
-
-                // decide whether to go shallow or deep iteration if it is compressed
-                CompressionType compressionType = entry.record().compressionType();
-                if (compressionType == CompressionType.NONE || shallow) {
-                    return entry;
-                } else {
-                    // init the inner iterator with the value payload of the message,
-                    // which will de-compress the payload to a set of messages;
-                    // since we assume nested compression is not allowed, the deep iterator
-                    // would not try to further decompress underlying messages
-                    // There will be at least one element in the inner iterator, so we don't
-                    // need to call hasNext() here.
-                    innerIter = new DeepRecordsIterator(entry);
-                    return innerIter.next();
-                }
-            } catch (EOFException e) {
+            if (!shallowIter.hasNext())
                 return allDone();
-            } catch (IOException e) {
-                throw new KafkaException(e);
+
+            LogEntry entry = shallowIter.next();
+
+            // decide whether to go shallow or deep iteration if it is compressed
+            if (shallow || !entry.isCompressed()) {
+                return entry;
+            } else {
+                // init the inner iterator with the value payload of the message,
+                // which will de-compress the payload to a set of messages;
+                // since we assume nested compression is not allowed, the deep iterator
+                // would not try to further decompress underlying messages
+                // There will be at least one element in the inner iterator, so we don't
+                // need to call hasNext() here.
+                innerIter = new DeepRecordsIterator(entry, ensureMatchingMagic, maxRecordSize);
+                return innerIter.next();
             }
         } else {
             return innerIter.next();
@@ -80,38 +88,70 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         return innerIter == null || !innerIter.hasNext();
     }
 
-    private static class DataLogInputStream implements LogInputStream {
+    private static final class DataLogInputStream implements LogInputStream<LogEntry> {
         private final DataInputStream stream;
+        protected final int maxMessageSize;
 
-        private DataLogInputStream(DataInputStream stream) {
+        DataLogInputStream(DataInputStream stream, int maxMessageSize) {
             this.stream = stream;
+            this.maxMessageSize = maxMessageSize;
         }
 
         public LogEntry nextEntry() throws IOException {
-            long offset = stream.readLong();
-            int size = stream.readInt();
-            if (size < 0)
-                throw new IllegalStateException("Record with size " + size);
+            try {
+                long offset = stream.readLong();
+                int size = stream.readInt();
+                if (size < Record.RECORD_OVERHEAD_V0)
+                    throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", Record.RECORD_OVERHEAD_V0));
+                if (size > maxMessageSize)
+                    throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
 
-            byte[] recordBuffer = new byte[size];
-            stream.readFully(recordBuffer, 0, size);
-            ByteBuffer buf = ByteBuffer.wrap(recordBuffer);
-            return new LogEntry(offset, new Record(buf));
+                byte[] recordBuffer = new byte[size];
+                stream.readFully(recordBuffer, 0, size);
+                ByteBuffer buf = ByteBuffer.wrap(recordBuffer);
+                return LogEntry.create(offset, new Record(buf));
+            } catch (EOFException e) {
+                return null;
+            }
         }
     }
 
-    private static class DeepRecordsIterator extends AbstractIterator<LogEntry> {
+    private static class ShallowRecordsIterator<T extends LogEntry> extends AbstractIterator<T> {
+        private final LogInputStream<T> logStream;
+
+        public ShallowRecordsIterator(LogInputStream<T> logStream) {
+            this.logStream = logStream;
+        }
+
+        @Override
+        protected T makeNext() {
+            try {
+                T entry = logStream.nextEntry();
+                if (entry == null)
+                    return allDone();
+                return entry;
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            }
+        }
+    }
+
+    public static class DeepRecordsIterator extends AbstractIterator<LogEntry> {
         private final ArrayDeque<LogEntry> logEntries;
         private final long absoluteBaseOffset;
+        private final byte wrapperMagic;
 
-        private DeepRecordsIterator(LogEntry entry) {
-            CompressionType compressionType = entry.record().compressionType();
-            ByteBuffer buffer = entry.record().value();
-            DataInputStream stream = Compressor.wrapForInput(new ByteBufferInputStream(buffer), compressionType, entry.record().magic());
-            LogInputStream logStream = new DataLogInputStream(stream);
+        public DeepRecordsIterator(LogEntry wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
+            Record wrapperRecord = wrapperEntry.record();
+            this.wrapperMagic = wrapperRecord.magic();
 
-            long wrapperRecordOffset = entry.offset();
-            long wrapperRecordTimestamp = entry.record().timestamp();
+            CompressionType compressionType = wrapperRecord.compressionType();
+            ByteBuffer buffer = wrapperRecord.value();
+            DataInputStream stream = MemoryRecordsBuilder.wrapForInput(new ByteBufferInputStream(buffer), compressionType, wrapperRecord.magic());
+            LogInputStream logStream = new DataLogInputStream(stream, maxMessageSize);
+
+            long wrapperRecordOffset = wrapperEntry.offset();
+            long wrapperRecordTimestamp = wrapperRecord.timestamp();
             this.logEntries = new ArrayDeque<>();
 
             // If relative offset is used, we need to decompress the entire message first to compute
@@ -119,22 +159,27 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
             // do the same for message format version 0
             try {
                 while (true) {
-                    try {
-                        LogEntry logEntry = logStream.nextEntry();
-                        if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
-                            Record recordWithTimestamp = new Record(
-                                    logEntry.record().buffer(),
-                                    wrapperRecordTimestamp,
-                                    entry.record().timestampType()
-                            );
-                            logEntry = new LogEntry(logEntry.offset(), recordWithTimestamp);
-                        }
-                        logEntries.add(logEntry);
-                    } catch (EOFException e) {
+                    LogEntry logEntry = logStream.nextEntry();
+                    if (logEntry == null)
                         break;
+
+                    Record record = logEntry.record();
+                    byte magic = record.magic();
+
+                    if (ensureMatchingMagic && magic != wrapperMagic)
+                        throw new InvalidRecordException("Compressed message magic does not match wrapper magic");
+
+                    if (magic > Record.MAGIC_VALUE_V0) {
+                        Record recordWithTimestamp = new Record(
+                                record.buffer(),
+                                wrapperRecordTimestamp,
+                                wrapperRecord.timestampType()
+                        );
+                        logEntry = LogEntry.create(logEntry.offset(), recordWithTimestamp);
                     }
+                    logEntries.addLast(logEntry);
                 }
-                if (entry.record().magic() > Record.MAGIC_VALUE_V0)
+                if (wrapperMagic > Record.MAGIC_VALUE_V0)
                     this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
                 else
                     this.absoluteBaseOffset = -1;
@@ -155,12 +200,10 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
             // Convert offset to absolute offset if needed.
             if (absoluteBaseOffset >= 0) {
                 long absoluteOffset = absoluteBaseOffset + entry.offset();
-                entry = new LogEntry(absoluteOffset, entry.record());
+                entry = LogEntry.create(absoluteOffset, entry.record());
             }
 
-            // decide whether to go shallow or deep iteration if it is compressed
-            CompressionType compression = entry.record().compressionType();
-            if (compression != CompressionType.NONE)
+            if (entry.isCompressed())
                 throw new InvalidRecordException("Inner messages must not be compressed");
 
             return entry;

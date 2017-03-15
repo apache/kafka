@@ -17,20 +17,38 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * Used to represent windowed stream aggregations (e.g. as returned by
- * {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)}),
- * which have the type {@code <Windowed<K>, V>}.
+ * The result key type of a windowed stream aggregation.
+ * <p>
+ * If a {@link KStream} gets grouped and aggregated using a window-aggregation the resulting {@link KTable} is a
+ * so-called "windowed {@link KTable}" with a combined key type that encodes the corresponding aggregation window and
+ * the original record key.
+ * Thus, a windowed {@link KTable} has type {@code <Windowed<K>,V>}.
  *
- * @param <K> Type of the key
+ * @param <K> type of the key
+ * @see KGroupedStream#count(Windows, String)
+ * @see KGroupedStream#count(Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#count(SessionWindows, String)
+ * @see KGroupedStream#count(SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#reduce(Reducer, Windows, String)
+ * @see KGroupedStream#reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
+ * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
  */
+@InterfaceStability.Unstable
 public class Windowed<K> {
 
-    private K key;
+    private final K key;
 
-    private Window window;
+    private final Window window;
 
-    public Windowed(K key, Window window) {
+    public Windowed(final K key, final Window window) {
         this.key = key;
         this.window = window;
     }
@@ -47,7 +65,7 @@ public class Windowed<K> {
     /**
      * Return the window containing the values associated with this key.
      *
-     * @return  the window containing the values
+     * @return the window containing the values
      */
     public Window window() {
         return window;
@@ -59,21 +77,20 @@ public class Windowed<K> {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this)
             return true;
 
         if (!(obj instanceof Windowed))
             return false;
 
-        Windowed<?> that = (Windowed) obj;
-
-        return this.window.equals(that.window) && this.key.equals(that.key);
+        final Windowed<?> that = (Windowed) obj;
+        return window.equals(that.window) && key.equals(that.key);
     }
 
     @Override
     public int hashCode() {
-        long n = ((long) window.hashCode() << 32) | key.hashCode();
+        final long n = ((long) window.hashCode() << 32) | key.hashCode();
         return (int) (n % 0xFFFFFFFFL);
     }
 }

@@ -73,8 +73,8 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, BrokerAndInitialOffset]) {
     mapLock synchronized {
-      val partitionsPerFetcher = partitionAndOffsets.groupBy{ case(topicAndPartition, brokerAndInitialOffset) =>
-        BrokerAndFetcherId(brokerAndInitialOffset.broker, getFetcherId(topicAndPartition.topic, topicAndPartition.partition))}
+      val partitionsPerFetcher = partitionAndOffsets.groupBy { case(topicPartition, brokerAndInitialOffset) =>
+        BrokerAndFetcherId(brokerAndInitialOffset.broker, getFetcherId(topicPartition.topic, topicPartition.partition))}
       for ((brokerAndFetcherId, partitionAndOffsets) <- partitionsPerFetcher) {
         var fetcherThread: AbstractFetcherThread = null
         fetcherThreadMap.get(brokerAndFetcherId) match {
@@ -91,8 +91,8 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
       }
     }
 
-    info("Added fetcher for partitions %s".format(partitionAndOffsets.map{ case (topicAndPartition, brokerAndInitialOffset) =>
-      "[" + topicAndPartition + ", initOffset " + brokerAndInitialOffset.initOffset + " to broker " + brokerAndInitialOffset.broker + "] "}))
+    info("Added fetcher for partitions %s".format(partitionAndOffsets.map { case (topicPartition, brokerAndInitialOffset) =>
+      "[" + topicPartition + ", initOffset " + brokerAndInitialOffset.initOffset + " to broker " + brokerAndInitialOffset.broker + "] "}))
   }
 
   def removeFetcherForPartitions(partitions: Set[TopicPartition]) {

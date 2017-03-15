@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,21 +28,26 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 public class NamedCacheTest {
 
     private NamedCache cache;
+    private MockStreamsMetrics streamMetrics;
 
     @Before
     public void setUp() throws Exception {
-        cache = new NamedCache("name");
+        streamMetrics = new MockStreamsMetrics(new Metrics());
+        cache = new NamedCache("name", streamMetrics);
     }
 
     @Test
@@ -64,6 +71,30 @@ public class NamedCacheTest {
             assertEquals(cache.misses(), 0);
             assertEquals(cache.overwrites(), 0);
         }
+    }
+
+    @Test
+    public void testMetrics() throws Exception {
+        final String scope = "record-cache";
+        final String entityName = cache.name();
+        final String opName = "hitRatio";
+        final String tagKey = "record-cache-id";
+        final String tagValue = cache.name();
+        final String groupName = "stream-" + scope + "-metrics";
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put(tagKey, tagValue);
+
+        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-min", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-max", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+
     }
 
     @Test
@@ -200,6 +231,21 @@ public class NamedCacheTest {
     }
 
     @Test
+    public void shouldRemoveDeletedValuesOnFlush() throws Exception {
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                // no-op
+            }
+        });
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, true, 0, 0, 0, ""));
+        cache.flush();
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(Bytes.wrap(new byte[]{1})));
+    }
+
+    @Test
     public void shouldBeReentrantAndNotBreakLRU() throws Exception {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
@@ -258,5 +304,10 @@ public class NamedCacheTest {
         });
         cache.put(key, dirty);
         cache.evict();
+    }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(cache.get(null));
     }
 }

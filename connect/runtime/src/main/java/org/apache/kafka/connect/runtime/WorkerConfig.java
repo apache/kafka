@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -28,7 +27,6 @@ import java.util.Map;
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
  */
-@InterfaceStability.Unstable
 public class WorkerConfig extends AbstractConfig {
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";

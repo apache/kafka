@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 
@@ -28,7 +27,6 @@ import java.util.Map;
  * and byte[]. Internally, this likely includes an intermediate step to the format used by the serialization
  * layer (e.g. JsonNode, GenericRecord, Message).
  */
-@InterfaceStability.Unstable
 public interface Converter {
 
     /**

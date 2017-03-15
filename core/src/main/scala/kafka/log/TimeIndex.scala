@@ -21,9 +21,9 @@ import java.io.File
 import java.nio.ByteBuffer
 
 import kafka.common.InvalidOffsetException
-import kafka.message.Message
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.common.record.Record
 
 /**
  * An index that maps from the timestamp to the logical offsets of the messages in a segment. This index might be
@@ -69,7 +69,7 @@ class TimeIndex(file: File,
   def lastEntry: TimestampOffset = {
     inLock(lock) {
       _entries match {
-        case 0 => TimestampOffset(Message.NoTimestamp, baseOffset)
+        case 0 => TimestampOffset(Record.NO_TIMESTAMP, baseOffset)
         case s => parseEntry(mmap, s - 1).asInstanceOf[TimestampOffset]
       }
     }
@@ -145,7 +145,7 @@ class TimeIndex(file: File,
       val idx = mmap.duplicate
       val slot = indexSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
       if (slot == -1)
-        TimestampOffset(Message.NoTimestamp, baseOffset)
+        TimestampOffset(Record.NO_TIMESTAMP, baseOffset)
       else {
         val entry = parseEntry(idx, slot).asInstanceOf[TimestampOffset]
         TimestampOffset(entry.timestamp, entry.offset)

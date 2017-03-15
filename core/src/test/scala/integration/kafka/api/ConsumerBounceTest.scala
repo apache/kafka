@@ -13,18 +13,19 @@
 
 package kafka.api
 
-import java.util.Collections
+import java.util.{Collection, Collections}
+import java.util.concurrent.{Callable, Executors, ExecutorService, Future, Semaphore, TimeUnit}
 
+import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, ShutdownableThread, TestUtils}
+import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{Before, After, Test}
 
 import scala.collection.JavaConverters._
-
 
 
 /**
@@ -39,6 +40,10 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
+
+  // Time to process commit and leave group requests in tests when brokers are available
+  val gracefulCloseTimeMs = 1000
+  val executor = Executors.newFixedThreadPool(2)
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -63,6 +68,15 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+  }
+
+  @After
+  override def tearDown() {
+    try {
+      executor.shutdownNow()
+    } finally {
+      super.tearDown()
+    }
   }
 
   @Test
@@ -122,7 +136,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     // wait until all the followers have synced the last HW with leader
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.replicaManager.getReplica(tp.topic(), tp.partition()).get.highWatermark.messageOffset == numRecords
+      server.replicaManager.getReplica(tp).get.highWatermark.messageOffset == numRecords
     ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)
@@ -145,6 +159,201 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(consumer.position(tp), consumer.committed(tp).offset)
       }
     }
+  }
+
+  @Test
+  def testClose() {
+    val numRecords = 10
+    sendRecords(numRecords)
+
+    checkCloseGoodPath(numRecords, "group1")
+    checkCloseWithCoordinatorFailure(numRecords, "group2", "group3")
+    checkCloseWithClusterFailure(numRecords, "group4", "group5")
+  }
+
+  /**
+   * Consumer is closed while cluster is healthy. Consumer should complete pending offset commits
+   * and leave group. New consumer instance should be able join group and start consuming from
+   * last committed offset.
+   */
+  private def checkCloseGoodPath(numRecords: Int, groupId: String) {
+    val consumer = createConsumerAndReceive(groupId, false, numRecords)
+    val future = submitCloseAndValidate(consumer, Long.MaxValue, None, Some(gracefulCloseTimeMs))
+    future.get
+    checkClosedState(groupId, numRecords)
+  }
+
+  /**
+   * Consumer closed while coordinator is unavailable. Close of consumers using group
+   * management should complete after commit attempt even though commits fail due to rebalance.
+   * Close of consumers using manual assignment should complete with successful commits since a
+   * broker is available.
+   */
+  private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String) {
+    val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
+    val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
+
+    val adminClient = AdminClient.createSimplePlaintext(this.brokerList)
+    killBroker(adminClient.findCoordinator(dynamicGroup).id)
+    killBroker(adminClient.findCoordinator(manualGroup).id)
+
+    val future1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
+    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(gracefulCloseTimeMs))
+    future1.get
+    future2.get
+
+    restartDeadBrokers()
+    checkClosedState(dynamicGroup, 0)
+    checkClosedState(manualGroup, numRecords)
+  }
+
+  /**
+   * Consumer is closed while all brokers are unavailable. Cannot rebalance or commit offsets since
+   * there is no coordinator, but close should timeout and return. If close is invoked with a very
+   * large timeout, close should timeout after request timeout.
+   */
+  private def checkCloseWithClusterFailure(numRecords: Int, group1: String, group2: String) {
+    val consumer1 = createConsumerAndReceive(group1, false, numRecords)
+
+    val requestTimeout = 6000
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
+    val consumer2 = createConsumerAndReceive(group2, true, numRecords)
+
+    servers.foreach(server => killBroker(server.config.brokerId))
+    val closeTimeout = 2000
+    val future1 = submitCloseAndValidate(consumer1, closeTimeout, Some(closeTimeout), Some(closeTimeout))
+    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, Some(requestTimeout), Some(requestTimeout))
+    future1.get
+    future2.get
+  }
+
+  /**
+   * Consumer is closed during rebalance. Close should leave group and close
+   * immediately if rebalance is in progress. If brokers are not available,
+   * close should terminate immediately without sending leave group.
+   */
+  @Test
+  def testCloseDuringRebalance() {
+    val topic = "closetest"
+    TestUtils.createTopic(this.zkUtils, topic, 10, serverCount, this.servers)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    checkCloseDuringRebalance("group1", topic, executor, true)
+  }
+
+  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean) {
+
+    def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
+      executor.submit(CoreUtils.runnable {
+          consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
+            def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+            }
+            def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+              revokeSemaphore.foreach(s => s.release())
+            }
+          })
+          consumer.poll(0)
+        }, 0)
+    }
+
+    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+      val startMs = System.currentTimeMillis
+      while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
+          otherConsumers.foreach(consumer => consumer.poll(100))
+      assertTrue("Rebalance did not complete in time", future.isDone)
+    }
+
+    def createConsumerToRebalance(): Future[Any] = {
+      val consumer = createConsumer(groupId)
+      val rebalanceSemaphore = new Semaphore(0)
+      val future = subscribeAndPoll(consumer, Some(rebalanceSemaphore))
+      // Wait for consumer to poll and trigger rebalance
+      assertTrue("Rebalance not triggered", rebalanceSemaphore.tryAcquire(2000, TimeUnit.MILLISECONDS))
+      // Rebalance is blocked by other consumers not polling
+      assertFalse("Rebalance completed too early", future.isDone)
+      future
+    }
+
+    val consumer1 = createConsumer(groupId)
+    waitForRebalance(2000, subscribeAndPoll(consumer1))
+    val consumer2 = createConsumer(groupId)
+    waitForRebalance(2000, subscribeAndPoll(consumer2), consumer1)
+    val rebalanceFuture = createConsumerToRebalance()
+
+    // consumer1 should leave group and close immediately even though rebalance is in progress
+    submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
+
+    // Rebalance should complete without waiting for consumer1 to timeout since consumer1 has left the group
+    waitForRebalance(2000, rebalanceFuture, consumer2)
+
+    // Trigger another rebalance and shutdown all brokers
+    createConsumerToRebalance()
+    servers.foreach(server => killBroker(server.config.brokerId))
+
+    // consumer2 should close immediately without LeaveGroup request since there are no brokers available
+    submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(0))
+  }
+
+  private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    createNewConsumer
+  }
+
+  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int) : KafkaConsumer[Array[Byte], Array[Byte]] = {
+    val consumer = createConsumer(groupId)
+    if (manualAssign)
+      consumer.assign(Collections.singleton(tp))
+    else
+      consumer.subscribe(Collections.singleton(topic))
+    receiveRecords(consumer, numRecords)
+    consumer
+  }
+
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
+    var received = 0
+    while (received < numRecords)
+      received += consumer.poll(1000).count()
+  }
+
+  private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+      closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
+    executor.submit(CoreUtils.runnable {
+      val closeGraceTimeMs = 2000
+      val startNanos = System.nanoTime
+      info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
+      consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
+      val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
+      maxCloseTimeMs match {
+        case Some(ms) => assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
+        case None =>
+      }
+      minCloseTimeMs match {
+        case Some(ms) => assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
+        case None =>
+      }
+      info("consumer.close() completed in " + timeTakenMs + " ms.")
+    }, 0)
+  }
+
+  private def checkClosedState(groupId: String, committedRecords: Int) {
+    // Check that close was graceful with offsets committed and leave group sent.
+    // New instance of consumer should be assigned partitions immediately and should see committed offsets.
+    val assignSemaphore = new Semaphore(0)
+    val consumer = createConsumer(groupId)
+    consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
+      def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+        assignSemaphore.release()
+      }
+      def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+      }})
+    consumer.poll(3000)
+    assertTrue("Assigment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
+    if (committedRecords > 0)
+      assertEquals(committedRecords, consumer.committed(tp).offset)
+    consumer.close()
   }
 
   private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false)

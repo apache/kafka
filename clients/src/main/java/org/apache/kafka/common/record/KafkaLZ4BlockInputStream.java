@@ -199,9 +199,8 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
         if (finished) {
             return -1;
         }
-        int value = buffer[bufferOffset++] & 0xFF;
 
-        return value;
+        return buffer[bufferOffset++] & 0xFF;
     }
 
     @Override

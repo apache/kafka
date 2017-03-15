@@ -21,7 +21,6 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.BrokerEndPoint
 import kafka.consumer.PartitionTopicInfo
-import kafka.message.ByteBufferMessageSet
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import kafka.common.{ClientIdAndBroker, KafkaException}
 import kafka.metrics.KafkaMetricsGroup
@@ -37,7 +36,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
+import org.apache.kafka.common.record.MemoryRecords
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
@@ -141,18 +141,18 @@ abstract class AbstractFetcherThread(name: String,
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
             // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
             if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.offset) {
-              Errors.forCode(partitionData.errorCode) match {
+              partitionData.error match {
                 case Errors.NONE =>
                   try {
-                    val messages = partitionData.toByteBufferMessageSet
-                    val newOffset = messages.shallowIterator.toSeq.lastOption.map(_.nextOffset).getOrElse(
+                    val records = partitionData.toRecords
+                    val newOffset = records.shallowEntries.asScala.lastOption.map(_.nextOffset).getOrElse(
                       currentPartitionFetchState.offset)
 
                     fetcherLagStats.getAndMaybePut(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicPartition, currentPartitionFetchState.offset, partitionData)
 
-                    val validBytes = messages.validBytes
+                    val validBytes = records.validBytes
                     if (validBytes > 0) {
                       // Update partitionStates only if there is no exception during processPartitionData
                       partitionStates.updateAndMoveToEnd(topicPartition, new PartitionFetchState(newOffset))
@@ -177,6 +177,7 @@ abstract class AbstractFetcherThread(name: String,
                     error("Current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentPartitionFetchState.offset, topic, partitionId, newOffset))
                   } catch {
+                    case e: FatalExitError => throw e
                     case e: Throwable =>
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       updatePartitionsWithError(topicPartition)
@@ -258,9 +259,9 @@ object AbstractFetcherThread {
   }
 
   trait PartitionData {
-    def errorCode: Short
+    def error: Errors
     def exception: Option[Throwable]
-    def toByteBufferMessageSet: ByteBufferMessageSet
+    def toRecords: MemoryRecords
     def highWatermark: Long
   }
 

@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -31,8 +31,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -221,7 +223,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
         ensureNotClosed();
-        return subscriptions.committed(partition);
+        if (subscriptions.isAssigned(partition)) {
+            return subscriptions.committed(partition);
+        }
+        return new OffsetAndMetadata(0);
     }
 
     @Override
@@ -329,6 +334,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
+        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void close(long timeout, TimeUnit unit) {
         ensureNotClosed();
         this.closed = true;
     }

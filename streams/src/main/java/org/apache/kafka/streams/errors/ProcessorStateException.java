@@ -17,22 +17,27 @@
 
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * Indicates a processor state operation (e.g. put, get) has failed.
+ *
+ * @see org.apache.kafka.streams.processor.StateStore
  */
+@InterfaceStability.Unstable
 public class ProcessorStateException extends StreamsException {
 
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
-    public ProcessorStateException(String s) {
-        super(s);
+    public ProcessorStateException(final String message) {
+        super(message);
     }
 
-    public ProcessorStateException(String s, Throwable throwable) {
-        super(s, throwable);
+    public ProcessorStateException(final String message, final Throwable throwable) {
+        super(message, throwable);
     }
 
-    public ProcessorStateException(Throwable throwable) {
+    public ProcessorStateException(final Throwable throwable) {
         super(throwable);
     }
 }

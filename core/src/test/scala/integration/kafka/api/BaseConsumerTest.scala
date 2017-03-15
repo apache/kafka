@@ -22,7 +22,6 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import kafka.common.Topic
 import kafka.server.KafkaConfig
-
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -36,6 +35,7 @@ import org.apache.kafka.common.errors.WakeupException
  */
 abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
+  val epsilon = 0.1
   val producerCount = 1
   val consumerCount = 2
   val serverCount = 3
@@ -116,7 +116,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
   }
-
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
     var callsToAssigned = 0

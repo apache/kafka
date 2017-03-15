@@ -12,11 +12,22 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.junit.After;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -28,22 +39,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LogEntry;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.junit.After;
-import org.junit.Test;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RecordAccumulatorTest {
 
@@ -84,7 +87,7 @@ public class RecordAccumulatorTest {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
             Deque<RecordBatch> partitionBatches = accum.batches().get(tp1);
             assertEquals(1, partitionBatches.size());
-            assertTrue(partitionBatches.peekFirst().records.isWritable());
+            assertTrue(partitionBatches.peekFirst().isWritable());
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
 
@@ -93,15 +96,15 @@ public class RecordAccumulatorTest {
         Deque<RecordBatch> partitionBatches = accum.batches().get(tp1);
         assertEquals(2, partitionBatches.size());
         Iterator<RecordBatch> partitionBatchesIterator = partitionBatches.iterator();
-        assertFalse(partitionBatchesIterator.next().records.isWritable());
-        assertTrue(partitionBatchesIterator.next().records.isWritable());
+        assertFalse(partitionBatchesIterator.next().isWritable());
+        assertTrue(partitionBatchesIterator.next().isWritable());
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
 
         List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
 
-        Iterator<LogEntry> iter = batch.records.iterator();
+        Iterator<LogEntry> iter = batch.records().deepEntries().iterator();
         for (int i = 0; i < appends; i++) {
             LogEntry entry = iter.next();
             assertEquals("Keys should match", ByteBuffer.wrap(key), entry.record().key());
@@ -130,7 +133,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
 
-        Iterator<LogEntry> iter = batch.records.iterator();
+        Iterator<LogEntry> iter = batch.records().deepEntries().iterator();
         LogEntry entry = iter.next();
         assertEquals("Keys should match", ByteBuffer.wrap(key), entry.record().key());
         assertEquals("Values should match", ByteBuffer.wrap(value), entry.record().value());
@@ -159,7 +162,7 @@ public class RecordAccumulatorTest {
         final int msgs = 10000;
         final int numParts = 2;
         final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 0L, 100L, metrics, time);
-        List<Thread> threads = new ArrayList<Thread>();
+        List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
             threads.add(new Thread() {
                 public void run() {
@@ -182,7 +185,7 @@ public class RecordAccumulatorTest {
             List<RecordBatch> batches = accum.drain(cluster, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (RecordBatch batch : batches) {
-                    for (LogEntry entry : batch.records)
+                    for (LogEntry entry : batch.records().deepEntries())
                         read++;
                     accum.deallocate(batch);
                 }
@@ -407,6 +410,48 @@ public class RecordAccumulatorTest {
         accum.unmutePartition(tp1);
         expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should be expired when the partition is not muted.", 1, expiredBatches.size());
+    }
+
+    @Test
+    public void testAppendInExpiryCallback() throws InterruptedException {
+        long retryBackoffMs = 100L;
+        long lingerMs = 3000L;
+        int requestTimeout = 60;
+        int messagesPerBatch = 1024 / msgSize;
+
+        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs,
+                retryBackoffMs, metrics, time);
+        final AtomicInteger expiryCallbackCount = new AtomicInteger();
+        final AtomicReference<Exception> unexpectedException = new AtomicReference<Exception>();
+        Callback callback = new Callback() {
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                if (exception instanceof TimeoutException) {
+                    expiryCallbackCount.incrementAndGet();
+                    try {
+                        accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException("Unexpected interruption", e);
+                    }
+                } else if (exception != null)
+                    unexpectedException.compareAndSet(null, exception);
+            }
+        };
+
+        for (int i = 0; i < messagesPerBatch + 1; i++)
+            accum.append(tp1, 0L, key, value, callback, maxBlockTimeMs);
+
+        assertEquals(2, accum.batches().get(tp1).size());
+        assertTrue("First batch not full", accum.batches().get(tp1).peekFirst().isFull());
+
+        // Advance the clock to expire the first batch.
+        time.sleep(requestTimeout + 1);
+        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch was not expired", 1, expiredBatches.size());
+        assertEquals("Callbacks not invoked for expiry", messagesPerBatch, expiryCallbackCount.get());
+        assertNull("Unexpected exception", unexpectedException.get());
+        assertEquals("Some messages not appended from expiry callbacks", 2, accum.batches().get(tp1).size());
+        assertTrue("First batch not full after expiry callbacks with appends", accum.batches().get(tp1).peekFirst().isFull());
     }
 
     @Test

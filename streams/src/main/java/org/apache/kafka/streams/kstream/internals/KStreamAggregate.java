@@ -28,12 +28,12 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private final String storeName;
     private final Initializer<T> initializer;
-    private final Aggregator<K, V, T> aggregator;
+    private final Aggregator<? super K, ? super V, T> aggregator;
 
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -59,7 +59,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
 
@@ -82,7 +82,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
+            tupleForwarder.maybeForward(key, newAgg, oldAgg);
         }
     }
 

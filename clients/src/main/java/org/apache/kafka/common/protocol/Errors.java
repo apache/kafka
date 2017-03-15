@@ -52,6 +52,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -164,7 +165,8 @@ public enum Errors {
         new InvalidRequestException("This most likely occurs because of a request being malformed by the client library or" +
             " the message was sent to an incompatible broker. See the broker logs for more details.")),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
-        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request."));
+        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
+    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -182,7 +184,7 @@ public enum Errors {
     private final short code;
     private final ApiException exception;
 
-    private Errors(int code, ApiException exception) {
+    Errors(int code, ApiException exception) {
         this.code = (short) code;
         this.exception = exception;
     }

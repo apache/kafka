@@ -144,7 +144,8 @@ public class FileStreamSourceTask extends SourceTask {
                             log.trace("Read a line from {}", logFilename());
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
+                            records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, null,
+                                    null, null, VALUE_SCHEMA, line, System.currentTimeMillis()));
                         }
                     } while (line != null);
                 }

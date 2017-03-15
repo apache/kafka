@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.TransportLayers;
 import org.apache.kafka.common.record.Records;
 
 import java.io.EOFException;
@@ -52,21 +52,18 @@ public class RecordsSend implements Send {
     @Override
     public long writeTo(GatheringByteChannel channel) throws IOException {
         long written = 0;
+
         if (remaining > 0) {
             written = records.writeTo(channel, size() - remaining, remaining);
             if (written < 0)
                 throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
+            remaining -= written;
         }
 
-        if (channel instanceof TransportLayer) {
-            TransportLayer tl = (TransportLayer) channel;
-            pending = tl.hasPendingWrites();
+        pending = TransportLayers.hasPendingWrites(channel);
+        if (remaining <= 0 && pending)
+            channel.write(EMPTY_BYTE_BUFFER);
 
-            if (remaining <= 0 && pending)
-                channel.write(EMPTY_BYTE_BUFFER);
-        }
-
-        remaining -= written;
         return written;
     }
 

@@ -14,22 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * The {@link ValueMapper} interface for mapping an original value to a new value (could be another key-value pair).
+ * The {@code ValueMapper} interface for mapping a value to a new value of arbitrary type.
+ * This is a stateless record-by-record operation, i.e, {@link #apply(Object)} is invoked individually for each record
+ * of a stream (cf. {@link ValueTransformer} for stateful value transformation).
+ * If {@code ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the record's
+ * key is preserved.
+ * If a record's key and value should be modified {@link KeyValueMapper} can be used.
  *
- * @param <V1>  original value type
- * @param <V2>  mapped value type
+ * @param <V>  value type
+ * @param <VR> mapped value type
+ * @see KeyValueMapper
+ * @see ValueTransformer
+ * @see KStream#mapValues(ValueMapper)
+ * @see KStream#flatMapValues(ValueMapper)
+ * @see KTable#mapValues(ValueMapper)
  */
-public interface ValueMapper<V1, V2> {
+@InterfaceStability.Unstable
+public interface ValueMapper<V, VR> {
 
     /**
      * Map the given value to a new value.
      *
-     * @param value  the value to be mapped
-     * @return       the new value
+     * @param value the value to be mapped
+     * @return the new value
      */
-    V2 apply(V1 value);
+    VR apply(final V value);
 }

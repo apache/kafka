@@ -1,7 +1,8 @@
 package kafka.common
 
-import kafka.cluster.{Replica, Partition}
+import kafka.cluster.{Partition, Replica}
 import kafka.utils.Json
+import org.apache.kafka.common.TopicPartition
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -29,7 +30,9 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   def this(partition: Partition) = this(partition.topic, partition.partitionId)
 
-  def this(replica: Replica) = this(replica.topic, replica.partitionId)
+  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
+
+  def this(replica: Replica) = this(replica.topicPartition)
 
   def asTuple = (topic, partition)
 

@@ -198,7 +198,7 @@ public final class BufferPool {
      * memory as free.
      * 
      * @param buffer The buffer to return
-     * @param size The size of the buffer to mark as deallocated, note that this maybe smaller than buffer.capacity
+     * @param size The size of the buffer to mark as deallocated, note that this may be smaller than buffer.capacity
      *             since the buffer may re-allocate itself during in-place compression
      */
     public void deallocate(ByteBuffer buffer, int size) {

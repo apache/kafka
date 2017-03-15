@@ -26,6 +26,6 @@ public interface Configurable {
     /**
      * Configure this class with the given key-value pairs
      */
-    public void configure(Map<String, ?> configs);
+    void configure(Map<String, ?> configs);
 
 }

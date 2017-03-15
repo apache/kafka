@@ -21,10 +21,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.xml.bind.DatatypeConverter;
@@ -176,24 +172,6 @@ public class TestUtils {
         return file;
     }
 
-    /**
-     * Create a records buffer including the offset and message size at the start, which is required if the buffer is to
-     * be sent as part of `ProduceRequest`. This is the reason why we can't use
-     * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
-     * constructor does not include either of these fields.
-     */
-    public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
-        int bufferSize = 0;
-        for (final Record record : records)
-            bufferSize += Records.LOG_OVERHEAD + record.size();
-        final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        final MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
-        for (final Record record : records)
-            memoryRecords.append(offset, record);
-        memoryRecords.close();
-        return memoryRecords.buffer();
-    }
-
     public static Properties producerConfig(final String bootstrapServers,
                                             final Class keySerializer,
                                             final Class valueSerializer,
@@ -309,4 +287,19 @@ public class TestUtils {
             fail(clusterId + " cannot be converted back to UUID.");
         }
     }
+
+    /**
+     * Checks the two iterables for equality by first converting both to a list.
+     */
+    public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
+        assertEquals(toList(it1), toList(it2));
+    }
+
+    public static <T> List<T> toList(Iterable<? extends T> iterable) {
+        List<T> list = new ArrayList<>();
+        for (T item : iterable)
+            list.add(item);
+        return list;
+    }
+
 }

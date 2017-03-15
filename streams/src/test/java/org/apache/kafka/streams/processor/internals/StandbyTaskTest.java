@@ -24,13 +24,13 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -81,8 +81,13 @@ public class StandbyTaskTest {
                     new MockStateStoreSupplier(storeName1, false).get(),
                     new MockStateStoreSupplier(storeName2, true).get()
             ),
-            Collections.<String, String>emptyMap(),
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            new HashMap<String, String>() {
+                {
+                    put(storeName1, storeChangelogTopicName1);
+                    put(storeName2, storeChangelogTopicName2);
+                }
+            },
+            Collections.<StateStore>emptyList());
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
@@ -94,11 +99,11 @@ public class StandbyTaskTest {
                     new MockStateStoreSupplier(ktable.topic(), true, false).get()
             ),
             new HashMap<String, String>() {
-            {
-                put("ktable1", ktable.topic());
-            }
-        },
-            Collections.<StateStore, ProcessorNode>emptyMap());
+                {
+                    put("ktable1", ktable.topic());
+                }
+            },
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
 
@@ -135,7 +140,7 @@ public class StandbyTaskTest {
                 new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(applicationId, baseDir.getPath());
+        stateDirectory = new StateDirectory(applicationId, baseDir.getPath(), new MockTime());
     }
 
     @After
@@ -202,7 +207,7 @@ public class StandbyTaskTest {
         assertEquals(Collections.emptyList(), store1.keys);
         assertEquals(Utils.mkList(1, 2, 3), store2.keys);
 
-        task.closeStateManager();
+        task.closeStateManager(true);
 
         File taskDir = stateDirectory.directoryForTask(taskId);
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -295,7 +300,7 @@ public class StandbyTaskTest {
         remaining = task.update(ktable, remaining);
         assertNull(remaining);
 
-        task.closeStateManager();
+        task.closeStateManager(true);
 
         File taskDir = stateDirectory.directoryForTask(taskId);
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -319,19 +324,10 @@ public class StandbyTaskTest {
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
         final KStreamBuilder builder = new KStreamBuilder();
         builder.stream("topic").groupByKey().count("my-store");
-        final ProcessorTopology topology = builder.build(0);
+        final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
         StreamsConfig config = createConfig(baseDir);
-        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config, new StreamsMetrics() {
-            @Override
-            public Sensor addLatencySensor(final String scopeName, final String entityName, final String operationName, final String... tags) {
-                return null;
-            }
-
-            @Override
-            public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-            }
-        }, stateDirectory);
+        new StandbyTask(taskId, applicationId, partitions, topology, consumer, restoreStateConsumer, config,
+            new MockStreamsMetrics(new Metrics()), stateDirectory);
 
     }
     private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

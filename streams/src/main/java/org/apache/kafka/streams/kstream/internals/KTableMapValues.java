@@ -26,11 +26,11 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final ValueMapper<V, V1> mapper;
+    private final ValueMapper<? super V, ? extends V1> mapper;
 
     private boolean sendOldValues = false;
 
-    public KTableMapValues(KTableImpl<K, ?, V> parent, ValueMapper<V, V1> mapper) {
+    public KTableMapValues(KTableImpl<K, ?, V> parent, ValueMapper<? super V, ? extends V1> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }

@@ -51,8 +51,14 @@ Change the log4j setting in either `clients/src/test/resources/log4j.properties`
     ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Generating test coverage reports ###
+Generate coverage reports for the whole project:
+
     ./gradlew reportCoverage
 
+Generate coverage for a single module, i.e.: 
+
+    ./gradlew clients:reportCoverage
+    
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean
     ./gradlew releaseTarGz
@@ -89,6 +95,10 @@ This is for `core`, `examples` and `clients`
 
     ./gradlew eclipse
     ./gradlew idea
+
+The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+to avoid known issues with this configuration.
 
 ### Building the jar for all scala versions and for all projects ###
     ./gradlew jarAll
@@ -131,7 +141,7 @@ may not be dedicated to Kafka's build.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForms=1 test`.
+The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
 
 * `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.

@@ -40,10 +40,11 @@ public class RecordCollectorImpl implements RecordCollector {
     private static final long SEND_RETRY_BACKOFF = 100L;
 
     private static final Logger log = LoggerFactory.getLogger(RecordCollectorImpl.class);
-
+    
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
+    private volatile Exception sendException;
 
 
     public RecordCollectorImpl(Producer<byte[], byte[]> producer, String streamTaskId) {
@@ -53,25 +54,36 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     @Override
-    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        send(record, keySerializer, valueSerializer, null);
+    public <K, V> void send(final String topic,
+                            K key,
+                            V value,
+                            Integer partition,
+                            Long timestamp,
+                            Serializer<K> keySerializer,
+                            Serializer<V> valueSerializer) {
+        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer, null);
     }
 
     @Override
-    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                            StreamPartitioner<K, V> partitioner) {
-        byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
-        byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
-        Integer partition = record.partition();
+    public <K, V> void  send(final String topic,
+                             K key,
+                             V value,
+                             Integer partition,
+                             Long timestamp,
+                             Serializer<K> keySerializer,
+                             Serializer<V> valueSerializer,
+                             StreamPartitioner<? super K, ? super V> partitioner) {
+        checkForException();
+        byte[] keyBytes = keySerializer.serialize(topic, key);
+        byte[] valBytes = valueSerializer.serialize(topic, value);
         if (partition == null && partitioner != null) {
-            List<PartitionInfo> partitions = this.producer.partitionsFor(record.topic());
+            List<PartitionInfo> partitions = this.producer.partitionsFor(topic);
             if (partitions != null && partitions.size() > 0)
-                partition = partitioner.partition(record.key(), record.value(), partitions.size());
+                partition = partitioner.partition(key, value, partitions.size());
         }
 
         ProducerRecord<byte[], byte[]> serializedRecord =
-                new ProducerRecord<>(record.topic(), partition, record.timestamp(), keyBytes, valBytes);
-        final String topic = serializedRecord.topic();
+                new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
 
         for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
             try {
@@ -79,10 +91,14 @@ public class RecordCollectorImpl implements RecordCollector {
                     @Override
                     public void onCompletion(RecordMetadata metadata, Exception exception) {
                         if (exception == null) {
+                            if (sendException != null) {
+                                return;
+                            }
                             TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
-                            log.error("{} Error sending record to topic {}", logPrefix, topic, exception);
+                            sendException = exception;
+                            log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
                         }
                     }
                 });
@@ -98,10 +114,17 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
+    private void checkForException() {
+        if (sendException != null) {
+            throw new StreamsException(String.format("%s exception caught when producing", logPrefix), sendException);
+        }
+    }
+
     @Override
     public void flush() {
         log.debug("{} Flushing producer", logPrefix);
         this.producer.flush();
+        checkForException();
     }
 
     /**
@@ -110,6 +133,7 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         producer.close();
+        checkForException();
     }
 
     /**
@@ -117,7 +141,8 @@ public class RecordCollectorImpl implements RecordCollector {
      *
      * @return the map from TopicPartition to offset
      */
-    Map<TopicPartition, Long> offsets() {
+    @Override
+    public Map<TopicPartition, Long> offsets() {
         return this.offsets;
     }
 }

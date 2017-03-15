@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,15 +106,24 @@ public class Stores {
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
                                     private boolean retainDuplicates = false;
+                                    private boolean sessionWindows;
                                     private boolean logged = true;
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, final long retentionPeriod, final int numSegments, final boolean retainDuplicates) {
                                         this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;
                                         this.retainDuplicates = retainDuplicates;
+                                        this.sessionWindows = false;
 
+                                        return this;
+                                    }
+
+                                    @Override
+                                    public PersistentKeyValueFactory<K, V> sessionWindowed(final long retentionPeriod) {
+                                        this.sessionWindows = true;
+                                        this.retentionPeriod = retentionPeriod;
                                         return this;
                                     }
 
@@ -140,7 +150,9 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         log.trace("Creating RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
-                                        if (numSegments > 0) {
+                                        if (sessionWindows) {
+                                            return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, keySerde, valueSerde, logged, logConfig, cachingEnabled);
+                                        } else if (numSegments > 0) {
                                             return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
                                         return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig, cachingEnabled);
@@ -325,7 +337,7 @@ public class Stores {
          * Keep all key-value entries off-heap in a local database, although for durability all entries are recorded in a Kafka
          * topic that can be read to restore the entries if they are lost.
          *
-         * @return the factory to create in-memory key-value stores; never null
+         * @return the factory to create persistent key-value stores; never null
          */
         PersistentKeyValueFactory<K, V> persistent();
     }
@@ -381,13 +393,18 @@ public class Stores {
 
         /**
          * Set the persistent store as a windowed key-value store
-         *
          * @param windowSize size of the windows
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window
          */
         PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates);
+
+        /**
+         * Set the persistent store as a {@link SessionStore} for use with {@link org.apache.kafka.streams.kstream.SessionWindows}
+         * @param retentionPeriod period of time in milliseconds to keep each window in this store
+         */
+        PersistentKeyValueFactory<K, V> sessionWindowed(final long retentionPeriod);
 
         /**
          * Indicates that a changelog should be created for the store. The changelog will be created

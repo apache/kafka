@@ -17,31 +17,43 @@
 
 package org.apache.kafka.streams;
 
-import java.util.Map;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 
+import java.util.Map;
+
+/**
+ * {@code KafkaClientSupplier} can be used to provide custom Kafka clients to a {@link KafkaStreams} instance.
+ *
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig, KafkaClientSupplier)
+ */
 public interface KafkaClientSupplier {
     /**
-     * Creates an instance of Producer which is used to produce records.
-     * @param config producer config which supplied by {@link StreamsConfig} given to {@link KafkaStreams}
-     * @return an instance of kafka Producer
+     * Create a {@link Producer} which is used to write records to sink topics.
+     *
+     * @param config {@link StreamsConfig#getProducerConfigs(String) producer config} which is supplied by the
+     *               {@link StreamsConfig} given to the {@link KafkaStreams} instance
+     * @return an instance of Kafka producer
      */
-    Producer<byte[], byte[]> getProducer(Map<String, Object> config);
+    Producer<byte[], byte[]> getProducer(final Map<String, Object> config);
 
     /**
-     * Creates an instance of Consumer which is used to consume records of source topics.
-     * @param config consumer config which supplied by {@link StreamsConfig} given to {@link KafkaStreams}
-     * @return an instance of kafka Consumer
+     * Create a {@link Consumer} which is used to read records of source topics.
+     *
+     * @param config {@link StreamsConfig#getConsumerConfigs(StreamThread, String, String) consumer config} which is
+     *               supplied by the {@link StreamsConfig} given to the {@link KafkaStreams} instance
+     * @return an instance of Kafka consumer
      */
-    Consumer<byte[], byte[]> getConsumer(Map<String, Object> config);
+    Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config);
 
     /**
-     * Creates an instance of Consumer which is used to consume records of internal topics.
-     * @param config restore consumer config which supplied by {@link StreamsConfig} given to
-     * {@link KafkaStreams}
-     * @return an instance of kafka Consumer
+     * Create a {@link Consumer} which is used to read records to restore {@link StateStore}s.
+     *
+     * @param config {@link StreamsConfig#getRestoreConsumerConfigs(String) restore consumer config} which is supplied
+     *               by the {@link StreamsConfig} given to the {@link KafkaStreams}
+     * @return an instance of Kafka consumer
      */
-    Consumer<byte[], byte[]> getRestoreConsumer(Map<String, Object> config);
+    Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config);
 }

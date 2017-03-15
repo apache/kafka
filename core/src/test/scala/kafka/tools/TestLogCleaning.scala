@@ -21,12 +21,15 @@ import joptsimple.OptionParser
 import java.util.Properties
 import java.util.Random
 import java.io._
+
 import kafka.consumer._
 import kafka.serializer._
 import kafka.utils._
-import kafka.log.FileMessageSet
 import kafka.log.Log
-import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.record.FileRecords
+
+import scala.collection.JavaConverters._
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
@@ -97,7 +100,7 @@ object TestLogCleaning {
 
     if(options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt, numMessagesOpt)
@@ -135,15 +138,15 @@ object TestLogCleaning {
   
   def dumpLog(dir: File) {
     require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
-    for(file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
-      val ms = new FileMessageSet(new File(dir, file))
-      for(entry <- ms) {
-        val key = TestUtils.readString(entry.message.key)
+    for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
+      val fileRecords = FileRecords.open(new File(dir, file))
+      for (entry <- fileRecords.shallowEntries.asScala) {
+        val key = TestUtils.readString(entry.record.key)
         val content = 
-          if(entry.message.isNull)
+          if(entry.record.hasNullValue)
             null
           else
-            TestUtils.readString(entry.message.payload)
+            TestUtils.readString(entry.record.value)
         println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
       }
     }

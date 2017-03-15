@@ -23,7 +23,6 @@ package org.apache.kafka.streams.state.internals;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
@@ -45,15 +44,27 @@ public class StoreChangeLoggerTest {
             new RecordCollectorImpl(null, "StoreChangeLoggerTest") {
                 @SuppressWarnings("unchecked")
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
-                    logged.put((Integer) record.key(), (String) record.value());
+                public <K1, V1> void send(final String topic,
+                                          K1 key,
+                                          V1 value,
+                                          Integer partition,
+                                          Long timestamp,
+                                          Serializer<K1> keySerializer,
+                                          Serializer<V1> valueSerializer) {
+                    logged.put((Integer) key, (String) value);
                 }
 
                 @Override
-                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer,
-                                          StreamPartitioner<K1, V1> partitioner) {
+                public <K1, V1> void send(final String topic,
+                                           K1 key,
+                                           V1 value,
+                                           Integer partition,
+                                           Long timestamp,
+                                           Serializer<K1> keySerializer,
+                                           Serializer<V1> valueSerializer,
+                                           StreamPartitioner<? super K1, ? super V1> partitioner) {
                     // ignore partitioner
-                    send(record, keySerializer, valueSerializer);
+                    send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
                 }
             }
     );

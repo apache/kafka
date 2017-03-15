@@ -35,7 +35,7 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()
   val topic = "foo"
-  val topicFilter = new Whitelist(topic)
+  val topicFilter = Whitelist(topic)
   val group = "test.group"
   val props = new Properties
 

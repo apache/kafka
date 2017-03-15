@@ -56,9 +56,15 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
             }
         }
+
         return new WindowStoreIterator<V>() {
             @Override
             public void close() {
+            }
+
+            @Override
+            public Long peekNextKey() {
+                throw new NoSuchElementException();
             }
 
             @Override

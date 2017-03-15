@@ -114,7 +114,7 @@ public class PartitionGroup {
         RecordQueue recordQueue = partitionQueues.get(partition);
 
         int oldSize = recordQueue.size();
-        int newSize = recordQueue.addRawRecords(rawRecords, timestampExtractor);
+        int newSize = recordQueue.addRawRecords(rawRecords);
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
