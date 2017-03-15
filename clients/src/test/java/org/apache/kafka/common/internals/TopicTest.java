@@ -38,7 +38,7 @@ public class TopicTest {
     }
 
     @Test
-    public void shouldRecognizeInvalidTopicNames() {
+    public void shouldThrowOnInvalidTopicNames() {
         String[] invalidTopicNames = {"", "foo bar", "..", "foo:bar", "foo=bar"};
 
         for (String topicName : invalidTopicNames) {
