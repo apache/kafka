@@ -158,9 +158,9 @@ public class ProduceRequest extends AbstractRequest {
                 .append(",timeout=").append(timeout);
 
         if (verbose)
-            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes));
+            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes, "[", "]", "=", ","));
 
-        bld.append("])");
+        bld.append("}");
         return bld.toString();
     }
 
