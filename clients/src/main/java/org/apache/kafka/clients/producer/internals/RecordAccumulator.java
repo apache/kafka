@@ -187,8 +187,8 @@ public final class RecordAccumulator {
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
-            int size = Math.max(this.batchSize, AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    key, value));
+            byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+            int size = Math.max(this.batchSize, AbstractRecords.sizeInBytesUpperBound(maxUsableMagic, key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
             buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
@@ -202,7 +202,6 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
                 MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(buffer, maxUsableMagic, compression,
                         TimestampType.CREATE_TIME, this.batchSize);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
