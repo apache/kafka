@@ -35,8 +35,7 @@ import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import kafka.utils.TestUtils.fail
 
-import scala.collection._
-import JavaConverters._
+import scala.collection.JavaConverters._
 
 class GroupMetadataManagerTest {
 
@@ -69,8 +68,7 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
-    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    val ret = Map(Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
     zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(Topic.GroupMetadataTopicName))).andReturn(ret)
@@ -359,13 +357,13 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = Map(topicPartition -> OffsetAndMetadata(offset))
 
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 
@@ -401,12 +399,12 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = Map(topicPartition -> OffsetAndMetadata(offset))
 
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 
@@ -443,13 +441,13 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = Map(topicPartition -> OffsetAndMetadata(offset))
 
     expectAppendMessage(appendError)
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 
@@ -484,7 +482,7 @@ class GroupMetadataManagerTest {
 
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
-    val offsets = immutable.Map(
+    val offsets = Map(
       topicPartition1 -> OffsetAndMetadata(offset, "", startMs, startMs + 1),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
 
@@ -492,8 +490,8 @@ class GroupMetadataManagerTest {
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 
@@ -632,7 +630,7 @@ class GroupMetadataManagerTest {
 
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
-    val offsets = immutable.Map(
+    val offsets = Map(
       topicPartition1 -> OffsetAndMetadata(offset, "", startMs, startMs + 1),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
 
@@ -640,8 +638,8 @@ class GroupMetadataManagerTest {
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 
@@ -708,7 +706,7 @@ class GroupMetadataManagerTest {
 
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
-    val offsets = immutable.Map(
+    val offsets = Map(
       topicPartition1 -> OffsetAndMetadata(offset, "", startMs, startMs + 1),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
 
@@ -716,8 +714,8 @@ class GroupMetadataManagerTest {
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    var commitErrors: Option[Map[TopicPartition, Errors]] = None
+    def callback(errors: Map[TopicPartition, Errors]) {
       commitErrors = Some(errors)
     }
 

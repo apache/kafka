@@ -21,7 +21,6 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import TestUtils.createBroker
@@ -38,7 +37,6 @@ import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
 
 class ReplicaManagerTest {
 

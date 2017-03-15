@@ -67,6 +67,7 @@ class LogManager(val logDirs: Array[File],
   loadLogs()
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
+//  TODO: Make Option[LogCleaner]
   val cleaner: LogCleaner =
     if(cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
@@ -289,21 +290,22 @@ class LogManager(val logDirs: Array[File],
    *
    * @param partitionOffsets Partition logs that need to be truncated
    */
-  def truncateTo(partitionOffsets: Map[TopicPartition, Long]) {
-    for ((topicPartition, truncateOffset) <- partitionOffsets) {
-      val log = logs.get(topicPartition)
-      // If the log does not exist, skip it
-      if (log != null) {
-        //May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
-        if (needToStopCleaner && cleaner != null)
-          cleaner.abortAndPauseCleaning(topicPartition)
-        log.truncateTo(truncateOffset)
-        if (needToStopCleaner && cleaner != null) {
-          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
-          cleaner.resumeCleaning(topicPartition)
+  def truncateTo(partitionOffsets: Map[TopicPartition, Long]): Unit = {
+    partitionOffsets.foreach {
+      case (topicPartition, truncateOffset) =>
+        val log = logs.get(topicPartition)
+        // If the log does not exist, skip it
+        if (log != null) {
+          //May need to abort and pause the cleaning of the log, and resume after truncation is done.
+          val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
+          if (needToStopCleaner && cleaner != null)
+            cleaner.abortAndPauseCleaning(topicPartition)
+          log.truncateTo(truncateOffset)
+          if (needToStopCleaner && cleaner != null) {
+            cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+            cleaner.resumeCleaning(topicPartition)
+          }
         }
-      }
     }
     checkpointRecoveryPointOffsets()
   }
@@ -340,10 +342,10 @@ class LogManager(val logDirs: Array[File],
    * Make a checkpoint for all logs in provided directory.
    */
   private def checkpointLogsInDir(dir: File): Unit = {
-    val recoveryPoints = this.logsByDir.get(dir.toString)
-    if (recoveryPoints.isDefined) {
-      this.recoveryPointCheckpoints(dir).write(recoveryPoints.get.mapValues(_.recoveryPoint))
-    }
+    for {
+      recoveryPoints <- logsByDir.get(dir.toString)
+      offsetCheckpoint <- recoveryPointCheckpoints.get(dir)
+    } yield offsetCheckpoint.write(recoveryPoints.mapValues(_.recoveryPoint))
   }
 
   /**
@@ -447,17 +449,15 @@ class LogManager(val logDirs: Array[File],
    * data directory with the fewest partitions.
    */
   private def nextLogDir(): File = {
-    if(logDirs.size == 1) {
+    if (logDirs.length == 1) {
       logDirs(0)
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
-      val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+      val logCounts = allLogs().groupBy(_.dir.getParent).mapValues(_.size)
       val zeros = logDirs.map(dir => (dir.getPath, 0)).toMap
-      var dirCounts = (zeros ++ logCounts).toBuffer
-    
       // choose the directory with the least logs in it
-      val leastLoaded = dirCounts.sortBy(_._2).head
-      new File(leastLoaded._1)
+      val leastLoaded = (zeros ++ logCounts).minBy { case (dir, count) => count }._1
+      new File(leastLoaded)
     }
   }
 
@@ -491,7 +491,7 @@ class LogManager(val logDirs: Array[File],
    * Map of log dir to logs by topic and partitions in that dir
    */
   private def logsByDir = {
-    this.logsByTopicPartition.groupBy {
+    logsByTopicPartition.groupBy {
       case (_, log) => log.dir.getParent
     }
   }

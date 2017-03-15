@@ -199,7 +199,7 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
   }
 
   private def partitionStateToPartitionStateInfo(partitionState: PartitionState): PartitionStateInfo = {
-    val leaderAndIsr = LeaderAndIsr(partitionState.leader, partitionState.leaderEpoch, partitionState.isr.asScala.map(_.toInt).toList, partitionState.zkVersion)
+    val leaderAndIsr = LeaderAndIsr(partitionState)
     val leaderInfo = LeaderIsrAndControllerEpoch(leaderAndIsr, partitionState.controllerEpoch)
     PartitionStateInfo(leaderInfo, partitionState.replicas.asScala.map(_.toInt))
   }

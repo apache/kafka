@@ -21,10 +21,6 @@ import kafka.server.{AbstractFetcherManager, AbstractFetcherThread, BrokerAndIni
 import kafka.cluster.{BrokerEndPoint, Cluster}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-
-import scala.collection.immutable
-import collection.mutable.HashMap
-import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
@@ -43,9 +39,9 @@ class ConsumerFetcherManager(private val consumerIdString: String,
                              private val zkUtils : ZkUtils)
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(Time.SYSTEM.milliseconds),
                                        config.clientId, config.numConsumerFetchers) {
-  private var partitionMap: immutable.Map[TopicPartition, PartitionTopicInfo] = null
+  private var partitionMap: Map[TopicPartition, PartitionTopicInfo] = null
   private var cluster: Cluster = null
-  private val noLeaderPartitionSet = new mutable.HashSet[TopicPartition]
+  private val noLeaderPartitionSet = new scala.collection.mutable.HashSet[TopicPartition]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
   private var leaderFinderThread: ShutdownableThread = null
@@ -54,47 +50,56 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
-      val leaderForPartitionsMap = new HashMap[TopicPartition, BrokerEndPoint]
       lock.lock()
-      try {
+      val leaderForPartitionsMap = try {
         while (noLeaderPartitionSet.isEmpty) {
           trace("No partition for leader election.")
           cond.await()
         }
 
-        trace("Partitions without leader %s".format(noLeaderPartitionSet))
+        trace(s"Partitions without leader: $noLeaderPartitionSet")
         val brokers = ClientUtils.getPlaintextBrokerEndPoints(zkUtils)
-        val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
-                                                            brokers,
-                                                            config.clientId,
-                                                            config.socketTimeoutMs,
-                                                            correlationId.getAndIncrement).topicsMetadata
-        if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
-        topicsMetadata.foreach { tmd =>
-          val topic = tmd.topic
-          tmd.partitionsMetadata.foreach { pmd =>
-            val topicAndPartition = new TopicPartition(topic, pmd.partitionId)
-            if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
-              val leaderBroker = pmd.leader.get
-              leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
-              noLeaderPartitionSet -= topicAndPartition
-            }
-          }
+        val topicsMetadata =
+          ClientUtils.fetchTopicMetadata(
+            noLeaderPartitionSet.map(m => m.topic).toSet,
+            brokers,
+            config.clientId,
+            config.socketTimeoutMs,
+            correlationId.getAndIncrement
+          ).topicsMetadata
+
+        debug(s"${topicsMetadata.mkString("\n")}")
+
+        val leaderForPartitionSeq = for {
+          tmd <- topicsMetadata
+          pmd <- tmd.partitionsMetadata
+          topicPartition = new TopicPartition(tmd.topic, pmd.partitionId) if noLeaderPartitionSet.contains(topicPartition)
+          leaderBroker <- pmd.leader
+        } yield {
+          noLeaderPartitionSet.remove(topicPartition)
+          (topicPartition, leaderBroker)
         }
+
+        leaderForPartitionSeq.toMap
       } catch {
         case t: Throwable => {
-            if (!isRunning.get())
-              throw t /* If this thread is stopped, propagate this exception to kill the thread. */
-            else
-              warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
+          if (!isRunning.get()) {
+            throw t /* If this thread is stopped, propagate this exception to kill the thread. */
+          } else {
+            warn(s"Failed to find leader for $noLeaderPartitionSet", t)
           }
+          Map.empty[TopicPartition, BrokerEndPoint]
+        }
       } finally {
         lock.unlock()
       }
 
       try {
-        addFetcherForPartitions(leaderForPartitionsMap.map { case (topicPartition, broker) =>
-          topicPartition -> BrokerAndInitialOffset(broker, partitionMap(topicPartition).getFetchOffset())}
+        addFetcherForPartitions(
+          leaderForPartitionsMap.map {
+            case (topicPartition, broker) =>
+              topicPartition -> BrokerAndInitialOffset(broker, partitionMap(topicPartition).getFetchOffset())
+          }
         )
       } catch {
         case t: Throwable =>

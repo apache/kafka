@@ -103,8 +103,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * @param targetState  The state that the replicas should be moved to
    * The controller's allLeaders cache should have been updated before this
    */
-  def handleStateChanges(replicas: Set[PartitionAndReplica], targetState: ReplicaState,
-                         callbacks: Callbacks = (new CallbackBuilder).build) {
+  def handleStateChanges(replicas: immutable.Set[PartitionAndReplica],
+                         targetState: ReplicaState,
+                         callbacks: Callbacks = (new CallbackBuilder).build): Unit = {
     if(replicas.nonEmpty) {
       info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
       try {
@@ -152,7 +153,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * @param partitionAndReplica The replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
-  def handleStateChange(partitionAndReplica: PartitionAndReplica, targetState: ReplicaState,
+  def handleStateChange(partitionAndReplica: PartitionAndReplica,
+                        targetState: ReplicaState,
                         callbacks: Callbacks) {
     val topic = partitionAndReplica.topic
     val partition = partitionAndReplica.partition
@@ -289,8 +291,11 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     replicaStatesForTopic.foldLeft(false)((deletionState, r) => deletionState || r._2 == ReplicaDeletionStarted)
   }
 
-  def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
-    replicaState.filter(r => r._1.topic.equals(topic) && r._2 == state).keySet
+  def replicasInState(topic: String, state: ReplicaState): immutable.Set[PartitionAndReplica] = {
+    replicaState
+      .filter(r => r._1.topic.equals(topic) && r._2 == state)
+      .keySet
+      .toSet
   }
 
   def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {

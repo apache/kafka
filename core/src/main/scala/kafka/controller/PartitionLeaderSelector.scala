@@ -52,11 +52,9 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
 
   def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     controllerContext.partitionReplicaAssignment.get(topicAndPartition) match {
-      case Some(assignedReplicas) =>
+      case Some(assignedReplicas) => {
         val liveAssignedReplicas = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
         val liveBrokersInIsr = currentLeaderAndIsr.isr.filter(r => controllerContext.liveBrokerIds.contains(r))
-        val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
-        val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
         val newLeaderAndIsr =
           if (liveBrokersInIsr.isEmpty) {
             // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
@@ -78,17 +76,19 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
               val newLeader = liveAssignedReplicas.head
               warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
                 .format(topicAndPartition, newLeader, liveAssignedReplicas.mkString(",")))
-              new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
+              currentLeaderAndIsr.newLeaderAndIsr(newLeader, List(newLeader))
             }
           } else {
             val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
             val newLeader = liveReplicasInIsr.head
             debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
               .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
-            new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
+            currentLeaderAndIsr.newLeaderAndIsr(newLeader, liveBrokersInIsr)
           }
-        info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))
+
+        info(s"Selected new leader and ISR $newLeaderAndIsr for offline partition $topicAndPartition")
         (newLeaderAndIsr, liveAssignedReplicas)
+      }
       case None =>
         throw new NoReplicaOnlineException("Partition %s doesn't have replicas assigned to it".format(topicAndPartition))
     }
@@ -100,31 +100,37 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
  * New isr = current isr
  * Replicas to receive LeaderAndIsr request = reassigned replicas
  */
-class ReassignedPartitionLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector with Logging {
-  this.logIdent = "[ReassignedPartitionLeaderSelector]: "
+class ReassignedPartitionLeaderSelector(controllerContext: ControllerContext)
+  extends PartitionLeaderSelector
+    with Logging {
+  logIdent = "[ReassignedPartitionLeaderSelector]: "
 
   /**
    * The reassigned replicas are already in the ISR when selectLeader is called.
    */
-  def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
-    val reassignedInSyncReplicas = controllerContext.partitionsBeingReassigned(topicAndPartition).newReplicas
-    val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
-    val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
-    val aliveReassignedInSyncReplicas = reassignedInSyncReplicas.filter(r => controllerContext.liveBrokerIds.contains(r) &&
-                                                                             currentLeaderAndIsr.isr.contains(r))
+  override def selectLeader(topicAndPartition: TopicAndPartition,
+                            currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+    val reassignedInSyncReplicas = controllerContext.partitionsBeingReassigned
+      .get(topicAndPartition)
+      .map(_.newReplicas)
+      .getOrElse(Seq.empty[Int])
+
+    val aliveReassignedInSyncReplicas = reassignedInSyncReplicas.filter(r =>
+      controllerContext.liveBrokerIds.contains(r) && currentLeaderAndIsr.isr.contains(r)
+    )
+
     val newLeaderOpt = aliveReassignedInSyncReplicas.headOption
     newLeaderOpt match {
-      case Some(newLeader) => (new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, currentLeaderAndIsr.isr,
-        currentLeaderIsrZkPathVersion + 1), reassignedInSyncReplicas)
+      case Some(newLeader) =>
+        (currentLeaderAndIsr.newLeader(newLeader), reassignedInSyncReplicas)
+
       case None =>
-        reassignedInSyncReplicas.size match {
-          case 0 =>
-            throw new NoReplicaOnlineException("List of reassigned replicas for partition " +
-              " %s is empty. Current leader and ISR: [%s]".format(topicAndPartition, currentLeaderAndIsr))
-          case _ =>
-            throw new NoReplicaOnlineException("None of the reassigned replicas for partition " +
-              "%s are in-sync with the leader. Current leader and ISR: [%s]".format(topicAndPartition, currentLeaderAndIsr))
+        val exceptionText = if (reassignedInSyncReplicas.isEmpty) {
+          s"List of reassigned replicas for partition $topicAndPartition is empty. Current leader and ISR: [$currentLeaderAndIsr]"
+        } else {
+          s"None of the reassigned replicas for partition $topicAndPartition are in-sync with the leader. Current leader and ISR: [$currentLeaderAndIsr]"
         }
+        throw new NoReplicaOnlineException(exceptionText)
     }
   }
 }
@@ -134,28 +140,31 @@ class ReassignedPartitionLeaderSelector(controllerContext: ControllerContext) ex
  * New isr = current isr;
  * Replicas to receive LeaderAndIsr request = assigned replicas
  */
-class PreferredReplicaPartitionLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector
-with Logging {
-  this.logIdent = "[PreferredReplicaPartitionLeaderSelector]: "
+class PreferredReplicaPartitionLeaderSelector(controllerContext: ControllerContext)
+  extends PartitionLeaderSelector
+    with Logging {
 
-  def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+  logIdent = "[PreferredReplicaPartitionLeaderSelector]: "
+
+  override def selectLeader(topicAndPartition: TopicAndPartition,
+                            currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
+//    TODO: Possible NoSuchElementException
     val preferredReplica = assignedReplicas.head
     // check if preferred replica is the current leader
     val currentLeader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
     if (currentLeader == preferredReplica) {
-      throw new LeaderElectionNotNeededException("Preferred replica %d is already the current leader for partition %s"
-                                                   .format(preferredReplica, topicAndPartition))
+      throw new LeaderElectionNotNeededException(
+        s"Preferred replica $preferredReplica is already the current leader for partition $topicAndPartition")
     } else {
-      info("Current leader %d for partition %s is not the preferred replica.".format(currentLeader, topicAndPartition) +
+      info(s"Current leader $currentLeader for partition $topicAndPartition is not the preferred replica." +
         " Triggering preferred replica leader election")
       // check if preferred replica is not the current leader and is alive and in the isr
       if (controllerContext.liveBrokerIds.contains(preferredReplica) && currentLeaderAndIsr.isr.contains(preferredReplica)) {
-        (new LeaderAndIsr(preferredReplica, currentLeaderAndIsr.leaderEpoch + 1, currentLeaderAndIsr.isr,
-          currentLeaderAndIsr.zkVersion + 1), assignedReplicas)
+        (currentLeaderAndIsr.newLeader(preferredReplica), assignedReplicas)
       } else {
-        throw new StateChangeFailedException("Preferred replica %d for partition ".format(preferredReplica) +
-          "%s is either not alive or not in the isr. Current leader and ISR: [%s]".format(topicAndPartition, currentLeaderAndIsr))
+        throw new StateChangeFailedException(s"Preferred replica $preferredReplica for partition $topicAndPartition " +
+          s"is either not alive or not in the isr. Current leader and ISR: [$currentLeaderAndIsr]")
       }
     }
   }
@@ -167,17 +176,13 @@ with Logging {
  * Replicas to receive LeaderAndIsr request = live assigned replicas
  */
 class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
-        extends PartitionLeaderSelector
-        with Logging {
+  extends PartitionLeaderSelector
+    with Logging {
 
-  this.logIdent = "[ControlledShutdownLeaderSelector]: "
+  logIdent = "[ControlledShutdownLeaderSelector]: "
 
-  def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
-    val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
-    val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
-
-    val currentLeader = currentLeaderAndIsr.leader
-
+  override def selectLeader(topicAndPartition: TopicAndPartition,
+                            currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
     val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
     val liveAssignedReplicas = assignedReplicas.filter(r => liveOrShuttingDownBrokerIds.contains(r))
@@ -185,11 +190,12 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
     val newIsr = currentLeaderAndIsr.isr.filter(brokerId => !controllerContext.shuttingDownBrokerIds.contains(brokerId))
     liveAssignedReplicas.find(newIsr.contains) match {
       case Some(newLeader) =>
-        debug("Partition %s : current leader = %d, new leader = %d".format(topicAndPartition, currentLeader, newLeader))
-        (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1), liveAssignedReplicas)
+        debug(s"Partition $topicAndPartition: current leader = ${currentLeaderAndIsr.leader}, new leader = $newLeader")
+        (currentLeaderAndIsr.newLeaderAndIsr(newLeader, newIsr), liveAssignedReplicas)
       case None =>
-        throw new StateChangeFailedException(("No other replicas in ISR %s for %s besides" +
-          " shutting down brokers %s").format(currentLeaderAndIsr.isr.mkString(","), topicAndPartition, controllerContext.shuttingDownBrokerIds.mkString(",")))
+        throw new StateChangeFailedException(
+          s"No other replicas in ISR ${currentLeaderAndIsr.isr.mkString(",")} for $topicAndPartition besides " +
+          s"shutting down brokers ${controllerContext.shuttingDownBrokerIds.mkString(",")}")
     }
   }
 }
@@ -198,11 +204,14 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
  * Essentially does nothing. Returns the current leader and ISR, and the current
  * set of replicas assigned to a given topic/partition.
  */
-class NoOpLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector with Logging {
+class NoOpLeaderSelector(controllerContext: ControllerContext)
+  extends PartitionLeaderSelector
+    with Logging {
 
-  this.logIdent = "[NoOpLeaderSelector]: "
+  logIdent = "[NoOpLeaderSelector]: "
 
-  def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+  def selectLeader(topicAndPartition: TopicAndPartition,
+                   currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     warn("I should never have been asked to perform leader election, returning the current LeaderAndIsr and replica assignment.")
     (currentLeaderAndIsr, controllerContext.partitionReplicaAssignment(topicAndPartition))
   }

@@ -26,8 +26,6 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
-import scala.collection._
-
 object OffsetCommitRequest extends Logging {
   val CurrentVersion: Short = 2
   val DefaultClientId = ""
@@ -84,12 +82,12 @@ object OffsetCommitRequest extends Logging {
       })
     })
 
-    OffsetCommitRequest(groupId, immutable.Map(pairs:_*), versionId, correlationId, clientId, groupGenerationId, memberId, retentionMs)
+    OffsetCommitRequest(groupId, Map(pairs:_*), versionId, correlationId, clientId, groupGenerationId, memberId, retentionMs)
   }
 }
 
 case class OffsetCommitRequest(groupId: String,
-                               requestInfo: immutable.Map[TopicAndPartition, OffsetAndMetadata],
+                               requestInfo: Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
                                correlationId: Int = 0,
                                clientId: String = OffsetCommitRequest.DefaultClientId,

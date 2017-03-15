@@ -17,9 +17,6 @@
 
 package kafka.server
 
-import scala.collection.mutable
-import scala.collection.Set
-import scala.collection.Map
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
@@ -30,7 +27,7 @@ import org.apache.kafka.common.utils.Utils
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher
-  private val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
+  private val fetcherThreadMap = new scala.collection.mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = "[" + name + "] "
 
@@ -106,15 +103,14 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
 
   def removeFetcherForPartitions(partitions: Set[TopicPartition]) {
     mapLock synchronized {
-      for (fetcher <- fetcherThreadMap.values)
-        fetcher.removePartitions(partitions)
+      fetcherThreadMap.valuesIterator.foreach(_.removePartitions(partitions))
     }
-    info("Removed fetcher for partitions %s".format(partitions.mkString(",")))
+    info(s"Removed fetcher for partitions ${partitions.mkString(",")}")
   }
 
   def shutdownIdleFetcherThreads() {
     mapLock synchronized {
-      val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
+      val keysToBeRemoved = new scala.collection.mutable.HashSet[BrokerIdAndFetcherId]
       for ((key, fetcher) <- fetcherThreadMap) {
         if (fetcher.partitionCount <= 0) {
           fetcher.shutdown()

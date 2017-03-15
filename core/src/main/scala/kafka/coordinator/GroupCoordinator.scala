@@ -19,7 +19,7 @@ package kafka.coordinator
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
+import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetFetchResponse, JoinGroupRequest}
 
-import scala.collection.{Map, Seq, immutable}
+import scala.collection.{Seq, immutable}
 
 
 /**

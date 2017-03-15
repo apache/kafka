@@ -19,7 +19,6 @@ package kafka.javaapi.consumer
 import kafka.serializer._
 import kafka.consumer._
 import kafka.common.{OffsetAndMetadata, TopicAndPartition, MessageStreamsExistException}
-import scala.collection.mutable
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
 

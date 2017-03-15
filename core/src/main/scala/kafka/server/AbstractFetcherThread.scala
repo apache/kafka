@@ -29,7 +29,6 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 
-import scala.collection.{Map, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -104,7 +103,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private def processFetchRequest(fetchRequest: REQ) {
-    val partitionsWithError = mutable.Set[TopicPartition]()
+    val partitionsWithError = scala.collection.mutable.Set[TopicPartition]()
 
     def updatePartitionsWithError(partition: TopicPartition): Unit = {
       partitionsWithError += partition
@@ -226,7 +225,7 @@ abstract class AbstractFetcherThread(name: String,
       for (partition <- partitions) {
         Option(partitionStates.stateValue(partition)).foreach (currentPartitionFetchState =>
           if (currentPartitionFetchState.isActive)
-            partitionStates.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.offset, new DelayedItem(delay)))
+            partitionStates.updateAndMoveToEnd(partition, PartitionFetchState(currentPartitionFetchState.offset, new DelayedItem(delay)))
         )
       }
       partitionMapCond.signalAll()
@@ -304,11 +303,11 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   val stats = new Pool[ClientIdTopicPartition, FetcherLagMetrics](Some(valueFactory))
 
   def getAndMaybePut(topic: String, partitionId: Int): FetcherLagMetrics = {
-    stats.getAndMaybePut(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
+    stats.getAndMaybePut(ClientIdTopicPartition(metricId.clientId, topic, partitionId))
   }
 
   def isReplicaInSync(topic: String, partitionId: Int): Boolean = {
-    val fetcherLagMetrics = stats.get(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
+    val fetcherLagMetrics = stats.get(ClientIdTopicPartition(metricId.clientId, topic, partitionId))
     if (fetcherLagMetrics != null)
       fetcherLagMetrics.lag <= 0
     else
@@ -316,7 +315,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   }
 
   def unregister(topic: String, partitionId: Int) {
-    val lagMetrics = stats.remove(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
+    val lagMetrics = stats.remove(ClientIdTopicPartition(metricId.clientId, topic, partitionId))
     if (lagMetrics != null) lagMetrics.unregister()
   }
 
@@ -350,9 +349,7 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
 /**
   * case class to keep partition offset and its state(active, inactive)
   */
-case class PartitionFetchState(offset: Long, delay: DelayedItem) {
-
-  def this(offset: Long) = this(offset, new DelayedItem(0))
+case class PartitionFetchState(offset: Long, delay: DelayedItem = new DelayedItem(0)) {
 
   def isActive: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0
 

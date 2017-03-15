@@ -42,7 +42,11 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topicDataMismatch = Json.encode(Map("controller_epoch" -> 1, "leader" -> 1,
     "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2)))
 
-  val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
+  val topicDataLeaderIsrAndControllerEpoch =
+    LeaderIsrAndControllerEpoch(
+      LeaderAndIsr(1, leaderEpoch, List(1, 2), 0),
+      controllerEpoch
+    )
 
   @Before
   override def setUp() {
@@ -86,14 +90,14 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
       "my-topic-test", partitionId, newLeaderAndIsr2, controllerEpoch, zkVersion + 1)
     assertTrue(updateSucceeded2)
     // returns true with existing zkVersion
-    assertEquals(newZkVersion2,1)
+    assertEquals(newZkVersion2, 1)
 
     // mismatched zkVersion and leaderEpoch
     val newLeaderAndIsr3 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion + 1)
     val (updateSucceeded3,newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkUtils,
       "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1)
     assertFalse(updateSucceeded3)
-    assertEquals(newZkVersion3,-1)
+    assertEquals(newZkVersion3, -1)
   }
 
   @Test

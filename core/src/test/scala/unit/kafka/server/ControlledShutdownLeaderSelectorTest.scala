@@ -45,7 +45,7 @@ class ControlledShutdownLeaderSelectorTest {
     controllerContext.partitionReplicaAssignment = mutable.Map(topicPartition -> assignment)
 
     val leaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
-    val firstLeaderAndIsr = new LeaderAndIsr(firstLeader, firstIsr)
+    val firstLeaderAndIsr = LeaderAndIsr(firstLeader, firstIsr)
     val (secondLeaderAndIsr, secondReplicas) = leaderSelector.selectLeader(topicPartition, firstLeaderAndIsr)
 
     assertEquals(preferredReplicaId, secondLeaderAndIsr.leader)

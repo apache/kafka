@@ -33,13 +33,12 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Test}
 
-import scala.collection.Map
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 
 class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
 
-  private var brokers: Seq[KafkaServer] = null
+  private var brokers = Seq.empty[KafkaServer]
   @volatile private var shutdownCompleted = false
 
   @After
@@ -96,7 +95,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
         }
       }
     }))
-    TestUtils.createTopic(zkUtils, "topic", numPartitions = 1, replicationFactor = 2, servers = brokers)
+    TestUtils.createTopic(zkUtils, "topic", replicationFactor = 2, servers = brokers)
     TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete")
   }
 
@@ -116,10 +115,11 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
                                                              quotaManager: ReplicationQuotaManager) =
             new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
               override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-                val prefix = threadNamePrefix.map(tp => s"${tp}:").getOrElse("")
+                val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
                 val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-                fetcherThread(new FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics,
-                  time, quotaManager))
+                fetcherThread(
+                  FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics, time, quotaManager)
+                )
               }
             }
         }

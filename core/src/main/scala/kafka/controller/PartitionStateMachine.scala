@@ -280,8 +280,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         debug("Live assigned replicas for partition %s are: [%s]".format(topicAndPartition, liveAssignedReplicas))
         // make the first replica in the list of assigned replicas, the leader
         val leader = liveAssignedReplicas.head
-        val leaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, liveAssignedReplicas.toList),
-          controller.epoch)
+        val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(
+          LeaderAndIsr(leader, liveAssignedReplicas.toList),
+          controller.epoch
+        )
         debug("Initializing leader and isr for partition %s to %s".format(topicAndPartition, leaderIsrAndControllerEpoch))
         try {
           zkUtils.createPersistentPath(
@@ -339,12 +341,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
           leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr
-        newLeaderAndIsr.zkVersion = newVersion
+        newLeaderAndIsr = leaderAndIsr.newZkVersion(newVersion)
         zookeeperPathUpdateSucceeded = updateSucceeded
         replicasForThisPartition = replicas
       }
-      val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
+      val newLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
       // update the leader cache
       controllerContext.partitionLeadershipInfo.put(TopicAndPartition(topic, partition), newLeaderIsrAndControllerEpoch)
       stateChangeLogger.trace("Controller %d epoch %d elected leader %d for Offline partition %s"
@@ -420,7 +421,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             val deletedTopics = controllerContext.allTopics -- currentChildren
             controllerContext.allTopics = currentChildren
 
-            val addedPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(newTopics.toSeq)
+            val addedPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(newTopics.toSeq).toMap
             controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
               !deletedTopics.contains(p._1.topic))
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
@@ -497,9 +498,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       inLock(controllerContext.controllerLock) {
         try {
           info(s"Partition modification triggered $data for path $dataPath")
-          val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
-          val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
-            !controllerContext.partitionReplicaAssignment.contains(p._1))
+          val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic)).toMap
+          val partitionsToBeAdded = partitionReplicaAssignment.filter(
+            p => !controllerContext.partitionReplicaAssignment.contains(p._1)
+          )
           if(controller.deleteTopicManager.isTopicQueuedUpForDeletion(topic))
             error("Skipping adding partitions %s for topic %s since it is currently being deleted"
                   .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
@@ -521,6 +523,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 }
 
+//TODO: state is not used anywhere, can we delete it?
 sealed trait PartitionState { def state: Byte }
 case object NewPartition extends PartitionState { val state: Byte = 0 }
 case object OnlinePartition extends PartitionState { val state: Byte = 1 }

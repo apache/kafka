@@ -29,7 +29,6 @@ import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
 
 class AbstractFetcherThreadTest {
 
@@ -85,7 +84,7 @@ class AbstractFetcherThreadTest {
 
   private def allMetricsNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
 
-  class DummyFetchRequest(val offsets: collection.Map[TopicPartition, Long]) extends FetchRequest {
+  class DummyFetchRequest(val offsets: Map[TopicPartition, Long]) extends FetchRequest {
     override def isEmpty: Boolean = offsets.isEmpty
 
     override def offset(topicPartition: TopicPartition): Long = offsets(topicPartition)
@@ -121,7 +120,7 @@ class AbstractFetcherThreadTest {
     override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] =
       fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
+    override protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
       new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.offset) }.toMap)
   }
 
@@ -192,14 +191,12 @@ class AbstractFetcherThreadTest {
         fetchRequest.offsets.mapValues(v => normalPartitionDataSet(v.toInt)).toSeq
     }
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {
-      val requestMap = new mutable.HashMap[TopicPartition, Long]
-      partitionMap.foreach { case (topicPartition, partitionFetchState) =>
-        // Add backoff delay check
-        if (partitionFetchState.isActive)
-          requestMap.put(topicPartition, partitionFetchState.offset)
+    override protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {
+      val topicPartitionOffsets = partitionMap.collect {
+        case (topicPartition, partitionFetchState) if partitionFetchState.isActive =>
+          topicPartition -> partitionFetchState.offset
       }
-      new DummyFetchRequest(requestMap)
+      new DummyFetchRequest(topicPartitionOffsets.toMap)
     }
 
     override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) = delayPartitions(partitions, fetchBackOffMs.toLong)
