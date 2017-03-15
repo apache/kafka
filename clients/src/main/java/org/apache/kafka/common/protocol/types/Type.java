@@ -235,16 +235,15 @@ public abstract class Type {
         }
 
         @Override
-        public Object read(ByteBuffer buffer) {
+        public String read(ByteBuffer buffer) {
             short length = buffer.getShort();
             if (length < 0)
                 throw new SchemaException("String length " + length + " cannot be negative");
             if (length > buffer.remaining())
                 throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-
-            byte[] bytes = new byte[length];
-            buffer.get(bytes);
-            return Utils.utf8(bytes);
+            String result = Utils.utf8(buffer, length);
+            buffer.position(buffer.position() + length);
+            return result;
         }
 
         @Override
@@ -287,16 +286,15 @@ public abstract class Type {
         }
 
         @Override
-        public Object read(ByteBuffer buffer) {
+        public String read(ByteBuffer buffer) {
             short length = buffer.getShort();
             if (length < 0)
                 return null;
             if (length > buffer.remaining())
                 throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-
-            byte[] bytes = new byte[length];
-            buffer.get(bytes);
-            return Utils.utf8(bytes);
+            String result = Utils.utf8(buffer, length);
+            buffer.position(buffer.position() + length);
+            return result;
         }
 
         @Override

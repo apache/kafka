@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -31,15 +32,21 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
 /**
  * This class implements the inner record format for magic 2 and above. The schema is as follows:
  *
+ *
  * Record =>
  *   Length => Varint
  *   Attributes => Int8
  *   TimestampDelta => Varlong
  *   OffsetDelta => Varint
- *   KeyLen => Varint
- *   Key => data
- *   ValueLen => Varint
- *   Value => data
+ *   Key => Bytes
+ *   Value => Bytes
+ *   Headers => [HeaderKey HeaderValue]
+ *     HeaderKey => String
+ *     HeaderValue => Bytes
+ *
+ * Note that in this schema, the Bytes and String types use a variable length integer to represent
+ * the length of the field. The array type used for the headers also uses a Varint for the number of
+ * headers.
  *
  * The current record attributes are depicted below:
  *
@@ -54,11 +61,11 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  */
 public class DefaultRecord implements Record {
 
-    // excluding key and value: 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
+    // excluding key, value and headers: 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
     private static final int MAX_RECORD_OVERHEAD = 21;
 
     private static final int CONTROL_FLAG_MASK = 0x01;
-    private static final int NULL_VALUE_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
+    private static final int NULL_VARINT_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
 
     private final int sizeInBytes;
     private final byte attributes;
@@ -67,6 +74,7 @@ public class DefaultRecord implements Record {
     private final int sequence;
     private final ByteBuffer key;
     private final ByteBuffer value;
+    private final Header[] headers;
     private Long checksum = null;
 
     private DefaultRecord(int sizeInBytes,
@@ -75,7 +83,8 @@ public class DefaultRecord implements Record {
                           long timestamp,
                           int sequence,
                           ByteBuffer key,
-                          ByteBuffer value) {
+                          ByteBuffer value,
+                          Header[] headers) {
         this.sizeInBytes = sizeInBytes;
         this.attributes = attributes;
         this.offset = offset;
@@ -83,6 +92,7 @@ public class DefaultRecord implements Record {
         this.sequence = sequence;
         this.key = key;
         this.value = value;
+        this.headers = headers;
     }
 
     @Override
@@ -156,13 +166,19 @@ public class DefaultRecord implements Record {
         return value == null ? null : value.duplicate();
     }
 
+    @Override
+    public Header[] headers() {
+        return headers;
+    }
+
     public static long writeTo(DataOutputStream out,
                                boolean isControlRecord,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
-                               ByteBuffer value) throws IOException {
-        int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value);
+                               ByteBuffer value,
+                               Header[] headers) throws IOException {
+        int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         ByteUtils.writeVarint(sizeInBytes, out);
 
         byte attributes = computeAttributes(isControlRecord);
@@ -187,6 +203,32 @@ public class DefaultRecord implements Record {
             out.write(value.array(), value.arrayOffset(), valueSize);
         }
 
+        if (headers == null) {
+            ByteUtils.writeVarint(0, out);
+        } else {
+            ByteUtils.writeVarint(headers.length, out);
+
+            for (Header header : headers) {
+                String headerKey = header.key();
+                if (headerKey == null) {
+                    ByteUtils.writeVarint(-1, out);
+                } else {
+                    byte[] utf8Bytes = Utils.utf8(headerKey);
+                    ByteUtils.writeVarint(utf8Bytes.length, out);
+                    out.write(utf8Bytes);
+                }
+
+                ByteBuffer headerValue = header.value();
+                if (headerValue == null) {
+                    ByteUtils.writeVarint(-1, out);
+                } else {
+                    int headerValueSize = headerValue.remaining();
+                    ByteUtils.writeVarint(headerValueSize, out);
+                    out.write(headerValue.array(), headerValue.arrayOffset(), headerValueSize);
+                }
+            }
+        }
+
         return computeChecksum(timestampDelta, key, value);
     }
 
@@ -195,10 +237,11 @@ public class DefaultRecord implements Record {
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
-                               ByteBuffer value) {
+                               ByteBuffer value,
+                               Header[] headers) {
         try {
             return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), isControlRecord, offsetDelta,
-                    timestampDelta, key, value);
+                    timestampDelta, key, value, headers);
         } catch (IOException e) {
             // cannot actually be raised by ByteBufferOutputStream
             throw new RuntimeException(e);
@@ -285,27 +328,46 @@ public class DefaultRecord implements Record {
         long offset = baseOffset + delta;
         int sequence = baseSequence >= 0 ? baseSequence + delta : RecordBatch.NO_SEQUENCE;
 
-        final ByteBuffer key;
+        ByteBuffer key = null;
         int keySize = ByteUtils.readVarint(buffer);
-        if (keySize < 0) {
-            key = null;
-        } else {
+        if (keySize >= 0) {
             key = buffer.slice();
             key.limit(keySize);
             buffer.position(buffer.position() + keySize);
         }
 
-        final ByteBuffer value;
+        ByteBuffer value = null;
         int valueSize = ByteUtils.readVarint(buffer);
-        if (valueSize < 0) {
-            value = null;
-        } else {
+        if (valueSize >= 0) {
             value = buffer.slice();
             value.limit(valueSize);
             buffer.position(buffer.position() + valueSize);
         }
 
-        return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
+        int numHeaders = ByteUtils.readVarint(buffer);
+        if (numHeaders < 0)
+            throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+        Header[] headers = new Header[numHeaders];
+        for (int i = 0; i < numHeaders; i++) {
+            String headerKey = null;
+            int headerKeySize = ByteUtils.readVarint(buffer);
+            if (headerKeySize >= 0) {
+                headerKey = Utils.utf8(buffer, headerKeySize);
+                buffer.position(buffer.position() + headerKeySize);
+            }
+
+            ByteBuffer headerValue = null;
+            int headerValueSize = ByteUtils.readVarint(buffer);
+            if (headerValueSize >= 0) {
+                headerValue = buffer.slice();
+                headerValue.limit(headerValueSize);
+                buffer.position(buffer.position() + headerValueSize);
+            }
+
+            headers[i] = new Header(headerKey, headerValue);
+        }
+
+        return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
     }
 
     private static byte computeAttributes(boolean isControlRecord) {
@@ -316,54 +378,76 @@ public class DefaultRecord implements Record {
                                   long timestampDelta,
                                   byte[] key,
                                   byte[] value) {
-        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value));
+        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value), null);
     }
 
     public static int sizeInBytes(int offsetDelta,
                                   long timestampDelta,
                                   ByteBuffer key,
-                                  ByteBuffer value) {
-        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value);
+                                  ByteBuffer value,
+                                  Header[] headers) {
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         return bodySize + ByteUtils.sizeOfVarint(bodySize);
     }
 
     private static int sizeOfBodyInBytes(int offsetDelta,
                                          long timestampDelta,
                                          ByteBuffer key,
-                                         ByteBuffer value) {
+                                         ByteBuffer value,
+                                         Header[] headers) {
         int size = 1; // always one byte for attributes
         size += ByteUtils.sizeOfVarint(offsetDelta);
         size += ByteUtils.sizeOfVarlong(timestampDelta);
 
-        if (key == null) {
-            size += NULL_VALUE_SIZE_BYTES;
-        } else {
-            int keySize = key.remaining();
-            size += ByteUtils.sizeOfVarint(keySize);
-            size += keySize;
-        }
-
-        if (value == null) {
-            size += NULL_VALUE_SIZE_BYTES;
-        } else {
-            int valueSize = value.remaining();
-            size += ByteUtils.sizeOfVarint(valueSize);
-            size += valueSize;
-        }
+        int keySize = key == null ? -1 : key.remaining();
+        int valueSize = value == null ? -1 : value.remaining();
+        size += sizeOf(keySize, valueSize, headers);
 
         return size;
     }
 
-    static int recordSizeUpperBound(byte[] key, byte[] value) {
+    private static int sizeOf(int keySize, int valueSize, Header[] headers) {
+        int size = 0;
+        if (keySize < 0)
+            size += NULL_VARINT_SIZE_BYTES;
+        else
+            size += ByteUtils.sizeOfVarint(keySize) + keySize;
+
+        if (valueSize < 0)
+            size += NULL_VARINT_SIZE_BYTES;
+        else
+            size += ByteUtils.sizeOfVarint(valueSize) + valueSize;
+
+        if (headers == null) {
+            size += ByteUtils.sizeOfVarint(0);
+        } else {
+            size += ByteUtils.sizeOfVarint(headers.length);
+            for (Header header : headers) {
+                String headerKey = header.key();
+                if (headerKey == null) {
+                    size += NULL_VARINT_SIZE_BYTES;
+                } else {
+                    int headerKeySize = Utils.utf8Length(headerKey);
+                    size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
+                }
+
+                ByteBuffer headerValue = header.value();
+                if (headerValue == null) {
+                    size += NULL_VARINT_SIZE_BYTES;
+                } else {
+                    int headerValueSize = headerValue.remaining();
+                    size += ByteUtils.sizeOfVarint(headerValueSize) + headerValueSize;
+                }
+            }
+        }
+        return size;
+    }
+
+    static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
         int size = MAX_RECORD_OVERHEAD;
-        if (key == null)
-            size += NULL_VALUE_SIZE_BYTES;
-        else
-            size += key.length + ByteUtils.sizeOfVarint(key.length);
-        if (value == null)
-            size += NULL_VALUE_SIZE_BYTES;
-        else
-            size += value.length + ByteUtils.sizeOfVarint(value.length);
+        int keySize = key == null ? -1 : key.length;
+        int valueSize = value == null ? -1 : value.length;
+        size += sizeOf(keySize, valueSize, headers);
         return size;
     }
 

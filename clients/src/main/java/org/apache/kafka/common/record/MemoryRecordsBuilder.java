@@ -69,7 +69,7 @@ public class MemoryRecordsBuilder {
     private float compressionRate = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
-    private long lastOffset = -1;
+    private Long lastOffset = null;
     private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
@@ -262,6 +262,60 @@ public class MemoryRecordsBuilder {
             compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
     }
 
+    private long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
+                                 ByteBuffer value, Header[] headers) {
+        try {
+            if (lastOffset != null && offset <= lastOffset)
+                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
+
+            if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
+                throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
+
+            if (magic < RecordBatch.MAGIC_VALUE_V2) {
+                if (isControlRecord)
+                    throw new IllegalArgumentException("Magic v" + magic + " does not support control records");
+                if (headers != null && headers.length > 0)
+                    throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
+            }
+
+            if (baseTimestamp == null)
+                baseTimestamp = timestamp;
+
+            if (magic > RecordBatch.MAGIC_VALUE_V1)
+                return appendEosLogRecord(offset, isControlRecord, timestamp, key, value, headers);
+            else
+                return appendOldLogRecord(offset, timestamp, key, value);
+        } catch (IOException e) {
+            throw new KafkaException("I/O exception when writing to the append stream, closing", e);
+        }
+    }
+
+    /**
+     * Append a new record at the given offset.
+     * @param offset The absolute offset of the record in the log buffer
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @param headers The record headers if there are any
+     * @return crc of the record
+     */
+    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value, Header[] headers) {
+        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), headers);
+    }
+
+    /**
+     * Append a new record at the given offset.
+     * @param offset The absolute offset of the record in the log buffer
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @param headers The record headers if there are any
+     * @return crc of the record
+     */
+    public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+        return appendWithOffset(offset, false, timestamp, key, value, headers);
+    }
+
     /**
      * Append a new record at the given offset.
      * @param offset The absolute offset of the record in the log buffer
@@ -270,39 +324,29 @@ public class MemoryRecordsBuilder {
      * @param value The record value
      * @return crc of the record
      */
-    public long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key, ByteBuffer value) {
-        try {
-            if (lastOffset >= 0 && offset <= lastOffset)
-                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
-
-            if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
-                throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
-
-            if (isControlRecord && magic < RecordBatch.MAGIC_VALUE_V2)
-                throw new IllegalArgumentException("Magic v" + magic + " does not support control records");
-
-            if (baseTimestamp == null)
-                baseTimestamp = timestamp;
-
-            if (magic > RecordBatch.MAGIC_VALUE_V1)
-                return appendEosLogRecord(offset, isControlRecord, timestamp, key, value);
-            else
-                return appendOldLogRecord(offset, timestamp, key, value);
-        } catch (IOException e) {
-            throw new KafkaException("I/O exception when writing to the append stream, closing", e);
-        }
+    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
+        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), null);
     }
 
-    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
-        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value));
+    /**
+     * Append a new record at the given offset.
+     * @param offset The absolute offset of the record in the log buffer
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @return crc of the record
+     */
+    public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
+        return appendWithOffset(offset, false, timestamp, key, value, null);
     }
 
     private long appendEosLogRecord(long offset, boolean isControlRecord, long timestamp,
-                                    ByteBuffer key, ByteBuffer value) throws IOException {
+                                    ByteBuffer key, ByteBuffer value, Header[] headers) throws IOException {
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
-        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value));
+        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value, headers);
+        // TODO: The crc is useless for the new message format. Maybe we should let writeTo return the written size?
+        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value, headers));
         return crc;
     }
 
@@ -321,11 +365,11 @@ public class MemoryRecordsBuilder {
     }
 
     public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value);
+        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, new Header[0]);
     }
 
     private long nextSequentialOffset() {
-        return lastOffset < 0 ? baseOffset : lastOffset + 1;
+        return lastOffset == null ? baseOffset : lastOffset + 1;
     }
 
     /**
@@ -341,7 +385,7 @@ public class MemoryRecordsBuilder {
     }
 
     public long append(SimpleRecord record) {
-        return append(record.timestamp(), record.key(), record.value());
+        return appendWithOffset(nextSequentialOffset(), record);
     }
 
     public long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
@@ -349,11 +393,11 @@ public class MemoryRecordsBuilder {
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);
         key.flip();
-        return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value);
+        return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, new Header[0]);
     }
 
     public long appendWithOffset(long offset, SimpleRecord record) {
-        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value());
+        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -380,7 +424,8 @@ public class MemoryRecordsBuilder {
      * @param record the record to add
      */
     public void append(Record record) {
-        appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value());
+        appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value(),
+                record.headers());
     }
 
     /**
@@ -389,7 +434,8 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendWithOffset(long offset, Record record) {
-        appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value());
+        appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value(),
+                record.headers());
     }
 
     /**
@@ -401,7 +447,7 @@ public class MemoryRecordsBuilder {
     public void appendWithOffset(long offset, LegacyRecord record) {
         if (record.magic() != magic)
             throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
-        if (lastOffset >= 0 && offset <= lastOffset)
+        if (lastOffset != null && offset <= lastOffset)
             throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
                     "(Offsets must increase monotonically).", offset, lastOffset));
         appendUncheckedWithOffset(offset, record);
@@ -467,7 +513,7 @@ public class MemoryRecordsBuilder {
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
-            int nextOffsetDelta = (int) (lastOffset + 1 - baseOffset);
+            int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset + 1 - baseOffset);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
         }

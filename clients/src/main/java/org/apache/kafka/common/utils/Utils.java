@@ -87,6 +87,21 @@ public class Utils {
         }
     }
 
+    public static String utf8(ByteBuffer buffer, int length) {
+        return utf8(buffer, 0, length);
+    }
+
+    public static String utf8(ByteBuffer buffer, int offset, int length) {
+        try {
+            if (buffer.hasArray())
+                return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, "UTF8");
+            else
+                return utf8(toArray(buffer));
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException("This shouldn't happen.", e);
+        }
+    }
+
     /**
      * Turn a string into a utf8 byte[]
      *

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -26,11 +27,17 @@ public class DefaultRecordBatchTest {
 
     @Test
     public void testSizeInBytes() {
+        Header[] headers = new Header[] {
+            new Header("foo", "value".getBytes()),
+            new Header("bar", Utils.wrapNullable(null))
+        };
+
         long timestamp = System.currentTimeMillis();
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord(timestamp, "key".getBytes(), "value".getBytes()),
             new SimpleRecord(timestamp + 30000, null, "value".getBytes()),
-            new SimpleRecord(timestamp + 60000, "key".getBytes(), null)
+            new SimpleRecord(timestamp + 60000, "key".getBytes(), null),
+            new SimpleRecord(timestamp + 60000, "key".getBytes(), "value".getBytes(), headers)
         };
         int actualSize = MemoryRecords.withRecords(CompressionType.NONE, records).sizeInBytes();
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));

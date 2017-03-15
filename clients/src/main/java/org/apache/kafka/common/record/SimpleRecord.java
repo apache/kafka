@@ -19,21 +19,31 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * High-level representation of a kafka record. This is useful when building record sets to
  * avoid depending on a specific magic version.
  */
 public class SimpleRecord {
-
     private final ByteBuffer key;
     private final ByteBuffer value;
     private final long timestamp;
+    private final Header[] headers;
 
-    public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value) {
+    public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
+        this.headers = headers == null ? new Header[0] : headers;
+    }
+
+    public SimpleRecord(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        this(timestamp, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value) {
+        this(timestamp, key, value, new Header[0]);
     }
 
     public SimpleRecord(long timestamp, byte[] key, byte[] value) {
@@ -68,6 +78,10 @@ public class SimpleRecord {
         return timestamp;
     }
 
+    public Header[] headers() {
+        return headers;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -77,7 +91,8 @@ public class SimpleRecord {
 
         if (timestamp != that.timestamp) return false;
         if (key != null ? !key.equals(that.key) : that.key != null) return false;
-        return value != null ? value.equals(that.value) : that.value == null;
+        if (value != null ? !value.equals(that.value) : that.value != null) return false;
+        return Arrays.equals(headers, that.headers);
     }
 
     @Override
@@ -85,7 +100,7 @@ public class SimpleRecord {
         int result = key != null ? key.hashCode() : 0;
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+        result = 31 * result + Arrays.hashCode(headers);
         return result;
     }
-
 }

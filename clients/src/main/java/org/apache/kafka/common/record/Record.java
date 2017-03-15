@@ -122,6 +122,7 @@ public interface Record {
      * For versions prior to 2, the record contained a timestamp type attribute. This method can be
      * used to check whether the value of that attribute matches a particular timestamp type. For versions
      * 2 and above, this will always be false.
+     *
      * @param timestampType the timestamp type to compare
      * @return true if the version is lower than 2 and the timestamp type matches
      */
@@ -135,4 +136,11 @@ public interface Record {
      */
     boolean isControlRecord();
 
+
+    /**
+     * Get the headers. For magic versions 1 and below, this always returns an empty array.
+     *
+     * @return the array of headers
+     */
+    Header[] headers();
 }

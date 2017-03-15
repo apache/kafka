@@ -367,7 +367,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
+            size += DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
+                    record.headers());
         }
         return size;
     }
@@ -385,7 +386,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += DefaultRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
+            size += DefaultRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value(),
+                    record.headers());
         }
         return size;
     }
@@ -393,8 +395,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     /**
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
-    static int batchSizeUpperBound(byte[] key, byte[] value) {
-        return LOG_ENTRY_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value);
+    static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
+        return LOG_ENTRY_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
 }

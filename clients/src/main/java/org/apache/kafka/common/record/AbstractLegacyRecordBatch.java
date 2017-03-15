@@ -94,6 +94,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public Header[] headers() {
+        return new Header[0];
+    }
+
+    @Override
     public boolean hasMagic(byte magic) {
         return magic == legacyRecord().magic();
     }

@@ -112,7 +112,11 @@ public abstract class AbstractRecords implements Records {
             if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
                 continue;
 
-            builder.append(record);
+            if (magic < RecordBatch.MAGIC_VALUE_V2) {
+                builder.appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
+            } else {
+                builder.append(record);
+            }
         }
 
         builder.close();
@@ -181,7 +185,7 @@ public abstract class AbstractRecords implements Records {
 
     public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value);
+            return DefaultRecordBatch.batchSizeUpperBound(key, value, null);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }

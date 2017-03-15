@@ -84,7 +84,10 @@ public class RecordAccumulatorTest {
     @Test
     public void testFull() throws Exception {
         long now = time.milliseconds();
-        int batchSize = 1024;
+
+        // test case assumes that the records do not fill the batch completely
+        int batchSize = 1025;
+
         RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10L * batchSize,
                 CompressionType.NONE, 10L, 100L, metrics, time, new ApiVersions());
         int appends = expectedNumAppends(batchSize);
@@ -93,7 +96,9 @@ public class RecordAccumulatorTest {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
             Deque<ProducerBatch> partitionBatches = accum.batches().get(tp1);
             assertEquals(1, partitionBatches.size());
-            assertTrue(partitionBatches.peekFirst().isWritable());
+
+            ProducerBatch batch = partitionBatches.peekFirst();
+            assertTrue(batch.isWritable());
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
 
@@ -212,10 +217,14 @@ public class RecordAccumulatorTest {
     public void testNextReadyCheckDelay() throws Exception {
         // Next check time will use lingerMs since this test won't trigger any retries/backoff
         long lingerMs = 10L;
-        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+
+        // test case assumes that the records do not fill the batch completely
+        int batchSize = 1025;
+
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         // Just short of going over the limit so we trigger linger time
-        int appends = expectedNumAppends(1024);
+        int appends = expectedNumAppends(batchSize);
 
         // Partition on node1 only
         for (int i = 0; i < appends; i++)
@@ -365,9 +374,12 @@ public class RecordAccumulatorTest {
         long lingerMs = 3000L;
         int requestTimeout = 60;
 
-        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        // test case assumes that the records do not fill the batch completely
+        int batchSize = 1025;
+
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
-        int appends = expectedNumAppends(1024);
+        int appends = expectedNumAppends(batchSize);
 
         // Test batches not in retry
         for (int i = 0; i < appends; i++) {
@@ -474,9 +486,13 @@ public class RecordAccumulatorTest {
     @Test
     public void testMutedPartitions() throws InterruptedException {
         long now = time.milliseconds();
-        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        // test case assumes that the records do not fill the batch completely
+        int batchSize = 1025;
+
+
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, 10, 100L, metrics, time, new ApiVersions());
-        int appends = expectedNumAppends(1024);
+        int appends = expectedNumAppends(batchSize);
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());

@@ -120,7 +120,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
     assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs.head.messageMaxBytes - DefaultRecordBatch.LOG_ENTRY_OVERHEAD - 10
+    val safeSize = configs.head.messageMaxBytes - DefaultRecordBatch.LOG_ENTRY_OVERHEAD - 12
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))

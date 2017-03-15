@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -28,11 +30,17 @@ public class DefaultRecordTest {
 
     @Test
     public void testBasicSerde() {
+        Header[] headers = new Header[] {
+            new Header("foo", "value".getBytes()),
+            new Header("bar", Utils.wrapNullable(null))
+        };
+
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord("hi".getBytes(), "there".getBytes()),
             new SimpleRecord(null, "there".getBytes()),
             new SimpleRecord("hi".getBytes(), null),
-            new SimpleRecord(null, null)
+            new SimpleRecord(null, null),
+            new SimpleRecord(15L, "hi".getBytes(), "there".getBytes(), headers)
         };
 
         for (boolean isControlRecord : Arrays.asList(true, false)) {
@@ -44,7 +52,8 @@ public class DefaultRecordTest {
                 long timestampDelta = 323;
 
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
-                DefaultRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
+                DefaultRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(),
+                        record.value(), record.headers());
                 buffer.flip();
 
                 DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
@@ -55,6 +64,9 @@ public class DefaultRecordTest {
                 assertEquals(record.key(), logRecord.key());
                 assertEquals(record.value(), logRecord.value());
                 assertEquals(isControlRecord, logRecord.isControlRecord());
+                assertArrayEquals(record.headers(), logRecord.headers());
+                assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
+                        record.headers()), logRecord.sizeInBytes());
             }
         }
     }
@@ -69,7 +81,7 @@ public class DefaultRecordTest {
         long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DefaultRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
+        DefaultRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value, new Header[0]);
         buffer.flip();
 
         DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
