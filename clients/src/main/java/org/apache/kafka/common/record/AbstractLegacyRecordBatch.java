@@ -44,9 +44,9 @@ import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
  * In general, this class should not be used directly. Instances of {@link Records} provides access to this
  * class indirectly through the {@link RecordBatch} interface.
  */
-public abstract class LegacyRecordBatch extends AbstractRecordBatch implements Record {
+public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch implements Record {
 
-    public abstract LegacyRecord record();
+    public abstract LegacyRecord legacyRecord();
 
     @Override
     public long lastOffset() {
@@ -55,57 +55,57 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
 
     @Override
     public boolean isValid() {
-        return record().isValid();
+        return legacyRecord().isValid();
     }
 
     @Override
     public void ensureValid() {
-        record().ensureValid();
+        legacyRecord().ensureValid();
     }
 
     @Override
     public int keySize() {
-        return record().keySize();
+        return legacyRecord().keySize();
     }
 
     @Override
     public boolean hasKey() {
-        return record().hasKey();
+        return legacyRecord().hasKey();
     }
 
     @Override
     public ByteBuffer key() {
-        return record().key();
+        return legacyRecord().key();
     }
 
     @Override
     public int valueSize() {
-        return record().valueSize();
+        return legacyRecord().valueSize();
     }
 
     @Override
     public boolean hasValue() {
-        return !record().hasNullValue();
+        return !legacyRecord().hasNullValue();
     }
 
     @Override
     public ByteBuffer value() {
-        return record().value();
+        return legacyRecord().value();
     }
 
     @Override
     public boolean hasMagic(byte magic) {
-        return magic == record().magic();
+        return magic == legacyRecord().magic();
     }
 
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
-        return record().timestampType() == timestampType;
+        return legacyRecord().timestampType() == timestampType;
     }
 
     @Override
     public long checksum() {
-        return record().checksum();
+        return legacyRecord().checksum();
     }
 
     @Override
@@ -115,12 +115,12 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
 
     @Override
     public long timestamp() {
-        return record().timestamp();
+        return legacyRecord().timestamp();
     }
 
     @Override
     public TimestampType timestampType() {
-        return record().timestampType();
+        return legacyRecord().timestampType();
     }
 
     @Override
@@ -130,38 +130,38 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
 
     @Override
     public byte magic() {
-        return record().magic();
+        return legacyRecord().magic();
     }
 
     @Override
     public CompressionType compressionType() {
-        return record().compressionType();
+        return legacyRecord().compressionType();
     }
 
     @Override
     public int sizeInBytes() {
-        return record().sizeInBytes() + LOG_OVERHEAD;
+        return legacyRecord().sizeInBytes() + LOG_OVERHEAD;
     }
 
     @Override
     public String toString() {
-        return "LegacyRecordBatch(" + offset() + ", " + record() + ")";
+        return "LegacyRecordBatch(" + offset() + ", " + legacyRecord() + ")";
     }
 
     @Override
     public void writeTo(ByteBuffer buffer) {
-        writeHeader(buffer, offset(), record().sizeInBytes());
-        buffer.put(record().buffer().duplicate());
+        writeHeader(buffer, offset(), legacyRecord().sizeInBytes());
+        buffer.put(legacyRecord().buffer().duplicate());
     }
 
     @Override
-    public long pid() {
-        return RecordBatch.NO_PID;
+    public long producerId() {
+        return RecordBatch.NO_PRODUCER_ID;
     }
 
     @Override
-    public short epoch() {
-        return RecordBatch.NO_EPOCH;
+    public short producerEpoch() {
+        return RecordBatch.NO_PRODUCER_EPOCH;
     }
 
     @Override
@@ -202,7 +202,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
      */
     @Override
     public Iterator<Record> iterator() {
-        final Iterator<LegacyRecordBatch> iterator;
+        final Iterator<AbstractLegacyRecordBatch> iterator;
         if (isCompressed())
             iterator = new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
         else
@@ -228,7 +228,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         out.writeInt(size);
     }
 
-    private static final class DataLogInputStream implements LogInputStream<LegacyRecordBatch> {
+    private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
         private final DataInputStream stream;
         protected final int maxMessageSize;
 
@@ -237,7 +237,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
             this.maxMessageSize = maxMessageSize;
         }
 
-        public LegacyRecordBatch nextBatch() throws IOException {
+        public AbstractLegacyRecordBatch nextBatch() throws IOException {
             try {
                 long offset = stream.readLong();
                 int size = stream.readInt();
@@ -256,13 +256,13 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
     }
 
-    private static class DeepRecordsIterator extends AbstractIterator<LegacyRecordBatch> {
-        private final ArrayDeque<LegacyRecordBatch> logEntries;
+    private static class DeepRecordsIterator extends AbstractIterator<AbstractLegacyRecordBatch> {
+        private final ArrayDeque<AbstractLegacyRecordBatch> logEntries;
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        private DeepRecordsIterator(LegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
-            LegacyRecord wrapperRecord = wrapperEntry.record();
+        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
+            LegacyRecord wrapperRecord = wrapperEntry.legacyRecord();
             this.wrapperMagic = wrapperRecord.magic();
 
             CompressionType compressionType = wrapperRecord.compressionType();
@@ -273,7 +273,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
 
             DataInputStream stream = new DataInputStream(compressionType.wrapForInput(
                     new ByteBufferInputStream(wrapperValue), wrapperRecord.magic()));
-            LogInputStream<LegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
+            LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long wrapperRecordOffset = wrapperEntry.lastOffset();
             long wrapperRecordTimestamp = wrapperRecord.timestamp();
@@ -284,11 +284,11 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
             // do the same for message format version 0
             try {
                 while (true) {
-                    LegacyRecordBatch logEntry = logStream.nextBatch();
+                    AbstractLegacyRecordBatch logEntry = logStream.nextBatch();
                     if (logEntry == null)
                         break;
 
-                    LegacyRecord record = logEntry.record();
+                    LegacyRecord record = logEntry.legacyRecord();
                     byte magic = record.magic();
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
@@ -321,16 +321,16 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
 
         @Override
-        protected LegacyRecordBatch makeNext() {
+        protected AbstractLegacyRecordBatch makeNext() {
             if (logEntries.isEmpty())
                 return allDone();
 
-            LegacyRecordBatch entry = logEntries.remove();
+            AbstractLegacyRecordBatch entry = logEntries.remove();
 
             // Convert offset to absolute offset if needed.
             if (absoluteBaseOffset >= 0) {
                 long absoluteOffset = absoluteBaseOffset + entry.lastOffset();
-                entry = new BasicLegacyRecordBatch(absoluteOffset, entry.record());
+                entry = new BasicLegacyRecordBatch(absoluteOffset, entry.legacyRecord());
             }
 
             if (entry.isCompressed())
@@ -340,7 +340,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
     }
 
-    private static class BasicLegacyRecordBatch extends LegacyRecordBatch {
+    private static class BasicLegacyRecordBatch extends AbstractLegacyRecordBatch {
         private final LegacyRecord record;
         private final long offset;
 
@@ -355,7 +355,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
 
         @Override
-        public LegacyRecord record() {
+        public LegacyRecord legacyRecord() {
             return record;
         }
 
@@ -379,7 +379,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
     }
 
-    static class ByteBufferLegacyRecordBatch extends LegacyRecordBatch implements MutableRecordBatch {
+    static class ByteBufferLegacyRecordBatch extends AbstractLegacyRecordBatch implements MutableRecordBatch {
         private final ByteBuffer buffer;
         private final LegacyRecord record;
 
@@ -396,7 +396,7 @@ public abstract class LegacyRecordBatch extends AbstractRecordBatch implements R
         }
 
         @Override
-        public LegacyRecord record() {
+        public LegacyRecord legacyRecord() {
             return record;
         }
 

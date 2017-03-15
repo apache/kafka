@@ -47,8 +47,8 @@ public interface RecordBatch extends Iterable<Record> {
      * Values used in the new message format by non-idempotent/non-transactional producers or when
      * up-converting from an older message format.
      */
-    long NO_PID = -1L;
-    short NO_EPOCH = -1;
+    long NO_PRODUCER_ID = -1L;
+    short NO_PRODUCER_EPOCH = -1;
     int NO_SEQUENCE = -1;
 
     /**
@@ -127,18 +127,18 @@ public interface RecordBatch extends Iterable<Record> {
     byte magic();
 
     /**
-     * Get the PID (producer ID) for this log entry. For older magic versions, this will return 0.
+     * Get the producer ID (PID) for this log entry. For older magic versions, this will return 0.
      *
      * @return The PID or 0 if there is none
      */
-    long pid();
+    long producerId();
 
     /**
      * Get the producer epoch for this log entry.
      *
      * @return The producer epoch, or 0 if there is none
      */
-    short epoch();
+    short producerEpoch();
 
     /**
      * Get the first sequence number of this message set.

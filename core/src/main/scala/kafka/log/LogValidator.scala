@@ -82,7 +82,7 @@ private[kafka] object LogValidator extends Logging {
 
     val (pid, epoch, sequence) = {
       val first = records.batches.asScala.head
-      (first.pid, first.epoch, first.baseSequence)
+      (first.producerId, first.producerEpoch, first.baseSequence)
     }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
@@ -231,9 +231,6 @@ private[kafka] object LogValidator extends Logging {
         buildRecordsAndAssignOffsets(messageFormatVersion, offsetCounter, messageTimestampType,
           CompressionType.forId(targetCodec.codec), currentTimestamp, validatedRecords)
       } else {
-        // ensure the inner messages are valid
-        validatedRecords.foreach(_.ensureValid)
-
         // we can update the wrapper message only and write the compressed payload as is
         val batch = records.batches.iterator.next()
         val firstOffset = offsetCounter.value

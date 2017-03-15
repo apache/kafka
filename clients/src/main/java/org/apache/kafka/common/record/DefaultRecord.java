@@ -52,10 +52,10 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * The offset and timestamp deltas compute the difference relative to the base offset and
  * base timestamp of the log entry that this record is contained in.
  */
-public class DefaultLogRecord implements Record {
+public class DefaultRecord implements Record {
 
-    // 5 bytes length + 10 bytes timestamp + 5 bytes offset + 5 bytes keylen + 5 bytes valuelen + 1 byte attributes
-    private static final int MAX_RECORD_OVERHEAD = 26;
+    // excluding key and value: 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
+    private static final int MAX_RECORD_OVERHEAD = 21;
 
     private static final int CONTROL_FLAG_MASK = 0x01;
     private static final int NULL_VALUE_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
@@ -69,13 +69,13 @@ public class DefaultLogRecord implements Record {
     private final ByteBuffer value;
     private Long checksum = null;
 
-    private DefaultLogRecord(int sizeInBytes,
-                             byte attributes,
-                             long offset,
-                             long timestamp,
-                             int sequence,
-                             ByteBuffer key,
-                             ByteBuffer value) {
+    private DefaultRecord(int sizeInBytes,
+                          byte attributes,
+                          long offset,
+                          long timestamp,
+                          int sequence,
+                          ByteBuffer key,
+                          ByteBuffer value) {
         this.sizeInBytes = sizeInBytes;
         this.attributes = attributes;
         this.offset = offset;
@@ -243,11 +243,11 @@ public class DefaultLogRecord implements Record {
         return (attributes & CONTROL_FLAG_MASK) != 0;
     }
 
-    public static DefaultLogRecord readFrom(DataInputStream input,
-                                            long baseOffset,
-                                            long baseTimestamp,
-                                            int baseSequence,
-                                            Long logAppendTime) throws IOException {
+    public static DefaultRecord readFrom(DataInputStream input,
+                                         long baseOffset,
+                                         long baseTimestamp,
+                                         int baseSequence,
+                                         Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
         input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
@@ -255,11 +255,11 @@ public class DefaultLogRecord implements Record {
         return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
 
-    public static DefaultLogRecord readFrom(ByteBuffer buffer,
-                                            long baseOffset,
-                                            long baseTimestamp,
-                                            int baseSequence,
-                                            Long logAppendTime) {
+    public static DefaultRecord readFrom(ByteBuffer buffer,
+                                         long baseOffset,
+                                         long baseTimestamp,
+                                         int baseSequence,
+                                         Long logAppendTime) {
         ByteBuffer dup = buffer.duplicate();
         int sizeOfBodyInBytes = ByteUtils.readVarint(dup);
         if (buffer.remaining() < sizeOfBodyInBytes)
@@ -270,12 +270,12 @@ public class DefaultLogRecord implements Record {
         return readFrom(dup, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
 
-    private static DefaultLogRecord readFrom(ByteBuffer buffer,
-                                             int sizeInBytes,
-                                             long baseOffset,
-                                             long baseTimestamp,
-                                             int baseSequence,
-                                             Long logAppendTime) {
+    private static DefaultRecord readFrom(ByteBuffer buffer,
+                                          int sizeInBytes,
+                                          long baseOffset,
+                                          long baseTimestamp,
+                                          int baseSequence,
+                                          Long logAppendTime) {
         byte attributes = buffer.get();
         long timestamp = baseTimestamp + ByteUtils.readVarlong(buffer);
         if (logAppendTime != null)
@@ -305,7 +305,7 @@ public class DefaultLogRecord implements Record {
             buffer.position(buffer.position() + valueSize);
         }
 
-        return new DefaultLogRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
+        return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value);
     }
 
     private static byte computeAttributes(boolean isControlRecord) {

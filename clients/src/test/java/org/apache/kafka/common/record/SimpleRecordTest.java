@@ -37,7 +37,7 @@ public class SimpleRecordTest {
     public void testCompressedIterationWithNullValue() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        LegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1);
+        AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1);
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
@@ -58,7 +58,7 @@ public class SimpleRecordTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        LegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
+        AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 

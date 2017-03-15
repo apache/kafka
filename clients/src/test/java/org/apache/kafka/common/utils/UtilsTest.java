@@ -34,6 +34,7 @@ import java.util.Random;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -86,6 +87,21 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+    }
+
+    @Test
+    public void toArray() {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer buffer = ByteBuffer.wrap(input);
+        assertArrayEquals(input, Utils.toArray(buffer));
+        assertEquals(0, buffer.position());
+
+        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertEquals(0, buffer.position());
+
+        buffer.position(2);
+        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertEquals(2, buffer.position());
     }
 
     private void subTest(ByteBuffer buffer) {

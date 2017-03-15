@@ -171,15 +171,15 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public long pid() {
+        public long producerId() {
             loadUnderlyingEntry();
-            return underlying.pid();
+            return underlying.producerId();
         }
 
         @Override
-        public short epoch() {
+        public short producerEpoch() {
             loadUnderlyingEntry();
-            return underlying.epoch();
+            return underlying.producerEpoch();
         }
 
         @Override
@@ -207,7 +207,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
                 if (magic > RecordBatch.MAGIC_VALUE_V1)
                     underlying = new DefaultRecordBatch(entryBuffer);
                 else
-                    underlying = new LegacyRecordBatch.ByteBufferLegacyRecordBatch(entryBuffer);
+                    underlying = new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(entryBuffer);
             } catch (IOException e) {
                 throw new KafkaException("Failed to load log entry at position " + position + " from file channel " + channel);
             }

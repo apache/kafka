@@ -332,8 +332,8 @@ object TestUtils extends Logging {
   def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
-              pid: Long = RecordBatch.NO_PID,
-              epoch: Short = RecordBatch.NO_EPOCH,
+              pid: Long = RecordBatch.NO_PRODUCER_ID,
+              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
     val kafkaRecords = records.map(record => new SimpleRecord(record._3, record._1, record._2))
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(kafkaRecords.asJava))

@@ -44,8 +44,8 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  LastOffsetDelta => Int32
  *  BaseTimestamp => Int64
  *  MaxTimestamp => Int64
- *  PID => Int64
- *  Epoch => Int16
+ *  ProducerId => Int64
+ *  ProducerEpoch => Int16
  *  BaseSequence => Int32
  *  PartitionLeaderEpoch => Int32
  *  Records => Record1, Record2, … , RecordN
@@ -73,11 +73,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     static final int BASE_TIMESTAMP_LENGTH = 8;
     static final int MAX_TIMESTAMP_OFFSET = BASE_TIMESTAMP_OFFSET + BASE_TIMESTAMP_LENGTH;
     static final int MAX_TIMESTAMP_LENGTH = 8;
-    static final int PID_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
-    static final int PID_LENGTH = 8;
-    static final int EPOCH_OFFSET = PID_OFFSET + PID_LENGTH;
-    static final int EPOCH_LENGTH = 2;
-    static final int BASE_SEQUENCE_OFFSET = EPOCH_OFFSET + EPOCH_LENGTH;
+    static final int PRODUCER_ID_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
+    static final int PRODUCER_ID_LENGTH = 8;
+    static final int PRODUCER_EPOCH_OFFSET = PRODUCER_ID_OFFSET + PRODUCER_ID_LENGTH;
+    static final int PRODUCER_EPOCH_LENGTH = 2;
+    static final int BASE_SEQUENCE_OFFSET = PRODUCER_EPOCH_OFFSET + PRODUCER_EPOCH_LENGTH;
     static final int BASE_SEQUENCE_LENGTH = 4;
     static final int PARTITION_LEADER_EPOCH_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     static final int PARTITION_LEADER_EPOCH_LENGTH = 4;
@@ -133,13 +133,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     @Override
-    public long pid() {
-        return buffer.getLong(PID_OFFSET);
+    public long producerId() {
+        return buffer.getLong(PRODUCER_ID_OFFSET);
     }
 
     @Override
-    public short epoch() {
-        return buffer.getShort(EPOCH_OFFSET);
+    public short producerEpoch() {
+        return buffer.getShort(PRODUCER_EPOCH_OFFSET);
     }
 
     @Override
@@ -195,7 +195,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
             while (true) {
                 try {
-                    DefaultLogRecord record = DefaultLogRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    DefaultRecord record = DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                     records.add(record);
 
                     if (record.offset() == lastOffset)
@@ -231,7 +231,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
                 long baseTimestamp = baseTimestamp();
                 int baseSequence = baseSequence();
 
-                DefaultLogRecord record = DefaultLogRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                DefaultRecord record = DefaultRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 if (record == null)
                     return allDone();
 
@@ -249,6 +249,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             return uncompressedIterator();
     }
 
+    @Override
     public void setOffset(long offset) {
         buffer.putLong(BASE_OFFSET_OFFSET, offset);
     }
@@ -340,8 +341,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
-        buffer.putLong(position + PID_OFFSET, pid);
-        buffer.putShort(position + EPOCH_OFFSET, epoch);
+        buffer.putLong(position + PRODUCER_ID_OFFSET, pid);
+        buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
@@ -366,7 +367,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += DefaultLogRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
+            size += DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value());
         }
         return size;
     }
@@ -384,7 +385,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             if (baseTimestamp == null)
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
-            size += DefaultLogRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
+            size += DefaultRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value());
         }
         return size;
     }
@@ -393,7 +394,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
     static int batchSizeUpperBound(byte[] key, byte[] value) {
-        return LOG_ENTRY_OVERHEAD + DefaultLogRecord.recordSizeUpperBound(key, value);
+        return LOG_ENTRY_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value);
     }
 
 }

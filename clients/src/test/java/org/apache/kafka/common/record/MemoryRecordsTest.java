@@ -53,8 +53,8 @@ public class MemoryRecordsTest {
             epoch = 28;
             firstSequence = 777;
         } else {
-            pid = RecordBatch.NO_PID;
-            epoch = RecordBatch.NO_EPOCH;
+            pid = RecordBatch.NO_PRODUCER_ID;
+            epoch = RecordBatch.NO_PRODUCER_EPOCH;
             firstSequence = RecordBatch.NO_SEQUENCE;
         }
     }
@@ -84,13 +84,13 @@ public class MemoryRecordsTest {
                 assertEquals(firstOffset + total, batch.baseOffset());
 
                 if (magic >= RecordBatch.MAGIC_VALUE_V2) {
-                    assertEquals(pid, batch.pid());
-                    assertEquals(epoch, batch.epoch());
+                    assertEquals(pid, batch.producerId());
+                    assertEquals(epoch, batch.producerEpoch());
                     assertEquals(firstSequence + total, batch.baseSequence());
                     assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
                 } else {
-                    assertEquals(RecordBatch.NO_PID, batch.pid());
-                    assertEquals(RecordBatch.NO_EPOCH, batch.epoch());
+                    assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
+                    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
                     assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                 }

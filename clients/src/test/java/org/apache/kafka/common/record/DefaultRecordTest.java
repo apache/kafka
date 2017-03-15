@@ -24,7 +24,7 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-public class DefaultLogRecordTest {
+public class DefaultRecordTest {
 
     @Test
     public void testBasicSerde() {
@@ -44,10 +44,10 @@ public class DefaultLogRecordTest {
                 long timestampDelta = 323;
 
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
-                DefaultLogRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
+                DefaultRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(), record.value());
                 buffer.flip();
 
-                DefaultLogRecord logRecord = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+                DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
                 assertNotNull(logRecord);
                 assertEquals(baseOffset + offsetDelta, logRecord.offset());
                 assertEquals(baseSequence + offsetDelta, logRecord.sequence());
@@ -69,10 +69,10 @@ public class DefaultLogRecordTest {
         long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DefaultLogRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
+        DefaultRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value);
         buffer.flip();
 
-        DefaultLogRecord record = DefaultLogRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
         assertNotNull(record);
         assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
     }

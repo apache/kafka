@@ -56,8 +56,8 @@ public class MemoryRecordsBuilder {
     private final int initPos;
     private final long baseOffset;
     private final long logAppendTime;
-    private final long pid;
-    private final short epoch;
+    private final long producerId;
+    private final short producerEpoch;
     private final int baseSequence;
     private final boolean isTransactional;
     private final int partitionLeaderEpoch;
@@ -84,8 +84,8 @@ public class MemoryRecordsBuilder {
      * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
      * @param baseOffset The initial offset to use for
      * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
-     * @param pid The producer ID associated with the producer writing this record set
-     * @param epoch The epoch of the pid
+     * @param producerId The producer ID (PID) associated with the producer writing this record set
+     * @param producerEpoch The epoch of the producer
      * @param baseSequence The sequence number of the first record in this set
      * @param isTransactional Whether or not the records are part of a transaction
      * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
@@ -98,8 +98,8 @@ public class MemoryRecordsBuilder {
                                 TimestampType timestampType,
                                 long baseOffset,
                                 long logAppendTime,
-                                long pid,
-                                short epoch,
+                                long producerId,
+                                short producerEpoch,
                                 int baseSequence,
                                 boolean isTransactional,
                                 int partitionLeaderEpoch,
@@ -108,16 +108,16 @@ public class MemoryRecordsBuilder {
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
 
         if (isTransactional) {
-            if (pid == RecordBatch.NO_PID)
-                throw new IllegalArgumentException("Cannot write transactional messages without a valid PID");
+            if (producerId == RecordBatch.NO_PRODUCER_ID)
+                throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
 
             if (magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
         }
 
-        if (pid != RecordBatch.NO_PID) {
-            if (epoch  < 0)
-                throw new IllegalArgumentException("Invalid negative epoch number");
+        if (producerId != RecordBatch.NO_PRODUCER_ID) {
+            if (producerEpoch  < 0)
+                throw new IllegalArgumentException("Invalid negative producer epoch");
 
             if (baseSequence < 0)
                  throw new IllegalArgumentException("Invalid negative sequence number used");
@@ -136,8 +136,8 @@ public class MemoryRecordsBuilder {
         this.writtenUncompressed = 0;
         this.compressionRate = 1;
         this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        this.pid = pid;
-        this.epoch = epoch;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
@@ -237,7 +237,7 @@ public class MemoryRecordsBuilder {
         }
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, pid, epoch, baseSequence, isTransactional, partitionLeaderEpoch);
+                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch);
 
         buffer.position(pos);
     }
@@ -249,7 +249,7 @@ public class MemoryRecordsBuilder {
 
         int wrapperSize = pos - initPos - Records.LOG_OVERHEAD;
         int writtenCompressed = wrapperSize - LegacyRecord.recordOverhead(magic);
-        LegacyRecordBatch.writeHeader(buffer, lastOffset, wrapperSize);
+        AbstractLegacyRecordBatch.writeHeader(buffer, lastOffset, wrapperSize);
 
         long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
         LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
@@ -301,8 +301,8 @@ public class MemoryRecordsBuilder {
                                     ByteBuffer key, ByteBuffer value) throws IOException {
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = DefaultLogRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
-        recordWritten(offset, timestamp, DefaultLogRecord.sizeInBytes(offsetDelta, timestamp, key, value));
+        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value);
+        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value));
         return crc;
     }
 
@@ -311,7 +311,7 @@ public class MemoryRecordsBuilder {
             timestamp = logAppendTime;
 
         int size = LegacyRecord.recordSize(magic, key, value);
-        LegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
+        AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
 
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
@@ -364,7 +364,7 @@ public class MemoryRecordsBuilder {
     public void appendUncheckedWithOffset(long offset, LegacyRecord record) {
         try {
             int size = record.sizeInBytes();
-            LegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
+            AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
 
             ByteBuffer buffer = record.buffer().duplicate();
             appendStream.write(buffer.array(), buffer.arrayOffset(), buffer.limit());
@@ -469,7 +469,7 @@ public class MemoryRecordsBuilder {
         } else {
             int nextOffsetDelta = (int) (lastOffset + 1 - baseOffset);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = DefaultLogRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
+            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
         }
 
         return numRecords == 0 ?

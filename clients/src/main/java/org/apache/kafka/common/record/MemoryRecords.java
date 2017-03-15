@@ -26,7 +26,7 @@ import java.util.List;
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
- * modifying in-place an existing buffer of log logEntries. To create a new buffer see {@link MemoryRecordsBuilder},
+ * modifying in-place an existing buffer of record batches. To create a new buffer see {@link MemoryRecordsBuilder},
  * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType, long)} variants.
  */
 public class MemoryRecords extends AbstractRecords {
@@ -124,7 +124,7 @@ public class MemoryRecords extends AbstractRecords {
         for (RecordBatch.MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
-            // We use the absolute offset to decide whether to retain the message or not Due KAFKA-4298, we have to
+            // We use the absolute offset to decide whether to retain the message or not due to KAFKA-4298, we have to
             // allow for the possibility that a previous version corrupted the log by writing a compressed message
             // set with a wrapper magic value not matching the magic of the inner messages. This will be fixed as we
             // recopy the messages to the destination buffer.
@@ -274,7 +274,7 @@ public class MemoryRecords extends AbstractRecords {
                                                TimestampType timestampType,
                                                int writeLimit) {
         return new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, 0L,
-                System.currentTimeMillis(), RecordBatch.NO_PID, RecordBatch.NO_EPOCH, RecordBatch.NO_SEQUENCE, false,
+                System.currentTimeMillis(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
                 RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, writeLimit);
     }
 
@@ -283,7 +283,7 @@ public class MemoryRecords extends AbstractRecords {
                                                TimestampType timestampType,
                                                long baseOffset) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset,
-                System.currentTimeMillis(), RecordBatch.NO_PID, RecordBatch.NO_EPOCH, RecordBatch.NO_SEQUENCE);
+                System.currentTimeMillis(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -292,7 +292,7 @@ public class MemoryRecords extends AbstractRecords {
                                                TimestampType timestampType,
                                                long baseOffset) {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, System.currentTimeMillis(),
-                RecordBatch.NO_PID, RecordBatch.NO_EPOCH, RecordBatch.NO_SEQUENCE);
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -302,7 +302,7 @@ public class MemoryRecords extends AbstractRecords {
                                                long baseOffset,
                                                long logAppendTime) {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PID, RecordBatch.NO_EPOCH, RecordBatch.NO_SEQUENCE);
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,

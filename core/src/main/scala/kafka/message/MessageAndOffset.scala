@@ -17,11 +17,11 @@
 
 package kafka.message
 
-import org.apache.kafka.common.record.LegacyRecordBatch
+import org.apache.kafka.common.record.AbstractLegacyRecordBatch
 
 object MessageAndOffset {
-  def fromRecordBatch(logEntry: LegacyRecordBatch): MessageAndOffset = {
-    MessageAndOffset(Message.fromRecord(logEntry.record), logEntry.lastOffset)
+  def fromRecordBatch(logEntry: AbstractLegacyRecordBatch): MessageAndOffset = {
+    MessageAndOffset(Message.fromRecord(logEntry.legacyRecord), logEntry.lastOffset)
   }
 }
 

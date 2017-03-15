@@ -60,7 +60,7 @@ class ByteBufferLogInputStream implements LogInputStream<RecordBatch.MutableReco
         if (magic > RecordBatch.MAGIC_VALUE_V1)
             return new DefaultRecordBatch(entrySlice);
         else
-            return new LegacyRecordBatch.ByteBufferLegacyRecordBatch(entrySlice);
+            return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(entrySlice);
     }
 
 }

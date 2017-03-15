@@ -94,7 +94,7 @@ public class NodeApiVersions {
     }
 
     /**
-     * Return the desired version (if usable) or the latest usable version supported by the client.
+     * Return the desired version (if usable) or the latest usable version if the desired version is null.
      */
     public short usableVersion(ApiKeys apiKey, Short desiredVersion) {
         UsableVersion usableVersion = usableVersions.get(apiKey);
@@ -119,7 +119,8 @@ public class NodeApiVersions {
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
         else if (usableVersion.apiVersion.minVersion > version || usableVersion.apiVersion.maxVersion < version)
             throw new UnsupportedVersionException("The broker does not support the requested version " + version +
-                    " for api " + apiKey);
+                    " for api " + apiKey + ". Supported versions are " + usableVersion.apiVersion.minVersion +
+                    " to " + usableVersion.apiVersion.maxVersion + ".");
     }
 
     /**

@@ -329,7 +329,10 @@ object DumpLogSegments {
             " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + entry.magic +
             " compresscodec: " + entry.compressionType + " crc: " + record.checksum)
 
-          if (printContents) {
+          if (record.isControlRecord) {
+            val controlType = ControlRecordType.parse(record.key)
+            print(s" controlType: $controlType")
+          } else if (printContents) {
             val (key, payload) = parser.parse(record)
             key.foreach(key => print(s" key: $key"))
             payload.foreach(payload => print(s" payload: $payload"))
@@ -340,7 +343,9 @@ object DumpLogSegments {
         println("offset: " + entry.lastOffset + " position: " + validBytes +
           " " + entry.timestampType + ": " + entry.maxTimestamp + " isvalid: " + entry.isValid +
           " size: " + entry.sizeInBytes + " magic: " + entry.magic +
-          " pid: " + entry.pid + " epoch: " + entry.epoch + " lastsequence: " + entry.lastSequence +
+          " producerId: " + entry.producerId + " producerEpoch: " + entry.producerEpoch +
+          " lastSequence: " + entry.lastSequence +
+          " isTransactional: " + entry.isTransactional +
           " compresscodec: " + entry.compressionType + " crc: " + entry.checksum)
       }
       validBytes += entry.sizeInBytes

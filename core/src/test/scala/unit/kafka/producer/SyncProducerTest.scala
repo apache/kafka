@@ -29,7 +29,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.record.{DefaultRecordBatch, DefaultLogRecord}
+import org.apache.kafka.common.record.{DefaultRecordBatch, DefaultRecord}
 import org.junit.Test
 import org.junit.Assert._
 
