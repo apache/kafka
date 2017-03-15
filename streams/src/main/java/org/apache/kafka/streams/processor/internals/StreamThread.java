@@ -202,6 +202,7 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
     private String originalReset;
     private StreamPartitionAssignor partitionAssignor = null;
+    private StreamsKafkaClient streamsKafkaClient;
     private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
@@ -1056,6 +1057,22 @@ public class StreamThread extends Thread {
         }
 
         return sb.toString();
+    }
+
+    /**
+     *
+     * @return
+     */
+    public StreamsKafkaClient getStreamsKafkaClient() {
+        return streamsKafkaClient;
+    }
+
+    /**
+     *
+     * @param streamsKafkaClient
+     */
+    public void setStreamsKafkaClient(StreamsKafkaClient streamsKafkaClient) {
+        this.streamsKafkaClient = streamsKafkaClient;
     }
 
     /**
