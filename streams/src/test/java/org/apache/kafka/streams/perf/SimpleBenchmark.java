@@ -54,6 +54,7 @@ import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -632,6 +633,18 @@ public class SimpleBenchmark {
         });
 
         return new KafkaStreams(builder, props);
+    }
+
+    private KafkaStreams createKafkaStreamsWithExceptionHandler(final KStreamBuilder builder, final Properties props) {
+        final KafkaStreams streamsClient = new KafkaStreams(builder, props);
+        streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                streamsClient.close(30, TimeUnit.SECONDS);
+            }
+        });
+
+        return streamsClient;
     }
 
     private class CountDownAction<V> implements ForeachAction<Integer, V> {
