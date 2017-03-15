@@ -51,6 +51,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -966,6 +968,57 @@ public class RocksDBWindowStoreTest {
             fail("should have thrown InvalidStateStoreException on closed store");
         } catch (InvalidStateStoreException e) {
             // ok
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldFetchAndIterateOverExactKeys() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        final RocksDBWindowStoreSupplier<String, String> supplier =
+                new RocksDBWindowStoreSupplier<>(
+                        "window",
+                        60 * 1000L * 2, 3,
+                        true,
+                        Serdes.String(),
+                        Serdes.String(),
+                        windowSize,
+                        true,
+                        Collections.<String, String>emptyMap(),
+                        false);
+
+        final Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            }
+        };
+
+        final MockProcessorContext context = new MockProcessorContext(
+                baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, cache);
+
+        final WindowStore<String, String> windowStore = supplier.get();
+        try {
+            windowStore.init(context, windowStore);
+
+            windowStore.put("a", "0001", 0);
+            windowStore.put("aa", "0002", 0);
+            windowStore.put("a", "0003", 1);
+            windowStore.put("aa", "0004", 1);
+            windowStore.put("a", "0005", 60000);
+
+            final List expected = Utils.mkList("0001", "0003", "0005");
+            assertThat(toList(windowStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
+        } finally {
+            windowStore.close();
         }
     }
 

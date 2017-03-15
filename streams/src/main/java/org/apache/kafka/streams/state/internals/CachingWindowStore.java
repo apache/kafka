@@ -39,6 +39,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
     private final Serde<V> valueSerde;
     private CacheFlushListener<Windowed<K>, V> flushListener;
     private final long windowSize;
+    private final SegmentedBytesStore.KeySchema keySchema = new WindowStoreKeySchema();
+
     private String name;
     private ThreadCache cache;
     private InternalProcessorContext context;
@@ -146,9 +148,17 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, binaryFrom, binaryTo);
-        return new MergedSortedCacheWindowStoreIterator<>(cacheIterator,
+
+
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(Bytes.wrap(serdes.rawKey(key)),
+                                                                             timeFrom,
+                                                                             timeTo);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
+
+        return new MergedSortedCacheWindowStoreIterator<>(filteredCacheIterator,
                                                           underlyingIterator,
                                                           new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
+
     }
 
 
