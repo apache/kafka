@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-
-import static org.apache.kafka.common.record.LogEntry.NO_PID;
 
 public class InitPidResponse extends AbstractResponse {
     private static final String PRODUCER_ID_KEY_NAME = "pid";
@@ -45,7 +44,7 @@ public class InitPidResponse extends AbstractResponse {
     }
 
     public InitPidResponse(Errors errors) {
-        this(errors, NO_PID, (short) 0);
+        this(errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
     }
 
     public long producerId() {

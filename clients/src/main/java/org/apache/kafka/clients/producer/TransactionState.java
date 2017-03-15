@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.record.LogEntry.NO_PID;
+import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
 /**
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
@@ -42,12 +42,12 @@ public class TransactionState {
         }
 
         public boolean isValid() {
-            return pid != NO_PID;
+            return pid != NO_PRODUCER_ID;
         }
     }
 
     public TransactionState(Time time) {
-        pidAndEpoch = new PidAndEpoch(NO_PID, (short) 0);
+        pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, (short) 0);
         sequenceNumbers = new HashMap<>();
         this.time = time;
     }
@@ -100,7 +100,7 @@ public class TransactionState {
      * from the broker.
     */
     public synchronized void reset() {
-        setPidAndEpoch(NO_PID, (short) 0);
+        setPidAndEpoch(NO_PRODUCER_ID, (short) 0);
         this.sequenceNumbers.clear();
     }
 

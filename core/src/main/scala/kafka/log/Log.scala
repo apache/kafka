@@ -369,10 +369,10 @@ class Log(@volatile var dir: File,
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
         val logEntries = segment.read(startOffset, Some(lastOffset), Int.MaxValue).records
         val currentTimeMs = time.milliseconds
-        logEntries.entries.asScala.foreach { entry =>
-          val pidEntry = PidEntry(entry.lastSequence, entry.epoch, entry.lastOffset,
+        logEntries.batches.asScala.foreach { entry =>
+          val pidEntry = PidEntry(entry.lastSequence, entry.producerEpoch, entry.lastOffset,
             (entry.lastOffset - entry.baseOffset + 1).toInt, entry.maxTimestamp)
-          pidMap.load(entry.pid, pidEntry, currentTimeMs)
+          pidMap.load(entry.producerId, pidEntry, currentTimeMs)
         }
       }
       logStartOffset.foreach(pidMap.cleanFrom)
@@ -641,25 +641,26 @@ class Log(@volatile var dir: File,
     for (batch <- records.batches.asScala) {
       // update the first offset if on the first message
       if (firstOffset < 0) {
-        firstOffset = if (entry.magic >= LogEntry.MAGIC_VALUE_V2) entry.baseOffset else entry.lastOffset
+        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
       }
 
       // check that offsets are monotonically increasing
       if (lastOffset >= batch.lastOffset)
         monotonic = false
 
-      val numRecordsInEntry: Int = (entry.lastOffset - entry.baseOffset + 1).toInt
-      val currentPidEntry = PidEntry(entry.lastSequence, entry.epoch, entry.lastOffset, numRecordsInEntry, entry.maxTimestamp)
-      if (entry.pid != LogEntry.NO_PID) {
-        pidEntryMap.get(entry.pid) match {
+      val numRecordsInEntry: Int = (batch.lastOffset - batch.baseOffset + 1).toInt
+      val currentPidEntry = PidEntry(batch.lastSequence, batch.producerEpoch, batch.lastOffset, numRecordsInEntry, batch.maxTimestamp)
+      val pid = batch.producerId
+      if (batch.producerId != RecordBatch.NO_PRODUCER_ID) {
+        pidEntryMap.get(pid) match {
           case Some(entryRange) =>
-            ProducerIdMapping.validatePidEntries(entry.pid, entryRange.last, currentPidEntry)
+            ProducerIdMapping.validatePidEntries(pid, entryRange.last, currentPidEntry)
            // If we have seen this pid before, replace the last PidEntry with information from the current LogEntry
-            pidEntryMap.put(entry.pid, PidEntryRange(entryRange.first, currentPidEntry))
+            pidEntryMap.put(pid, PidEntryRange(entryRange.first, currentPidEntry))
           case None =>
             // If this is the first time we are seeing a particular pid, set both the first and the last PidEntry for
             // this pid to span the first and last offset/sequence of the the current LogEntry.
-            pidEntryMap.put(entry.pid, PidEntryRange(currentPidEntry, currentPidEntry))
+            pidEntryMap.put(pid, PidEntryRange(currentPidEntry, currentPidEntry))
         }
       }
 

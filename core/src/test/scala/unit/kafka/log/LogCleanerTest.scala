@@ -818,10 +818,10 @@ class LogCleanerTest extends JUnitSuite {
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
 
 
-  def record(key: Int, value: Int, pid: Long = LogEntry.NO_PID, epoch: Short = LogEntry.NO_EPOCH,
-             sequence: Int = LogEntry.NO_SEQUENCE): MemoryRecords = {
+  def record(key: Int, value: Int, pid: Long = RecordBatch.NO_PRODUCER_ID, epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+             sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
     MemoryRecords.withRecords(0L, CompressionType.NONE, pid, epoch, sequence,
-      new KafkaRecord(key.toString.getBytes, value.toString.getBytes))
+      new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
   def record(key: Int, value: Array[Byte]) =
