@@ -80,7 +80,7 @@ public class ProduceRequest extends AbstractRequest {
     private final short acks;
     private final int timeout;
 
-    private final Collection<TopicPartition> partitions;
+    private final Map<TopicPartition, Integer> partitionSizes;
 
     // This is set to null by `clearPartitionRecords` to prevent unnecessary memory retention when a produce request is
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
@@ -92,7 +92,14 @@ public class ProduceRequest extends AbstractRequest {
         this.acks = acks;
         this.timeout = timeout;
         this.partitionRecords = partitionRecords;
-        this.partitions = new ArrayList<>(partitionRecords.keySet());
+        this.partitionSizes = createPartitionSizes(partitionRecords);
+    }
+
+    private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
+        Map<TopicPartition, Integer> result = new HashMap<>();
+        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
+            result.put(entry.getKey(), entry.getValue().sizeInBytes());
+        return result;
     }
 
     public ProduceRequest(Struct struct, short version) {
@@ -108,7 +115,7 @@ public class ProduceRequest extends AbstractRequest {
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
-        partitions = new ArrayList<>(partitionRecords.keySet());
+        partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
     }
@@ -144,21 +151,16 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    public String toString() {
-        // Store it in a local variable to protect against concurrent updates
-        Map<TopicPartition, MemoryRecords> partitionRecords = this.partitionRecords;
-
+    public String toString(boolean verbose) {
+        // Use the same format as `Struct.toString()`
         StringBuilder bld = new StringBuilder();
-        bld.append("(type=ProduceRequest")
-                .append(", acks=").append(acks)
-                .append(", timeout=").append(timeout);
+        bld.append("{acks=").append(acks)
+                .append(",timeout=").append(timeout);
 
-        if (partitionRecords == null)
-            bld.append(", partitions=").append(Utils.mkString(partitions, ","));
-        else
-            bld.append(", partitionRecords=(").append(Utils.mkString(partitionRecords));
+        if (verbose)
+            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes));
 
-        bld.append("))");
+        bld.append("])");
         return bld.toString();
     }
 
@@ -171,7 +173,7 @@ public class ProduceRequest extends AbstractRequest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
         ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
 
-        for (TopicPartition tp : partitions)
+        for (TopicPartition tp : partitions())
             responseMap.put(tp, partitionResponse);
 
         short versionId = version();
@@ -184,6 +186,10 @@ public class ProduceRequest extends AbstractRequest {
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
         }
+    }
+
+    private Collection<TopicPartition> partitions() {
+        return partitionSizes.keySet();
     }
 
     public short acks() {
