@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -425,4 +426,15 @@ public class UtilsTest {
         }
     }
 
+    @Test(timeout = 120000)
+    public void testRecursiveDelete() throws IOException {
+        Utils.delete(null); // delete of null does nothing.
+        Utils.delete(TestUtils.tempFile()); // deleting a temporary file works
+        File tempDir = TestUtils.tempDirectory();
+        File tempDir2 = TestUtils.tempDirectory(tempDir.toPath(), "a");
+        TestUtils.tempDirectory(tempDir.toPath(), "b");
+        TestUtils.tempDirectory(tempDir2.toPath(), "c");
+        Utils.delete(tempDir); // deleting a directory hierarchy works
+        Utils.delete(tempDir); // deleting a non-existent directory hierarchy works
+    }
 }
