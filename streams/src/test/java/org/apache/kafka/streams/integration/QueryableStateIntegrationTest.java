@@ -80,7 +80,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 @RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final long COMMIT_INTERVAL_MS = 3000L;
+    private static final long COMMIT_INTERVAL_MS = 300L;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
