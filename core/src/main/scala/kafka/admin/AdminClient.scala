@@ -220,6 +220,7 @@ class AdminClient(val time: Time,
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
+
   def getTopicListOffset(req: ListOffsetRequest.Builder, node: Node): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
     val responseBody = send(node, ApiKeys.LIST_OFFSETS, req)
     responseBody.asInstanceOf[ListOffsetResponse].responseData().asScala.toMap
