@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
-import org.junit.{After, Before, Test}
+import org.junit.{Test, After, Before}
 
 import scala.util.Random
 import org.apache.log4j.{Level, Logger}
@@ -26,6 +26,7 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AdminUtils
+import kafka.common.FailedToSendMessageException
 import kafka.consumer.{Consumer, ConsumerConfig}
 import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}

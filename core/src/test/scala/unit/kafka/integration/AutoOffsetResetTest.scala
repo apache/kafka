@@ -17,12 +17,13 @@
 
 package kafka.integration
 
-import kafka.utils.{Logging, ZKGroupTopicDirs}
-import kafka.consumer.{Consumer, ConsumerConfig, ConsumerConnector, ConsumerTimeoutException}
+import kafka.utils.{ZKGroupTopicDirs, Logging}
+import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnector, Consumer}
 import kafka.server._
 import kafka.utils.TestUtils
 import kafka.serializer._
-import kafka.producer.{KeyedMessage, Producer}
+import kafka.producer.{Producer, KeyedMessage}
+
 import org.junit.{After, Before, Test}
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._

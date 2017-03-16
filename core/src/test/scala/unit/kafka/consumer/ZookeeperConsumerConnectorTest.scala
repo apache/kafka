@@ -28,8 +28,9 @@ import kafka.serializer._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
 import org.apache.log4j.{Level, Logger}
-import org.junit.{After, Before, Test}
+import org.junit.{Test, After, Before}
 
 import scala.collection._
 

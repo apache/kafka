@@ -17,7 +17,7 @@
 package kafka.security.auth
 
 import java.net.InetAddress
-import java.util.UUID
+import java.util.{UUID}
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost

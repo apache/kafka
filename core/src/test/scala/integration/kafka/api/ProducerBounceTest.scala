@@ -21,9 +21,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 class ProducerBounceTest extends KafkaServerTestHarness {

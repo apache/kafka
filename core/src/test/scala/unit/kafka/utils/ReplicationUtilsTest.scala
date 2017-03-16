@@ -26,6 +26,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
 
+
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
   val partitionId = 0

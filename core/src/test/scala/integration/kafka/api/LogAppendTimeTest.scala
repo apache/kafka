@@ -24,10 +24,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.test.IntegrationTest
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
-import org.junit.experimental.categories.Category
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer

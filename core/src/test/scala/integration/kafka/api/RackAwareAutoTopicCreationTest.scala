@@ -18,14 +18,13 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.admin.{AdminUtils, RackAwareMode, RackAwareTest}
+import kafka.admin.{RackAwareMode, AdminUtils, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.Assert._
 import org.junit.Test
-
 import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {

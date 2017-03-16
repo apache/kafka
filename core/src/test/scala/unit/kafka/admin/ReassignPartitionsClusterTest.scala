@@ -22,7 +22,6 @@ import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-
 import scala.collection.Map
 import scala.collection.Seq
 

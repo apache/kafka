@@ -29,7 +29,7 @@ import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{Test, After, Before}
 
 abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null

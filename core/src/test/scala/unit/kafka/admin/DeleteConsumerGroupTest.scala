@@ -20,8 +20,9 @@ import kafka.utils._
 import kafka.server.KafkaConfig
 import org.junit.Test
 import kafka.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
 import kafka.integration.KafkaServerTestHarness
+
 
 class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)

@@ -25,6 +25,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 

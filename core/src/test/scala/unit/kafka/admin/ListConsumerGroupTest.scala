@@ -21,6 +21,7 @@ import java.util.Properties
 import org.easymock.EasyMock
 import org.junit.Before
 import org.junit.Test
+
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
 import kafka.consumer.OldConsumer
@@ -28,6 +29,7 @@ import kafka.consumer.Whitelist
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+
 
 class ListConsumerGroupTest extends KafkaServerTestHarness {
 

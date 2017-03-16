@@ -19,11 +19,11 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
-import org.junit.{After, Before, Test}
+import org.junit.{Test, After, Before}
 
 import scala.collection._
 import org.junit.Assert._
+
 import kafka.cluster._
 import kafka.server._
 import kafka.consumer._

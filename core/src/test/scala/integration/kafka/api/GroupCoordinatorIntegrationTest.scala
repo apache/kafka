@@ -27,8 +27,6 @@ import scala.collection.JavaConverters._
 import java.util.Properties
 
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP

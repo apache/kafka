@@ -19,7 +19,7 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.Properties
+import java.util.{Properties}
 
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness

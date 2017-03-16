@@ -22,9 +22,7 @@ import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._

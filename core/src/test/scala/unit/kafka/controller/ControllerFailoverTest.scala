@@ -31,6 +31,7 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
 
+
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
   val numNodes = 2
