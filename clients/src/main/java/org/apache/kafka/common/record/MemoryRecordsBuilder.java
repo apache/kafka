@@ -208,9 +208,9 @@ public class MemoryRecordsBuilder {
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > 1)
-                writeEosLogEntryHeader();
+                writeDefaultBatchHeader();
             else if (compressionType != CompressionType.NONE)
-                writeOldEntryCompressedWrapperHeader();
+                writeLegacyCompressedWrapperHeader();
 
             ByteBuffer buffer = buffer().duplicate();
             buffer.flip();
@@ -219,7 +219,7 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    private void writeEosLogEntryHeader() {
+    private void writeDefaultBatchHeader() {
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
@@ -243,7 +243,7 @@ public class MemoryRecordsBuilder {
         buffer.position(pos);
     }
 
-    private void writeOldEntryCompressedWrapperHeader() {
+    private void writeLegacyCompressedWrapperHeader() {
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
@@ -283,9 +283,9 @@ public class MemoryRecordsBuilder {
                 baseTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1)
-                return appendEosLogRecord(offset, isControlRecord, timestamp, key, value, headers);
+                return appendDefaultRecord(offset, isControlRecord, timestamp, key, value, headers);
             else
-                return appendOldLogRecord(offset, timestamp, key, value);
+                return appendLegacyRecord(offset, timestamp, key, value);
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
@@ -326,7 +326,7 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
-        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), null);
+        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
     /**
@@ -338,44 +338,32 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(offset, false, timestamp, key, value, null);
-    }
-
-    private long appendEosLogRecord(long offset, boolean isControlRecord, long timestamp,
-                                    ByteBuffer key, ByteBuffer value, Header[] headers) throws IOException {
-        int offsetDelta = (int) (offset - baseOffset);
-        long timestampDelta = timestamp - baseTimestamp;
-        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value, headers);
-        // TODO: The crc is useless for the new message format. Maybe we should let writeTo return the written size?
-        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value, headers));
-        return crc;
-    }
-
-    private long appendOldLogRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
-        if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
-            timestamp = logAppendTime;
-
-        int size = LegacyRecord.recordSize(magic, key, value);
-        AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
-
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-            timestamp = logAppendTime;
-        long crc = LegacyRecord.write(appendStream, magic, timestamp, key, value, CompressionType.NONE, timestampType);
-        recordWritten(offset, timestamp, size + Records.LOG_OVERHEAD);
-        return crc;
-    }
-
-    public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, new Header[0]);
-    }
-
-    private long nextSequentialOffset() {
-        return lastOffset == null ? baseOffset : lastOffset + 1;
+        return appendWithOffset(offset, false, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
     /**
-     * Append a new record at the next consecutive offset. If no records have been appended yet, use the base
-     * offset of this builder.
+     * Append a new record at the given offset.
+     * @param offset The absolute offset of the record in the log buffer
+     * @param record The record to append
+     * @return crc of the record
+     */
+    public long appendWithOffset(long offset, SimpleRecord record) {
+        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value(), record.headers());
+    }
+
+    /**
+     * Append a new record at the next sequential offset.
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @return crc of the record
+     */
+    public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
+        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, Record.EMPTY_HEADERS);
+    }
+
+    /**
+     * Append a new record at the next sequential offset.
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
@@ -385,20 +373,28 @@ public class MemoryRecordsBuilder {
         return append(timestamp, wrapNullable(key), wrapNullable(value));
     }
 
+    /**
+     * Append a new record at the next sequential offset.
+     * @param record The record to append
+     * @return crc of the record
+     */
     public long append(SimpleRecord record) {
         return appendWithOffset(nextSequentialOffset(), record);
     }
 
+    /**
+     * Append a control record at the next sequential offset.
+     * @param timestamp The record timestamp
+     * @param type The control record type (cannot be UNKNOWN)
+     * @param value The control record value
+     * @return crc of the record
+     */
     public long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
         Struct keyStruct = type.recordKey();
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);
         key.flip();
-        return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, new Header[0]);
-    }
-
-    public long appendWithOffset(long offset, SimpleRecord record) {
-        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value(), record.headers());
+        return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
     /**
@@ -461,6 +457,30 @@ public class MemoryRecordsBuilder {
      */
     public void append(LegacyRecord record) {
         appendWithOffset(nextSequentialOffset(), record);
+    }
+
+    private long appendDefaultRecord(long offset, boolean isControlRecord, long timestamp,
+                                     ByteBuffer key, ByteBuffer value, Header[] headers) throws IOException {
+        int offsetDelta = (int) (offset - baseOffset);
+        long timestampDelta = timestamp - baseTimestamp;
+        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value, headers);
+        // TODO: The crc is useless for the new message format. Maybe we should let writeTo return the written size?
+        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value, headers));
+        return crc;
+    }
+
+    private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+        if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
+            timestamp = logAppendTime;
+
+        int size = LegacyRecord.recordSize(magic, key, value);
+        AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
+
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            timestamp = logAppendTime;
+        long crc = LegacyRecord.write(appendStream, magic, timestamp, key, value, CompressionType.NONE, timestampType);
+        recordWritten(offset, timestamp, size + Records.LOG_OVERHEAD);
+        return crc;
     }
 
     private long toInnerOffset(long offset) {
@@ -543,6 +563,10 @@ public class MemoryRecordsBuilder {
 
     public byte magic() {
         return magic;
+    }
+
+    private long nextSequentialOffset() {
+        return lastOffset == null ? baseOffset : lastOffset + 1;
     }
 
     public static class RecordsInfo {

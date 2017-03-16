@@ -185,7 +185,7 @@ public abstract class AbstractRecords implements Records {
 
     public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value, null);
+            return DefaultRecordBatch.batchSizeUpperBound(key, value, Record.EMPTY_HEADERS);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }

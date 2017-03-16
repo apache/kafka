@@ -24,6 +24,8 @@ import java.nio.ByteBuffer;
  */
 public interface Record {
 
+    Header[] EMPTY_HEADERS = new Header[0];
+
     /**
      * The offset of this record in the log
      * @return the offset

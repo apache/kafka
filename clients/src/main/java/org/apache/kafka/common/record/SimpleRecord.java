@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * High-level representation of a kafka record. This is useful when building record sets to
@@ -32,10 +33,11 @@ public class SimpleRecord {
     private final Header[] headers;
 
     public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+        Objects.requireNonNull(headers, "Headers must be non-null");
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = headers == null ? new Header[0] : headers;
+        this.headers = headers;
     }
 
     public SimpleRecord(long timestamp, byte[] key, byte[] value, Header[] headers) {
@@ -43,7 +45,7 @@ public class SimpleRecord {
     }
 
     public SimpleRecord(long timestamp, ByteBuffer key, ByteBuffer value) {
-        this(timestamp, key, value, new Header[0]);
+        this(timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
     public SimpleRecord(long timestamp, byte[] key, byte[] value) {

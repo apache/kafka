@@ -95,7 +95,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public Header[] headers() {
-        return new Header[0];
+        return Record.EMPTY_HEADERS;
     }
 
     @Override

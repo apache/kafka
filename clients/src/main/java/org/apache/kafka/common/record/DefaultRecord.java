@@ -203,25 +203,24 @@ public class DefaultRecord implements Record {
             out.write(value.array(), value.arrayOffset(), valueSize);
         }
 
-        if (headers == null) {
-            ByteUtils.writeVarint(0, out);
-        } else {
-            ByteUtils.writeVarint(headers.length, out);
+        if (headers == null)
+            throw new IllegalArgumentException("Headers cannot be null");
 
-            for (Header header : headers) {
-                String headerKey = header.key();
-                byte[] utf8Bytes = Utils.utf8(headerKey);
-                ByteUtils.writeVarint(utf8Bytes.length, out);
-                out.write(utf8Bytes);
+        ByteUtils.writeVarint(headers.length, out);
 
-                ByteBuffer headerValue = header.value();
-                if (headerValue == null) {
-                    ByteUtils.writeVarint(-1, out);
-                } else {
-                    int headerValueSize = headerValue.remaining();
-                    ByteUtils.writeVarint(headerValueSize, out);
-                    out.write(headerValue.array(), headerValue.arrayOffset(), headerValueSize);
-                }
+        for (Header header : headers) {
+            String headerKey = header.key();
+            byte[] utf8Bytes = Utils.utf8(headerKey);
+            ByteUtils.writeVarint(utf8Bytes.length, out);
+            out.write(utf8Bytes);
+
+            ByteBuffer headerValue = header.value();
+            if (headerValue == null) {
+                ByteUtils.writeVarint(-1, out);
+            } else {
+                int headerValueSize = headerValue.remaining();
+                ByteUtils.writeVarint(headerValueSize, out);
+                out.write(headerValue.array(), headerValue.arrayOffset(), headerValueSize);
             }
         }
 
@@ -375,7 +374,7 @@ public class DefaultRecord implements Record {
                                   long timestampDelta,
                                   byte[] key,
                                   byte[] value) {
-        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value), null);
+        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
     public static int sizeInBytes(int offsetDelta,
@@ -415,26 +414,25 @@ public class DefaultRecord implements Record {
         else
             size += ByteUtils.sizeOfVarint(valueSize) + valueSize;
 
-        if (headers == null) {
-            size += ByteUtils.sizeOfVarint(0);
-        } else {
-            size += ByteUtils.sizeOfVarint(headers.length);
-            for (Header header : headers) {
-                String headerKey = header.key();
-                if (headerKey == null) {
-                    size += NULL_VARINT_SIZE_BYTES;
-                } else {
-                    int headerKeySize = Utils.utf8Length(headerKey);
-                    size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
-                }
+        if (headers == null)
+            throw new IllegalArgumentException("Headers cannot be null");
 
-                ByteBuffer headerValue = header.value();
-                if (headerValue == null) {
-                    size += NULL_VARINT_SIZE_BYTES;
-                } else {
-                    int headerValueSize = headerValue.remaining();
-                    size += ByteUtils.sizeOfVarint(headerValueSize) + headerValueSize;
-                }
+        size += ByteUtils.sizeOfVarint(headers.length);
+        for (Header header : headers) {
+            String headerKey = header.key();
+            if (headerKey == null) {
+                size += NULL_VARINT_SIZE_BYTES;
+            } else {
+                int headerKeySize = Utils.utf8Length(headerKey);
+                size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
+            }
+
+            ByteBuffer headerValue = header.value();
+            if (headerValue == null) {
+                size += NULL_VARINT_SIZE_BYTES;
+            } else {
+                int headerValueSize = headerValue.remaining();
+                size += ByteUtils.sizeOfVarint(headerValueSize) + headerValueSize;
             }
         }
         return size;
