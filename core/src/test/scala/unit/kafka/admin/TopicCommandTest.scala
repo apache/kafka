@@ -26,10 +26,7 @@ import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils._
 import org.apache.kafka.common.errors.TopicExistsException
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test

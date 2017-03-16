@@ -14,11 +14,8 @@ package kafka.admin
 
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Test
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAwareTest {
 
   @Test

@@ -168,6 +168,7 @@ subprojects {
     }
   }
 
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -179,10 +180,6 @@ subprojects {
       events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
       showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
-    }
-
-    useJUnit {
-      excludeCategories 'org.apache.kafka.test.IntegrationTest'
     }
 
   }
@@ -204,7 +201,22 @@ subprojects {
     }
   }
 
-  task testAll(dependsOn: ['test', 'integrationTest'])
+  task unitTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
+      showStandardStreams = userShowStandardStreams ?: false
+      exceptionFormat = 'full'
+    }
+    useJUnit {
+      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
+  }
 
   jar {
     from "$rootDir/LICENSE"

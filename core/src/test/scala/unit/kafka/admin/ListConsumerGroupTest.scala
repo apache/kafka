@@ -28,10 +28,7 @@ import kafka.consumer.Whitelist
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class ListConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()

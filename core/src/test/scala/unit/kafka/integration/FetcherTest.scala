@@ -28,10 +28,7 @@ import kafka.cluster._
 import kafka.server._
 import kafka.consumer._
 import kafka.utils.TestUtils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
   def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)

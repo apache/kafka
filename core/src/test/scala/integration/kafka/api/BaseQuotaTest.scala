@@ -29,7 +29,6 @@ import org.junit.Assert._
 import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
-@Category(Array(classOf[IntegrationTest]))
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   def userPrincipal : String

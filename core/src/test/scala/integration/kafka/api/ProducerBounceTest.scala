@@ -26,7 +26,6 @@ import org.junit.Assert._
 import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
-@Category(Array(classOf[IntegrationTest]))
 class ProducerBounceTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
   private val serverMessageMaxBytes =  producerBufferSize/2

@@ -30,7 +30,6 @@ import org.junit.{Before, Test}
 import org.junit.Assert._
 import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class AdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1

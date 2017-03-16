@@ -45,7 +45,6 @@ import org.junit.experimental.categories.Category
 
 import scala.collection.JavaConverters._
 
-@Category(Array(classOf[IntegrationTest]))
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test

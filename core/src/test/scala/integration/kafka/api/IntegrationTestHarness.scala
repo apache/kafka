@@ -33,7 +33,7 @@ import scala.collection.mutable.Buffer
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
-trait IntegrationTestHarness extends KafkaServerTestHarness {
+abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerCount: Int
   val consumerCount: Int

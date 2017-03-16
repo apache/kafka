@@ -26,7 +26,6 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AdminUtils
-import kafka.common.FailedToSendMessageException
 import kafka.consumer.{Consumer, ConsumerConfig}
 import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -34,11 +33,8 @@ import kafka.utils.CoreUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1

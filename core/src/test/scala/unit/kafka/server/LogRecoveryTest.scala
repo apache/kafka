@@ -27,12 +27,9 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.test.IntegrationTest
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class LogRecoveryTest extends ZooKeeperTestHarness {
 
   val replicaLagTimeMaxMs = 5000L

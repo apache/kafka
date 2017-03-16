@@ -23,14 +23,11 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
 import org.junit.Test
-import org.junit.experimental.categories.Category
 
 import scala.collection.Map
 
-@Category(Array(classOf[IntegrationTest]))
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
   val numPartitions = 8

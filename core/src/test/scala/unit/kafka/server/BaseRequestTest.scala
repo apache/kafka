@@ -29,10 +29,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
 

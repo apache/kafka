@@ -35,14 +35,10 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()

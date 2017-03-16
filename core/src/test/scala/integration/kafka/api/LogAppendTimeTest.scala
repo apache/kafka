@@ -36,7 +36,6 @@ import scala.collection.mutable.ArrayBuffer
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
   * level configs, see the *ProducerSendTest classes.
   */
-@Category(Array(classOf[IntegrationTest]))
 class LogAppendTimeTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1

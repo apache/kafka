@@ -24,7 +24,6 @@ import kafka.api.{FetchRequest, FetchRequestBuilder, PartitionFetchInfo}
 import kafka.server.{KafkaConfig, KafkaRequestHandler}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
-import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
 
 import scala.collection._
@@ -34,14 +33,11 @@ import kafka.serializer.StringEncoder
 import java.util.Properties
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
 /**
  * End to end tests of the primitive apis against a local server
  */
 @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
-@Category(Array(classOf[IntegrationTest]))
 class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 

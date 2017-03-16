@@ -56,7 +56,6 @@ import scala.collection.JavaConverters._
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
   * would end up with ZooKeeperTestHarness twice.
   */
-@Category(Array(classOf[IntegrationTest]))
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2

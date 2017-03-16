@@ -29,13 +29,10 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Test
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 
 @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
-@Category(Array(classOf[IntegrationTest]))
 class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.

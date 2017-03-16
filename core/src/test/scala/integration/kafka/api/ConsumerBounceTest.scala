@@ -33,7 +33,6 @@ import scala.collection.JavaConverters._
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-@Category(Array(classOf[IntegrationTest]))
 class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1

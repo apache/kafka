@@ -38,7 +38,6 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 
-@Category(Array(classOf[IntegrationTest]))
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   def generateConfigs = {

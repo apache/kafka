@@ -21,13 +21,10 @@ import org.junit.Assert._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 import org.junit.{After, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
-@Category(Array(classOf[IntegrationTest]))
 class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   val servers = ArrayBuffer[KafkaServer]()
 

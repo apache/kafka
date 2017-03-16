@@ -32,11 +32,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
-@Category(Array(classOf[IntegrationTest]))
 class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1

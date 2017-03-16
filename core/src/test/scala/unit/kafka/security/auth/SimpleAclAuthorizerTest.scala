@@ -25,12 +25,9 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
-import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
-@Category(Array(classOf[IntegrationTest]))
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   val simpleAclAuthorizer = new SimpleAclAuthorizer

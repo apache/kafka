@@ -29,12 +29,9 @@ import kafka.utils._
 import kafka.common._
 import kafka.admin.{AdminOperationException, AdminUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
 import scala.collection.Map
 
-@Category(Array(classOf[IntegrationTest]))
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 

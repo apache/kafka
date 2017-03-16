@@ -28,16 +28,12 @@ import kafka.serializer._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
-import org.apache.kafka.test.IntegrationTest
 import org.apache.log4j.{Level, Logger}
-import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 import scala.collection._
 
 @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
-@Category(Array(classOf[IntegrationTest]))
 class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging {
 
   val RebalanceBackoffMs = 5000

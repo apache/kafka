@@ -32,10 +32,7 @@ import kafka.utils._
 import org.junit.{Before, Test}
 import kafka.serializer._
 import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1

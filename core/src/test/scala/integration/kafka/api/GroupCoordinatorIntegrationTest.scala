@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.test.IntegrationTest
 import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
   val overridingProps = new Properties()

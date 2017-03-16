@@ -35,7 +35,6 @@ import org.junit.experimental.categories.Category
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-@Category(Array(classOf[IntegrationTest]))
 abstract class BaseConsumerTest extends IntegrationTestHarness {
 
   val epsilon = 0.1

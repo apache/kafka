@@ -30,14 +30,11 @@ import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
 import org.junit.Test
-import org.junit.experimental.categories.Category
 
 import scala.collection.JavaConverters._
 
-@Category(Array(classOf[IntegrationTest]))
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   def generateConfigs() = {

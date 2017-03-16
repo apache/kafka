@@ -34,7 +34,6 @@ import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
-import org.junit.experimental.categories.Category
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -86,7 +85,6 @@ object EndToEndClusterIdTest {
   }
 }
 
-@Category(Array(classOf[IntegrationTest]))
 class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
   import EndToEndClusterIdTest._

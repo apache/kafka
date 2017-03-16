@@ -31,13 +31,10 @@ import java.util.Properties
 import java.io.File
 
 import kafka.admin.AdminUtils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 
 import scala.util.Random
 import scala.collection._
 
-@Category(Array(classOf[IntegrationTest]))
 class OffsetCommitTest extends ZooKeeperTestHarness {
   val random: Random = new Random()
   val group = "test-group"

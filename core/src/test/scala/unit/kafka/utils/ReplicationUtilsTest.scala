@@ -22,13 +22,10 @@ import kafka.server.{KafkaConfig, ReplicaFetcherManager}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.easymock.EasyMock
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
   val partitionId = 0

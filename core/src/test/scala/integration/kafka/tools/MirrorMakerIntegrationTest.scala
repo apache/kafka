@@ -26,11 +26,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.test.IntegrationTest
 import org.junit.Test
-import org.junit.experimental.categories.Category
 
-@Category(Array(classOf[IntegrationTest]))
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs(): Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)

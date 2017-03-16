@@ -31,15 +31,12 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
 import org.junit.{After, Test}
 
 import scala.collection.Map
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 
-@Category(Array(classOf[IntegrationTest]))
 class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
 
   private var brokers: Seq[KafkaServer] = null
