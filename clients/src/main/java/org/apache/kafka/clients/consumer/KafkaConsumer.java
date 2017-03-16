@@ -762,7 +762,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Set<TopicPartition> assignment() {
         acquire();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
+            return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
         } finally {
             release();
         }
@@ -776,7 +776,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Set<String> subscription() {
         acquire();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
+            return Collections.unmodifiableSet(this.subscriptions.subscription());
         } finally {
             release();
         }
