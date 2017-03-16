@@ -53,7 +53,9 @@ import static org.junit.Assert.assertEquals;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -80,6 +82,10 @@ import static org.hamcrest.core.IsEqual.equalTo;
 @RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 1;
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(300);
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);

@@ -42,7 +42,9 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,6 +61,9 @@ import static org.hamcrest.core.Is.is;
  * Tests all available joins of Kafka Streams DSL.
  */
 public class JoinIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(300);
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
