@@ -167,6 +167,14 @@ public interface RecordBatch extends Iterable<Record> {
     int sizeInBytes();
 
     /**
+     * Get the count if it is efficiently supported by the message format (which is only the case
+     * for magic 2 and higher).
+     *
+     * @return The number of records in the batch or null for magic versions 0 and 1.
+     */
+    Integer countOrNull();
+
+    /**
      * Check whether this entry contains a compressed message set.
      * @return true if so, false otherwise
      */

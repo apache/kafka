@@ -23,12 +23,11 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -81,7 +80,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     static final int BASE_SEQUENCE_LENGTH = 4;
     static final int PARTITION_LEADER_EPOCH_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     static final int PARTITION_LEADER_EPOCH_LENGTH = 4;
-    static final int RECORDS_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
+    static final int RECORDS_COUNT_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
+    static final int RECORDS_COUNT_LENGTH = 4;
+    static final int RECORDS_OFFSET = RECORDS_COUNT_OFFSET + RECORDS_COUNT_LENGTH;
     public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
@@ -163,6 +164,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     @Override
+    public Integer countOrNull() {
+        return buffer.getInt(RECORDS_COUNT_OFFSET);
+    }
+
+    @Override
     public void writeTo(ByteBuffer buffer) {
         buffer.put(this.buffer.duplicate());
     }
@@ -185,24 +191,17 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
         // TODO: An improvement for the consumer would be to only decompress the records
         // we need to fill max.poll.records and leave the rest compressed.
-        Deque<Record> records = new ArrayDeque<>();
+        int numRecords = countOrNull();
+        List<Record> records = new ArrayList<>(numRecords);
         try {
             Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             long baseOffset = baseOffset();
             long baseTimestamp = baseTimestamp();
             int baseSequence = baseSequence();
-            long lastOffset = lastOffset();
 
-            while (true) {
-                try {
-                    DefaultRecord record = DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
-                    records.add(record);
-
-                    if (record.offset() == lastOffset)
-                        break;
-                } catch (EOFException e) {
-                    break;
-                }
+            for (int i = 0; i < numRecords; i++) {
+                DefaultRecord record = DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                records.add(record);
             }
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -325,7 +324,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
                             short epoch,
                             int sequence,
                             boolean isTransactional,
-                            int partitionLeaderEpoch) {
+                            int partitionLeaderEpoch,
+                            int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
@@ -345,6 +345,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
+        buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
         long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
     }

@@ -27,9 +27,9 @@ import java.util.Collection;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
@@ -67,13 +67,17 @@ public class MemoryRecordsTest {
                 TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false,
                 partitionLeaderEpoch, buffer.limit());
 
-        byte[][] keys = new byte[][] {"a".getBytes(), "b".getBytes(), "c".getBytes(), null, "d".getBytes(), null};
-        byte[][] values = new byte[][] {"1".getBytes(), "2".getBytes(), "3".getBytes(), "4".getBytes(), null, null};
-        long[] timestamps = new long[] {1, 2, 3, 4, 5, 6};
+        SimpleRecord[] records = new SimpleRecord[] {
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()),
+            new SimpleRecord(4L, null, "4".getBytes()),
+            new SimpleRecord(5L, "d".getBytes(), null),
+            new SimpleRecord(6L, (byte[]) null, null)
+        };
 
-        for (int i = 0; i < keys.length; i++)
-            builder.append(timestamps[i], keys[i], values[i]);
-
+        for (SimpleRecord record : records)
+            builder.append(record);
 
         MemoryRecords memoryRecords = builder.build();
         for (int iteration = 0; iteration < 2; iteration++) {
@@ -88,36 +92,38 @@ public class MemoryRecordsTest {
                     assertEquals(epoch, batch.producerEpoch());
                     assertEquals(firstSequence + total, batch.baseSequence());
                     assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
+                    assertEquals(records.length, batch.countOrNull().intValue());
                 } else {
                     assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
                     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
                     assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
+                    assertNull(batch.countOrNull());
                 }
 
-                int records = 0;
+                int recordCount = 0;
                 for (Record record : batch) {
                     assertTrue(record.isValid());
                     assertTrue(record.hasMagic(batch.magic()));
                     assertFalse(record.isCompressed());
                     assertEquals(firstOffset + total, record.offset());
-                    assertEquals(wrapNullable(keys[total]), record.key());
-                    assertEquals(wrapNullable(values[total]), record.value());
+                    assertEquals(records[total].key(), record.key());
+                    assertEquals(records[total].value(), record.value());
 
                     if (magic >= RecordBatch.MAGIC_VALUE_V2)
                         assertEquals(firstSequence + total, record.sequence());
 
                     if (magic > RecordBatch.MAGIC_VALUE_V0) {
-                        assertEquals(timestamps[total], record.timestamp());
+                        assertEquals(records[total].timestamp(), record.timestamp());
                         if (magic < RecordBatch.MAGIC_VALUE_V2)
                             assertTrue(record.hasTimestampType(batch.timestampType()));
                     }
 
                     total++;
-                    records++;
+                    recordCount++;
                 }
 
-                assertEquals(batch.baseOffset() + records - 1, batch.lastOffset());
+                assertEquals(batch.baseOffset() + recordCount - 1, batch.lastOffset());
             }
         }
     }

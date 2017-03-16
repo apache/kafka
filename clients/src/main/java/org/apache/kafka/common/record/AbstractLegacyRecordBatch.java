@@ -149,6 +149,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public Integer countOrNull() {
+        return null;
+    }
+
+    @Override
     public String toString() {
         return "LegacyRecordBatch(" + offset() + ", " + legacyRecord() + ")";
     }
@@ -309,6 +314,10 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                         logEntry = new BasicLegacyRecordBatch(logEntry.lastOffset(), recordWithTimestamp);
                     }
                     logEntries.addLast(logEntry);
+
+                    // break early if we reach the last offset in the batch
+                    if (logEntry.offset() == wrapperRecordOffset)
+                        break;
                 }
 
                 if (logEntries.isEmpty())

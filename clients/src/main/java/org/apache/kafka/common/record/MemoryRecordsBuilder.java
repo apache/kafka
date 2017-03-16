@@ -65,7 +65,7 @@ public class MemoryRecordsBuilder {
     private final int initialCapacity;
 
     private long writtenUncompressed = 0;
-    private long numRecords = 0;
+    private int numRecords = 0;
     private float compressionRate = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
@@ -237,7 +237,8 @@ public class MemoryRecordsBuilder {
         }
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch);
+                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional,
+                partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
     }
@@ -470,6 +471,9 @@ public class MemoryRecordsBuilder {
     }
 
     private void recordWritten(long offset, long timestamp, int size) {
+        if (numRecords == Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Maximum number of records per batch exceeded");
+
         numRecords += 1;
         writtenUncompressed += size;
         lastOffset = offset;

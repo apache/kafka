@@ -243,6 +243,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public Integer countOrNull() {
+            loadUnderlyingEntry();
+            return underlying.countOrNull();
+        }
+
+        @Override
         public void writeTo(ByteBuffer buffer) {
             try {
                 buffer.limit(entrySize + LOG_OVERHEAD);
