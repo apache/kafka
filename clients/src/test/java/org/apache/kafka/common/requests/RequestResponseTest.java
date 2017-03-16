@@ -255,7 +255,7 @@ public class RequestResponseTest {
         ProduceResponse.PartitionResponse partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(LogEntry.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertEquals(RecordBatch.NO_TIMESTAMP, partitionResponse.logAppendTime);
 
         request.clearPartitionRecords();
 
@@ -265,7 +265,7 @@ public class RequestResponseTest {
         partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(LogEntry.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertEquals(RecordBatch.NO_TIMESTAMP, partitionResponse.logAppendTime);
     }
 
     @Test

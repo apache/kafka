@@ -147,7 +147,7 @@ public class SenderTest {
                 if (request.version() != 2)
                     return false;
 
-                MemoryRecords records = request.partitionRecords().get(tp0);
+                MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
                 return records != null &&
                         records.sizeInBytes() > 0 &&
                         records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
@@ -199,7 +199,7 @@ public class SenderTest {
                 if (request.version() != 2)
                     return false;
 
-                Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecords();
+                Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
                 if (recordsMap.size() != 2)
                     return false;
 
