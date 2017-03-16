@@ -131,7 +131,7 @@ public class FetchRequest extends AbstractRequest {
         @Override
         public FetchRequest build(short version) {
             if (version < 3) {
-                maxBytes = -1;
+                maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }
 
             return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData);
