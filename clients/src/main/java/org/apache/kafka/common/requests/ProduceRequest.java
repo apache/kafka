@@ -96,7 +96,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
-        Map<TopicPartition, Integer> result = new HashMap<>();
+        Map<TopicPartition, Integer> result = new HashMap<>(partitionRecords.size());
         for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
             result.put(entry.getKey(), entry.getValue().sizeInBytes());
         return result;
