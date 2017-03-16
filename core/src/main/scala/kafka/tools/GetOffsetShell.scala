@@ -119,7 +119,7 @@ object GetOffsetShell {
             val partitions:java.util.Map[TopicPartition, java.lang.Long] = Map(new TopicPartition(metadata.topic(), metadata.partition()) ->
               java.lang.Long.valueOf(time)).asJava
 
-            val request: ListOffsetRequest.Builder = new ListOffsetRequest.Builder().setMinVersion(0.toShort).setTargetTimes(partitions)
+            val request= new ListOffsetRequest.Builder().setMinVersion(0.toShort).setTargetTimes(partitions)
 
             val listOffset= adminClient.getTopicListOffset(request,metadata.leader() )
 
