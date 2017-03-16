@@ -331,7 +331,7 @@ object DumpLogSegments {
 
           if (entry.magic >= RecordBatch.MAGIC_VALUE_V2) {
             print(" sequence: " + record.sequence +
-              " headerKeys: " + record.headers.map(_.key).mkString("(", ",", ")"))
+              " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           }
 
           if (record.isControlRecord) {
@@ -349,7 +349,7 @@ object DumpLogSegments {
           print("baseOffset: " + entry.baseOffset + " lastOffset: " + entry.lastOffset +
             " baseSequence: " + entry.baseSequence + " lastSequence: " + entry.lastSequence +
             " producerId: " + entry.producerId + " producerEpoch: " + entry.producerEpoch +
-            " isTransactional: " + entry.isTransactional)
+            " partitionLeaderEpoch: " + entry.partitionLeaderEpoch + " isTransactional: " + entry.isTransactional)
         else
           print("offset: " + entry.lastOffset)
 
