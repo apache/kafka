@@ -241,9 +241,10 @@ public class RequestResponseTest {
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest();
+        Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
-        assertEquals(1, errorResponse.responses().size());
+        assertEquals(partitions, errorResponse.responses().keySet());
         ProduceResponse.PartitionResponse partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
@@ -253,7 +254,7 @@ public class RequestResponseTest {
 
         // `getErrorResponse` should behave the same after `clearPartitionRecords`
         errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
-        assertEquals(1, errorResponse.responses().size());
+        assertEquals(partitions, errorResponse.responses().keySet());
         partitionResponse = errorResponse.responses().values().iterator().next();
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
         assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
