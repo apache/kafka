@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
@@ -102,6 +103,69 @@ public class UtilsTest {
         buffer.position(2);
         assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
         assertEquals(2, buffer.position());
+    }
+
+    @Test
+    public void toArrayDirectByteBuffer() {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer buffer = ByteBuffer.allocateDirect(5);
+        buffer.put(input);
+        buffer.rewind();
+
+        assertArrayEquals(input, Utils.toArray(buffer));
+        assertEquals(0, buffer.position());
+
+        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertEquals(0, buffer.position());
+
+        buffer.position(2);
+        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertEquals(2, buffer.position());
+    }
+
+    @Test
+    public void utf8ByteArraySerde() throws UnsupportedEncodingException {
+        String utf8String = "A\u00ea\u00f1\u00fcC";
+        byte[] utf8Bytes = utf8String.getBytes("UTF8");
+        assertArrayEquals(utf8Bytes, Utils.utf8(utf8String));
+        assertEquals(utf8Bytes.length, Utils.utf8Length(utf8String));
+        assertEquals(utf8String, Utils.utf8(utf8Bytes));
+    }
+
+    @Test
+    public void utf8ByteBufferSerde() throws UnsupportedEncodingException {
+        String utf8String = "A\u00ea\u00f1\u00fcC";
+        byte[] utf8Bytes = utf8String.getBytes("UTF8");
+
+        ByteBuffer utf8Buffer = ByteBuffer.allocate(20);
+        utf8Buffer.position(4);
+        utf8Buffer.put(utf8Bytes);
+
+        utf8Buffer.position(4);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, utf8Bytes.length));
+        assertEquals(4, utf8Buffer.position());
+
+        utf8Buffer.position(0);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, 4, utf8Bytes.length));
+        assertEquals(0, utf8Buffer.position());
+    }
+
+    @Test
+    public void utf8DirectByteBufferSerde() throws UnsupportedEncodingException {
+        String utf8String = "A\u00ea\u00f1\u00fcC";
+        byte[] utf8Bytes = utf8String.getBytes("UTF8");
+
+        ByteBuffer utf8Buffer = ByteBuffer.allocateDirect(20);
+        utf8Buffer.position(4);
+        utf8Buffer.put(utf8Bytes);
+
+        utf8Buffer.position(4);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, utf8Bytes.length));
+        assertEquals(4, utf8Buffer.position());
+
+        utf8Buffer.position(0);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, 4, utf8Bytes.length));
+        assertEquals(0, utf8Buffer.position());
     }
 
     private void subTest(ByteBuffer buffer) {

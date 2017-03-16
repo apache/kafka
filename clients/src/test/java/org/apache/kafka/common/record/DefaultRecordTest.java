@@ -32,7 +32,8 @@ public class DefaultRecordTest {
     public void testBasicSerde() {
         Header[] headers = new Header[] {
             new Header("foo", "value".getBytes()),
-            new Header("bar", Utils.wrapNullable(null))
+            new Header("bar", Utils.wrapNullable(null)),
+            new Header("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 
         SimpleRecord[] records = new SimpleRecord[] {

@@ -87,16 +87,33 @@ public class Utils {
         }
     }
 
+    /**
+     * Read a UTF8 string from a byte buffer. Note that the position of the byte buffer is not affected
+     * by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
     public static String utf8(ByteBuffer buffer, int length) {
         return utf8(buffer, 0, length);
     }
 
+    /**
+     * Read a UTF8 string from a byte buffer at a given offset. Note that the position of the byte buffer
+     * is not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position in the buffer
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
     public static String utf8(ByteBuffer buffer, int offset, int length) {
         try {
             if (buffer.hasArray())
                 return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, "UTF8");
             else
-                return utf8(toArray(buffer));
+                return utf8(toArray(buffer, offset, length));
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException("This shouldn't happen.", e);
         }
@@ -168,7 +185,8 @@ public class Utils {
     }
 
     /**
-     * Read the given byte buffer into a byte array
+     * Read the given byte buffer from its current position to its limit into a byte array.
+     * @param buffer The buffer to read from
      */
     public static byte[] toArray(ByteBuffer buffer) {
         return toArray(buffer, 0, buffer.remaining());
@@ -194,6 +212,9 @@ public class Utils {
 
     /**
      * Read a byte array from the given offset and size in the buffer
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position of the buffer
+     * @param size The number of bytes to read into the array
      */
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
         byte[] dest = new byte[size];
@@ -201,6 +222,7 @@ public class Utils {
             System.arraycopy(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, dest, 0, size);
         } else {
             int pos = buffer.position();
+            buffer.position(pos + offset);
             buffer.get(dest);
             buffer.position(pos);
         }

@@ -47,6 +47,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  ProducerEpoch => Int16
  *  BaseSequence => Int32
  *  PartitionLeaderEpoch => Int32
+ *  RecordsCount => Int32
  *  Records => Record1, Record2, … , RecordN
  *
  *  The current attributes are given below:
@@ -163,9 +164,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         return LOG_OVERHEAD + buffer.getInt(SIZE_OFFSET);
     }
 
+    private int count() {
+        return buffer.getInt(RECORDS_COUNT_OFFSET);
+    }
+
     @Override
     public Integer countOrNull() {
-        return buffer.getInt(RECORDS_COUNT_OFFSET);
+        return count();
     }
 
     @Override
@@ -191,7 +196,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
         // TODO: An improvement for the consumer would be to only decompress the records
         // we need to fill max.poll.records and leave the rest compressed.
-        int numRecords = countOrNull();
+        int numRecords = count();
+        if (numRecords < 0)
+            throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v2 batch");
+
         List<Record> records = new ArrayList<>(numRecords);
         try {
             Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
@@ -199,10 +207,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
             long baseTimestamp = baseTimestamp();
             int baseSequence = baseSequence();
 
-            for (int i = 0; i < numRecords; i++) {
-                DefaultRecord record = DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
-                records.add(record);
-            }
+            for (int i = 0; i < numRecords; i++)
+                records.add(DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime));
         } catch (IOException e) {
             throw new KafkaException(e);
         } finally {

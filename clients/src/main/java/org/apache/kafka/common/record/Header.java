@@ -16,20 +16,23 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class Header {
     private final String key;
     private final ByteBuffer value;
 
     public Header(String key, ByteBuffer value) {
+        Objects.requireNonNull(key, "Null header keys are not permitted");
         this.key = key;
         this.value = value;
     }
 
     public Header(String key, byte[] value) {
-        this.key = key;
-        this.value = ByteBuffer.wrap(value);
+        this(key, Utils.wrapNullable(value));
     }
 
     public String key() {
@@ -37,7 +40,7 @@ public class Header {
     }
 
     public ByteBuffer value() {
-        return value == null ? value : value.duplicate();
+        return value == null ? null : value.duplicate();
     }
 
     @Override

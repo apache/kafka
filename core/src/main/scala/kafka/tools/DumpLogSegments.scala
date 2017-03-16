@@ -329,6 +329,11 @@ object DumpLogSegments {
             " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + entry.magic +
             " compresscodec: " + entry.compressionType + " crc: " + record.checksum)
 
+          if (entry.magic >= RecordBatch.MAGIC_VALUE_V2) {
+            print(" sequence: " + record.sequence +
+              " headerKeys: " + record.headers.map(_.key).mkString("(", ",", ")"))
+          }
+
           if (record.isControlRecord) {
             val controlType = ControlRecordType.parse(record.key)
             print(s" controlType: $controlType")
@@ -340,12 +345,17 @@ object DumpLogSegments {
           println()
         }
       } else {
-        println("offset: " + entry.lastOffset + " position: " + validBytes +
-          " " + entry.timestampType + ": " + entry.maxTimestamp + " isvalid: " + entry.isValid +
+        if (entry.magic >= RecordBatch.MAGIC_VALUE_V2)
+          print("baseOffset: " + entry.baseOffset + " lastOffset: " + entry.lastOffset +
+            " baseSequence: " + entry.baseSequence + " lastSequence: " + entry.lastSequence +
+            " producerId: " + entry.producerId + " producerEpoch: " + entry.producerEpoch +
+            " isTransactional: " + entry.isTransactional)
+        else
+          print("offset: " + entry.lastOffset)
+
+        println(" position: " + validBytes + " " + entry.timestampType + ": " + entry.maxTimestamp +
+          " isvalid: " + entry.isValid +
           " size: " + entry.sizeInBytes + " magic: " + entry.magic +
-          " producerId: " + entry.producerId + " producerEpoch: " + entry.producerEpoch +
-          " lastSequence: " + entry.lastSequence +
-          " isTransactional: " + entry.isTransactional +
           " compresscodec: " + entry.compressionType + " crc: " + entry.checksum)
       }
       validBytes += entry.sizeInBytes

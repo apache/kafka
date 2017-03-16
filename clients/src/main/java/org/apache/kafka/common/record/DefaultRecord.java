@@ -210,13 +210,9 @@ public class DefaultRecord implements Record {
 
             for (Header header : headers) {
                 String headerKey = header.key();
-                if (headerKey == null) {
-                    ByteUtils.writeVarint(-1, out);
-                } else {
-                    byte[] utf8Bytes = Utils.utf8(headerKey);
-                    ByteUtils.writeVarint(utf8Bytes.length, out);
-                    out.write(utf8Bytes);
-                }
+                byte[] utf8Bytes = Utils.utf8(headerKey);
+                ByteUtils.writeVarint(utf8Bytes.length, out);
+                out.write(utf8Bytes);
 
                 ByteBuffer headerValue = header.value();
                 if (headerValue == null) {
@@ -347,14 +343,15 @@ public class DefaultRecord implements Record {
         int numHeaders = ByteUtils.readVarint(buffer);
         if (numHeaders < 0)
             throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+
         Header[] headers = new Header[numHeaders];
         for (int i = 0; i < numHeaders; i++) {
-            String headerKey = null;
             int headerKeySize = ByteUtils.readVarint(buffer);
-            if (headerKeySize >= 0) {
-                headerKey = Utils.utf8(buffer, headerKeySize);
-                buffer.position(buffer.position() + headerKeySize);
-            }
+            if (headerKeySize < 0)
+                throw new InvalidRecordException("Invalid negative header key size " + headerKeySize);
+
+            String headerKey = Utils.utf8(buffer, headerKeySize);
+            buffer.position(buffer.position() + headerKeySize);
 
             ByteBuffer headerValue = null;
             int headerValueSize = ByteUtils.readVarint(buffer);
