@@ -858,7 +858,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void addStreamTasks(Collection<TopicPartition> assignment) {
+    private void addStreamTasks(Collection<TopicPartition> assignment, final long start) {
         if (partitionAssignor == null)
             throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
@@ -896,7 +896,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        taskCreator.retryWithBackoff(newTasks);
+        taskCreator.retryWithBackoff(newTasks, start);
     }
 
     StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
@@ -913,7 +913,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void addStandbyTasks() {
+    private void addStandbyTasks(final long start) {
         if (partitionAssignor == null)
             throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding standby tasks: this should not happen.");
 
@@ -940,7 +940,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
-        new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks);
+        new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks, start);
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
@@ -1129,7 +1129,7 @@ public class StreamThread extends Thread {
     }
 
     abstract class AbstractTaskCreator {
-        void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
             while (true) {
                 final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
@@ -1141,13 +1141,14 @@ public class StreamThread extends Thread {
                     try {
                         createTask(taskId, partitions);
                         it.remove();
+                        backoffTimeMs = 50L;
                     } catch (final LockException e) {
                         // ignore and retry
                         log.warn("Could not create task {}. Will retry.", taskId, e);
                     }
                 }
 
-                if (tasksToBeCreated.isEmpty() || backoffTimeMs > rebalanceTimeoutMs) {
+                if (tasksToBeCreated.isEmpty() || time.milliseconds() - start > rebalanceTimeoutMs) {
                     break;
                 }
 
@@ -1215,9 +1216,9 @@ public class StreamThread extends Thread {
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
                 closeNonAssignedSuspendedTasks();
-                addStreamTasks(assignment);
+                addStreamTasks(assignment, start);
                 storeChangelogReader.restore();
-                addStandbyTasks();
+                addStandbyTasks(start);
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 setStateWhenNotInPendingShutdown(State.RUNNING);
