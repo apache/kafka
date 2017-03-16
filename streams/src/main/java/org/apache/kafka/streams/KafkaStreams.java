@@ -131,6 +131,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
+    private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
 
     private final StreamsConfig config;
@@ -217,9 +218,13 @@ public class KafkaStreams {
     private synchronized void setState(final State newState) {
         final State oldState = state;
         if (!state.isValidTransition(newState)) {
-            log.warn("Unexpected state transition from {} to {}.", oldState, newState);
+            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+        } else {
+            log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
         }
+
         state = newState;
+
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
         }
@@ -310,6 +315,8 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + processId;
 
+        this.logPrefix = String.format("stream-client [%s]", clientId);
+
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
             MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
@@ -329,7 +336,7 @@ public class KafkaStreams {
         final ProcessorTopology globalTaskTopology = builder.buildGlobalStateTopology();
 
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
+            log.warn("{} Negative cache size passed in. Reverting to cache size of 0 bytes.", logPrefix);
         }
 
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
@@ -395,7 +402,7 @@ public class KafkaStreams {
         try {
             client.close();
         } catch (final IOException e) {
-            log.warn("Could not close StreamKafkaClient.", e);
+            log.warn("{} Could not close StreamKafkaClient.", logPrefix, e);
         }
 
     }
@@ -411,7 +418,7 @@ public class KafkaStreams {
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
-        log.debug("Starting Kafka Stream process.");
+        log.debug("{} Starting Kafka Stream process.", logPrefix);
 
         if (state == State.CREATED) {
             checkBrokerVersionCompatibility();
@@ -425,7 +432,7 @@ public class KafkaStreams {
                 thread.start();
             }
 
-            log.info("Started Kafka Stream process");
+            log.info("{} Started Kafka Stream process", logPrefix);
         } else {
             throw new IllegalStateException("Cannot start again.");
         }
@@ -450,7 +457,7 @@ public class KafkaStreams {
      * before all threads stopped
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("Stopping Kafka Stream process.");
+        log.debug("{} Stopping Kafka Stream process.", logPrefix);
         if (state.isCreatedOrRunning()) {
             setState(State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
@@ -486,7 +493,7 @@ public class KafkaStreams {
                     }
 
                     metrics.close();
-                    log.info("Stopped Kafka Streams process.");
+                    log.info("{} Stopped Kafka Streams process.", logPrefix);
                 }
             }, "kafka-streams-close-thread");
             shutdown.setDaemon(true);
@@ -556,7 +563,8 @@ public class KafkaStreams {
         final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
 
         final String localApplicationDir = stateDir + File.separator + appId;
-        log.debug("Removing local Kafka Streams application data in {} for application {}.",
+        log.debug("{} Removing local Kafka Streams application data in {} for application {}.",
+            logPrefix,
             localApplicationDir,
             appId);
 
