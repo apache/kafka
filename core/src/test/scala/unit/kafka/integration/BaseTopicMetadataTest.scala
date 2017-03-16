@@ -28,9 +28,12 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
-import org.junit.{Test, After, Before}
+import org.junit.experimental.categories.Category
+import org.junit.{After, Before, Test}
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
   var brokerEndPoints: Seq[BrokerEndPoint] = null

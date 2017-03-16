@@ -28,9 +28,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
+@Category(Array(classOf[IntegrationTest]))
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
   private val serverMessageMaxBytes =  producerBufferSize/2

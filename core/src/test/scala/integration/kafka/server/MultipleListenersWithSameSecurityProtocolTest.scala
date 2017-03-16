@@ -31,13 +31,16 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert.assertEquals
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
+@Category(Array(classOf[IntegrationTest]))
 class MultipleListenersWithSameSecurityProtocolTest extends ZooKeeperTestHarness {
 
   private val trustStoreFile = File.createTempFile("truststore", ".jks")

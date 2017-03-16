@@ -19,10 +19,13 @@ package kafka.server
 
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.test.IntegrationTest
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class ServerStartupTest extends ZooKeeperTestHarness {
 
   @Test

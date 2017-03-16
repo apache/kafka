@@ -22,9 +22,13 @@ import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
+
 import scala.collection.Map
 import scala.collection.Seq
 
+@Category(Array(classOf[IntegrationTest]))
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
   var servers: Seq[KafkaServer] = null

@@ -37,15 +37,13 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,8 +57,7 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class KStreamKTableJoinIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
@@ -91,9 +88,10 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+
 
     }
 
@@ -103,16 +101,6 @@ public class KStreamKTableJoinIntegrationTest {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Parameter
-    public long cacheSizeBytes;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[] {0, 10 * 1024 * 1024L};
-
     }
 
     /**
@@ -145,7 +133,17 @@ public class KStreamKTableJoinIntegrationTest {
     }
 
     @Test
-    public void shouldCountClicksPerRegion() throws Exception {
+    public void shouldCountClicksPerRegionWithZeroByteCache() throws Exception {
+        countClicksPerRegion(0);
+    }
+
+    @Test
+    public void shouldCountClicksPerRegionWithNonZeroByteCache() throws Exception {
+        countClicksPerRegion(10 * 1024 * 1024);
+    }
+
+    private void countClicksPerRegion(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         // Input 1: Clicks per user (multiple records allowed per user).
         final List<KeyValue<String, Long>> userClicks = Arrays.asList(
             new KeyValue<>("alice", 13L),
@@ -187,7 +185,33 @@ public class KStreamKTableJoinIntegrationTest {
             );
 
         //
-        // Step 1: Configure and start the processor topology.
+        // Step 1: Publish user-region information.
+        //
+        // To keep this code example simple and easier to understand/reason about, we publish all
+        // user-region records before any user-click records (cf. step 3). In practice though,
+        // data records would typically be arriving concurrently in both input streams/topics.
+        final Properties userRegionsProducerConfig = new Properties();
+        userRegionsProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        userRegionsProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        userRegionsProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+        userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig, mockTime);
+
+
+        //
+        // Step 2: Publish some user click events.
+        //
+        final Properties userClicksProducerConfig = new Properties();
+        userClicksProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        userClicksProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        userClicksProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+        userClicksProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks, userClicksProducerConfig, mockTime);
+
+        //
+        // Step 3: Configure and start the processor topology.
         //
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
@@ -257,32 +281,6 @@ public class KStreamKTableJoinIntegrationTest {
 
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
-
-        //
-        // Step 2: Publish user-region information.
-        //
-        // To keep this code example simple and easier to understand/reason about, we publish all
-        // user-region records before any user-click records (cf. step 3). In practice though,
-        // data records would typically be arriving concurrently in both input streams/topics.
-        final Properties userRegionsProducerConfig = new Properties();
-        userRegionsProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        userRegionsProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        userRegionsProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig, mockTime);
-
-
-        //
-        // Step 3: Publish some user click events.
-        //
-        final Properties userClicksProducerConfig = new Properties();
-        userClicksProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        userClicksProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        userClicksProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        userClicksProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks, userClicksProducerConfig, mockTime);
 
         //
         // Step 4: Verify the application's output data.

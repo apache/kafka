@@ -33,10 +33,13 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.test.IntegrationTest
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
+@Category(Array(classOf[IntegrationTest]))
 class LogOffsetTest extends ZooKeeperTestHarness {
   val random = new Random()
   var logDir: File = null

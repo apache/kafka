@@ -28,7 +28,10 @@ import java.util.Properties
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @Test

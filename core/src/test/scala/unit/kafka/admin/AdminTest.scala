@@ -40,9 +40,12 @@ import kafka.admin.AdminUtils._
 import scala.collection.{Map, immutable}
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
 import scala.collection.JavaConverters._
 
+@Category(Array(classOf[IntegrationTest]))
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test

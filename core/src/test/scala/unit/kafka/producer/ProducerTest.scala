@@ -33,12 +33,15 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.test.IntegrationTest
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 import org.scalatest.exceptions.TestFailedException
 
 @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
+@Category(Array(classOf[IntegrationTest]))
 class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1

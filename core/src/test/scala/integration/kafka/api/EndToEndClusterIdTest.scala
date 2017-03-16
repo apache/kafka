@@ -19,7 +19,7 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Properties}
+import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
@@ -34,6 +34,7 @@ import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
+import org.junit.experimental.categories.Category
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -85,6 +86,7 @@ object EndToEndClusterIdTest {
   }
 }
 
+@Category(Array(classOf[IntegrationTest]))
 class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
   import EndToEndClusterIdTest._

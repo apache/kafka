@@ -22,13 +22,18 @@ import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.data.{ACL}
+import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
+
+@Category(Array(classOf[IntegrationTest]))
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   val jaasFile = kafka.utils.JaasTestUtils.writeZkFile
   val authProvider = "zookeeper.authProvider.1"

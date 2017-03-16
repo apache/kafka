@@ -19,11 +19,15 @@ package kafka.server
 import java.util.Properties
 
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestUtils, CoreUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.junit.{Before, Test}
 import org.junit.Assert._
 import java.io.File
 
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
+
+@Category(Array(classOf[IntegrationTest]))
 class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var props1: Properties = null
   var config1: KafkaConfig = null

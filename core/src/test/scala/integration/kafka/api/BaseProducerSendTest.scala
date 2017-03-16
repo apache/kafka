@@ -31,11 +31,14 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   def generateConfigs = {

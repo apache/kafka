@@ -24,8 +24,10 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.test.IntegrationTest
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
+import org.junit.experimental.categories.Category
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -34,6 +36,7 @@ import scala.collection.mutable.ArrayBuffer
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
   * level configs, see the *ProducerSendTest classes.
   */
+@Category(Array(classOf[IntegrationTest]))
 class LogAppendTimeTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1

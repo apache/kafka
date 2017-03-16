@@ -34,7 +34,10 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2

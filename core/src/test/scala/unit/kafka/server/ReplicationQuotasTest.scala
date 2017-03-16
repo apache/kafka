@@ -29,8 +29,11 @@ import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
 
 /**
@@ -42,6 +45,7 @@ import scala.collection.JavaConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
+@Category(Array(classOf[IntegrationTest]))
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
 

@@ -24,9 +24,12 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   def userPrincipal : String

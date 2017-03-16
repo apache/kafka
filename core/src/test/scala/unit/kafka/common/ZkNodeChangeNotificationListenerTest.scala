@@ -19,8 +19,11 @@ package kafka.common
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils, ZkUtils}
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Test
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
 
   override def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

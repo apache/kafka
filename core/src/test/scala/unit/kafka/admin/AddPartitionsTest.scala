@@ -27,8 +27,11 @@ import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
+@Category(Array(classOf[IntegrationTest]))
 class AddPartitionsTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]

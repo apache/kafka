@@ -27,7 +27,10 @@ import TestUtils._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"

@@ -18,11 +18,14 @@
 package kafka.zk
 
 import kafka.consumer.ConsumerConfig
-import kafka.utils.{ZkPath, TestUtils, ZkUtils}
+import kafka.utils.{TestUtils, ZkPath, ZkUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
 import org.junit.Test
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class ZKPathTest extends ZooKeeperTestHarness {
 
   val path = "/some_dir"

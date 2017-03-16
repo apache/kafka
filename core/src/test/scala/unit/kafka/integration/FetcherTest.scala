@@ -19,16 +19,19 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 import org.junit.Assert._
-
 import kafka.cluster._
 import kafka.server._
 import kafka.consumer._
 import kafka.utils.TestUtils
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
   def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)

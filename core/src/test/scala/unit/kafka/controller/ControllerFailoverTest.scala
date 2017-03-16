@@ -26,12 +26,14 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.test.IntegrationTest
 import org.apache.log4j.{Level, Logger}
+import org.junit.experimental.categories.Category
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
 
-
+@Category(Array(classOf[IntegrationTest]))
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
   val numNodes = 2

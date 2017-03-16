@@ -18,9 +18,12 @@
 package kafka.utils
 
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.test.IntegrationTest
 import org.junit.Assert._
 import org.junit.Test
+import org.junit.experimental.categories.Category
 
+@Category(Array(classOf[IntegrationTest]))
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
   val path = "/path"
