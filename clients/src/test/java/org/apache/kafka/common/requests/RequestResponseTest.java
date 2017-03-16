@@ -225,7 +225,9 @@ public class RequestResponseTest {
         ProduceRequest request = createProduceRequest();
         assertEquals(1, request.partitionRecordsOrFail().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
+        assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
+        assertFalse(request.toString(true).contains("numPartitions"));
 
         request.clearPartitionRecords();
         try {
@@ -234,8 +236,11 @@ public class RequestResponseTest {
         } catch (IllegalStateException e) {
             // OK
         }
+
         assertFalse(request.toString(false).contains("partitionSizes"));
+        assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
+        assertFalse(request.toString(true).contains("numPartitions"));
     }
 
     @Test

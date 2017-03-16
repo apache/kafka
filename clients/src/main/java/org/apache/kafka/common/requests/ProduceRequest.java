@@ -159,6 +159,8 @@ public class ProduceRequest extends AbstractRequest {
 
         if (verbose)
             bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes, "[", "]", "=", ","));
+        else
+            bld.append(",numPartitions=").append(partitionSizes.size());
 
         bld.append("}");
         return bld.toString();
