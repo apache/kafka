@@ -77,14 +77,16 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         try {
             collector.send(topic, key, value, null, timestamp, keySerializer, valSerializer, partitioner);
         } catch (ClassCastException e) {
+            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
             throw new StreamsException(
                     String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
                                     "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
                                     "provide correct Serdes via method parameters.",
                                     keySerializer.getClass().getName(),
                                     valSerializer.getClass().getName(),
-                                    key.getClass().getName(),
-                                    value.getClass().getName()),
+                                    keyClass,
+                                    valueClass),
                     e);
         }
     }
