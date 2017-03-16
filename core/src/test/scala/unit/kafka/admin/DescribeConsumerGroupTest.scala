@@ -26,6 +26,7 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
+
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService
 import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
@@ -34,10 +35,13 @@ import kafka.consumer.Whitelist
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
+
 
 class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
