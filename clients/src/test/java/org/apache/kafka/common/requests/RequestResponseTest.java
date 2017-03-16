@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.ListenerName;
@@ -216,13 +217,6 @@ public class RequestResponseTest {
     @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest();
-        assertFalse(request.toString(false).contains("partitionSizes"));
-        assertTrue(request.toString(true).contains("partitionSizes"));
-    }
-
-    @Test
-    public void produceRequestClearPartitionsTest() {
-        ProduceRequest request = createProduceRequest();
         assertEquals(1, request.partitionRecordsOrFail().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
@@ -237,10 +231,33 @@ public class RequestResponseTest {
             // OK
         }
 
+        // `toString` should behave the same after `clearPartitionRecords`
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
         assertFalse(request.toString(true).contains("numPartitions"));
+    }
+
+    @Test
+    public void produceRequestGetErrorResponseTest() {
+        ProduceRequest request = createProduceRequest();
+
+        ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
+        assertEquals(1, errorResponse.responses().size());
+        ProduceResponse.PartitionResponse partitionResponse = errorResponse.responses().values().iterator().next();
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
+        assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
+        assertEquals(Record.NO_TIMESTAMP, partitionResponse.logAppendTime);
+
+        request.clearPartitionRecords();
+
+        // `getErrorResponse` should behave the same after `clearPartitionRecords`
+        errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
+        assertEquals(1, errorResponse.responses().size());
+        partitionResponse = errorResponse.responses().values().iterator().next();
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
+        assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
+        assertEquals(Record.NO_TIMESTAMP, partitionResponse.logAppendTime);
     }
 
     @Test
