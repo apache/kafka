@@ -134,28 +134,14 @@ public class UtilsTest {
 
     @Test
     public void utf8ByteBufferSerde() throws UnsupportedEncodingException {
-        String utf8String = "A\u00ea\u00f1\u00fcC";
-        byte[] utf8Bytes = utf8String.getBytes("UTF8");
-
-        ByteBuffer utf8Buffer = ByteBuffer.allocate(20);
-        utf8Buffer.position(4);
-        utf8Buffer.put(utf8Bytes);
-
-        utf8Buffer.position(4);
-        assertEquals(utf8String, Utils.utf8(utf8Buffer, utf8Bytes.length));
-        assertEquals(4, utf8Buffer.position());
-
-        utf8Buffer.position(0);
-        assertEquals(utf8String, Utils.utf8(utf8Buffer, 4, utf8Bytes.length));
-        assertEquals(0, utf8Buffer.position());
+        doTestUtf8ByteBuffer(ByteBuffer.allocate(20));
+        doTestUtf8ByteBuffer(ByteBuffer.allocateDirect(20));
     }
 
-    @Test
-    public void utf8DirectByteBufferSerde() throws UnsupportedEncodingException {
+    private void doTestUtf8ByteBuffer(ByteBuffer utf8Buffer) throws UnsupportedEncodingException {
         String utf8String = "A\u00ea\u00f1\u00fcC";
         byte[] utf8Bytes = utf8String.getBytes("UTF8");
 
-        ByteBuffer utf8Buffer = ByteBuffer.allocateDirect(20);
         utf8Buffer.position(4);
         utf8Buffer.put(utf8Bytes);
 
