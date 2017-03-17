@@ -54,6 +54,7 @@ import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -592,7 +593,7 @@ public class SimpleBenchmark {
             }
         });
 
-        return new KafkaStreams(builder, props);
+        return createKafkaStreamsWithExceptionHandler(builder, props);
     }
 
     private KafkaStreams createKafkaStreamsWithSink(String topic, final CountDownLatch latch) {
@@ -631,7 +632,7 @@ public class SimpleBenchmark {
             }
         });
 
-        return new KafkaStreams(builder, props);
+        return createKafkaStreamsWithExceptionHandler(builder, props);
     }
 
     private class CountDownAction<V> implements ForeachAction<Integer, V> {
@@ -664,7 +665,7 @@ public class SimpleBenchmark {
 
         input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
-        return new KafkaStreams(builder, streamConfig);
+        return createKafkaStreamsWithExceptionHandler(builder, streamConfig);
     }
 
     private KafkaStreams createKafkaStreamsKTableKTableJoin(Properties streamConfig, String kTableTopic1,
@@ -676,7 +677,7 @@ public class SimpleBenchmark {
 
         input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
-        return new KafkaStreams(builder, streamConfig);
+        return createKafkaStreamsWithExceptionHandler(builder, streamConfig);
     }
 
     private KafkaStreams createKafkaStreamsKStreamKStreamJoin(Properties streamConfig, String kStreamTopic1,
@@ -689,7 +690,7 @@ public class SimpleBenchmark {
 
         input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(timeDifferenceMs)).foreach(new CountDownAction(latch));
 
-        return new KafkaStreams(builder, streamConfig);
+        return createKafkaStreamsWithExceptionHandler(builder, streamConfig);
     }
 
     private KafkaStreams createKafkaStreamsWithStateStore(String topic,
@@ -739,9 +740,23 @@ public class SimpleBenchmark {
             }
         }, "store");
 
-        return new KafkaStreams(builder, props);
+        return createKafkaStreamsWithExceptionHandler(builder, props);
     }
 
+    private KafkaStreams createKafkaStreamsWithExceptionHandler(final KStreamBuilder builder, final Properties props) {
+        final KafkaStreams streamsClient = new KafkaStreams(builder, props);
+        streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
+
+                streamsClient.close(30, TimeUnit.SECONDS);
+            }
+        });
+
+        return streamsClient;
+    }
+    
     private double megabytesPerSec(long time, long processedBytes) {
         return  (processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
     }
