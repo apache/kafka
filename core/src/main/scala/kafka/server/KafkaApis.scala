@@ -776,6 +776,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def createGroupMetadataTopic(): MetadataResponse.TopicMetadata = {
     val aliveBrokers = metadataCache.getAliveBrokers
     if (aliveBrokers.size < config.offsetsTopicReplicationFactor) {
+      error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
+        s"'${config.offsetsTopicReplicationFactor}' for the offsets topic (configured via " +
+        s"'${KafkaConfig.OffsetsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
+        s"and not all brokers are up yet.")
       new MetadataResponse.TopicMetadata(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Topic.GroupMetadataTopicName, true,
         java.util.Collections.emptyList())
     } else {
