@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -39,6 +40,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -622,11 +624,11 @@ public class RocksDBWindowStoreTest {
         final RocksDBWindowStoreSupplier<String, String> supplier =
                 new RocksDBWindowStoreSupplier<>(
                         "window",
-                        60 * 1000L * 2, 3,
+                        0x7a00000000000000L, 2,
                         true,
                         Serdes.String(),
                         Serdes.String(),
-                        windowSize,
+                        0x7a00000000000000L,
                         true,
                         Collections.<String, String>emptyMap(),
                         false);
@@ -638,12 +640,22 @@ public class RocksDBWindowStoreTest {
         windowStore.put("aa", "0002", 0);
         windowStore.put("a", "0003", 1);
         windowStore.put("aa", "0004", 1);
-        windowStore.put("a", "0005", 60000);
+        windowStore.put("a", "0005", 0x7a00000000000000L - 1);
 
         final List expected = Utils.mkList("0001", "0003", "0005");
+        System.out.println("retention is " + retentionPeriod);
         assertThat(toList(windowStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
     }
 
+    @Test
+    public void should() throws Exception {
+        final Bytes bytes1 = WindowStoreUtils.toBinaryKey(new byte[]{'a'}, 0x7a00000000000000L -1, 0);
+        final Bytes bytes2 = WindowStoreUtils.toBinaryKey(new byte[]{'a', 'a'}, 1, 0);
+        System.out.println(bytes2.compareTo(bytes1));
+        System.out.println(bytes1);
+        System.out.println(bytes2);
+
+    }
     private void putFirstBatch(final WindowStore<Integer, String> store, final long startTime, final MockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero");
