@@ -42,7 +42,7 @@ public final class ListenerName {
     private final String value;
 
     public ListenerName(String value) {
-        Objects.requireNonNull("value should not be null");
+        Objects.requireNonNull(value, "value should not be null");
         this.value = value;
     }
 
