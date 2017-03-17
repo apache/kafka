@@ -326,6 +326,25 @@ public interface KStream<K, V> {
                final String streamName);
 
     /**
+     * Print the records of this stream to {@code System.out}.
+     * <p>
+     * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
+     * {@code toString()} on the deserialized object.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
+     * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
+     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param mapper     mapper to allow customized output of key and value
+     */
+    void print(final Serde<K> keySerde,
+               final Serde<V> valSerde,
+               final String streamName,
+               final KeyValueMapper<K, V, String> mapper);
+
+    /**
      * Write the records of this stream to a file at the given path.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the file.
