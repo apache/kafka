@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -220,28 +219,31 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     private Iterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
-        return new AbstractIterator<Record>() {
-            int position = RECORDS_OFFSET;
+        final Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
+        final long baseOffset = baseOffset();
+        final long baseTimestamp = baseTimestamp();
+        final int baseSequence = baseSequence();
+
+        buffer.position(RECORDS_OFFSET);
+        final int totalRecords = count();
+
+        return new Iterator<Record>() {
+            int readRecords = 0;
 
             @Override
-            protected Record makeNext() {
-                if (position >= buffer.limit())
-                    return allDone();
+            public boolean hasNext() {
+                return readRecords < totalRecords;
+            }
 
-                ByteBuffer buf = buffer.duplicate();
-                buf.position(position);
+            @Override
+            public Record next() {
+                readRecords++;
+                return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+            }
 
-                Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
-                long baseOffset = baseOffset();
-                long baseTimestamp = baseTimestamp();
-                int baseSequence = baseSequence();
-
-                DefaultRecord record = DefaultRecord.readFrom(buf, baseOffset, baseTimestamp, baseSequence, logAppendTime);
-                if (record == null)
-                    return allDone();
-
-                position += record.sizeInBytes();
-                return record;
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
             }
         };
     }

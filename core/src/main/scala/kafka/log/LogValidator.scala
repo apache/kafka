@@ -146,7 +146,7 @@ private[kafka] object LogValidator extends Logging {
 
       // TODO: in the compressed path, we ensure that the batch max timestamp is correct.
       //       We should either do the same or (better) let those two paths converge.
-      if (batch.magic > 0 && timestampType == TimestampType.LOG_APPEND_TIME)
+      if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.LOG_APPEND_TIME)
         batch.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, currentTimestamp)
     }
 

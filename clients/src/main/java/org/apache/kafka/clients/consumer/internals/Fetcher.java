@@ -770,6 +770,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
                 for (RecordBatch batch : partition.records.batches()) {
+                    if (this.checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+                        try {
+                            batch.ensureValid();
+                        } catch (InvalidRecordException e) {
+                            throw new KafkaException("Record batch for partition " + partition + " at offset " +
+                                    batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                        }
+                    }
+
                     for (Record record : batch) {
                         // control records should not be returned to the user. also skip anything out of range
                         if (record.isControlRecord() || record.offset() < position) {
@@ -783,7 +792,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 recordsCount = parsed.size();
 
-                log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                log.trace("Adding {} fetched record(s) for partition {} with offset {} to buffered record list",
+                        parsed.size(), tp, position);
                 parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
 
                 if (parsed.isEmpty() && !skippedRecords && partition.records.sizeInBytes() > 0) {

@@ -298,14 +298,12 @@ public class DefaultRecord implements Record {
                                          long baseTimestamp,
                                          int baseSequence,
                                          Long logAppendTime) {
-        ByteBuffer dup = buffer.duplicate();
-        int sizeOfBodyInBytes = ByteUtils.readVarint(dup);
+        int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
         if (buffer.remaining() < sizeOfBodyInBytes)
             return null;
 
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        dup.limit(dup.position() + sizeOfBodyInBytes);
-        return readFrom(dup, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        return readFrom(buffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
 
     private static DefaultRecord readFrom(ByteBuffer buffer,
@@ -315,13 +313,14 @@ public class DefaultRecord implements Record {
                                           int baseSequence,
                                           Long logAppendTime) {
         byte attributes = buffer.get();
-        long timestamp = baseTimestamp + ByteUtils.readVarlong(buffer);
+        long timestampDelta = ByteUtils.readVarlong(buffer);
+        long timestamp = baseTimestamp + timestampDelta;
         if (logAppendTime != null)
             timestamp = logAppendTime;
 
-        int delta = ByteUtils.readVarint(buffer);
-        long offset = baseOffset + delta;
-        int sequence = baseSequence >= 0 ? baseSequence + delta : RecordBatch.NO_SEQUENCE;
+        int offsetDelta = ByteUtils.readVarint(buffer);
+        long offset = baseOffset + offsetDelta;
+        int sequence = baseSequence >= 0 ? baseSequence + offsetDelta : RecordBatch.NO_SEQUENCE;
 
         ByteBuffer key = null;
         int keySize = ByteUtils.readVarint(buffer);
@@ -342,6 +341,9 @@ public class DefaultRecord implements Record {
         int numHeaders = ByteUtils.readVarint(buffer);
         if (numHeaders < 0)
             throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+
+        if (numHeaders == 0)
+            return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, Record.EMPTY_HEADERS);
 
         Header[] headers = new Header[numHeaders];
         for (int i = 0; i < numHeaders; i++) {
