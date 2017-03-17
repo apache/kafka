@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -42,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 public class KGroupedTableImplTest {
 
     private final KStreamBuilder builder = new KStreamBuilder();
+    private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
     private KStreamTestDriver driver = null;
 
@@ -62,6 +64,11 @@ public class KGroupedTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, (String) null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAllowInvalidStoreNameOnAggregate() throws Exception {
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
@@ -92,6 +99,11 @@ public class KGroupedTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (String) null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAllowInvalidStoreNameOnReduce() throws Exception {
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
