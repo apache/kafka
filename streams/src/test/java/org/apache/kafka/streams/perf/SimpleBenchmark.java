@@ -748,6 +748,8 @@ public class SimpleBenchmark {
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
+                System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
+
                 streamsClient.close(30, TimeUnit.SECONDS);
             }
         });
