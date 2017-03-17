@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -365,11 +367,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static TransactionState configureTransactionState(ProducerConfig config, Time time) {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        TransactionState transactionState = null;
         if (idempotenceEnabled) {
-            return new TransactionState(time);
-        } else {
-            return null;
+            String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+            transactionState = new TransactionState(time, transactionalId, transactionTimeoutMs);
+            if (transactionState.isTransactional())
+                log.info("Instantiated a transactional producer.");
+            else
+                log.info("Instantiated an idempotent producer.");
+        } else if (config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
+            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         }
+
+        return transactionState;
     }
 
     private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled) {
@@ -429,6 +440,76 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
         }
     }
+
+    /**
+     * Needs to be called before any other methods when the transactional.id is set in the configuration.
+     *
+     * This method does the following:
+     *   1. Ensures any transactions initiated by previous instances of the producer
+     *      are completed. If the previous instance had failed with a transaction in
+     *      progress, it will be aborted. If the last transaction had begun completion,
+     *      but not yet finished, this method awaits its completion.
+     *   2. Gets the internal producer id and epoch, used in all future transactional
+     *      messages issued by the producer.
+     *
+     * @throws IllegalStateException if the TransactionalId for the producer is not set
+     *         in the configuration.
+     */
+    public void initTransactions() {
+        // What do we need to do?
+        //  1. Find Coordinator.
+
+
+
+        //  2. Send InitPidRequest to Coordinator.
+    }
+
+    /**
+     * Should be called before the start of each new transaction.
+     *
+     * @throws ProducerFencedException if another producer is with the same
+     *         transactional.id is active.
+     */
+    public void beginTransaction() throws ProducerFencedException {
+        // Set the transactional bit in the producer.
+    }
+
+    /**
+     * Sends a list of consumed offsets to the consumer group coordinator, and also marks
+     * those offsets as part of the current transaction. These offsets will be considered
+     * consumed only if the transaction is committed successfully.
+     *
+     * This method should be used when you need to batch consumed and produced messages
+     * together, typically in a consume-transform-produce pattern.
+     *
+     * @throws ProducerFencedException if another producer is with the same
+     *         transactional.id is active.
+     */
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  String consumerGroupId) throws ProducerFencedException {
+
+    }
+
+    /**
+     * Commits the ongoing transaction.
+     *
+     * @throws ProducerFencedException if another producer is with the same
+     *         transactional.id is active.
+     */
+    public void commitTransaction() throws ProducerFencedException {
+
+    }
+
+    /**
+     * Aborts the ongoing transaction.
+     *
+     * @throws ProducerFencedException if another producer is with the same
+     *         transactional.id is active.
+     */
+    public void abortTransaction() throws ProducerFencedException {
+
+    }
+
 
     /**
      * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.

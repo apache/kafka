@@ -32,6 +32,8 @@ public class TransactionState {
     private volatile PidAndEpoch pidAndEpoch;
     private final Map<TopicPartition, Integer> sequenceNumbers;
     private final Time time;
+    private final String transactionalId;
+    private final int transactionTimeoutMs;
 
     public static class PidAndEpoch {
         public final long producerId;
@@ -47,10 +49,28 @@ public class TransactionState {
         }
     }
 
-    public TransactionState(Time time) {
-        this.pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-        this.sequenceNumbers = new HashMap<>();
+    public TransactionState(Time time, String transactionalId, int transactionTimeoutMs) {
+        pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        sequenceNumbers = new HashMap<>();
         this.time = time;
+        this.transactionalId = transactionalId;
+        this.transactionTimeoutMs = transactionTimeoutMs;
+    }
+
+    public TransactionState(Time time) {
+        this(time, "", 0);
+    }
+
+    public boolean isTransactional() {
+        return !transactionalId.isEmpty();
+    }
+
+    public String transactionalId() {
+        return transactionalId;
+    }
+
+    public int transactionTimeoutMs() {
+        return transactionTimeoutMs;
     }
 
     public boolean hasPid() {

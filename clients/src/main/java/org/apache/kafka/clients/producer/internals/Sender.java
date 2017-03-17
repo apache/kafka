@@ -299,9 +299,20 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForPid() {
-        if (transactionState == null)
+        // If this is a transactional producer, the PID will be received when recovering transactions in the
+        // initTransactions() method of the producer.
+        if (transactionState != null && !transactionState.isTransactional())
+            getPid();
+    }
+
+    private void maybeWaitForTransactionCoordinator() {
+        if (transactionState == null || !transactionState.isTransactional())
             return;
 
+
+    }
+
+    private void getPid() {
         while (!transactionState.hasPid()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
