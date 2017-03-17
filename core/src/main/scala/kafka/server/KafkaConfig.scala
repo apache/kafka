@@ -22,7 +22,8 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
-import kafka.coordinator.OffsetConfig
+import kafka.coordinator.group.OffsetConfig
+import kafka.coordinator.transaction.TransactionLog
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -154,6 +155,13 @@ object Defaults {
   val OffsetsRetentionCheckIntervalMs: Long = OffsetConfig.DefaultOffsetsRetentionCheckIntervalMs
   val OffsetCommitTimeoutMs = OffsetConfig.DefaultOffsetCommitTimeoutMs
   val OffsetCommitRequiredAcks = OffsetConfig.DefaultOffsetCommitRequiredAcks
+
+  /** ********* Transaction management configuration ***********/
+  val TransactionsTopicMinISR = TransactionLog.DefaultMinInSyncReplicas
+  val TransactionsLoadBufferSize = TransactionLog.DefaultLoadBufferSize
+  val TransactionsTopicReplicationFactor = TransactionLog.DefaultReplicationFactor
+  val TransactionsTopicPartitions = TransactionLog.DefaultNumPartitions
+  val TransactionsTopicSegmentBytes = TransactionLog.DefaultSegmentBytes
 
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
@@ -329,6 +337,12 @@ object KafkaConfig {
   val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
   val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
   val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
+  /** ********* Transaction management configuration ***********/
+  val TransactionsTopicMinISRProp = "transaction.state.log.min.isr"
+  val TransactionsLoadBufferSizeProp = "transaction.state.log.load.buffer.size"
+  val TransactionsTopicPartitionsProp = "transaction.state.log.num.partitions"
+  val TransactionsTopicSegmentBytesProp = "transaction.state.log.segment.bytes"
+  val TransactionsTopicReplicationFactorProp = "transaction.state.log.replication.factor"
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
@@ -565,6 +579,14 @@ object KafkaConfig {
   val OffsetCommitTimeoutMsDoc = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
   "or this timeout is reached. This is similar to the producer request timeout."
   val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden"
+  /** ********* Transaction management configuration ***********/
+  val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."
+  val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading pid and transactions into the cache."
+  val TransactionsTopicReplicationFactorDoc = "The replication factor for the transaction topic (set higher to ensure availability). " +
+    "Internal topic creation will fail until the cluster size meets this replication factor requirement."
+  val TransactionsTopicPartitionsDoc = "The number of partitions for the transaction topic (should not change after deployment)."
+  val TransactionsTopicSegmentBytesDoc = "The transaction topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
+
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user>, <client-id> or <user, client-id> in Zookeeper. " +
   "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
@@ -759,6 +781,13 @@ object KafkaConfig {
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
+
+      /** ********* Transaction management configuration ***********/
+      .define(TransactionsTopicMinISRProp, INT, Defaults.TransactionsTopicMinISR, HIGH, TransactionsTopicMinISRDoc)
+      .define(TransactionsLoadBufferSizeProp, INT, Defaults.TransactionsLoadBufferSize, HIGH, TransactionsLoadBufferSizeDoc)
+      .define(TransactionsTopicReplicationFactorProp, SHORT, Defaults.TransactionsTopicReplicationFactor, HIGH, TransactionsTopicReplicationFactorDoc)
+      .define(TransactionsTopicPartitionsProp, INT, Defaults.TransactionsTopicPartitions, HIGH, TransactionsTopicPartitionsDoc)
+      .define(TransactionsTopicSegmentBytesProp, INT, Defaults.TransactionsTopicSegmentBytes, HIGH, TransactionsTopicSegmentBytesDoc)
 
       /** ********* Kafka Metrics Configuration ***********/
       .define(MetricNumSamplesProp, INT, Defaults.MetricNumSamples, atLeast(1), LOW, MetricNumSamplesDoc)
@@ -961,6 +990,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val offsetCommitRequiredAcks = getShort(KafkaConfig.OffsetCommitRequiredAcksProp)
   val offsetsTopicSegmentBytes = getInt(KafkaConfig.OffsetsTopicSegmentBytesProp)
   val offsetsTopicCompressionCodec = Option(getInt(KafkaConfig.OffsetsTopicCompressionCodecProp)).map(value => CompressionCodec.getCompressionCodec(value)).orNull
+
+  /** ********* Transaction management configuration ***********/
+  val transactionTopicMinISR = getInt(KafkaConfig.TransactionsTopicMinISRProp)
+  val transactionsLoadBufferSize = getInt(KafkaConfig.TransactionsLoadBufferSizeProp)
+  val transactionTopicReplicationFactor = getShort(KafkaConfig.TransactionsTopicReplicationFactorProp)
+  val transactionTopicPartitions = getInt(KafkaConfig.TransactionsTopicPartitionsProp)
+  val transactionTopicSegmentBytes = getInt(KafkaConfig.TransactionsTopicSegmentBytesProp)
 
   /** ********* Metric Configuration **************/
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)

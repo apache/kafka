@@ -14,63 +14,70 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.transaction
 
-import kafka.common.Topic
-import kafka.utils.ZkUtils
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class TransactionCoordinatorTest {
 
-  val zkUtils: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+  val time = new MockTime()
 
-  var zkVersion: Int = -1
-  var data: String = null
-  val capturedVersion: Capture[Int] = EasyMock.newCapture()
-  val capturedData: Capture[String] = EasyMock.newCapture()
-  EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString()))
-    .andAnswer(new IAnswer[(Option[String], Int)] {
-      override def answer(): (Option[String], Int) = {
-        if (zkVersion == -1) {
-          (None.asInstanceOf[Option[String]], 0)
+  var nextPid: Long = 0L
+  val pidManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
+
+  EasyMock.expect(pidManager.nextPid())
+    .andAnswer(new IAnswer[Long] {
+      override def answer(): Long = {
+        nextPid += 1
+        nextPid - 1
+      }
+    })
+    .anyTimes()
+
+  val transactionManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
+
+  EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq("a")))
+    .andReturn(true)
+    .anyTimes()
+  EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq("b")))
+    .andReturn(false)
+    .anyTimes()
+  EasyMock.expect(transactionManager.isCoordinatorLoadingInProgress(EasyMock.anyString()))
+    .andReturn(false)
+    .anyTimes()
+
+  val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
+  EasyMock.expect(transactionManager.addTransaction(EasyMock.eq("a"), EasyMock.capture(capturedTxn)))
+    .andAnswer(new IAnswer[TransactionMetadata] {
+      override def answer(): TransactionMetadata = {
+        capturedTxn.getValue
+      }
+    })
+    .once()
+  EasyMock.expect(transactionManager.getTransaction(EasyMock.eq("a")))
+    .andAnswer(new IAnswer[Option[TransactionMetadata]] {
+      override def answer(): Option[TransactionMetadata] = {
+        if (capturedTxn.hasCaptured) {
+          Some(capturedTxn.getValue)
         } else {
-          (Some(data), zkVersion)
+          None
         }
       }
     })
     .anyTimes()
 
-  EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName))
-    .andReturn(Some(2))
-    .once()
+  val coordinator: TransactionCoordinator = new TransactionCoordinator(0, pidManager, transactionManager)
 
-  EasyMock.expect(zkUtils.conditionalUpdatePersistentPath(EasyMock.anyString(),
-    EasyMock.capture(capturedData),
-    EasyMock.capture(capturedVersion),
-    EasyMock.anyObject().asInstanceOf[Option[(ZkUtils, String, String) => (Boolean,Int)]]))
-    .andAnswer(new IAnswer[(Boolean, Int)] {
-      override def answer(): (Boolean, Int) = {
-        zkVersion = capturedVersion.getValue + 1
-        data = capturedData.getValue
-
-        (true, zkVersion)
-      }
-    })
-    .anyTimes()
-
-  EasyMock.replay(zkUtils)
-
-  val pidManager: ProducerIdManager = new ProducerIdManager(0, zkUtils)
-  val logManager: TransactionLogManager = new TransactionLogManager(0, zkUtils)
-  val coordinator: TransactionCoordinator = new TransactionCoordinator(0, pidManager, logManager)
-
-  var result: InitPidResult = null
+  var result: InitPidResult = _
 
   @Before
   def setUp(): Unit = {
+    EasyMock.replay(pidManager, transactionManager)
+
     coordinator.startup()
     // only give one of the two partitions of the transaction topic
     coordinator.handleTxnImmigration(1)
@@ -78,7 +85,7 @@ class TransactionCoordinatorTest {
 
   @After
   def tearDown(): Unit = {
-    EasyMock.reset(zkUtils)
+    EasyMock.reset(pidManager, transactionManager)
     coordinator.shutdown()
   }
 
@@ -97,9 +104,6 @@ class TransactionCoordinatorTest {
 
     coordinator.handleInitPid("a", transactionTimeoutMs, initPidMockCallback)
     assertEquals(InitPidResult(2L, 1, Errors.NONE), result)
-
-    coordinator.handleInitPid("c", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(3L, 0, Errors.NONE), result)
 
     coordinator.handleInitPid("b", transactionTimeoutMs, initPidMockCallback)
     assertEquals(InitPidResult(-1L, -1, Errors.NOT_COORDINATOR), result)

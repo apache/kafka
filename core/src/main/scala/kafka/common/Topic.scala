@@ -25,7 +25,7 @@ object Topic {
 
   val GroupMetadataTopicName = "__consumer_offsets"
   val TransactionStateTopicName = "__transaction_state"
-  val InternalTopics = immutable.Set(GroupMetadataTopicName)
+  val InternalTopics = immutable.Set(GroupMetadataTopicName, TransactionStateTopicName)
 
   val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 249

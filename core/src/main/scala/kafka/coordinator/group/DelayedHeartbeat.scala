@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import kafka.server.DelayedOperation
 
@@ -23,11 +23,11 @@ import kafka.server.DelayedOperation
  * Delayed heartbeat operations that are added to the purgatory for session timeout checking.
  * Heartbeats are paused during rebalance.
  */
-private[coordinator] class DelayedHeartbeat(coordinator: GroupCoordinator,
-                                            group: GroupMetadata,
-                                            member: MemberMetadata,
-                                            heartbeatDeadline: Long,
-                                            sessionTimeout: Long)
+private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
+                                      group: GroupMetadata,
+                                      member: MemberMetadata,
+                                      heartbeatDeadline: Long,
+                                      sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
 
   // overridden since tryComplete already synchronizes on the group. This makes it safe to

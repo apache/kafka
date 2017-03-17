@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.group
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
+import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{OffsetFetchResponse, JoinGroupRequest}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, immutable}
 
@@ -776,7 +776,7 @@ object GroupCoordinator {
     apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
-  private[coordinator] def offsetConfig(config: KafkaConfig) = OffsetConfig(
+  private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
     maxMetadataSize = config.offsetMetadataMaxSize,
     loadBufferSize = config.offsetsLoadBufferSize,
     offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,

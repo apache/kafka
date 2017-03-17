@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import java.util.concurrent.TimeUnit
 
