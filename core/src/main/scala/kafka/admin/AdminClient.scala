@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit, Future}
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
-import kafka.coordinator.GroupOverview
+import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 
 import org.apache.kafka.clients._

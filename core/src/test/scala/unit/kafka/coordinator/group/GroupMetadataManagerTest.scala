@@ -15,9 +15,7 @@
   * limitations under the License.
   */
 
-package kafka.coordinator
-
-import java.nio.ByteBuffer
+package kafka.coordinator.group
 
 import kafka.api.ApiVersion
 import kafka.cluster.Partition
@@ -26,6 +24,7 @@ import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.TestUtils.fail
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
+
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -34,6 +33,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{Before, Test}
+
+import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 import scala.collection._

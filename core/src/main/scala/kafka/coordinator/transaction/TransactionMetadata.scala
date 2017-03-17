@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.transaction
 
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.TopicPartition
@@ -29,7 +29,7 @@ private[coordinator] sealed trait TransactionState { def byte: Byte }
   * transition: received AddPartitionsToTxnRequest => Ongoing
   *             received AddOffsetsToTxnRequest => Ongoing
   */
-private[coordinator] case object NotExist extends TransactionState { val byte: Byte = 0 }
+private[coordinator] case object Empty extends TransactionState { val byte: Byte = 0 }
 
 /**
   * Transaction has started and ongoing
@@ -72,7 +72,7 @@ private[coordinator] case object CompleteAbort extends TransactionState { val by
 private[coordinator] object TransactionMetadata {
   def byteToState(byte: Byte): TransactionState = {
     byte match {
-      case 0 => NotExist
+      case 0 => Empty
       case 1 => Ongoing
       case 2 => PrepareCommit
       case 3 => PrepareAbort
@@ -84,7 +84,12 @@ private[coordinator] object TransactionMetadata {
 }
 
 @nonthreadsafe
-private[coordinator] class TransactionMetadata(var state: TransactionState) {
+private[coordinator] class TransactionMetadata(val pid: Long,
+                                               var epoch: Short,
+                                               val txnTimeoutMs: Int,
+                                               var state: TransactionState) {
+
+  def this(pid: Long, epoch: Short, txnTimeoutMs: Int) = this(pid, epoch, txnTimeoutMs, Empty)
 
   // participated partitions in this transaction
   val topicPartitions = mutable.Set.empty[TopicPartition]
@@ -94,10 +99,15 @@ private[coordinator] class TransactionMetadata(var state: TransactionState) {
   }
 
   override def toString: String =
-    s"(state: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
+    s"(pid: $pid, epoch: $epoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
 
   override def equals(that: Any): Boolean = that match {
-    case other: TransactionMetadata => state.equals(other.state) && topicPartitions.equals(other.topicPartitions)
+    case other: TransactionMetadata =>
+      pid == other.pid &&
+      epoch == other.epoch &&
+      txnTimeoutMs == other.txnTimeoutMs &&
+      state.equals(other.state) &&
+      topicPartitions.equals(other.topicPartitions)
     case _ => false
   }
 

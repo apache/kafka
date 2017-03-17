@@ -23,7 +23,7 @@ import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 import kafka.common.Topic
-import kafka.coordinator.OffsetConfig
+import kafka.coordinator.group.OffsetConfig
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}

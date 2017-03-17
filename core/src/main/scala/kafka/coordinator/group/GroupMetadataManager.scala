@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import java.io.PrintStream
 import java.nio.ByteBuffer
@@ -27,6 +27,7 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
 import kafka.common.{MessageFormatter, _}
+import kafka.coordinator.group._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
@@ -45,9 +46,9 @@ import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ListBuffer
 
-class GroupMetadataManager(val brokerId: Int,
-                           val interBrokerProtocolVersion: ApiVersion,
-                           val config: OffsetConfig,
+class GroupMetadataManager(brokerId: Int,
+                           interBrokerProtocolVersion: ApiVersion,
+                           config: OffsetConfig,
                            replicaManager: ReplicaManager,
                            zkUtils: ZkUtils,
                            time: Time) extends Logging with KafkaMetricsGroup {
@@ -361,25 +362,25 @@ class GroupMetadataManager(val brokerId: Int,
             (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
           }.toMap
         } else {
-            topicPartitionsOpt match {
-              case None =>
-                // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
-                // that commit offsets to Kafka.)
-                group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                  topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
-                }
+          topicPartitionsOpt match {
+            case None =>
+              // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
+              // that commit offsets to Kafka.)
+              group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
+                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+              }
 
-              case Some(topicPartitions) =>
-                topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-                  val partitionData = group.offset(topicPartition) match {
-                    case None =>
-                      new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
-                    case Some(offsetAndMetadata) =>
-                      new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
-                  }
-                  topicPartition -> partitionData
-                }.toMap
-            }
+            case Some(topicPartitions) =>
+              topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+                val partitionData = group.offset(topicPartition) match {
+                  case None =>
+                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
+                  case Some(offsetAndMetadata) =>
+                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                }
+                topicPartition -> partitionData
+              }.toMap
+          }
         }
       }
     }
@@ -418,7 +419,7 @@ class GroupMetadataManager(val brokerId: Int,
     scheduler.schedule(topicPartition.toString, doLoadGroupsAndOffsets)
   }
 
-  private[coordinator] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
     def highWaterMark = replicaManager.getHighWatermark(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
@@ -573,7 +574,7 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   // visible for testing
-  private[coordinator] def cleanupGroupMetadata(): Unit = {
+  private[group] def cleanupGroupMetadata(): Unit = {
     cleanupGroupMetadata(None)
   }
 
@@ -840,7 +841,7 @@ object GroupMetadataManager {
    *
    * @return key for offset commit message
    */
-  private[coordinator] def offsetCommitKey(group: String, topicPartition: TopicPartition,
+  private[group] def offsetCommitKey(group: String, topicPartition: TopicPartition,
                                            versionId: Short = 0): Array[Byte] = {
     val key = new Struct(CURRENT_OFFSET_KEY_SCHEMA)
     key.set(OFFSET_KEY_GROUP_FIELD, group)
@@ -858,7 +859,7 @@ object GroupMetadataManager {
    *
    * @return key bytes for group metadata message
    */
-  private[coordinator] def groupMetadataKey(group: String): Array[Byte] = {
+  private[group] def groupMetadataKey(group: String): Array[Byte] = {
     val key = new Struct(CURRENT_GROUP_KEY_SCHEMA)
     key.set(GROUP_KEY_GROUP_FIELD, group)
 
@@ -874,7 +875,7 @@ object GroupMetadataManager {
    * @param offsetAndMetadata consumer's current offset and metadata
    * @return payload for offset commit message
    */
-  private[coordinator] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
+  private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
     // generate commit value with schema version 1
     val value = new Struct(CURRENT_OFFSET_VALUE_SCHEMA)
     value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
@@ -896,9 +897,9 @@ object GroupMetadataManager {
    * @param version the version of the value message to use
    * @return payload for offset commit message
    */
-  private[coordinator] def groupMetadataValue(groupMetadata: GroupMetadata,
-                                              assignment: Map[String, Array[Byte]],
-                                              version: Short = 0): Array[Byte] = {
+  private[group] def groupMetadataValue(groupMetadata: GroupMetadata,
+                                        assignment: Map[String, Array[Byte]],
+                                        version: Short = 0): Array[Byte] = {
     val value = if (version == 0) new Struct(GROUP_METADATA_VALUE_SCHEMA_V0) else new Struct(CURRENT_GROUP_VALUE_SCHEMA)
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))

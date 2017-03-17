@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.transaction
+
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
 
-import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
 
-class TransactionLogManagerTest extends JUnitSuite {
+class TransactionLogTest extends JUnitSuite {
 
   val epoch: Short = 0
   val transactionTimeoutMs: Int = 1000
@@ -38,13 +39,11 @@ class TransactionLogManagerTest extends JUnitSuite {
 
   @Test
   def shouldThrowExceptionWriteInvalidTxn() {
-    val txnMetadata = new TransactionMetadata(NotExist)
+    val txnMetadata = new TransactionMetadata(0L, epoch, transactionTimeoutMs)
     txnMetadata.addPartitions(topicPartitions)
 
-    val pidMetadata = new PidMetadata(0L, epoch, transactionTimeoutMs, txnMetadata)
-
     intercept[IllegalStateException] {
-      TransactionLogManager.valueToBytes(pidMetadata)
+      TransactionLog.valueToBytes(txnMetadata)
     }
   }
 
@@ -57,7 +56,7 @@ class TransactionLogManagerTest extends JUnitSuite {
       "four" -> 4L,
       "five" -> 5L)
 
-    val transactionStates = Map[Long, TransactionState](0L -> NotExist,
+    val transactionStates = Map[Long, TransactionState](0L -> Empty,
       1L -> Ongoing,
       2L -> PrepareCommit,
       3L -> CompleteCommit,
@@ -65,17 +64,14 @@ class TransactionLogManagerTest extends JUnitSuite {
       5L -> CompleteAbort)
 
     // generate transaction log messages
-
     val txnRecords = pidMappings.map { case (transactionalId, pid) =>
-      val txnMetadata = new TransactionMetadata(transactionStates(pid))
+      val txnMetadata = new TransactionMetadata(pid, epoch, transactionTimeoutMs, transactionStates(pid))
 
-      if (!txnMetadata.state.equals(NotExist))
+      if (!txnMetadata.state.equals(Empty))
         txnMetadata.addPartitions(topicPartitions)
 
-      val pidMetadata = new PidMetadata(pid, epoch, transactionTimeoutMs, txnMetadata)
-
-      val keyBytes = TransactionLogManager.keyToBytes(transactionalId)
-      val valueBytes = TransactionLogManager.valueToBytes(pidMetadata)
+      val keyBytes = TransactionLog.keyToBytes(transactionalId)
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata)
 
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
@@ -84,22 +80,19 @@ class TransactionLogManagerTest extends JUnitSuite {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val key = TransactionLogManager.readMessageKey(record.key())
+      val key = TransactionLog.readMessageKey(record.key())
 
       key match {
         case pidKey: TxnKey =>
           val transactionalId = pidKey.key
-          val pidMetadata = TransactionLogManager.readMessageValue(record.value())
+          val txnMetadata = TransactionLog.readMessageValue(record.value())
 
-          assertEquals(pidMappings(transactionalId), pidMetadata.pid)
-          assertEquals(epoch, pidMetadata.epoch)
-          assertEquals(transactionTimeoutMs, pidMetadata.txnTimeoutMs)
+          assertEquals(pidMappings(transactionalId), txnMetadata.pid)
+          assertEquals(epoch, txnMetadata.epoch)
+          assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
+          assertEquals(transactionStates(txnMetadata.pid), txnMetadata.state)
 
-          val txnMetadata = pidMetadata.txnMetadata
-
-          assertEquals(transactionStates(pidMetadata.pid), txnMetadata.state)
-
-          if (txnMetadata.state.equals(NotExist))
+          if (txnMetadata.state.equals(Empty))
             assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
           else
             assertEquals(topicPartitions, txnMetadata.topicPartitions)

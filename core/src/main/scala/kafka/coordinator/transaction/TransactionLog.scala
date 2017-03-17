@@ -14,23 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.transaction
 
-import kafka.common.{KafkaException, MessageFormatter, Topic}
-import kafka.utils.CoreUtils.inLock
-import kafka.utils.{Logging, ZkUtils}
-
+import kafka.common.{KafkaException, MessageFormatter}
+import kafka.message.{CompressionCodec, NoCompressionCodec}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Utils
-
-import java.util.concurrent.locks.ReentrantLock
 import java.io.PrintStream
 import java.nio.ByteBuffer
 
-import scala.collection.mutable
+import kafka.log.LogConfig
 
 /*
  * Messages stored for the transaction topic represent the pid and transactional status of the corresponding
@@ -40,8 +35,16 @@ import scala.collection.mutable
  * key version 0:               [transactionalId]
  *    -> value version 0:       [pid, epoch, expire_timestamp, status, [topic [partition] ]
  */
-object TransactionLogManager {
+object TransactionLog {
 
+  // log-level config default values and enforced values
+  val DefaultNumPartitions: Int = 50
+  val DefaultSegmentBytes: Int = 100 * 1024 * 1024
+  val DefaultReplicationFactor: Short = 3.toShort
+  val DefaultMinInSyncReplicas: Int = 3
+  val DefaultLoadBufferSize: Int = 5 * 1024 * 1024
+
+  // log message formats
   private val TXN_ID_KEY = "transactional_id"
 
   private val PID_KEY = "pid"
@@ -120,21 +123,21 @@ object TransactionLogManager {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(pidMetadata: PidMetadata): Array[Byte] = {
+  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadata): Array[Byte] = {
     val value = new Struct(CURRENT_VALUE_SCHEMA)
-    value.set(VALUE_SCHEMA_PID_FIELD, pidMetadata.pid)
-    value.set(VALUE_SCHEMA_EPOCH_FIELD, pidMetadata.epoch)
-    value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, pidMetadata.txnTimeoutMs)
-    value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, pidMetadata.txnMetadata.state.byte)
+    value.set(VALUE_SCHEMA_PID_FIELD, txnMetadata.pid)
+    value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.epoch)
+    value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
+    value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
 
-    if (pidMetadata.txnMetadata.state.equals(NotExist)) {
-      if (pidMetadata.txnMetadata.topicPartitions.nonEmpty)
-        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${pidMetadata.txnMetadata.state}: ${pidMetadata.txnMetadata}")
+    if (txnMetadata.state == Empty) {
+      if (txnMetadata.topicPartitions.nonEmpty)
+        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.state}: ${txnMetadata}")
 
       value.set(VALUE_SCHEMA_TXN_PARTITIONS_FIELD, null)
     } else {
       // first group the topic partitions by their topic names
-      val topicAndPartitions = pidMetadata.txnMetadata.topicPartitions.groupBy(_.topic())
+      val topicAndPartitions = txnMetadata.topicPartitions.groupBy(_.topic())
 
       val partitionArray = topicAndPartitions.map { topicAndPartitionIds =>
         val topicPartitionsStruct = value.instance(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
@@ -179,7 +182,7 @@ object TransactionLogManager {
     *
     * @return a pid metadata object from the message
     */
-  def readMessageValue(buffer: ByteBuffer): PidMetadata = {
+  def readMessageValue(buffer: ByteBuffer): TransactionMetadata = {
     if (buffer == null) { // tombstone
       null
     } else {
@@ -195,9 +198,9 @@ object TransactionLogManager {
         val stateByte = value.getByte(VALUE_SCHEMA_TXN_STATUS_FIELD)
         val state = TransactionMetadata.byteToState(stateByte)
 
-        val transactionMetadata = new TransactionMetadata(state)
+        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state)
 
-        if (!state.equals(NotExist)) {
+        if (!state.equals(Empty)) {
           val topicPartitionArray = value.getArray(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
 
           topicPartitionArray.foreach { memberMetadataObj =>
@@ -214,7 +217,7 @@ object TransactionLogManager {
           }
         }
 
-        new PidMetadata(pid, epoch, timeout, transactionMetadata)
+        transactionMetadata
       } else {
         throw new IllegalStateException(s"Unknown version $version from the pid mapping message value")
       }
@@ -241,60 +244,11 @@ object TransactionLogManager {
   }
 }
 
-case class TxnKey(version: Short, key: String) extends BaseKey {
-
-  override def toString: String = key.toString
+trait BaseKey{
+  def version: Short
+  def key: Any
 }
 
-/*
- * Transaction log manager is part of the transaction coordinator that manages the transaction log, which is
- * a special internal topic.
- */
-class TransactionLogManager(val brokerId: Int,
-                            val zkUtils: ZkUtils) extends Logging {
-
-  this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
-
-  /* number of partitions for the transaction log topic */
-  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
-
-  /* lock protecting access to loading and owned partition sets */
-  private val partitionLock = new ReentrantLock()
-
-  /* partitions of transaction topics that are assigned to this manager */
-  private val ownedPartitions: mutable.Set[Int] = mutable.Set()
-
-  def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
-
-  def isCoordinatorFor(transactionalId: String): Boolean = inLock(partitionLock) { ownedPartitions.contains(partitionFor(transactionalId)) }
-
-  /**
-    * Gets the partition count of the transaction log topic from ZooKeeper.
-    * If the topic does not exist, the default partition count is returned.
-    */
-  private def getTransactionTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(50)  // TODO: need a config for this
-  }
-
-  /**
-    * Add the partition into the owned list
-    *
-    * TODO: this is for test only and should be augmented with txn log bootstrapping
-    */
-  def addPartitionOwnership(partition: Int) {
-    inLock(partitionLock) {
-      ownedPartitions.add(partition)
-    }
-  }
-
-  /**
-    * Remove the partition from the owned list
-    *
-    * TODO: this is for test only and should be augmented with cache cleaning
-    */
-  def removePartitionOwnership(offsetsPartition: Int): Unit = {
-    inLock(partitionLock) {
-      ownedPartitions.remove(offsetsPartition)
-    }
-  }
+case class TxnKey(version: Short, key: String) extends BaseKey {
+  override def toString: String = key.toString
 }

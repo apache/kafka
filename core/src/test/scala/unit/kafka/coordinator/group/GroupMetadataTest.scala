@@ -15,10 +15,12 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
+
 import org.apache.kafka.common.TopicPartition
+
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -47,7 +49,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testCanRebalanceWhenAwaitingSync(){
+  def testCanRebalanceWhenAwaitingSync() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(AwaitingSync)
     assertTrue(group.canRebalance)
