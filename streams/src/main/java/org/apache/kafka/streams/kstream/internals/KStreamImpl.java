@@ -192,9 +192,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde, streamName), this.name);
+        peek(new PrintAction<>(System.out, keySerde, valSerde, streamName), name);
     }
-
 
     @Override
     public void writeAsText(String filePath) {
@@ -226,7 +225,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         try {
 
             PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde, streamName), this.name);
+            peek(new PrintAction<>(printStream, keySerde, valSerde, streamName), name);
+
 
         } catch (FileNotFoundException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
@@ -320,11 +320,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> peek(final ForeachAction<? super K, ? super V> action) {
+        return peek(action, topology.newName(PEEK_NAME));
+    }
+
+    private KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final String name) {
         Objects.requireNonNull(action, "action can't be null");
-        final String name = topology.newName(PEEK_NAME);
-
         topology.addProcessor(name, new KStreamPeek<>(action), this.name);
-
         return new KStreamImpl<>(topology, name, sourceNodes, repartitionRequired);
     }
 
