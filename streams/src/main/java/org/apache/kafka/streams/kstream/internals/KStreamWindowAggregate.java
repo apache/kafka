@@ -116,11 +116,11 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             }
 
             // create the new window for the rest of unmatched window that do not exist yet
-            for (long windowStartMs : matchedWindows.keySet()) {
+            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
-                windowStore.put(key, newAgg, windowStartMs);
-                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), newAgg, oldAgg);
+                windowStore.put(key, newAgg, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
         }
     }

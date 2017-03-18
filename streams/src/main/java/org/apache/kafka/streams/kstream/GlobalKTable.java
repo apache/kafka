@@ -52,8 +52,8 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
  * view.get(key); // can be done on any key, as all keys are present
  *}</pre>
- * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy if the underlying topic and
- * thus, all keys can be queried locally.
+ * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy of the underlying topic,
+ * thus all keys can be queried locally.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes

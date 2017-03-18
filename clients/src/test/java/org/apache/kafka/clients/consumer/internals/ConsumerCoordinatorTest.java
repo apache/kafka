@@ -120,7 +120,7 @@ public class ConsumerCoordinatorTest {
         this.time = new MockTime();
         this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
         this.metadata = new Metadata(0, Long.MAX_VALUE);
-        this.metadata.update(cluster, time.milliseconds());
+        this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
@@ -292,7 +292,7 @@ public class ConsumerCoordinatorTest {
 
         // ensure metadata is up-to-date for leader
         metadata.setTopics(singletonList(topic1));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -310,7 +310,7 @@ public class ConsumerCoordinatorTest {
 
         // ensure metadata is up-to-date for leader
         metadata.setTopics(singletonList(topic1));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -349,7 +349,7 @@ public class ConsumerCoordinatorTest {
         // partially update the metadata with one topic first,
         // let the leader to refresh metadata during assignment
         metadata.setTopics(singletonList(topic1));
-        metadata.update(TestUtils.singletonCluster(topic1, 1), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -369,7 +369,7 @@ public class ConsumerCoordinatorTest {
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
-        client.prepareMetadataUpdate(cluster);
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
         coordinator.poll(time.milliseconds());
 
@@ -389,7 +389,7 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
         metadata.needMetadataForAllTopics(true);
-        metadata.update(TestUtils.singletonCluster(topic1, 1), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(), time.milliseconds());
 
         assertEquals(singleton(topic1), subscriptions.subscription());
 
@@ -410,7 +410,7 @@ public class ConsumerCoordinatorTest {
                 final Map<String, Integer> updatedPartitions = new HashMap<>();
                 for (String topic : updatedSubscription)
                     updatedPartitions.put(topic, 1);
-                metadata.update(TestUtils.clusterWith(1, updatedPartitions), time.milliseconds());
+                metadata.update(TestUtils.clusterWith(1, updatedPartitions), Collections.<String>emptySet(), time.milliseconds());
                 return true;
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -453,7 +453,7 @@ public class ConsumerCoordinatorTest {
 
         // ensure metadata is up-to-date for leader
         metadata.setTopics(singletonList(topic1));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -524,7 +524,7 @@ public class ConsumerCoordinatorTest {
         // partially update the metadata with one topic first,
         // let the leader to refresh metadata during assignment
         metadata.setTopics(singletonList(topic1));
-        metadata.update(TestUtils.singletonCluster(topic1, 1), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -541,7 +541,7 @@ public class ConsumerCoordinatorTest {
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
-        client.prepareMetadataUpdate(cluster);
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
         coordinator.joinGroupIfNeeded();
 
@@ -712,7 +712,7 @@ public class ConsumerCoordinatorTest {
 
         // ensure metadata is up-to-date for leader
         metadata.setTopics(singletonList(topic1));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -731,7 +731,7 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.needRejoin());
 
         // a new partition is added to the topic
-        metadata.update(TestUtils.singletonCluster(topic1, 2), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(topic1, 2), Collections.<String>emptySet(), time.milliseconds());
 
         // we should detect the change and ask for reassignment
         assertTrue(coordinator.needRejoin());
@@ -751,7 +751,7 @@ public class ConsumerCoordinatorTest {
         metadata.setTopics(topics);
 
         // we only have metadata for one topic initially
-        metadata.update(TestUtils.singletonCluster(topic1, 1), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -772,7 +772,7 @@ public class ConsumerCoordinatorTest {
                     Map<String, Integer> topicPartitionCounts = new HashMap<>();
                     topicPartitionCounts.put(topic1, 1);
                     topicPartitionCounts.put(topic2, 1);
-                    metadata.update(TestUtils.singletonCluster(topicPartitionCounts), time.milliseconds());
+                    metadata.update(TestUtils.singletonCluster(topicPartitionCounts), Collections.<String>emptySet(), time.milliseconds());
                     return true;
                 }
                 return false;
@@ -789,12 +789,72 @@ public class ConsumerCoordinatorTest {
         assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
     }
 
+    @Test
+    public void testRebalanceAfterTopicUnavailableWithSubscribe() {
+        unavailableTopicTest(false, false, Collections.<String>emptySet());
+    }
+
+    @Test
+    public void testRebalanceAfterTopicUnavailableWithPatternSubscribe() {
+        unavailableTopicTest(true, false, Collections.<String>emptySet());
+    }
+
+    @Test
+    public void testRebalanceAfterNotMatchingTopicUnavailableWithPatternSSubscribe() {
+        unavailableTopicTest(true, false, Collections.<String>singleton("notmatching"));
+    }
+
+    @Test
+    public void testAssignWithTopicUnavailable() {
+        unavailableTopicTest(true, false, Collections.<String>emptySet());
+    }
+
+    private void unavailableTopicTest(boolean patternSubscribe, boolean assign, Set<String> unavailableTopicsInLastMetadata) {
+        final String consumerId = "consumer";
+
+        metadata.setTopics(singletonList(topic1));
+        client.prepareMetadataUpdate(Cluster.empty(), Collections.singleton("test1"));
+
+        if (assign)
+            subscriptions.assignFromUser(singleton(t1p));
+        else if (patternSubscribe)
+            subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
+        else
+            subscriptions.subscribe(singleton(topic1), rebalanceListener);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        Map<String, List<String>> memberSubscriptions = Collections.singletonMap(consumerId, singletonList(topic1));
+        partitionAssignor.prepare(Collections.<String, List<TopicPartition>>emptyMap());
+
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.NONE));
+        coordinator.poll(time.milliseconds());
+        if (!assign) {
+            assertFalse(coordinator.needRejoin());
+            assertEquals(Collections.<TopicPartition>emptySet(), rebalanceListener.assigned);
+        }
+        assertTrue("Metadata refresh not requested for unavailable partitions", metadata.updateRequested());
+
+        client.prepareMetadataUpdate(cluster, unavailableTopicsInLastMetadata);
+        client.poll(0, time.milliseconds());
+        client.prepareResponse(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.poll(time.milliseconds());
+
+        assertFalse("Metadata refresh requested unnecessarily", metadata.updateRequested());
+        if (!assign) {
+            assertFalse(coordinator.needRejoin());
+            assertEquals(singleton(t1p), rebalanceListener.assigned);
+        }
+    }
 
     @Test
     public void testExcludeInternalTopicsConfigOption() {
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
-        metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), Collections.<String>emptySet(), time.milliseconds());
 
         assertFalse(subscriptions.subscription().contains(TestUtils.GROUP_METADATA_TOPIC_NAME));
     }
@@ -804,7 +864,7 @@ public class ConsumerCoordinatorTest {
         coordinator = buildCoordinator(new Metrics(), assignors, false, false);
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
-        metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
+        metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), Collections.<String>emptySet(), time.milliseconds());
 
         assertTrue(subscriptions.subscription().contains(TestUtils.GROUP_METADATA_TOPIC_NAME));
     }
@@ -1030,7 +1090,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        client.prepareMetadataUpdate(cluster);
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
         coordinator.joinGroupIfNeeded();
 

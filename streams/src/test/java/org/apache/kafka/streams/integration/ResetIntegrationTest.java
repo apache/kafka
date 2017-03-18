@@ -22,7 +22,7 @@ import kafka.tools.StreamsResetter;
 import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -122,9 +122,7 @@ public class ResetIntegrationTest {
             try {
                 TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
                         "Test consumer group active even after waiting " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-            } catch (GroupCoordinatorNotAvailableException e) {
-                continue;
-            } catch (IllegalArgumentException e) {
+            } catch (TimeoutException e) {
                 continue;
             }
             break;
@@ -421,7 +419,7 @@ public class ResetIntegrationTest {
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
         @Override
         public boolean conditionMet() {
-            return adminClient.describeConsumerGroup(APP_ID + testNo).consumers().get().isEmpty();
+            return adminClient.describeConsumerGroup(APP_ID + testNo, 0).consumers().get().isEmpty();
         }
     }
 

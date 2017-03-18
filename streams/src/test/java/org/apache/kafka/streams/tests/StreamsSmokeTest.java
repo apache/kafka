@@ -53,13 +53,6 @@ public class StreamsSmokeTest {
                 // this starts a KafkaStreams client
                 final SmokeTestClient client = new SmokeTestClient(new File(stateDir), kafka);
                 client.start();
-
-                Runtime.getRuntime().addShutdownHook(new Thread() {
-                    @Override
-                    public void run() {
-                        client.close();
-                    }
-                });
                 break;
             case "close-deadlock-test":
                 final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka);

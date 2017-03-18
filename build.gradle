@@ -27,6 +27,7 @@ buildscript {
     classpath "org.ajoberstar:grgit:1.7.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
   }
 }
 
@@ -819,6 +820,48 @@ project(':streams:examples') {
 
   jar {
     dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':jmh-benchmarks') {
+
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  shadowJar {
+    baseName = 'kafka-jmh-benchmarks-all'
+    classifier = null
+    version = null
+  }
+
+  dependencies {
+      compile project(':clients')
+      compile project(':streams')
+      compile 'org.openjdk.jmh:jmh-core:1.17.5'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.5'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.5'
+  }
+
+  jar {
+    manifest {
+      attributes "Main-Class": "org.openjdk.jmh.Main"
+    }
+  }
+
+
+  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
+
+    main="-jar"
+
+    doFirst {
+      if (System.getProperty("jmhArgs")) {
+          args System.getProperty("jmhArgs").split(',')
+      }
+      args = [shadowJar.archivePath, *args]
+    }
+  }
+
+  javadoc {
+     enabled = false
   }
 }
 

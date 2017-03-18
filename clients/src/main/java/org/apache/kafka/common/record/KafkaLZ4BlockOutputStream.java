@@ -20,7 +20,7 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
@@ -138,7 +138,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     private void writeHeader() throws IOException {
-        Utils.writeUnsignedIntLE(buffer, 0, MAGIC);
+        ByteUtils.writeUnsignedIntLE(buffer, 0, MAGIC);
         bufferOffset = 4;
         buffer[bufferOffset++] = flg.toByte();
         buffer[bufferOffset++] = bd.toByte();
@@ -182,13 +182,13 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         }
 
         // Write content
-        Utils.writeUnsignedIntLE(out, compressedLength | compressMethod);
+        ByteUtils.writeUnsignedIntLE(out, compressedLength | compressMethod);
         out.write(bufferToWrite, 0, compressedLength);
 
         // Calculate and write block checksum
         if (flg.isBlockChecksumSet()) {
             int hash = checksum.hash(bufferToWrite, 0, compressedLength, 0);
-            Utils.writeUnsignedIntLE(out, hash);
+            ByteUtils.writeUnsignedIntLE(out, hash);
         }
         bufferOffset = 0;
     }
@@ -200,7 +200,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     private void writeEndMark() throws IOException {
-        Utils.writeUnsignedIntLE(out, 0);
+        ByteUtils.writeUnsignedIntLE(out, 0);
         // TODO implement content checksum, update flg.validate()
         finished = true;
     }
@@ -258,10 +258,10 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     @Override
     public void close() throws IOException {
         if (!finished) {
+            // basicallly flush the buffer writing the last block
             writeBlock();
+            // write the end block and finish the stream
             writeEndMark();
-            flush();
-            finished = true;
         }
         if (out != null) {
             out.close();

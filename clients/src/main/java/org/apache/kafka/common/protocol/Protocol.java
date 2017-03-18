@@ -1090,11 +1090,6 @@ public class Protocol {
                 Type innerType = ((ArrayOf) field.type).type();
                 if (!subTypes.containsKey(field.name))
                     subTypes.put(field.name, innerType);
-            } else if (field.type instanceof Schema) {
-                b.append(field.name);
-                b.append(" ");
-                if (!subTypes.containsKey(field.name))
-                    subTypes.put(field.name, field.type);
             } else {
                 b.append(field.name);
                 b.append(" ");

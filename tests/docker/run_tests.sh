@@ -18,6 +18,11 @@
 #   TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
 set -x
 
+die() {
+    echo $@
+    exit 1
+}
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TESTS_DIR=`dirname ${SCRIPT_DIR}`
 KAFKA_SRC=`dirname ${TESTS_DIR}`
@@ -40,7 +45,8 @@ docker run --rm -it ${KAFKA_IMAGE} "true"
 if [[ $? != 0 || ${KAFKA_IMAGE_REBUILD} != "" ]]; then
     echo "kafka image ${KAFKA_IMAGE} does not exist. Building it from scratch."
     COMMIT_INFO=$(git describe HEAD)
-    docker build -t ${KAFKA_IMAGE} --label=commit_info=${COMMIT_INFO} ${SCRIPT_DIR}
+    docker build -t ${KAFKA_IMAGE} --label=commit_info=${COMMIT_INFO} ${SCRIPT_DIR} \
+        || die "docker build failed"
 fi
 
 echo "Using kafka image: ${KAFKA_IMAGE}"

@@ -220,12 +220,12 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private def run(): Unit = {
     try {
       setAclIndividually("/")
-      for (path <- zkUtils.securePersistentZkPaths) {
+      for (path <- ZkUtils.SecureZkRootPaths) {
         debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
         setAclsRecursively(path)
       }
-      
+
       @tailrec
       def recurse(): Unit = {
         val future = futures.synchronized { 

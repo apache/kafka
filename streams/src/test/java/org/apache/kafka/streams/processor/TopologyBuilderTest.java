@@ -629,7 +629,7 @@ public class TopologyBuilderTest {
                     goodNodeName)
                 .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
-            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder, LocalMockProcessorSupplier.STORE_NAME);
+            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder);
             driver.process("topic", null, null);
         } catch (final StreamsException e) {
             final Throwable cause = e.getCause();

@@ -22,12 +22,16 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -42,6 +46,9 @@ public class CompositeReadOnlyWindowStoreTest {
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
     private ReadOnlyWindowStoreStub<String, String>
             otherUnderlyingStore;
+
+    @Rule
+    public final ExpectedException windowStoreIteratorException = ExpectedException.none();
 
     @Before
     public void before() {
@@ -106,17 +113,53 @@ public class CompositeReadOnlyWindowStoreTest {
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);
     }
 
-
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() throws Exception {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new StateStoreProviderStub(true), QueryableStoreTypes.windowStore(), "foo");
         store.fetch("key", 1, 10);
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() throws Exception {
         underlyingWindowStore.setOpen(false);
-        underlyingWindowStore.fetch("key", 1, 10);
+        final CompositeReadOnlyWindowStore<Object, Object> store =
+                new CompositeReadOnlyWindowStore<>(stubProviderOne, QueryableStoreTypes.windowStore(), "window-store");
+        try {
+            store.fetch("key", 1, 10);
+            Assert.fail("InvalidStateStoreException was expected");
+        } catch (InvalidStateStoreException e) {
+            Assert.assertEquals("State store is not available anymore and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void emptyIteratorAlwaysReturnsFalse() throws Exception {
+        final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
+                StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
+        final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
+
+        Assert.assertFalse(windowStoreIterator.hasNext());
+    }
+
+    @Test
+    public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() throws Exception {
+        final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
+                StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
+        final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
+
+        windowStoreIteratorException.expect(NoSuchElementException.class);
+        windowStoreIterator.peekNextKey();
+    }
+
+    @Test
+    public void emptyIteratorNextShouldThrowNoSuchElementException() throws Exception {
+        final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
+                StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
+        final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
+
+        windowStoreIteratorException.expect(NoSuchElementException.class);
+        windowStoreIterator.next();
     }
 
 }

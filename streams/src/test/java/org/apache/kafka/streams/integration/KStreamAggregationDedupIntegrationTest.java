@@ -61,6 +61,8 @@ import static org.hamcrest.core.Is.is;
  */
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 300L;
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -90,7 +92,7 @@ public class KStreamAggregationDedupIntegrationTest {
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
 
         KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
@@ -304,7 +306,8 @@ public class KStreamAggregationDedupIntegrationTest {
             valueDeserializer.getClass().getName());
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
             outputTopic,
-            numMessages, 60 * 1000);
+            numMessages,
+            60 * 1000);
 
     }
 

@@ -199,8 +199,13 @@ public final class Metadata {
     /**
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
+     *
+     * @param cluster the cluster containing metadata for topics with valid metadata
+     * @param unavailableTopics topics which are non-existent or have one or more partitions whose
+     *        leader is not known
+     * @param now current time in milliseconds
      */
-    public synchronized void update(Cluster cluster, long now) {
+    public synchronized void update(Cluster cluster, Set<String> unavailableTopics, long now) {
         Objects.requireNonNull(cluster, "cluster should not be null");
 
         this.needUpdate = false;
@@ -223,7 +228,7 @@ public final class Metadata {
         }
 
         for (Listener listener: listeners)
-            listener.onMetadataUpdate(cluster);
+            listener.onMetadataUpdate(cluster, unavailableTopics);
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
@@ -306,7 +311,14 @@ public final class Metadata {
      * MetadataUpdate Listener
      */
     public interface Listener {
-        void onMetadataUpdate(Cluster cluster);
+        /**
+         * Callback invoked on metadata update.
+         *
+         * @param cluster the cluster containing metadata for topics with valid metadata
+         * @param unavailableTopics topics which are non-existent or have one or more partitions whose
+         *        leader is not known
+         */
+        void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics);
     }
 
     private synchronized void requestUpdateForNewTopics() {
@@ -329,7 +341,7 @@ public final class Metadata {
 
             for (String topic : this.topics.keySet()) {
                 List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
-                if (partitionInfoList != null) {
+                if (!partitionInfoList.isEmpty()) {
                     partitionInfos.addAll(partitionInfoList);
                 }
             }

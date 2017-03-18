@@ -79,6 +79,15 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     protected abstract Struct toStruct();
 
+    public String toString(boolean verbose) {
+        return toStruct().toString();
+    }
+
+    @Override
+    public final String toString() {
+        return toString(true);
+    }
+
     /**
      * Get an error response for a request
      */
