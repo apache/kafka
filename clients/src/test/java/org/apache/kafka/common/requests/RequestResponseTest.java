@@ -313,7 +313,7 @@ public class RequestResponseTest {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);
         FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
-        assertEquals(fr2.maxBytes(),fr.maxBytes());
+        assertEquals(fr2.maxBytes(), fr.maxBytes());
     }
     
     private RequestHeader createRequestHeader() {
