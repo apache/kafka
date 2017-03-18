@@ -18,104 +18,63 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.PrintStream;
 
+class KeyValuePrinter<K, V> extends KStreamPeek {
 
-class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
-
-    private final PrintStream printStream;
+    private PrintStream printStream;
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private String streamName;
 
-
-    KeyValuePrinter(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
+    public KeyValuePrinter(final PrintStream printStream, final Serde<?> keySerde, final Serde<?> valueSerde, final String streamName) {
+        super(null);
+        this.printStream = printStream;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.streamName = streamName;
-        if (printStream == null) {
-            this.printStream = System.out;
-        } else {
-            this.printStream = printStream;
-        }
-    }
-
-    KeyValuePrinter(PrintStream printStream, String streamName) {
-        this(printStream, null, null, streamName);
-    }
-
-    KeyValuePrinter(Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-        this(System.out, keySerde, valueSerde, streamName);
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KeyValuePrinterProcessor(this.printStream, this.keySerde, this.valueSerde, this.streamName);
+        return new KStreamPeekProcessor();
     }
 
-
-    private class KeyValuePrinterProcessor extends AbstractProcessor<K, V> {
-        private final PrintStream printStream;
-        private Serde<?> keySerde;
-        private Serde<?> valueSerde;
-        private ProcessorContext processorContext;
-        private String streamName;
-
-        private KeyValuePrinterProcessor(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-            this.printStream = printStream;
-            this.keySerde = keySerde;
-            this.valueSerde = valueSerde;
-            this.streamName = streamName;
-        }
+    private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
+        ForeachAction<K, V> action = printAction(context(), printStream, keySerde, valueSerde, streamName);
 
         @Override
-        public void init(ProcessorContext context) {
-            this.processorContext = context;
-
-            if (this.keySerde == null) {
-                keySerde = this.processorContext.keySerde();
-            }
-
-            if (this.valueSerde == null) {
-                valueSerde = this.processorContext.valueSerde();
-            }
+        public void process(final K key, final V value) {
+            action.apply(key, value);
+            context().forward(key, value);
         }
+    }
 
-        @Override
-        public void process(K key, V value) {
-            K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
-            V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
-
-            printStream.println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
-
-            this.processorContext.forward(key, value);
-        }
-
-
-        private Object maybeDeserialize(Object receivedElement, Deserializer<?> deserializer) {
-            if (receivedElement == null) {
-                return null;
+    private static <K, V> ForeachAction<K, V> printAction(final ProcessorContext context, final PrintStream printStream, final Serde<?> keySerde, final Serde<?> valueSerde, final String streamName) {
+        return new ForeachAction<K, V>() {
+            @Override
+            public void apply(final K key, final V value) {
+                K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
+                V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
+                printStream.println("[" + streamName + "]: " + keyToPrint + " , " + valueToPrint);
             }
 
-            if (receivedElement instanceof byte[]) {
-                return deserializer.deserialize(this.processorContext.topic(), (byte[]) receivedElement);
-            }
+            private Object maybeDeserialize(Object receivedElement, Deserializer<?> deserializer) {
+                if (receivedElement == null) {
+                    return null;
+                }
 
-            return receivedElement;
-        }
+                if (receivedElement instanceof byte[]) {
+                    return deserializer.deserialize(context.topic(), (byte[]) receivedElement);
+                }
 
-        @Override
-        public void close() {
-            if (this.printStream == System.out) {
-                this.printStream.flush();
-            } else {
-                this.printStream.close();
+                return receivedElement;
             }
-        }
+        };
     }
 }
