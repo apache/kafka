@@ -17,6 +17,7 @@
 
 package kafka.log
 
+import java.util
 import java.util.{Collections, Locale, Properties}
 
 import scala.collection.JavaConverters._
@@ -58,7 +59,8 @@ object Defaults {
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
 }
 
-case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
+case class LogConfig(props: java.util.Map[_, _],
+                     userSuppliedProps: java.util.Set[String] = Collections.emptySet()) extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
@@ -89,6 +91,21 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
 
+  def userSupplied(prop: String) = userSuppliedProps.contains(prop)
+  
+  /**
+    * Create a log config instance using the given properties and defaults
+    */
+  def withOverrides(overrides: Properties): LogConfig = {
+    val props = new Properties()
+    props.putAll(originals())
+    props.putAll(overrides)
+    val userSupplied = new util.HashSet[String]
+    userSupplied.addAll(userSuppliedProps)
+    userSupplied.addAll(overrides.stringPropertyNames())
+    LogConfig(props, userSupplied)
+  }
+  
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
 }
@@ -304,9 +321,10 @@ object LogConfig {
   def serverConfigName(configName: String): Option[String] = configDef.serverConfigName(configName)
 
   /**
-   * Create a log config instance using the given properties and defaults
-   */
-  def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
+    * Create a log config instance using the given properties and defaults. Notice that the returned LogConfig
+    * does not distinguish user supplied configurations.
+    */
+  def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties) : LogConfig = {
     val props = new Properties()
     props.putAll(defaults)
     props.putAll(overrides)

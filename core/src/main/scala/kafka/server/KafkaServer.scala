@@ -634,10 +634,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
-    val defaultLogConfig = LogConfig(defaultProps)
+    val defaultLogConfig = LogConfig(defaultProps, config.originals().keySet())
 
     val configs = AdminUtils.fetchAllTopicConfigs(zkUtils).map { case (topic, configs) =>
-      topic -> LogConfig.fromProps(defaultProps, configs)
+      topic -> defaultLogConfig.withOverrides(configs)
     }
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,

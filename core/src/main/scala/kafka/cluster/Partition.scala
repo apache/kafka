@@ -104,8 +104,7 @@ class Partition(val topic: String,
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     assignedReplicaMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
-        val config = LogConfig.fromProps(logManager.defaultConfig.originals,
-                                         AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
+        val config = logManager.defaultConfig.withOverrides(AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
         val log = logManager.createLog(topicPartition, config)
         val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
         val offsetMap = checkpoint.read

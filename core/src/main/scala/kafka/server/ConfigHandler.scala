@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import DynamicConfig.Broker._
@@ -54,12 +55,17 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
+      val userSuppliedProps = new util.HashSet[String]
+      userSuppliedProps.addAll(logManager.defaultConfig.userSuppliedProps)
       val props = new Properties()
       props.putAll(logManager.defaultConfig.originals)
       topicConfig.asScala.foreach { case (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
+        if (!configNamesToExclude.contains(key)) {
+          props.put(key, value)
+          userSuppliedProps.add(key)
+        }
       }
-      val logConfig = LogConfig(props)
+      val logConfig = LogConfig(props, userSuppliedProps)
       if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)

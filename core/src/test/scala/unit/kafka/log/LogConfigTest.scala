@@ -17,9 +17,10 @@
 
 package kafka.log
 
+import java.util
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -79,6 +80,22 @@ class LogConfigTest {
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
+  }
+  
+  @Test
+  def testWithOverrides() = {
+    val props = new Properties()
+    props.setProperty("k1", "v1")
+    props.setProperty("k2", "v2")
+    val userSuppliedProps = new util.HashSet[String]
+    userSuppliedProps.add("k2")
+    val config = LogConfig(props, userSuppliedProps)
+    assertFalse(config.userSupplied("k1"))
+    assertTrue(config.userSupplied("k2"))
+    val overrides = new Properties()
+    overrides.put("k1", "new_v1")
+    assertTrue(config.withOverrides(overrides).userSupplied("k1"))
+    assertTrue(config.withOverrides(overrides).userSupplied("k2"))
   }
 
   @Test
