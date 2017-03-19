@@ -762,7 +762,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Set<TopicPartition> assignment() {
         acquire();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
+            return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
         } finally {
             release();
         }
@@ -776,7 +776,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Set<String> subscription() {
         acquire();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
+            return Collections.unmodifiableSet(this.subscriptions.subscription());
         } finally {
             release();
         }
@@ -1125,7 +1125,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         acquire();
         try {
-            coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
+            coordinator.commitOffsetsSync(Collections.unmodifiableMap(offsets), Long.MAX_VALUE);
         } finally {
             release();
         }
@@ -1182,7 +1182,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             log.debug("Committing offsets: {} ", offsets);
-            coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
+            coordinator.commitOffsetsAsync(Collections.unmodifiableMap(offsets), callback);
         } finally {
             release();
         }
