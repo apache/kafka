@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -107,9 +108,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           assertEquals(topic, metadata.topic())
           assertEquals(partition, metadata.partition())
           offset match {
-            case 0 => assertEquals(metadata.serializedKeySize + metadata.serializedValueSize, "key".getBytes.length + "value".getBytes.length)
-            case 1 => assertEquals(metadata.serializedKeySize(), "key".getBytes.length)
-            case 2 => assertEquals(metadata.serializedValueSize, "value".getBytes.length)
+            case 0 => assertEquals(metadata.serializedKeySize + metadata.serializedValueSize,
+              "key".getBytes(StandardCharsets.UTF_8).length + "value".getBytes(StandardCharsets.UTF_8).length)
+            case 1 => assertEquals(metadata.serializedKeySize(), "key".getBytes(StandardCharsets.UTF_8).length)
+            case 2 => assertEquals(metadata.serializedValueSize, "value".getBytes(StandardCharsets.UTF_8).length)
             case _ => assertTrue(metadata.serializedValueSize > 0)
           }
           assertNotEquals(metadata.checksum(), 0)
@@ -125,24 +127,27 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // send a normal record
-      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes, "value".getBytes)
+      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
+        "value".getBytes(StandardCharsets.UTF_8))
       assertEquals("Should have offset 0", 0L, producer.send(record0, callback).get.offset)
 
       // send a record with null value should be ok
-      val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes, null)
+      val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8), null)
       assertEquals("Should have offset 1", 1L, producer.send(record1, callback).get.offset)
 
       // send a record with null key should be ok
-      val record2 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes)
+      val record2 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))
       assertEquals("Should have offset 2", 2L, producer.send(record2, callback).get.offset)
 
       // send a record with null part id should be ok
-      val record3 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
+      val record3 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes(StandardCharsets.UTF_8),
+        "value".getBytes(StandardCharsets.UTF_8))
       assertEquals("Should have offset 3", 3L, producer.send(record3, callback).get.offset)
 
       // send a record with null topic should fail
       try {
-        val record4 = new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes, "value".getBytes)
+        val record4 = new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes(StandardCharsets.UTF_8),
+          "value".getBytes(StandardCharsets.UTF_8))
         producer.send(record4, callback)
         fail("Should not allow sending a record without topic")
       } catch {
@@ -183,7 +188,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
-        val record = new ProducerRecord(topic, partition, s"key$i".getBytes, s"value$i".getBytes)
+        val record = new ProducerRecord(topic, partition, s"key$i".getBytes(StandardCharsets.UTF_8),
+          s"value$i".getBytes(StandardCharsets.UTF_8))
         (record, producer.send(record))
       }
       producer.close(timeoutMs, TimeUnit.MILLISECONDS)
@@ -237,7 +243,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
-        val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes, s"value$i".getBytes)
+        val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes(StandardCharsets.UTF_8),
+          s"value$i".getBytes(StandardCharsets.UTF_8))
         (record, producer.send(record, callback))
       }
       producer.close(20000L, TimeUnit.MILLISECONDS)
@@ -268,7 +275,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // non-blocking send a list of records
-      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
+      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes(StandardCharsets.UTF_8),
+        "value".getBytes(StandardCharsets.UTF_8))
       for (_ <- 1 to numRecords)
         producer.send(record0)
       val response0 = producer.send(record0)
@@ -301,7 +309,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       val now = System.currentTimeMillis()
       val futures = (1 to numRecords).map { i =>
-        producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes))
+        producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
       }.map(_.get(30, TimeUnit.SECONDS))
 
       // make sure all of them end up in the same partition with increasing offset values
@@ -345,7 +353,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val partition0 = 0
 
     var futures0 = (1 to numRecords).map { i =>
-      producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes))
+      producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
     }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values
@@ -358,7 +366,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
     val partition1 = 1
     try {
-      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes))
+      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8)))
       fail("Should not allow sending a record to a partition not present in the metadata")
     } catch {
       case _: KafkaException => // this is ok
@@ -371,7 +379,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     // send records to the newly added partition after confirming that metadata have been updated.
     val futures1 = (1 to numRecords).map { i =>
-      producer.send(new ProducerRecord(topic, partition1, null, ("value" + i).getBytes))
+      producer.send(new ProducerRecord(topic, partition1, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
     }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values
@@ -382,7 +390,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
 
     futures0 = (1 to numRecords).map { i =>
-      producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes))
+      producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
     }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values starting where previous
@@ -401,7 +409,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val producer = createProducer(brokerList, lingerMs = Long.MaxValue)
     try {
       TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
-      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic,
+        "value".getBytes(StandardCharsets.UTF_8))
       for (_ <- 0 until 50) {
         val responses = (0 until numRecords) map (_ => producer.send(record))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
@@ -421,7 +430,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
-    val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes)
+    val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
+      "value".getBytes(StandardCharsets.UTF_8))
 
     // Test closing from caller thread.
     for (_ <- 0 until 50) {
@@ -450,7 +460,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))
 
     // Test closing from sender thread.
     class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]], sendRecords: Boolean) extends Callback {
