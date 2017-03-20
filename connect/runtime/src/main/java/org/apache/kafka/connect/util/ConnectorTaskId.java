@@ -80,6 +80,6 @@ public class ConnectorTaskId implements Serializable, Comparable<ConnectorTaskId
         int connectorCmp = connector.compareTo(o.connector);
         if (connectorCmp != 0)
             return connectorCmp;
-        return Integer.compareTo(((Integer) task), o.task);
+        return Integer.compare(task, o.task);
     }
 }
