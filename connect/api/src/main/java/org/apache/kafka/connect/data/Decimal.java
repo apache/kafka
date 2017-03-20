@@ -51,8 +51,8 @@ public class Decimal {
     public static SchemaBuilder builder(int scale) {
         return SchemaBuilder.bytes()
                 .name(LOGICAL_NAME)
-                .parameter(SCALE_FIELD, ((Integer) scale).toString())
-                .version(1);
+                .parameter(SCALE_FIELD, Integer.toString(scale))
+                .version(1); 
     }
 
     public static Schema schema(int scale) {
