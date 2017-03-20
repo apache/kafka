@@ -145,7 +145,7 @@ public class SimpleRecordTest {
     }
 
     @Test
-    public void buildEosRecord() {
+    public void buildDefaultRecord() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,

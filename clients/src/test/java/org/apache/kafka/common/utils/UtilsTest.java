@@ -22,6 +22,7 @@ import org.easymock.IAnswer;
 import org.junit.Test;
 
 import java.io.Closeable;
+import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -88,6 +89,34 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+    }
+
+    @Test
+    public void writeToBuffer() throws IOException {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer source = ByteBuffer.wrap(input);
+
+        ByteBuffer dest = ByteBuffer.allocate(input.length);
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+
+        Utils.writeTo(out, source, source.remaining());
+
+        dest.flip();
+        assertEquals(source, dest);
+    }
+
+    @Test
+    public void writeToDirectBuffer() throws IOException {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer source = ByteBuffer.wrap(input);
+
+        ByteBuffer dest = ByteBuffer.allocateDirect(input.length);
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+
+        Utils.writeTo(out, source, source.remaining());
+
+        dest.flip();
+        assertEquals(source, dest);
     }
 
     @Test

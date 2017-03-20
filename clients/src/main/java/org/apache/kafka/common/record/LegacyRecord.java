@@ -544,7 +544,7 @@ public final class LegacyRecord {
         } else {
             int size = key.remaining();
             out.writeInt(size);
-            out.write(key.array(), key.arrayOffset(), size);
+            Utils.writeTo(out, key, size);
         }
         // write the value
         if (value == null) {
@@ -552,7 +552,7 @@ public final class LegacyRecord {
         } else {
             int size = value.remaining();
             out.writeInt(size);
-            out.write(value.array(), value.arrayOffset(), size);
+            Utils.writeTo(out, value, size);
         }
     }
 
@@ -602,7 +602,7 @@ public final class LegacyRecord {
         } else {
             int size = key.remaining();
             crc.updateInt(size);
-            crc.update(key.array(), key.arrayOffset(), size);
+            crc.update(key, size);
         }
         // update for the value
         if (value == null) {
@@ -610,7 +610,7 @@ public final class LegacyRecord {
         } else {
             int size = value.remaining();
             crc.updateInt(size);
-            crc.update(value.array(), value.arrayOffset(), size);
+            crc.update(value, size);
         }
         return crc.getValue();
     }

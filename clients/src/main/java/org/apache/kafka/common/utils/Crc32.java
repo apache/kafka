@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
 /**
@@ -72,6 +73,15 @@ public class Crc32 implements Checksum {
     @Override
     public void reset() {
         crc = 0xffffffff;
+    }
+
+    public void update(ByteBuffer buffer, int length) {
+        if (buffer.hasArray()) {
+            update(buffer.array(), buffer.arrayOffset(), length);
+        } else {
+            for (int i = 0; i < length; i++)
+                update(buffer.get(i));
+        }
     }
 
     @Override

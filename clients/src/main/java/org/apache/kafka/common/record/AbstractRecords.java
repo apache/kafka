@@ -75,14 +75,14 @@ public abstract class AbstractRecords implements Records {
             if (recordBatchAndRecords.batch.magic() <= toMagic)
                 recordBatchAndRecords.batch.writeTo(buffer);
             else
-                buffer = convertLogEntry(toMagic, buffer, recordBatchAndRecords);
+                buffer = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
         }
 
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);
     }
 
-    private ByteBuffer convertLogEntry(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
+    private ByteBuffer convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
         RecordBatch batch = recordBatchAndRecords.batch;
         final TimestampType timestampType = batch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;

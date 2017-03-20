@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
@@ -794,6 +795,23 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
+
+    /**
+     * Write the contents of a buffer to an output stream. The byes are copied from the current position
+     * in the buffer.
+     * @param out The output to write to
+     * @param buffer The buffer to write from
+     * @param length The number of bytes to write
+     * @throws IOException For any errors writing to the output
+     */
+    public static void writeTo(DataOutput out, ByteBuffer buffer, int length) throws IOException {
+        if (buffer.hasArray()) {
+            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
+        } else {
+            for (int i = 0; i < length; i++)
+                out.writeByte(buffer.get(i));
+        }
     }
 
     public static <T> List<T> toList(Iterator<T> iterator) {

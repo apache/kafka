@@ -75,9 +75,9 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (position + LOG_OVERHEAD + size > end)
             return null;
 
-        FileChannelRecordBatch logEntry = new FileChannelRecordBatch(offset, channel, position, size);
-        position += logEntry.sizeInBytes();
-        return logEntry;
+        FileChannelRecordBatch batch = new FileChannelRecordBatch(offset, channel, position, size);
+        position += batch.sizeInBytes();
+        return batch;
     }
 
     /**
@@ -107,25 +107,25 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             if (magic() >= RecordBatch.MAGIC_VALUE_V2)
                 return offset;
 
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.baseOffset();
         }
 
         @Override
         public CompressionType compressionType() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.compressionType();
         }
 
         @Override
         public TimestampType timestampType() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.timestampType();
         }
 
         @Override
         public long maxTimestamp() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.maxTimestamp();
         }
 
@@ -172,29 +172,29 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public long producerId() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.producerId();
         }
 
         @Override
         public short producerEpoch() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.producerEpoch();
         }
 
         @Override
         public int baseSequence() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.baseSequence();
         }
 
         @Override
         public int lastSequence() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.lastSequence();
         }
 
-        private void loadUnderlyingEntry() {
+        private void loadUnderlyingRecordBatch() {
             try {
                 if (underlying != null)
                     return;
@@ -215,25 +215,25 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public Iterator<Record> iterator() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.iterator();
         }
 
         @Override
         public boolean isValid() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.isValid();
         }
 
         @Override
         public void ensureValid() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             underlying.ensureValid();
         }
 
         @Override
         public long checksum() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.checksum();
         }
 
@@ -244,7 +244,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public Integer countOrNull() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.countOrNull();
         }
 
@@ -263,13 +263,13 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public boolean isTransactional() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.isTransactional();
         }
 
         @Override
         public int partitionLeaderEpoch() {
-            loadUnderlyingEntry();
+            loadUnderlyingRecordBatch();
             return underlying.partitionLeaderEpoch();
         }
 

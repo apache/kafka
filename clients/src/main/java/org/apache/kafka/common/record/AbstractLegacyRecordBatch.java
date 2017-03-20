@@ -205,10 +205,10 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     /**
-     * Get an iterator for the nested entries contained within this log entry. Note that
-     * if the entry is not compressed, then this method will return an iterator over the
-     * shallow entry only (i.e. this object).
-     * @return An iterator over the records contained within this log entry
+     * Get an iterator for the nested entries contained within this batch. Note that
+     * if the batch is not compressed, then this method will return an iterator over the
+     * shallow record only (i.e. this object).
+     * @return An iterator over the records contained within this batch
      */
     @Override
     public Iterator<Record> iterator() {
@@ -267,7 +267,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     private static class DeepRecordsIterator extends AbstractIterator<AbstractLegacyRecordBatch> {
-        private final ArrayDeque<AbstractLegacyRecordBatch> logEntries;
+        private final ArrayDeque<AbstractLegacyRecordBatch> batches;
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
@@ -287,18 +287,18 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
             long wrapperRecordOffset = wrapperEntry.lastOffset();
             long wrapperRecordTimestamp = wrapperRecord.timestamp();
-            this.logEntries = new ArrayDeque<>();
+            this.batches = new ArrayDeque<>();
 
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset. For simplicity and because it's a format that is on its way out, we
             // do the same for message format version 0
             try {
                 while (true) {
-                    AbstractLegacyRecordBatch logEntry = logStream.nextBatch();
-                    if (logEntry == null)
+                    AbstractLegacyRecordBatch batch = logStream.nextBatch();
+                    if (batch == null)
                         break;
 
-                    LegacyRecord record = logEntry.legacyRecord();
+                    LegacyRecord record = batch.legacyRecord();
                     byte magic = record.magic();
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
@@ -311,20 +311,20 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                                 wrapperRecordTimestamp,
                                 wrapperRecord.timestampType()
                         );
-                        logEntry = new BasicLegacyRecordBatch(logEntry.lastOffset(), recordWithTimestamp);
+                        batch = new BasicLegacyRecordBatch(batch.lastOffset(), recordWithTimestamp);
                     }
-                    logEntries.addLast(logEntry);
+                    batches.addLast(batch);
 
                     // break early if we reach the last offset in the batch
-                    if (logEntry.offset() == wrapperRecordOffset)
+                    if (batch.offset() == wrapperRecordOffset)
                         break;
                 }
 
-                if (logEntries.isEmpty())
+                if (batches.isEmpty())
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
                 if (wrapperMagic > RecordBatch.MAGIC_VALUE_V0)
-                    this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().lastOffset();
+                    this.absoluteBaseOffset = wrapperRecordOffset - batches.getLast().lastOffset();
                 else
                     this.absoluteBaseOffset = -1;
             } catch (IOException e) {
@@ -336,10 +336,10 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         @Override
         protected AbstractLegacyRecordBatch makeNext() {
-            if (logEntries.isEmpty())
+            if (batches.isEmpty())
                 return allDone();
 
-            AbstractLegacyRecordBatch entry = logEntries.remove();
+            AbstractLegacyRecordBatch entry = batches.remove();
 
             // Convert offset to absolute offset if needed.
             if (absoluteBaseOffset >= 0) {

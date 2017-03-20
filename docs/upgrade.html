@@ -58,10 +58,11 @@
         replication factor requirement.</li>
     <li>By default <code>message.timestamp.difference.max.ms</code> is the same as <code>retention.ms</code> instead of
         <code>Long.MAX_VALUE</code>.</li>
-    <li>Beginning in 0.11.0, the configuration <code>max.message.bytes</code> applies to the total size of a batch of messages.
+    <li>The broker configuration <code>max.message.bytes</code> now applies to the total size of a batch of messages.
         Previously the setting applied to batches of compressed messages, or to non-compressed messages individually. In practice,
         the change is minor since a message batch may consist of only a single message, so the limitation on the size of
-        individual messages is only reduced by the overhead of the batch format.</li>
+        individual messages is only reduced by the overhead of the batch format. This similarly affects the
+        producer's <code>batch.size</code> configuration.</li>
 </ul>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>

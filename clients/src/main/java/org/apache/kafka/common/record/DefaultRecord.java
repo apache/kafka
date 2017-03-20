@@ -192,7 +192,7 @@ public class DefaultRecord implements Record {
         } else {
             int keySize = key.remaining();
             ByteUtils.writeVarint(keySize, out);
-            out.write(key.array(), key.arrayOffset(), keySize);
+            Utils.writeTo(out, key, keySize);
         }
 
         if (value == null) {
@@ -200,7 +200,7 @@ public class DefaultRecord implements Record {
         } else {
             int valueSize = value.remaining();
             ByteUtils.writeVarint(valueSize, out);
-            out.write(value.array(), value.arrayOffset(), valueSize);
+            Utils.writeTo(out, value, valueSize);
         }
 
         if (headers == null)
@@ -210,6 +210,9 @@ public class DefaultRecord implements Record {
 
         for (Header header : headers) {
             String headerKey = header.key();
+            if (headerKey == null)
+                throw new IllegalArgumentException("Invalid null header key found in headers");
+
             byte[] utf8Bytes = Utils.utf8(headerKey);
             ByteUtils.writeVarint(utf8Bytes.length, out);
             out.write(utf8Bytes);
@@ -220,7 +223,7 @@ public class DefaultRecord implements Record {
             } else {
                 int headerValueSize = headerValue.remaining();
                 ByteUtils.writeVarint(headerValueSize, out);
-                out.write(headerValue.array(), headerValue.arrayOffset(), headerValueSize);
+                Utils.writeTo(out, headerValue, headerValueSize);
             }
         }
 
@@ -239,7 +242,7 @@ public class DefaultRecord implements Record {
                     timestampDelta, key, value, headers);
         } catch (IOException e) {
             // cannot actually be raised by ByteBufferOutputStream
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
         }
     }
 
@@ -253,10 +256,10 @@ public class DefaultRecord implements Record {
         crc.updateLong(timestamp);
 
         if (key != null)
-            crc.update(key.array(), key.arrayOffset(), key.remaining());
+            crc.update(key, key.remaining());
 
         if (value != null)
-            crc.update(value.array(), value.arrayOffset(), value.remaining());
+            crc.update(value, value.remaining());
 
         return crc.getValue();
     }

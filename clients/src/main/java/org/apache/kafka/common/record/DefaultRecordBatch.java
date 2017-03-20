@@ -83,7 +83,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     static final int RECORDS_COUNT_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
     static final int RECORDS_COUNT_LENGTH = 4;
     static final int RECORDS_OFFSET = RECORDS_COUNT_OFFSET + RECORDS_COUNT_LENGTH;
-    public static final int LOG_ENTRY_OVERHEAD = RECORDS_OFFSET;
+    public static final int RECORD_BATCH_OVERHEAD = RECORDS_OFFSET;
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
@@ -197,7 +197,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         // we need to fill max.poll.records and leave the rest compressed.
         int numRecords = count();
         if (numRecords < 0)
-            throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v2 batch");
+            throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v" +
+                    magic() + " batch");
 
         List<Record> records = new ArrayList<>(numRecords);
         try {
@@ -374,7 +375,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         if (!iterator.hasNext())
             return 0;
 
-        int size = LOG_ENTRY_OVERHEAD;
+        int size = RECORD_BATCH_OVERHEAD;
         Long baseTimestamp = null;
         while (iterator.hasNext()) {
             Record record = iterator.next();
@@ -393,7 +394,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         if (!iterator.hasNext())
             return 0;
 
-        int size = LOG_ENTRY_OVERHEAD;
+        int size = RECORD_BATCH_OVERHEAD;
         int offsetDelta = 0;
         Long baseTimestamp = null;
         while (iterator.hasNext()) {
@@ -411,7 +412,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
     static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return LOG_ENTRY_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
+        return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
 }

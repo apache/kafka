@@ -88,7 +88,7 @@ public class RecordAccumulatorTest {
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
 
-        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10L * batchSize,
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10L * batchSize,
                 CompressionType.NONE, 10L, 100L, metrics, time, new ApiVersions());
         int appends = expectedNumAppends(batchSize);
         for (int i = 0; i < appends; i++) {
@@ -128,7 +128,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testAppendLarge() throws Exception {
         int batchSize = 512;
-        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, 0L, 100L, metrics, time, new ApiVersions());
         accum.append(tp1, 0L, key, new byte[2 * batchSize], null, maxBlockTimeMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
@@ -137,7 +137,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testLinger() throws Exception {
         long lingerMs = 10L;
-        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
         assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
@@ -156,7 +156,7 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testPartialDrain() throws Exception {
-        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, 10L, 100L, metrics, time, new ApiVersions());
         int appends = 1024 / msgSize + 1;
         List<TopicPartition> partitions = asList(tp1, tp2);
@@ -176,7 +176,7 @@ public class RecordAccumulatorTest {
         final int numThreads = 5;
         final int msgs = 10000;
         final int numParts = 2;
-        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, 0L, 100L, metrics, time, new ApiVersions());
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
@@ -221,7 +221,7 @@ public class RecordAccumulatorTest {
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
 
-        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         // Just short of going over the limit so we trigger linger time
         int appends = expectedNumAppends(batchSize);
@@ -256,7 +256,7 @@ public class RecordAccumulatorTest {
     public void testRetryBackoff() throws Exception {
         long lingerMs = Long.MAX_VALUE / 4;
         long retryBackoffMs = Long.MAX_VALUE / 2;
-        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
 
         long now = time.milliseconds();
@@ -294,7 +294,7 @@ public class RecordAccumulatorTest {
     @Test
     public void testFlush() throws Exception {
         long lingerMs = Long.MAX_VALUE;
-        final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 64 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         for (int i = 0; i < 100; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, maxBlockTimeMs);
@@ -328,7 +328,7 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testAwaitFlushComplete() throws Exception {
-        RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 64 * 1024,
+        RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, Long.MAX_VALUE, 100L, metrics, time, new ApiVersions());
         accum.append(new TopicPartition(topic, 0), 0L, key, value, null, maxBlockTimeMs);
 
@@ -348,7 +348,7 @@ public class RecordAccumulatorTest {
     public void testAbortIncompleteBatches() throws Exception {
         long lingerMs = Long.MAX_VALUE;
         final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
-        final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 64 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions());
         class TestCallback implements Callback {
             @Override
@@ -377,7 +377,7 @@ public class RecordAccumulatorTest {
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
 
-        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
         int appends = expectedNumAppends(batchSize);
 
@@ -448,7 +448,7 @@ public class RecordAccumulatorTest {
         int requestTimeout = 60;
         int messagesPerBatch = expectedNumAppends(1024);
 
-        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
                 CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions());
         final AtomicInteger expiryCallbackCount = new AtomicInteger();
         final AtomicReference<Exception> unexpectedException = new AtomicReference<>();
@@ -490,7 +490,7 @@ public class RecordAccumulatorTest {
         int batchSize = 1025;
 
 
-        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.LOG_ENTRY_OVERHEAD, 10 * batchSize,
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, 10, 100L, metrics, time, new ApiVersions());
         int appends = expectedNumAppends(batchSize);
         for (int i = 0; i < appends; i++) {

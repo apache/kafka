@@ -855,9 +855,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         return parsedRecords;
     }
 
-    /**
-     * Parse the record entry, deserializing the key / value fields if necessary
-     */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
                                              RecordBatch batch,
                                              Record record) {

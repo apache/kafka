@@ -291,7 +291,7 @@ public class RequestResponseTest {
     }
 
     @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3ShouldContainOnlyOneLogEntry() {
+    public void produceRequestV3ShouldContainOnlyOneRecordBatch() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
@@ -310,7 +310,7 @@ public class RequestResponseTest {
     }
 
     @Test(expected = InvalidRecordException.class)
-    public void produceRequestV3CannotHaveNoLogEntries() {
+    public void produceRequestV3CannotHaveNoRecordBatches() {
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), MemoryRecords.EMPTY);
         new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 5000, produceData).build().toStruct();

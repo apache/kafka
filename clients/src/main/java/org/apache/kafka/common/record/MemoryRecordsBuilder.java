@@ -207,7 +207,7 @@ public class MemoryRecordsBuilder {
             buffer().position(initPos);
             builtRecords = MemoryRecords.EMPTY;
         } else {
-            if (magic > 1)
+            if (magic > RecordBatch.MAGIC_VALUE_V1)
                 writeDefaultBatchHeader();
             else if (compressionType != CompressionType.NONE)
                 writeLegacyCompressedWrapperHeader();
