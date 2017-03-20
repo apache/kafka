@@ -351,7 +351,7 @@ public class Utils {
     }
 
     public static <K, V> String mkString(Map<K, V> map) {
-        return mkString(map, "{", "}", "=", " ,");
+        return mkString(map, "{", "}", "=", ", ");
     }
 
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,

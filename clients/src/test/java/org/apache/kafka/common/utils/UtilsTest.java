@@ -29,6 +29,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 import static org.apache.kafka.common.utils.Utils.formatAddress;
@@ -77,6 +79,14 @@ public class UtilsTest {
         assertEquals("", Utils.join(Collections.emptyList(), ","));
         assertEquals("1", Utils.join(Arrays.asList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
+    }
+    
+    @Test
+    public void testMkString() {
+        Map<String, String> map = new HashMap<>();
+        map.put("a", "b");
+        map.put("c", "d");
+        assertEquals(map.toString(), Utils.mkString(map));
     }
 
     @Test
