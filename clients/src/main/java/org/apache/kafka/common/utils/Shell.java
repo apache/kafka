@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -87,8 +88,10 @@ abstract public class Shell {
             //One time scheduling.
             timeoutTimer.schedule(new ShellTimeoutTimerTask(this), timeout);
         }
-        final BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-        BufferedReader inReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        final BufferedReader errReader = new BufferedReader(
+            new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8));
+        BufferedReader inReader = new BufferedReader(
+            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
         final StringBuffer errMsg = new StringBuffer();
 
         // read error and input streams as this would free up the buffers
