@@ -257,8 +257,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     @Override
-    public void setOffset(long offset) {
-        buffer.putLong(BASE_OFFSET_OFFSET, offset);
+    public void setLastOffset(long offset) {
+        buffer.putLong(BASE_OFFSET_OFFSET, offset - buffer.getInt(LAST_OFFSET_DELTA_OFFSET));
     }
 
     @Override
@@ -277,7 +277,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public void setPartitionLeaderEpoch(int epoch) {
-        buffer.putInt(PARTITION_LEADER_EPOCH_LENGTH, epoch);
+        long currentEpoch = producerEpoch();
+        if (currentEpoch == epoch)
+            return;
+
+        buffer.putInt(PARTITION_LEADER_EPOCH_OFFSET, epoch);
+        long crc = computeChecksum();
+        ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
     }
 
     @Override

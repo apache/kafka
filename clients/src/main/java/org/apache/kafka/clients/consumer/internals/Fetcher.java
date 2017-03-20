@@ -859,7 +859,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
-                                             RecordBatch entry,
+                                             RecordBatch batch,
                                              Record record) {
         if (this.checkCrcs) {
             try {
@@ -873,7 +873,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
-            TimestampType timestampType = entry.timestampType();
+            TimestampType timestampType = batch.timestampType();
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);

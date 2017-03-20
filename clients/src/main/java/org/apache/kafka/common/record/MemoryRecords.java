@@ -101,6 +101,11 @@ public class MemoryRecords extends AbstractRecords {
         return bytes;
     }
 
+    @Override
+    public MemoryRecords downConvert(byte toMagic) {
+        return downConvert(batches(), toMagic);
+    }
+
     /**
      * Filter the records into the provided ByteBuffer.
      * @param filter The filter function

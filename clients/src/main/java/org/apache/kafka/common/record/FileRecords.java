@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -227,6 +228,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
             size.set(targetSize);
         }
         return originalSize - targetSize;
+    }
+
+    @Override
+    public Records downConvert(byte toMagic) {
+        List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
+        if (batches.isEmpty()) {
+            // This indicates that the message is too large, which means that the buffer is not large
+            // enough to hold a full record batch. We just return all the bytes in the file message set.
+            // Even though the message set does not have the right format version, we expect old clients
+            // to raise an error to the user after reading the message size and seeing that there
+            // are not enough available bytes in the response to read the full message.
+            return this;
+        } else {
+            return downConvert(batches, toMagic);
+        }
     }
 
     @Override

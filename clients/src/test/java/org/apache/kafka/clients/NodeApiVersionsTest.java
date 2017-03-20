@@ -55,7 +55,7 @@ public class NodeApiVersionsTest {
     }
 
     @Test(expected = UnsupportedVersionException.class)
-    public void testEnsureUsableUnusuableVersion() {
+    public void testEnsureUsableUnusableVersion() {
         NodeApiVersions apiVersions = NodeApiVersions.create();
         apiVersions.ensureUsable(ApiKeys.PRODUCE, (short) 15);
     }

@@ -122,7 +122,6 @@ private[kafka] object LogValidator extends Logging {
     for (batch <- records.batches.asScala) {
       ensureNonTransactional(batch)
 
-      val baseOffset = offsetCounter.value
       for (record <- batch.asScala) {
         record.ensureValid()
         ensureNotControlRecord(record)
@@ -139,10 +138,7 @@ private[kafka] object LogValidator extends Logging {
         }
       }
 
-      if (batch.magic > RecordBatch.MAGIC_VALUE_V1)
-        batch.setOffset(baseOffset)
-      else
-        batch.setOffset(offsetCounter.value - 1)
+      batch.setLastOffset(offsetCounter.value - 1)
 
       // TODO: in the compressed path, we ensure that the batch max timestamp is correct.
       //       We should either do the same or (better) let those two paths converge.
@@ -233,13 +229,9 @@ private[kafka] object LogValidator extends Logging {
       } else {
         // we can update the wrapper message only and write the compressed payload as is
         val batch = records.batches.iterator.next()
-        val firstOffset = offsetCounter.value
         val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
 
-        if (messageFormatVersion > RecordBatch.MAGIC_VALUE_V1)
-          batch.setOffset(firstOffset)
-        else
-          batch.setOffset(lastOffset)
+        batch.setLastOffset(lastOffset)
 
         if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
           maxTimestamp = currentTimestamp

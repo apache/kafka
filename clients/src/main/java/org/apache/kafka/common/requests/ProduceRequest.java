@@ -136,7 +136,7 @@ public class ProduceRequest extends AbstractRequest {
         partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        transactionalId = version >= 3 ? struct.getString(TRANSACTIONAL_ID_KEY_NAME) : null;
+        transactionalId = struct.hasField(TRANSACTIONAL_ID_KEY_NAME) ? struct.getString(TRANSACTIONAL_ID_KEY_NAME) : null;
     }
 
     private void validateRecords(short version, MemoryRecords records) {
@@ -169,7 +169,7 @@ public class ProduceRequest extends AbstractRequest {
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
 
-        if (version >= 3)
+        if (struct.hasField(TRANSACTIONAL_ID_KEY_NAME))
             struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
 
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());

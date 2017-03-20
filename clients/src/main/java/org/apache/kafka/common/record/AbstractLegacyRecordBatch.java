@@ -415,7 +415,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public void setOffset(long offset) {
+        public void setLastOffset(long offset) {
             buffer.putLong(OFFSET_OFFSET, offset);
         }
 

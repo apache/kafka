@@ -28,7 +28,6 @@ import java.util.EnumMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 /**
@@ -117,15 +116,12 @@ public class NodeApiVersions {
         UsableVersion usableVersion = usableVersions.get(apiKey);
         if (usableVersion == null)
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        else if (usableVersion.apiVersion.minVersion > version || usableVersion.apiVersion.maxVersion < version)
-            throw new UnsupportedVersionException("The broker does not support the requested version " + version +
-                    " for api " + apiKey + ". Supported versions are " + usableVersion.apiVersion.minVersion +
-                    " to " + usableVersion.apiVersion.maxVersion + ".");
+        usableVersion.ensureUsable(version);
     }
 
     /**
      * Convert the object to a string with no linebreaks.<p/>
-     *
+     * <p>
      * This toString method is relatively expensive, so avoid calling it unless debug logging is turned on.
      */
     @Override
@@ -198,10 +194,16 @@ public class NodeApiVersions {
         return bld.toString();
     }
 
+    /**
+     * Get the version information for a given API.
+     *
+     * @param apiKey The api key to lookup
+     * @return The api version information from the broker or null if it is unsupported
+     */
     public ApiVersion apiVersion(ApiKeys apiKey) {
         UsableVersion usableVersion = usableVersions.get(apiKey);
         if (usableVersion == null)
-            throw new NoSuchElementException();
+            return null;
         return usableVersion.apiVersion;
     }
 
@@ -246,7 +248,8 @@ public class NodeApiVersions {
         private void ensureUsable(short desiredVersion) {
             if (apiVersion.minVersion > desiredVersion || apiVersion.maxVersion < desiredVersion)
                 throw new UnsupportedVersionException("The broker does not support the requested version " + desiredVersion +
-                        " for api " + apiKey);
+                        " for api " + apiKey + ". Supported versions are " + apiVersion.minVersion +
+                        " to " + apiVersion.maxVersion + ".");
         }
 
     }

@@ -49,55 +49,37 @@ public abstract class AbstractRecords implements Records {
         return true;
     }
 
-    /**
-     * Convert this message set to a compatible magic format.
-     *
-     * @param toMagic The maximum magic version to convert to. Batches with larger magic values
-     *                will be converted to this magic; batches with equal or lower magic will not
-     *                be converted at all.
-     */
-    @Override
-    public Records downConvert(byte toMagic) {
-        List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
-        if (batches.isEmpty()) {
-            // This indicates that the message is too large, which indicates that the buffer is not large
-            // enough to hold a full record batch. We just return all the bytes in the file message set.
-            // Even though the message set does not have the right format version, we expect old clients
-            // to raise an error to the user after reading the message size and seeing that there
-            // are not enough available bytes in the response to read the full message.
-            return this;
-        } else {
-            // maintain the batch along with the decompressed records to avoid the need to decompress again
-            List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>(batches.size());
-            int totalSizeEstimate = 0;
+    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic) {
+        // maintain the batch along with the decompressed records to avoid the need to decompress again
+        List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
+        int totalSizeEstimate = 0;
 
-            for (RecordBatch batch : batches) {
-                if (batch.magic() <= toMagic) {
-                    totalSizeEstimate += batch.sizeInBytes();
-                    recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
-                } else {
-                    List<Record> records = Utils.toList(batch.iterator());
-                    final long baseOffset;
-                    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                        baseOffset = batch.baseOffset();
-                    else
-                        baseOffset = records.get(0).offset();
-                    totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, batch.compressionType(), records);
-                    recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, records, baseOffset));
-                }
-            }
-
-            ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
-            for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
-                if (recordBatchAndRecords.batch.magic() <= toMagic)
-                    recordBatchAndRecords.batch.writeTo(buffer);
+        for (RecordBatch batch : batches) {
+            if (batch.magic() <= toMagic) {
+                totalSizeEstimate += batch.sizeInBytes();
+                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
+            } else {
+                List<Record> records = Utils.toList(batch.iterator());
+                final long baseOffset;
+                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
+                    baseOffset = batch.baseOffset();
                 else
-                    buffer = convertLogEntry(toMagic, buffer, recordBatchAndRecords);
+                    baseOffset = records.get(0).offset();
+                totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, batch.compressionType(), records);
+                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, records, baseOffset));
             }
-
-            buffer.flip();
-            return MemoryRecords.readableRecords(buffer);
         }
+
+        ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
+        for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
+            if (recordBatchAndRecords.batch.magic() <= toMagic)
+                recordBatchAndRecords.batch.writeTo(buffer);
+            else
+                buffer = convertLogEntry(toMagic, buffer, recordBatchAndRecords);
+        }
+
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
     }
 
     private ByteBuffer convertLogEntry(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {

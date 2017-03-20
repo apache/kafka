@@ -202,7 +202,7 @@ public interface RecordBatch extends Iterable<Record> {
      * A mutable log entry is one that can be modified in place (without copying).
      */
     interface MutableRecordBatch extends RecordBatch {
-        void setOffset(long offset);
+        void setLastOffset(long offset);
 
         void setMaxTimestamp(TimestampType timestampType, long maxTimestamp);
 

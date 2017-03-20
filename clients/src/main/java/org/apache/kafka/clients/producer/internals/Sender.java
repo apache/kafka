@@ -369,12 +369,15 @@ public class Sender implements Runnable {
             TopicPartition tp = batch.topicPartition;
             MemoryRecords records = batch.records();
 
-            // down convert if necessary to the minimum magic used. This is intended to handle edge cases around
-            // cluster upgrades where brokers may not all support the same message format version. For example,
-            // if a partition migrates from a broker which is supporting the new magic version to one which doesn't,
-            // then we will need to convert.
+            // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
+            // that the producer starts building the batch and the time that we send the request, and we may have
+            // chosen the message format based on out-dated metadata. In the worst case, we optimistically chose to use
+            // the new message format, but found that the broker didn't support it, so we need to down-convert on the
+            // client before sending. This is intended to handle edge cases around cluster upgrades where brokers may
+            // not all support the same message format version. For example, if a partition migrates from a broker
+            // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
-                records = (MemoryRecords) batch.records().downConvert(minUsedMagic);
+                records = batch.records().downConvert(minUsedMagic);
             produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }
