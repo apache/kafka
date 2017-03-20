@@ -50,12 +50,12 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Forcing re-running unit & integration tests w/o code change ###
     ./gradlew cleanTest test
 
-### Running a particular unit test ###
-    ./gradlew -Dtest.single=RequestResponseSerializationTest core:unitTest
+### Running a particular test ###
+    ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-### Running a particular test method within a unit test ###
-    ./gradlew core:unitTest --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:unitTest --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
+### Running a particular test method within a unit/integration test ###
+    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
 ### Running a particular unit test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`

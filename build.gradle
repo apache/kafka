@@ -168,6 +168,9 @@ subprojects {
     }
   }
 
+  def testLoggingEvents = ["passed", "skipped", "failed"]
+  def testShowStandardStreams = false
+  def testExceptionFormat = 'full'
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
@@ -177,9 +180,9 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
 
   }
@@ -192,9 +195,9 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
@@ -209,9 +212,9 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
     useJUnit {
       excludeCategories 'org.apache.kafka.test.IntegrationTest'

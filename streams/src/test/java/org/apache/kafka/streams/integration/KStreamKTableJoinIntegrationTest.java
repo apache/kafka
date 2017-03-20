@@ -90,7 +90,6 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory().getPath());
 
@@ -187,33 +186,7 @@ public class KStreamKTableJoinIntegrationTest {
             );
 
         //
-        // Step 1: Publish user-region information.
-        //
-        // To keep this code example simple and easier to understand/reason about, we publish all
-        // user-region records before any user-click records (cf. step 3). In practice though,
-        // data records would typically be arriving concurrently in both input streams/topics.
-        final Properties userRegionsProducerConfig = new Properties();
-        userRegionsProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        userRegionsProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        userRegionsProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig, mockTime);
-
-
-        //
-        // Step 2: Publish some user click events.
-        //
-        final Properties userClicksProducerConfig = new Properties();
-        userClicksProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        userClicksProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        userClicksProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        userClicksProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks, userClicksProducerConfig, mockTime);
-
-        //
-        // Step 3: Configure and start the processor topology.
+        // Step 1: Configure and start the processor topology.
         //
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
@@ -283,6 +256,32 @@ public class KStreamKTableJoinIntegrationTest {
 
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
+
+        //
+        // Step 2: Publish user-region information.
+        //
+        // To keep this code example simple and easier to understand/reason about, we publish all
+        // user-region records before any user-click records (cf. step 3). In practice though,
+        // data records would typically be arriving concurrently in both input streams/topics.
+        final Properties userRegionsProducerConfig = new Properties();
+        userRegionsProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        userRegionsProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        userRegionsProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+        userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig, mockTime);
+
+
+        //
+        // Step 3: Publish some user click events.
+        //
+        final Properties userClicksProducerConfig = new Properties();
+        userClicksProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        userClicksProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        userClicksProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+        userClicksProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks, userClicksProducerConfig, mockTime);
 
         //
         // Step 4: Verify the application's output data.
