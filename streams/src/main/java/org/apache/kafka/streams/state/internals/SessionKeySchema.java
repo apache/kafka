@@ -50,15 +50,17 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new HasNextCondition() {
             @Override
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                if (iterator.hasNext()) {
+                while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
                     final Bytes keyBytes = Bytes.wrap(SessionKeySerde.extractKeyBytes(bytes.get()));
-                    if (!keyBytes.equals(binaryKey)) {
-                        return false;
-                    }
                     final long start = SessionKeySerde.extractStart(bytes.get());
                     final long end = SessionKeySerde.extractEnd(bytes.get());
-                    return end >= from && start <= to;
+                    if (keyBytes.equals(binaryKey)
+                            && end >= from
+                            && start <= to) {
+                        return true;
+                    }
+                    iterator.next();
                 }
                 return false;
             }

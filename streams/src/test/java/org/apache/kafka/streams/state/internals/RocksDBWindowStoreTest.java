@@ -40,7 +40,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -642,20 +641,50 @@ public class RocksDBWindowStoreTest {
         windowStore.put("aa", "0004", 1);
         windowStore.put("a", "0005", 0x7a00000000000000L - 1);
 
+
         final List expected = Utils.mkList("0001", "0003", "0005");
-        System.out.println("retention is " + retentionPeriod);
         assertThat(toList(windowStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void should() throws Exception {
-        final Bytes bytes1 = WindowStoreUtils.toBinaryKey(new byte[]{'a'}, 0x7a00000000000000L -1, 0);
-        final Bytes bytes2 = WindowStoreUtils.toBinaryKey(new byte[]{'a', 'a'}, 1, 0);
-        System.out.println(bytes2.compareTo(bytes1));
-        System.out.println(bytes1);
-        System.out.println(bytes2);
+    public void shouldFetchAndIterateOverExactBinaryKeys() throws Exception {
+        final RocksDBWindowStoreSupplier<Bytes, String> supplier =
+                new RocksDBWindowStoreSupplier<>(
+                        "window",
+                        60000, 2,
+                        true,
+                        Serdes.Bytes(),
+                        Serdes.String(),
+                        60000,
+                        true,
+                        Collections.<String, String>emptyMap(),
+                        false);
 
+        windowStore = supplier.get();
+        windowStore.init(context, windowStore);
+
+        final Bytes key1 = Bytes.wrap(new byte[]{0});
+        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        windowStore.put(key1, "1", 0);
+        windowStore.put(key2, "2", 0);
+        windowStore.put(key3, "3", 0);
+        windowStore.put(key1, "4", 1);
+        windowStore.put(key2, "5", 1);
+        windowStore.put(key3, "6", 59999);
+        windowStore.put(key1, "7", 59999);
+        windowStore.put(key2, "8", 59999);
+        windowStore.put(key3, "9", 59999);
+
+        final List expectedKey1 = Utils.mkList("1", "4", "7");
+        assertThat(toList(windowStore.fetch(key1, 0, Long.MAX_VALUE)), equalTo(expectedKey1));
+        final List expectedKey2 = Utils.mkList("2", "5", "8");
+        assertThat(toList(windowStore.fetch(key2, 0, Long.MAX_VALUE)), equalTo(expectedKey2));
+        final List expectedKey3 = Utils.mkList("3", "6", "9");
+        assertThat(toList(windowStore.fetch(key3, 0, Long.MAX_VALUE)), equalTo(expectedKey3));
     }
+
     private void putFirstBatch(final WindowStore<Integer, String> store, final long startTime, final MockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero");
